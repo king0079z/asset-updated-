@@ -1,0 +1,69 @@
+import { NextApiRequest, NextApiResponse } from 'next';
+import { createClient } from '@/util/supabase/api';
+import prisma from '@/lib/prisma';
+import { logDataAccess } from '@/lib/audit';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Only allow GET requests
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    // Authenticate the user
+    const supabase = createClient(req, res);
+    const { data: { user }, error } = await supabase.auth.getUser();
+
+    if (error || !user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Log the action using the correct function from audit.ts
+    await logDataAccess(
+      'vehicle',
+      'all',
+      { action: 'VEHICLE_TRACKING_VIEW', description: 'User viewed vehicle tracking data' }
+    );
+
+    // Fetch vehicles with their latest location data
+    const vehicles = await prisma.vehicle.findMany({
+      select: {
+        id: true,
+        name: true,
+        plateNumber: true, // Changed from licensePlate to match schema
+        status: true,
+        vehicleLocations: {
+          orderBy: {
+            timestamp: 'desc',
+          },
+          take: 1,
+          select: {
+            latitude: true,
+            longitude: true,
+            timestamp: true,
+          },
+        },
+      },
+    });
+
+    // Transform the data for the frontend
+    const transformedVehicles = vehicles.map(vehicle => ({
+      id: vehicle.id,
+      name: vehicle.name,
+      licensePlate: vehicle.plateNumber, // Map plateNumber to licensePlate for frontend
+      status: vehicle.status.toLowerCase(), // Convert to lowercase to match frontend expectations
+      location: vehicle.vehicleLocations && vehicle.vehicleLocations.length > 0 
+        ? {
+            lat: vehicle.vehicleLocations[0].latitude,
+            lng: vehicle.vehicleLocations[0].longitude,
+            lastUpdated: vehicle.vehicleLocations[0].timestamp.toISOString(),
+          } 
+        : undefined,
+    }));
+
+    return res.status(200).json({ vehicles: transformedVehicles });
+  } catch (error) {
+    console.error('Error fetching vehicle tracking data:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}

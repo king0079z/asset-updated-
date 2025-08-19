@@ -1,0 +1,12 @@
+{
+  "buildCommand": "node custom-build.js",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "env": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "UV_THREADPOOL_SIZE": "1",
+    "NEXT_CONCURRENT_FEATURES": "1"
+  }
+}

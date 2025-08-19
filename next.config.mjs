@@ -1,0 +1,27 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  images: {
+    domains: ["assets.co.dev", "ykjxvhvxlrjhxnrjnpjc.supabase.co"],
+    unoptimized: true,
+  },
+  // Disable SWC minification to reduce file operations during build
+  swcMinify: false,
+  // Exclude problematic API routes
+  excludeDefaultMomentLocales: true,
+  // Reduce the number of files processed during build
+  experimental: {
+    cpus: 1
+  },
+  // Disable source maps to reduce file operations
+  productionBrowserSourceMaps: false,
+  // Disable compression to reduce file operations
+  compress: false,
+  // Disable static optimization to reduce file operations
+  staticPageGenerationTimeout: 60
+};
+
+export default nextConfig;
