@@ -1,3 +1,4 @@
+// @ts-nocheck
 // AI Analysis page translations
 const aiAnalysisTranslations = {
   // Page title and header

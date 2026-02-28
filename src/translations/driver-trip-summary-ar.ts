@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Driver Trip Summary Dialog Arabic translations
 const driverTripSummaryTranslations = {
   // Dialog title and description

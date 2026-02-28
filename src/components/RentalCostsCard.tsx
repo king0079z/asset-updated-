@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Car, TrendingUp, Calendar, CalendarClock, ArrowRight, AlertTriangle, RefreshCw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

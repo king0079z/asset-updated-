@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
@@ -9,411 +9,356 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum OrganizationStatus {
-  ACTIVE
-  SUSPENDED
-  CANCELLED
-}
-
-enum SubscriptionPlan {
-  FREE
-  BASIC
-  PROFESSIONAL
-  ENTERPRISE
-}
-
 model Organization {
-  id                String              @id @default(cuid())
-  name              String
-  slug              String              @unique
-  logo              String?
-  status            OrganizationStatus  @default(ACTIVE)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  
-  // Relations
-  users             User[]
-  subscription      Subscription?
-  members           OrganizationMember[]
-  billingHistory    BillingHistory[]
-  usageMetrics      UsageMetrics[]
-  assets            Asset[]
-  kitchens          Kitchen[]
-  foodSupplies      FoodSupply[]
-  recipes           Recipe[]
-  vehicles          Vehicle[]
-  vendors           Vendor[]
-  trackingDevices   TrackingDevice[]
-  tickets           Ticket[]
-  plannerTasks      PlannerTask[]
-  errorLogs         ErrorLog[]
-  auditLogs         AuditLog[]
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  logo                String?
+  status              OrganizationStatus   @default(ACTIVE)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  assets              Asset[]
+  auditLogs           AuditLog[]
+  billingHistory      BillingHistory[]
+  errorLogs           ErrorLog[]
+  foodSupplies        FoodSupply[]
+  kitchens            Kitchen[]
+  locations           Location[]
+  members             OrganizationMember[]
+  plannerTasks        PlannerTask[]
+  recipes             Recipe[]
+  subscription        Subscription?
+  tickets             Ticket[]
+  trackingDevices     TrackingDevice[]
+  usageMetrics        UsageMetrics[]
+  users               User[]
+  vehicles            Vehicle[]
   vehicleMaintenances VehicleMaintenance[]
-  locations         Location[]
+  vendors             Vendor[]
 }
 
 model Subscription {
-  id                  String            @id @default(cuid())
-  organizationId      String            @unique
-  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  plan                SubscriptionPlan  @default(FREE)
-  startDate           DateTime          @default(now())
-  endDate             DateTime?
-  isActive            Boolean           @default(true)
-  stripeCustomerId    String?
+  id                   String           @id @default(cuid())
+  organizationId       String           @unique
+  plan                 SubscriptionPlan @default(FREE)
+  startDate            DateTime         @default(now())
+  endDate              DateTime?
+  isActive             Boolean          @default(true)
+  stripeCustomerId     String?
   stripeSubscriptionId String?
-  maxUsers            Int               @default(5)
-  maxKitchens         Int               @default(2)
-  maxRecipes          Int               @default(50)
-  maxAssets           Int               @default(100)
-  features            Json              @default("{}")
-  licenseKey          String?           // Added field for license key
-  licenseKeyCreatedAt DateTime?         // Added field for license key creation date
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  maxUsers             Int              @default(5)
+  maxKitchens          Int              @default(2)
+  maxRecipes           Int              @default(50)
+  maxAssets            Int              @default(100)
+  features             Json             @default("{}")
+  licenseKey           String?
+  licenseKeyCreatedAt  DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  organization         Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model OrganizationMember {
-  id                String            @id @default(cuid())
-  organizationId    String
-  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId            String            @db.Uuid
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role              String            @default("MEMBER")
-  invitedEmail      String?
-  inviteAccepted    Boolean           @default(false)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String       @db.Uuid
+  role           String       @default("MEMBER")
+  invitedEmail   String?
+  inviteAccepted Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
 }
 
 model BillingHistory {
-  id                  String            @id @default(cuid())
-  organizationId      String
-  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  amount              Decimal           @db.Decimal(10, 2)
-  currency            String            @default("USD")
-  status              String
-  description         String?
-  stripeInvoiceId     String?
+  id                    String       @id @default(cuid())
+  organizationId        String
+  amount                Decimal      @db.Decimal(10, 2)
+  currency              String       @default("USD")
+  status                String
+  description           String?
+  stripeInvoiceId       String?
   stripePaymentIntentId String?
-  billingDate         DateTime          @default(now())
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  billingDate           DateTime     @default(now())
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model UsageMetrics {
-  id                String            @id @default(cuid())
-  organizationId    String
-  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  date              DateTime          @db.Date
-  activeUsers       Int               @default(0)
-  totalKitchens     Int               @default(0)
-  totalRecipes      Int               @default(0)
-  totalAssets       Int               @default(0)
-  apiCalls          Int               @default(0)
-  storageUsed       BigInt            @default(0)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String
+  date           DateTime     @db.Date
+  activeUsers    Int          @default(0)
+  totalKitchens  Int          @default(0)
+  totalRecipes   Int          @default(0)
+  totalAssets    Int          @default(0)
+  apiCalls       Int          @default(0)
+  storageUsed    BigInt       @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, date])
 }
 
 model User {
-  id                    String            @id @db.Uuid
-  email                 String            @unique
-  createdAt             DateTime          @default(now())
-  status                UserStatus        @default(PENDING)
-  isAdmin               Boolean           @default(false)
-  role                  UserRole          @default(STAFF)
-  customRoleId          String?           // Reference to a custom role if applicable
-  pageAccess            Json?             // Stores page access permissions as JSON
-  canDeleteDocuments    Boolean           @default(false) // Controls if user can delete documents
-  buttonVisibility      Json?             // Stores button visibility permissions as JSON
-  organizationId        String?           // Made optional temporarily for migration
-  organization          Organization?     @relation(fields: [organizationId], references: [id])
-  organizationMemberships OrganizationMember[]
-  assets                Asset[]
-  vehicles              VehicleRental[]
-  assetHistory          AssetHistory[]
-  foodSupplies          FoodSupply[]
-  foodConsumption       FoodConsumption[]
-  foodDisposals         FoodDisposal[]
-  tickets               Ticket[]
-  assignedTickets       Ticket[]          @relation("AssignedTickets")
-  ticketHistory         TicketHistory[]
-  plannerTasks          PlannerTask[]
-  assignedTasks         PlannerTask[]     @relation("AssignedTasks")
-  kitchenAssignments    KitchenAssignment[]
-  assignedKitchens      KitchenAssignment[] @relation("AssignedByUser")
-  licenseKeyRoles       LicenseKeyRole[]
-  vehicleMaintenances   VehicleMaintenance[]
-  requestedStockTransfers StockTransfer[] @relation("UserRequestedTransfers")
-  approvedStockTransfers StockTransfer[] @relation("ApprovedTransfers")
-  createdProductionBatches ProductionBatch[] @relation("UserCreatedBatches")
-  orderedPurchaseOrders PurchaseOrder[] @relation("UserOrderedPurchaseOrders")
+  id                       String               @id @db.Uuid
+  email                    String               @unique
+  createdAt                DateTime             @default(now())
+  status                   UserStatus           @default(PENDING)
+  isAdmin                  Boolean              @default(false)
+  role                     UserRole             @default(STAFF)
+  customRoleId             String?
+  pageAccess               Json?
+  canDeleteDocuments       Boolean              @default(false)
+  buttonVisibility         Json?
+  organizationId           String?
+  assets                   Asset[]
+  assetHistory             AssetHistory[]
+  foodConsumption          FoodConsumption[]
+  foodDisposals            FoodDisposal[]
+  foodSupplies             FoodSupply[]
+  assignedKitchens         KitchenAssignment[]  @relation("AssignedByUser")
+  kitchenAssignments       KitchenAssignment[]
+  licenseKeyRoles          LicenseKeyRole[]
+  organizationMemberships  OrganizationMember[]
+  assignedTasks            PlannerTask[]        @relation("AssignedTasks")
+  plannerTasks             PlannerTask[]
+  createdProductionBatches ProductionBatch[]    @relation("UserCreatedBatches")
+  orderedPurchaseOrders    PurchaseOrder[]      @relation("UserOrderedPurchaseOrders")
+  approvedStockTransfers   StockTransfer[]      @relation("ApprovedTransfers")
+  requestedStockTransfers  StockTransfer[]      @relation("UserRequestedTransfers")
+  assignedTickets          Ticket[]             @relation("AssignedTickets")
+  tickets                  Ticket[]
+  ticketHistory            TicketHistory[]
+  organization             Organization?        @relation(fields: [organizationId], references: [id])
+  vehicleMaintenances      VehicleMaintenance[]
+  vehicles                 VehicleRental[]
 }
 
 model LicenseKeyRole {
-  id            String    @id @default(cuid())
-  licenseKey    String    @unique
-  role          String
-  plan          String?
+  id             String    @id @default(cuid())
+  licenseKey     String    @unique
+  role           String
+  plan           String?
   expirationDate DateTime?
-  userId        String    @db.Uuid
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
-}
-
-enum UserStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum UserRole {
-  ADMIN
-  MANAGER
-  STAFF
+  userId         String    @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model CustomRole {
-  id          String    @id @default(cuid())
-  name        String    @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
   description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
-
-enum VendorType {
-  ASSET
-  FOOD_SUPPLY
-  VEHICLE
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Vendor {
-  id                String       @id @default(cuid())
-  name              String
-  email             String?
-  phone             String?
-  address           String?
-  type              VendorType[]
-  reliabilityScore  Float?       // Reliability score (0-100)
-  qualityScore      Float?       // Quality score (0-100)
-  responseTimeScore Float?       // Response time score (0-100)
-  lastReviewDate    DateTime?    // Date of last performance review
-  notes             String?      // Additional notes about vendor performance
-  organizationId    String?      // Made optional temporarily for migration
-  organization      Organization? @relation(fields: [organizationId], references: [id])
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  assets            Asset[]
-  foodSupplies      FoodSupply[]
+  id                  String               @id @default(cuid())
+  name                String
+  email               String?
+  phone               String?
+  address             String?
+  type                VendorType[]
+  reliabilityScore    Float?
+  qualityScore        Float?
+  responseTimeScore   Float?
+  lastReviewDate      DateTime?
+  notes               String?
+  organizationId      String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  assets              Asset[]
+  foodSupplies        FoodSupply[]
+  purchaseOrders      PurchaseOrder[]
   vehicleMaintenances VehicleMaintenance[]
-  purchaseOrders    PurchaseOrder[]
+  organization        Organization?        @relation(fields: [organizationId], references: [id])
 }
 
 model Asset {
-  id          String     @id @default(cuid())
-  assetId     String?    @unique @default(cuid())
-  name        String
-  description String?
-  barcode     String?    @unique @default(cuid())
-  type        AssetType? @default(FURNITURE)
-  imageUrl    String?
-  floorNumber String?
-  roomNumber  String?
-  status      AssetStatus @default(ACTIVE)
-  location    AssetLocation?
+  id             String          @id @default(cuid())
+  assetId        String?         @unique @default(cuid())
+  name           String
+  description    String?
+  barcode        String?         @unique @default(cuid())
+  type           AssetType?      @default(FURNITURE)
+  imageUrl       String?
+  floorNumber    String?
+  roomNumber     String?
+  status         AssetStatus     @default(ACTIVE)
   purchaseAmount Float?
-  purchaseDate DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  userId      String     @db.Uuid
-  user        User       @relation(fields: [userId], references: [id])
-  vendorId    String?
-  vendor      Vendor?    @relation(fields: [vendorId], references: [id])
-  organizationId String?  // Made optional temporarily for migration
-  organization Organization? @relation(fields: [organizationId], references: [id])
-  movements   AssetMovement[]
-  history     AssetHistory[]
-  tickets     Ticket[]
-  plannerTasks PlannerTask[]
-  documents   AssetDocument[]
-  disposedAt  DateTime?
-  lastMovedAt DateTime?
-}
-
-enum AssetType {
-  FURNITURE
-  EQUIPMENT
-  ELECTRONICS
-}
-
-enum AssetStatus {
-  ACTIVE
-  IN_TRANSIT
-  DISPOSED
-  MAINTENANCE
-  DAMAGED
-  CRITICAL
-  LIKE_NEW
+  purchaseDate   DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  userId         String          @db.Uuid
+  vendorId       String?
+  organizationId String?
+  disposedAt     DateTime?
+  lastMovedAt    DateTime?
+  organization   Organization?   @relation(fields: [organizationId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  vendor         Vendor?         @relation(fields: [vendorId], references: [id])
+  documents      AssetDocument[]
+  history        AssetHistory[]
+  location       AssetLocation?
+  movements      AssetMovement[]
+  plannerTasks   PlannerTask[]
+  tickets        Ticket[]
 }
 
 model AssetMovement {
-  id          String   @id @default(cuid())
-  assetId     String
-  asset       Asset    @relation(fields: [assetId], references: [id])
-  fromRoom    String?
-  toRoom      String?
-  fromFloor   String?
-  toFloor     String?
-  reason      String?
-  movedAt     DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  assetId   String
+  fromRoom  String?
+  toRoom    String?
+  fromFloor String?
+  toFloor   String?
+  reason    String?
+  movedAt   DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  asset     Asset    @relation(fields: [assetId], references: [id])
 }
 
 model AssetLocation {
-  id                     String   @id @default(cuid())
-  latitude               Float
-  longitude              Float
-  address                String?
-  accuracy               Float?   // Accuracy in meters
-  source                 String?  // Source of location data (gps, wifi, cell, ip, etc.)
-  assetId                String   @unique
-  asset                  Asset    @relation(fields: [assetId], references: [id])
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-}
-
-enum LocationType {
-  CENTRAL_STORE
-  CENTRAL_KITCHEN
-  KITCHEN
+  id        String   @id @default(cuid())
+  latitude  Float
+  longitude Float
+  address   String?
+  accuracy  Float?
+  source    String?
+  assetId   String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  asset     Asset    @relation(fields: [assetId], references: [id])
 }
 
 model StockTransfer {
-  id             String     @id @default(cuid())
+  id             String              @id @default(cuid())
   fromLocationId String
-  fromLocation   Location   @relation("FromLocation", fields: [fromLocationId], references: [id])
   toLocationId   String
-  toLocation     Location   @relation("ToLocation", fields: [toLocationId], references: [id])
-  status         String     // e.g. "PENDING", "APPROVED", "IN_TRANSIT", "COMPLETED"
-  requestedById  String     @db.Uuid
-  requestedBy    User       @relation("UserRequestedTransfers", fields: [requestedById], references: [id])
-  approvedById   String?    @db.Uuid
-  approvedBy     User?      @relation("ApprovedTransfers", fields: [approvedById], references: [id])
-  items          StockTransferItem[]
+  status         String
+  requestedById  String              @db.Uuid
+  approvedById   String?             @db.Uuid
   notes          String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @default(now())
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @default(now())
+  approvedBy     User?               @relation("ApprovedTransfers", fields: [approvedById], references: [id])
+  fromLocation   Location            @relation("FromLocation", fields: [fromLocationId], references: [id])
+  requestedBy    User                @relation("UserRequestedTransfers", fields: [requestedById], references: [id])
+  toLocation     Location            @relation("ToLocation", fields: [toLocationId], references: [id])
+  items          StockTransferItem[]
 }
 
 model StockTransferItem {
-  id               String     @id @default(cuid())
-  stockTransferId  String
-  stockTransfer    StockTransfer @relation(fields: [stockTransferId], references: [id])
-  foodSupplyId     String
-  foodSupply       FoodSupply @relation(fields: [foodSupplyId], references: [id])
-  quantity         Float
-  batchNumber      String?
-  expirationDate   DateTime
+  id              String        @id @default(cuid())
+  stockTransferId String
+  foodSupplyId    String
+  quantity        Float
+  batchNumber     String?
+  expirationDate  DateTime
+  foodSupply      FoodSupply    @relation(fields: [foodSupplyId], references: [id])
+  stockTransfer   StockTransfer @relation(fields: [stockTransferId], references: [id])
 }
 
 model ProductionBatch {
-  id             String     @id @default(cuid())
-  locationId     String
-  location       Location   @relation(fields: [locationId], references: [id])
-  recipeId       String
-  recipe         Recipe     @relation(fields: [recipeId], references: [id])
-  quantity       Int
-  status         String     // e.g. "PLANNED", "IN_PROGRESS", "COMPLETED"
-  startedAt      DateTime?
-  completedAt    DateTime?
-  createdById    String     @db.Uuid
-  createdBy      User       @relation("UserCreatedBatches", fields: [createdById], references: [id])
-  notes          String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @default(now())
+  id          String    @id @default(cuid())
+  locationId  String
+  recipeId    String
+  quantity    Int
+  status      String
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdById String    @db.Uuid
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now())
+  createdBy   User      @relation("UserCreatedBatches", fields: [createdById], references: [id])
+  location    Location  @relation(fields: [locationId], references: [id])
+  recipe      Recipe    @relation(fields: [recipeId], references: [id])
 }
 
 model PurchaseOrder {
-  id             String     @id @default(cuid())
-  locationId     String
-  location       Location   @relation(fields: [locationId], references: [id])
-  vendorId       String
-  vendor         Vendor     @relation(fields: [vendorId], references: [id])
-  status         String     // e.g. "DRAFT", "SENT", "RECEIVED", "CANCELLED"
-  orderedById    String     @db.Uuid
-  orderedBy      User       @relation("UserOrderedPurchaseOrders", fields: [orderedById], references: [id])
-  items          PurchaseOrderItem[]
-  notes          String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @default(now())
+  id          String              @id @default(cuid())
+  locationId  String
+  vendorId    String
+  status      String
+  orderedById String              @db.Uuid
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @default(now())
+  location    Location            @relation(fields: [locationId], references: [id])
+  orderedBy   User                @relation("UserOrderedPurchaseOrders", fields: [orderedById], references: [id])
+  vendor      Vendor              @relation(fields: [vendorId], references: [id])
+  items       PurchaseOrderItem[]
 }
 
 model PurchaseOrderItem {
-  id             String     @id @default(cuid())
+  id              String        @id @default(cuid())
   purchaseOrderId String
-  purchaseOrder  PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
-  foodSupplyId   String
-  foodSupply     FoodSupply @relation(fields: [foodSupplyId], references: [id])
-  quantity       Float
-  pricePerUnit   Float
-  batchNumber    String?
-  expirationDate DateTime
+  foodSupplyId    String
+  quantity        Float
+  pricePerUnit    Float
+  batchNumber     String?
+  expirationDate  DateTime
+  foodSupply      FoodSupply    @relation(fields: [foodSupplyId], references: [id])
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
 }
 
 model Location {
-  id             String       @id @default(cuid())
-  name           String?
-  type           LocationType?
-  description    String?
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  kitchens       Kitchen[]
-  inventories    LocationInventory[]
-  outgoingTransfers StockTransfer[] @relation("FromLocation")
-  incomingTransfers StockTransfer[] @relation("ToLocation")
+  id                String              @id @default(cuid())
+  name              String?
+  type              LocationType?
+  description       String?
+  organizationId    String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  kitchens          Kitchen[]
+  organization      Organization?       @relation(fields: [organizationId], references: [id])
+  inventories       LocationInventory[]
   productionBatches ProductionBatch[]
-  purchaseOrders   PurchaseOrder[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  purchaseOrders    PurchaseOrder[]
+  outgoingTransfers StockTransfer[]     @relation("FromLocation")
+  incomingTransfers StockTransfer[]     @relation("ToLocation")
 }
 
 model Kitchen {
-  id          String   @id @default(cuid())
-  name        String
-  floorNumber String
-  description String?
-  organizationId String? // Made optional temporarily for migration
-  organization Organization? @relation(fields: [organizationId], references: [id])
-  barcodes    KitchenBarcode[]
-  consumption FoodConsumption[]
-  disposals   FoodDisposal[]
-  recipeUsages RecipeUsage[]
-  assignments KitchenAssignment[]
-  foodSupplies FoodSupply[] // Add the opposite relation field
+  id                  String              @id @default(cuid())
+  name                String
+  floorNumber         String
+  description         String?
+  organizationId      String?
+  locationId          String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  consumption         FoodConsumption[]
+  disposals           FoodDisposal[]
+  foodSupplies        FoodSupply[]
+  location            Location?           @relation(fields: [locationId], references: [id])
+  organization        Organization?       @relation(fields: [organizationId], references: [id])
+  assignments         KitchenAssignment[]
+  barcodes            KitchenBarcode[]
   kitchenFoodSupplies KitchenFoodSupply[]
-  locationId  String?
-  location    Location? @relation(fields: [locationId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  recipeUsages        RecipeUsage[]
 }
 
 model KitchenAssignment {
   id           String   @id @default(cuid())
   userId       String   @db.Uuid
-  user         User     @relation(fields: [userId], references: [id])
   kitchenId    String
-  kitchen      Kitchen  @relation(fields: [kitchenId], references: [id])
   assignedById String   @db.Uuid
-  assignedBy   User     @relation("AssignedByUser", fields: [assignedById], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  assignedBy   User     @relation("AssignedByUser", fields: [assignedById], references: [id])
+  kitchen      Kitchen  @relation(fields: [kitchenId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, kitchenId])
 }
@@ -422,24 +367,24 @@ model KitchenBarcode {
   id           String     @id @default(cuid())
   barcode      String     @unique
   kitchenId    String
-  kitchen      Kitchen    @relation(fields: [kitchenId], references: [id])
   foodSupplyId String
-  foodSupply   FoodSupply @relation(fields: [foodSupplyId], references: [id])
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @default(now())
+  foodSupply   FoodSupply @relation(fields: [foodSupplyId], references: [id])
+  kitchen      Kitchen    @relation(fields: [kitchenId], references: [id])
 }
 
 model LocationInventory {
   id             String     @id @default(cuid())
   locationId     String
-  location       Location   @relation(fields: [locationId], references: [id])
   foodSupplyId   String
-  foodSupply     FoodSupply @relation(fields: [foodSupplyId], references: [id])
   quantity       Float
   batchNumber    String?
   expirationDate DateTime
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @default(now())
+  foodSupply     FoodSupply @relation(fields: [foodSupplyId], references: [id])
+  location       Location   @relation(fields: [locationId], references: [id])
 
   @@unique([locationId, foodSupplyId, batchNumber, expirationDate])
 }
@@ -447,46 +392,46 @@ model LocationInventory {
 model KitchenFoodSupply {
   id             String     @id @default(cuid())
   kitchenId      String
-  kitchen        Kitchen    @relation(fields: [kitchenId], references: [id])
   foodSupplyId   String
-  foodSupply     FoodSupply @relation(fields: [foodSupplyId], references: [id])
   quantity       Float
   expirationDate DateTime
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @default(now())
+  foodSupply     FoodSupply @relation(fields: [foodSupplyId], references: [id])
+  kitchen        Kitchen    @relation(fields: [kitchenId], references: [id])
 
   @@unique([kitchenId, foodSupplyId])
 }
 
 model FoodSupply {
-  id             String   @id @default(cuid())
-  name           String
-  quantity       Float
-  unit           String
-  category       String
-  pricePerUnit   Float    @default(0)
-  expirationDate DateTime
-  notes          String?
-  totalWasted    Float    @default(0)
-  barcode        String?  @unique // Adding direct barcode field to FoodSupply
-  kitchenId      String?  // Adding direct kitchen relationship
-  kitchen        Kitchen? @relation(fields: [kitchenId], references: [id])
-  userId         String   @db.Uuid
-  user           User     @relation(fields: [userId], references: [id])
-  vendorId       String?
-  vendor         Vendor?  @relation(fields: [vendorId], references: [id])
-  organizationId String?  // Made optional temporarily for migration
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  consumption    FoodConsumption[]
-  barcodes       KitchenBarcode[]
-  disposals      FoodDisposal[]
-  recipeIngredients RecipeIngredient[]
-  kitchenSupplies KitchenFoodSupply[]
-  stockTransferItems StockTransferItem[]
-  purchaseOrderItems PurchaseOrderItem[]
+  id                  String              @id @default(cuid())
+  name                String
+  quantity            Float
+  unit                String
+  category            String
+  pricePerUnit        Float               @default(0)
+  expirationDate      DateTime
+  notes               String?
+  totalWasted         Float               @default(0)
+  barcode             String?             @unique
+  kitchenId           String?
+  userId              String              @db.Uuid
+  vendorId            String?
+  organizationId      String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @default(now())
+  consumption         FoodConsumption[]
+  disposals           FoodDisposal[]
+  kitchen             Kitchen?            @relation(fields: [kitchenId], references: [id])
+  organization        Organization?       @relation(fields: [organizationId], references: [id])
+  user                User                @relation(fields: [userId], references: [id])
+  vendor              Vendor?             @relation(fields: [vendorId], references: [id])
+  barcodes            KitchenBarcode[]
+  kitchenSupplies     KitchenFoodSupply[]
   locationInventories LocationInventory[]
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @default(now())
+  purchaseOrderItems  PurchaseOrderItem[]
+  recipeIngredients   RecipeIngredient[]
+  stockTransferItems  StockTransferItem[]
 }
 
 model FoodConsumption {
@@ -494,234 +439,181 @@ model FoodConsumption {
   quantity       Float
   date           DateTime   @default(now())
   foodSupplyId   String
-  foodSupply     FoodSupply @relation(fields: [foodSupplyId], references: [id])
   kitchenId      String
-  kitchen        Kitchen    @relation(fields: [kitchenId], references: [id])
   userId         String     @db.Uuid
-  user           User       @relation(fields: [userId], references: [id])
   notes          String?
-  expirationDate DateTime?  // Record the expiration date at time of consumption
+  expirationDate DateTime?
   createdAt      DateTime   @default(now())
+  foodSupply     FoodSupply @relation(fields: [foodSupplyId], references: [id])
+  kitchen        Kitchen    @relation(fields: [kitchenId], references: [id])
+  user           User       @relation(fields: [userId], references: [id])
 }
 
 model Vehicle {
-  id              String           @id @default(cuid())
-  name            String
-  make            String?
-  model           String
-  year            Int
-  plateNumber     String           @unique
-  licensePlate    String?
-  status          VehicleStatus    @default(AVAILABLE)
-  type            VehicleType      @default(CAR)
-  color           String?
-  mileage         Int?
-  rentalAmount    Float
-  insuranceInfo   String?
-  registrationExp DateTime?
-  imageUrl        String?
-  organizationId  String?          // Made optional temporarily for migration
-  organization    Organization?    @relation(fields: [organizationId], references: [id])
-  rentals         VehicleRental[]
+  id               String               @id @default(cuid())
+  name             String
+  make             String?
+  model            String
+  year             Int
+  plateNumber      String               @unique
+  licensePlate     String?
+  status           VehicleStatus        @default(AVAILABLE)
+  type             VehicleType          @default(CAR)
+  color            String?
+  mileage          Int?
+  rentalAmount     Float
+  insuranceInfo    String?
+  registrationExp  DateTime?
+  imageUrl         String?
+  organizationId   String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  trackingDevices  TrackingDevice[]
+  organization     Organization?        @relation(fields: [organizationId], references: [id])
   vehicleLocations VehicleLocation[]
-  trips           VehicleTrip[]
-  trackingDevices TrackingDevice[] // Relation to tracking devices
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  maintenances    VehicleMaintenance[]
+  maintenances     VehicleMaintenance[]
+  rentals          VehicleRental[]
+  trips            VehicleTrip[]
 }
 
 model TrackingDevice {
   id              String           @id @default(cuid())
-  deviceId        String           @unique // Unique identifier for the device (IMEI, serial number, etc.)
+  deviceId        String           @unique
   name            String
   type            DeviceType       @default(GPS_TRACKER)
   status          DeviceStatus     @default(ACTIVE)
   vehicleId       String?
-  vehicle         Vehicle?         @relation(fields: [vehicleId], references: [id])
-  lastPing        DateTime?        // Last time the device sent data
-  batteryLevel    Int?             // Battery level in percentage (0-100)
+  lastPing        DateTime?
+  batteryLevel    Int?
   firmwareVersion String?
   installDate     DateTime?
-  metadata        Json?            // Additional device-specific metadata
-  apiKey          String           @unique @default(cuid()) // API key for device authentication
-  deviceLocations DeviceLocation[]
-  organizationId  String?          // Made optional temporarily for migration
-  organization    Organization?    @relation(fields: [organizationId], references: [id])
+  metadata        Json?
+  apiKey          String           @unique @default(cuid())
+  organizationId  String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @default(now())
+  deviceLocations DeviceLocation[]
+  organization    Organization?    @relation(fields: [organizationId], references: [id])
+  vehicle         Vehicle?         @relation(fields: [vehicleId], references: [id])
 }
 
 model DeviceLocation {
-  id              String         @id @default(cuid())
-  deviceId        String
-  device          TrackingDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  latitude        Float
-  longitude       Float
-  altitude        Float?
-  speed           Float?         // Speed in km/h
-  heading         Float?         // Direction in degrees (0-360)
-  accuracy        Float?         // Accuracy in meters
-  timestamp       DateTime       @default(now())
-  metadata        Json?          // Additional location data (fuel level, engine status, etc.)
-  createdAt       DateTime       @default(now())
+  id        String         @id @default(cuid())
+  deviceId  String
+  latitude  Float
+  longitude Float
+  altitude  Float?
+  speed     Float?
+  heading   Float?
+  accuracy  Float?
+  timestamp DateTime       @default(now())
+  metadata  Json?
+  createdAt DateTime       @default(now())
+  device    TrackingDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
   @@index([deviceId, timestamp])
 }
 
-enum DeviceType {
-  GPS_TRACKER
-  OBD_DEVICE
-  ASSET_TRACKER
-  DASH_CAM
-  TEMPERATURE_MONITOR
-}
-
-enum DeviceStatus {
-  ACTIVE
-  INACTIVE
-  MAINTENANCE
-  DISCONNECTED
-}
-
 model VehicleLocation {
-  id          String   @id @default(cuid())
-  vehicleId   String
-  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  latitude    Float
-  longitude   Float
-  timestamp   DateTime @default(now())
-  createdAt   DateTime @default(now())
-  metadata    Json?    // Store additional location metadata
-  userId      String?  @db.Uuid // Track which user recorded this location
+  id        String   @id @default(cuid())
+  vehicleId String
+  latitude  Float
+  longitude Float
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+  metadata  Json?
+  userId    String?  @db.Uuid
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
   @@index([vehicleId, timestamp])
 }
 
-enum VehicleStatus {
-  AVAILABLE
-  RENTED
-  MAINTENANCE
-  RETIRED
-}
-
-enum VehicleType {
-  CAR
-  TRUCK
-  VAN
-  BUS
-  MOTORCYCLE
-}
-
 model VehicleRental {
-  id         String    @id @default(cuid())
-  displayId  String?   @unique
-  startDate  DateTime
-  endDate    DateTime?
-  status     String
-  vehicleId  String
-  vehicle    Vehicle   @relation(fields: [vehicleId], references: [id])
-  userId     String    @db.Uuid
-  user       User      @relation(fields: [userId], references: [id])
-  notes      String?
-  dailyRate  Float?
-  totalCost  Float?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id           String               @id @default(cuid())
+  displayId    String?              @unique
+  startDate    DateTime
+  endDate      DateTime?
+  status       String
+  vehicleId    String
+  userId       String               @db.Uuid
+  notes        String?
+  dailyRate    Float?
+  totalCost    Float?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
   maintenances VehicleMaintenance[]
+  user         User                 @relation(fields: [userId], references: [id])
+  vehicle      Vehicle              @relation(fields: [vehicleId], references: [id])
 }
 
 model VehicleTrip {
-  id              String    @id @default(cuid())
-  vehicleId       String
-  vehicle         Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  userId          String    @db.Uuid
-  startTime       DateTime
-  endTime         DateTime?
-  startLatitude   Float
-  startLongitude  Float
-  endLatitude     Float?
-  endLongitude    Float?
-  targetEndLatitude Float?  // Custom ending point latitude
-  targetEndLongitude Float? // Custom ending point longitude
-  distance        Float     @default(0)
-  isAutoStarted   Boolean   @default(false)
-  isAutoEnded     Boolean   @default(false)
-  completionStatus String?
-  routePoints     Json?     // Store route points as JSON array of coordinates
-  metadata        Json?     // Store additional trip metadata
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now())
-}
-
-enum AssetHistoryAction {
-  MOVED
-  DISPOSED
-  REGISTERED
-  UPDATED
-  LOCATION_SHARED
-  STATUS_CHANGED
+  id                 String    @id @default(cuid())
+  vehicleId          String
+  userId             String    @db.Uuid
+  startTime          DateTime
+  endTime            DateTime?
+  startLatitude      Float
+  startLongitude     Float
+  endLatitude        Float?
+  endLongitude       Float?
+  targetEndLatitude  Float?
+  targetEndLongitude Float?
+  distance           Float     @default(0)
+  isAutoStarted      Boolean   @default(false)
+  isAutoEnded        Boolean   @default(false)
+  completionStatus   String?
+  routePoints        Json?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now())
+  vehicle            Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 }
 
 model AssetHistory {
-  id          String            @id @default(cuid())
-  assetId     String
-  asset       Asset             @relation(fields: [assetId], references: [id])
-  action      AssetHistoryAction
-  details     Json
-  userId      String            @db.Uuid
-  user        User              @relation(fields: [userId], references: [id])
-  createdAt   DateTime          @default(now())
-}
-
-enum TicketStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CLOSED
-}
-
-enum TicketPriority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
+  id        String             @id @default(cuid())
+  assetId   String
+  action    AssetHistoryAction
+  details   Json
+  userId    String             @db.Uuid
+  createdAt DateTime           @default(now())
+  asset     Asset              @relation(fields: [assetId], references: [id])
+  user      User               @relation(fields: [userId], references: [id])
 }
 
 model Ticket {
-  id            String        @id @default(cuid())
-  displayId     String?       @unique
-  title         String
-  description   String
-  status        TicketStatus  @default(OPEN)
-  priority      TicketPriority @default(MEDIUM)
-  barcode       String?       @unique @default(cuid())
-  assetId       String?
-  asset         Asset?        @relation(fields: [assetId], references: [id])
-  userId        String        @db.Uuid
-  user          User          @relation(fields: [userId], references: [id])
-  assignedToId  String?       @db.Uuid
-  assignedTo    User?         @relation("AssignedTickets", fields: [assignedToId], references: [id])
-  requesterName String?
-  organizationId String?      // Made optional temporarily for migration
-  organization  Organization? @relation(fields: [organizationId], references: [id])
-  history       TicketHistory[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id             String          @id @default(cuid())
+  displayId      String?         @unique
+  title          String
+  description    String
+  status         TicketStatus    @default(OPEN)
+  priority       TicketPriority  @default(MEDIUM)
+  barcode        String?         @unique @default(cuid())
+  assetId        String?
+  userId         String          @db.Uuid
+  assignedToId   String?         @db.Uuid
+  requesterName  String?
+  organizationId String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  asset          Asset?          @relation(fields: [assetId], references: [id])
+  assignedTo     User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  organization   Organization?   @relation(fields: [organizationId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  history        TicketHistory[]
 }
 
 model TicketHistory {
-  id             String        @id @default(cuid())
+  id             String          @id @default(cuid())
   ticketId       String
-  ticket         Ticket        @relation(fields: [ticketId], references: [id])
   status         TicketStatus?
   priority       TicketPriority?
   comment        String
-  userId         String        @db.Uuid
-  user           User          @relation(fields: [userId], references: [id])
+  userId         String          @db.Uuid
   startedAt      DateTime?
-  resolutionTime Int?          // Resolution time in seconds
-  createdAt      DateTime      @default(now())
+  resolutionTime Int?
+  createdAt      DateTime        @default(now())
+  ticket         Ticket          @relation(fields: [ticketId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
 }
 
 model ReportHistory {
@@ -735,22 +627,6 @@ model ReportHistory {
   startDate      DateTime?
   endDate        DateTime?
   createdAt      DateTime  @default(now())
-}
-
-enum AuditLogType {
-  USER_ACTIVITY
-  DATA_ACCESS
-  DATA_MODIFICATION
-  SECURITY_EVENT
-  SYSTEM_EVENT
-  COMPLIANCE_EVENT
-}
-
-enum AuditLogSeverity {
-  INFO
-  WARNING
-  ERROR
-  CRITICAL
 }
 
 model AuditLog {
@@ -774,63 +650,35 @@ model AuditLog {
   verifiedBy     String?          @db.Uuid
   retentionDate  DateTime?
   metadata       Json?
-  organizationId String?          // Added for proper multi-tenancy (nullable for system-wide logs)
+  organizationId String?
   organization   Organization?    @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
 }
 
-enum TaskPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-enum TaskStatus {
-  PLANNED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
 model PlannerTask {
-  id                String       @id @default(cuid())
-  title             String
-  description       String?
-  startDate         DateTime
-  endDate           DateTime?
-  priority          TaskPriority @default(MEDIUM)
-  status            TaskStatus   @default(PLANNED)
-  assetId           String?
-  asset             Asset?       @relation(fields: [assetId], references: [id])
-  userId            String       @db.Uuid
-  user              User         @relation(fields: [userId], references: [id])
-  aiSuggested       Boolean      @default(false)
-  aiNotes           String?
-  assignedToUserId  String?      @db.Uuid
-  assignedToUser    User?        @relation("AssignedTasks", fields: [assignedToUserId], references: [id])
-  completedAt       DateTime?
-  estimatedHours    Float?
-  actualHours       Float?
-  organizationId    String?      // Made optional temporarily for migration
-  organization      Organization? @relation(fields: [organizationId], references: [id])
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-}
-
-enum ErrorSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-enum ErrorStatus {
-  NEW
-  INVESTIGATING
-  RESOLVED
-  IGNORED
+  id               String        @id @default(cuid())
+  title            String
+  description      String?
+  startDate        DateTime
+  endDate          DateTime?
+  priority         TaskPriority  @default(MEDIUM)
+  status           TaskStatus    @default(PLANNED)
+  assetId          String?
+  userId           String        @db.Uuid
+  aiSuggested      Boolean       @default(false)
+  aiNotes          String?
+  assignedToUserId String?       @db.Uuid
+  completedAt      DateTime?
+  estimatedHours   Float?
+  actualHours      Float?
+  organizationId   String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  asset            Asset?        @relation(fields: [assetId], references: [id])
+  assignedToUser   User?         @relation("AssignedTasks", fields: [assignedToUserId], references: [id])
+  organization     Organization? @relation(fields: [organizationId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
 }
 
 model ErrorLog {
@@ -849,10 +697,10 @@ model ErrorLog {
   resolvedBy     String?       @db.Uuid
   occurrences    Int           @default(1)
   lastOccurredAt DateTime      @default(now())
-  organizationId String?       // Added for proper multi-tenancy (nullable for system-wide errors)
-  organization   Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([userId])
   @@index([status])
@@ -861,151 +709,298 @@ model ErrorLog {
 }
 
 model AssetDocument {
-  id             String    @id @default(cuid())
-  assetId        String
-  asset          Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  fileName       String    @default("unnamed")
-  fileUrl        String    @default("")
-  fileType       String    @default("application/octet-stream")
-  fileSize       Int       @default(0)
-  uploadedAt     DateTime  @default(now())
-  uploadedById   String    @db.Uuid @default("00000000-0000-0000-0000-000000000000")
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @default(now()) @updatedAt
+  id           String   @id @default(cuid())
+  assetId      String
+  fileName     String   @default("unnamed")
+  fileUrl      String   @default("")
+  fileType     String   @default("application/octet-stream")
+  fileSize     Int      @default(0)
+  uploadedAt   DateTime @default(now())
+  uploadedById String   @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid")) @db.Uuid
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+  asset        Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }
 
 model SystemSettings {
-  id             String    @id @default(cuid())
-  key            String    @unique
-  value          Json
-  description    String?
-  lastUpdatedBy  String?   @db.Uuid
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @default(now())
+  id            String   @id @default(cuid())
+  key           String   @unique
+  value         Json
+  description   String?
+  lastUpdatedBy String?  @db.Uuid
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
 }
 
 model RoleDefaultPermission {
   id                 String    @id @default(cuid())
-  role               UserRole?
-  customRoleId       String?
+  role               UserRole? @unique
+  customRoleId       String?   @unique
   customRoleName     String?
-  pageAccess         Json      // Stores default page access permissions as JSON
+  pageAccess         Json
   canDeleteDocuments Boolean   @default(false)
-  buttonVisibility   Json?     // Stores button visibility permissions as JSON
+  buttonVisibility   Json?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @default(now())
-
-  @@unique([role])
-  @@unique([customRoleId])
 }
 
 model Recipe {
-  id              String            @id @default(cuid())
-  name            String
-  description     String?
-  servings        Int               @default(4)
-  prepTime        Int               @default(30)
-  instructions    String
-  totalCost       Float             @default(0)
-  costPerServing  Float             @default(0)
-  sellingPrice    Float             @default(0)
-  barcode         String?           @unique
-  isSubrecipe     Boolean           @default(false) // True if this recipe is a subrecipe
-  userId          String            @db.Uuid
-  organizationId  String?           // Made optional temporarily for migration
-  organization    Organization?     @relation(fields: [organizationId], references: [id])
-  ingredients     RecipeIngredient[]
-  usages          RecipeUsage[]
-  disposals       FoodDisposal[]
-  usedAsSubrecipeIn RecipeIngredient[] @relation("SubRecipe")
+  id                String             @id @default(cuid())
+  name              String
+  description       String?
+  servings          Int                @default(4)
+  prepTime          Int                @default(30)
+  instructions      String
+  totalCost         Float              @default(0)
+  costPerServing    Float              @default(0)
+  sellingPrice      Float              @default(0)
+  barcode           String?            @unique
+  isSubrecipe       Boolean            @default(false)
+  userId            String             @db.Uuid
+  organizationId    String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  disposals         FoodDisposal[]
   productionBatches ProductionBatch[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  organization      Organization?      @relation(fields: [organizationId], references: [id])
+  ingredients       RecipeIngredient[]
+  usedAsSubrecipeIn RecipeIngredient[] @relation("SubRecipe")
+  usages            RecipeUsage[]
 }
 
 model RecipeIngredient {
-  id            String      @id @default(cuid())
-  recipeId      String
-  recipe        Recipe      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  foodSupplyId  String?
-  foodSupply    FoodSupply? @relation(fields: [foodSupplyId], references: [id])
-  subRecipeId   String?
-  subRecipe     Recipe?     @relation("SubRecipe", fields: [subRecipeId], references: [id])
-  quantity      Float
-  cost          Float       @default(0)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @default(now())
-  wastes        IngredientWaste[]
+  id           String            @id @default(cuid())
+  recipeId     String
+  foodSupplyId String?
+  subRecipeId  String?
+  quantity     Float
+  cost         Float             @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @default(now())
+  wastes       IngredientWaste[]
+  foodSupply   FoodSupply?       @relation(fields: [foodSupplyId], references: [id])
+  recipe       Recipe            @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  subRecipe    Recipe?           @relation("SubRecipe", fields: [subRecipeId], references: [id])
 }
 
 model RecipeUsage {
-  id            String      @id @default(cuid())
-  recipeId      String
-  recipe        Recipe      @relation(fields: [recipeId], references: [id])
-  kitchenId     String
-  kitchen       Kitchen     @relation(fields: [kitchenId], references: [id])
-  userId        String      @db.Uuid
-  servingsUsed  Int         @default(1)
-  cost          Float       @default(0) // Total cost for this usage
-  waste         Float       @default(0) // Total waste for this usage
-  sellingPrice  Float       @default(0) // Selling price for this usage
-  profit        Float       @default(0) // Profit for this usage
-  notes         String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @default(now())
+  id           String   @id @default(cuid())
+  recipeId     String
+  kitchenId    String
+  userId       String   @db.Uuid
+  servingsUsed Int      @default(1)
+  cost         Float    @default(0)
+  waste        Float    @default(0)
+  sellingPrice Float    @default(0)
+  profit       Float    @default(0)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+  kitchen      Kitchen  @relation(fields: [kitchenId], references: [id])
+  recipe       Recipe   @relation(fields: [recipeId], references: [id])
 }
 
 model FoodDisposal {
-  id            String      @id @default(cuid())
-  foodSupplyId  String
-  foodSupply    FoodSupply  @relation(fields: [foodSupplyId], references: [id])
-  quantity      Float
-  reason        String
-  notes         String?
-  cost          Float       @default(0)
-  userId        String      @db.Uuid
-  user          User        @relation(fields: [userId], references: [id])
-  kitchenId     String?
-  kitchen       Kitchen?    @relation(fields: [kitchenId], references: [id])
-  source        String?     @default("direct") // "direct" or "recipe"
-  recipeId      String?
-  recipe        Recipe?     @relation(fields: [recipeId], references: [id])
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id           String     @id @default(cuid())
+  foodSupplyId String
+  quantity     Float
+  reason       String
+  notes        String?
+  cost         Float      @default(0)
+  userId       String     @db.Uuid
+  kitchenId    String?
+  source       String?    @default("direct")
+  recipeId     String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  foodSupply   FoodSupply @relation(fields: [foodSupplyId], references: [id])
+  kitchen      Kitchen?   @relation(fields: [kitchenId], references: [id])
+  recipe       Recipe?    @relation(fields: [recipeId], references: [id])
+  user         User       @relation(fields: [userId], references: [id])
 }
 
 model VehicleMaintenance {
-  id             String      @id @default(cuid())
-  vehicleId      String
-  vehicle        Vehicle     @relation(fields: [vehicleId], references: [id])
-  rentalId       String?     // Optional: link to a specific rental period
-  rental         VehicleRental? @relation(fields: [rentalId], references: [id])
-  userId         String?     @db.Uuid // Who recorded the maintenance
-  user           User?       @relation(fields: [userId], references: [id])
-  organizationId String?     // For multi-tenancy
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  maintenanceType String     // e.g. "Oil Change", "Tire Replacement"
-  description    String?
-  maintenanceDate DateTime   @default(now())
-  cost           Float       @default(0)
-  mileage        Int?
-  vendorId       String?
-  vendor         Vendor?     @relation(fields: [vendorId], references: [id])
-  nextDueDate    DateTime?   // For AI/forecasting
-  aiRecommendation String?   // e.g. "Replace soon", "Monitor", etc.
-  receiptUrl     String?     // URL to uploaded maintenance receipt/invoice
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @default(now())
+  id               String         @id @default(cuid())
+  vehicleId        String
+  rentalId         String?
+  userId           String?        @db.Uuid
+  organizationId   String?
+  maintenanceType  String
+  description      String?
+  maintenanceDate  DateTime       @default(now())
+  cost             Float          @default(0)
+  mileage          Int?
+  vendorId         String?
+  nextDueDate      DateTime?
+  aiRecommendation String?
+  receiptUrl       String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now())
+  organization     Organization?  @relation(fields: [organizationId], references: [id])
+  rental           VehicleRental? @relation(fields: [rentalId], references: [id])
+  user             User?          @relation(fields: [userId], references: [id])
+  vehicle          Vehicle        @relation(fields: [vehicleId], references: [id])
+  vendor           Vendor?        @relation(fields: [vendorId], references: [id])
 }
 
 model IngredientWaste {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   recipeIngredientId String
-  recipeIngredient   RecipeIngredient  @relation(fields: [recipeIngredientId], references: [id], onDelete: Cascade)
   wasteType          String
-  wastePercentage    Float             @default(0)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @default(now())
+  wastePercentage    Float            @default(0)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @default(now())
+  recipeIngredient   RecipeIngredient @relation(fields: [recipeIngredientId], references: [id], onDelete: Cascade)
 
   @@unique([recipeIngredientId, wasteType])
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum UserStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum VendorType {
+  ASSET
+  FOOD_SUPPLY
+  VEHICLE
+}
+
+enum AssetType {
+  FURNITURE
+  EQUIPMENT
+  ELECTRONICS
+}
+
+enum AssetStatus {
+  ACTIVE
+  IN_TRANSIT
+  DISPOSED
+  MAINTENANCE
+  DAMAGED
+  CRITICAL
+  LIKE_NEW
+}
+
+enum LocationType {
+  CENTRAL_STORE
+  CENTRAL_KITCHEN
+  KITCHEN
+}
+
+enum DeviceType {
+  GPS_TRACKER
+  OBD_DEVICE
+  ASSET_TRACKER
+  DASH_CAM
+  TEMPERATURE_MONITOR
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  DISCONNECTED
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  RENTED
+  MAINTENANCE
+  RETIRED
+}
+
+enum VehicleType {
+  CAR
+  TRUCK
+  VAN
+  BUS
+  MOTORCYCLE
+}
+
+enum AssetHistoryAction {
+  MOVED
+  DISPOSED
+  REGISTERED
+  UPDATED
+  LOCATION_SHARED
+  STATUS_CHANGED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AuditLogType {
+  USER_ACTIVITY
+  DATA_ACCESS
+  DATA_MODIFICATION
+  SECURITY_EVENT
+  SYSTEM_EVENT
+  COMPLIANCE_EVENT
+}
+
+enum AuditLogSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ErrorSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ErrorStatus {
+  NEW
+  INVESTIGATING
+  RESOLVED
+  IGNORED
 }

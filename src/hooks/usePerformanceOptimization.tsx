@@ -13,6 +13,7 @@ import {
   removePassiveEventListener,
   isClient
 } from '@/lib/performance';
+import { logDebug } from '@/lib/client-logger';
 
 /**
  * Hook for applying performance optimizations to components
@@ -50,7 +51,7 @@ export function usePerformanceOptimization(componentName: string) {
     deferOperations([
       () => {
         // Add any deferred operations here
-        console.log(`[Performance] Applied optimizations to ${componentName}`);
+        logDebug(`[Performance] Applied optimizations to ${componentName}`);
       }
     ]);
   }, [componentName]);

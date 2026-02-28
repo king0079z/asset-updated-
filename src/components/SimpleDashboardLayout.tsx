@@ -103,6 +103,7 @@ function SimpleSidebar({ className }: SidebarProps) {
   const { t, dir } = useTranslation();
   const isRtl = dir === 'rtl';
   const { isDark } = useTheme();
+  const { hasAccess, isAdmin, loading } = usePageAccess();
   
   const menuItems = {
     main: [
@@ -258,8 +259,6 @@ function SimpleSidebar({ className }: SidebarProps) {
       <div className="flex-1 px-4 py-6 space-y-8 overflow-y-auto scrollbar-none max-h-[calc(100vh-200px)]">
         {/* Get page access information once for all sections */}
         {(() => {
-          const { hasAccess, isAdmin, loading } = usePageAccess();
-          
           // Don't render any menu sections until permissions are loaded
           if (loading) {
             return (

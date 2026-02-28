@@ -78,7 +78,8 @@ const QuickAction: React.FC<QuickActionProps> = ({
   
   // Use the passed pageAccessData if available, otherwise use the hook directly
   // This allows the component to be used both inside and outside the QuickActionsMenu
-  const accessData = pageAccessData || usePageAccess();
+  const fallbackPageAccessData = usePageAccess();
+  const accessData = pageAccessData || fallbackPageAccessData;
   const { hasAccess, isAdmin, loading } = accessData;
   
   // Check if user has access to this action's page

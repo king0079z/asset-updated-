@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Continue without session data
       }
       
-      const { message, stack, context, url, userAgent, userId, userEmail, severity, timestamp } = req.body;
+      const { message, stack, context, url, userAgent, severity } = req.body;
       
       // Determine severity based on error message if not provided
       let errorSeverity: ErrorSeverity = severity || 'MEDIUM';
@@ -48,8 +48,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         context,
         url,
         userAgent,
-        userId: userId || user?.id,
-        userEmail: userEmail || user?.email,
+        userId: user?.id,
+        userEmail: user?.email,
         severity: errorSeverity,
       });
       
@@ -105,13 +105,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Check if user is admin or manager by role OR has isAdmin flag set to true
     if (!finalUserData || ((finalUserData.role !== 'ADMIN' && finalUserData.role !== 'MANAGER') && !finalUserData.isAdmin)) {
-      // Special case for admin@example.com - automatically grant access
-      if (user.email === 'admin@example.com') {
-        console.log(`Granting access to admin@example.com despite role/flag issues`);
-      } else {
-        console.log(`Access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
-        return res.status(403).json({ error: 'Forbidden: Admin access required' });
-      }
+      console.log(`Access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
+      return res.status(403).json({ error: 'Forbidden: Admin access required' });
     }
 
     try {
@@ -181,13 +176,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Check if user is admin or manager by role OR has isAdmin flag set to true
     if (!finalUserData || ((finalUserData.role !== 'ADMIN' && finalUserData.role !== 'MANAGER') && !finalUserData.isAdmin)) {
-      // Special case for admin@example.com - automatically grant access
-      if (user.email === 'admin@example.com') {
-        console.log(`PATCH - Granting access to admin@example.com despite role/flag issues`);
-      } else {
-        console.log(`Access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
-        return res.status(403).json({ error: 'Forbidden: Admin access required' });
-      }
+      console.log(`Access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
+      return res.status(403).json({ error: 'Forbidden: Admin access required' });
     }
 
     try {
@@ -240,13 +230,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // For DELETE, we're more strict - require either ADMIN role or isAdmin flag
     if (!finalUserData || (finalUserData.role !== 'ADMIN' && !finalUserData.isAdmin)) {
-      // Special case for admin@example.com - automatically grant access
-      if (user.email === 'admin@example.com') {
-        console.log(`DELETE - Granting access to admin@example.com despite role/flag issues`);
-      } else {
-        console.log(`Delete access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
-        return res.status(403).json({ error: 'Forbidden: Admin access required' });
-      }
+      console.log(`Delete access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
+      return res.status(403).json({ error: 'Forbidden: Admin access required' });
     }
 
     try {

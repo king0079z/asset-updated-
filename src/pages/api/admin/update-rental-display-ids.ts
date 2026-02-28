@@ -17,6 +17,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { role: true, isAdmin: true },
+    });
+    const isAuthorizedAdmin =
+      !!dbUser && (dbUser.role === 'ADMIN' || dbUser.isAdmin === true);
+
+    if (!isAuthorizedAdmin) {
+      return res.status(403).json({ message: 'Forbidden: Admin access required' });
+    }
+
     // Get all rentals without display IDs
     const rentalsWithoutDisplayId = await prisma.vehicleRental.findMany({
       where: {
@@ -32,21 +43,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`Found ${rentalsWithoutDisplayId.length} rentals without proper display IDs`);
 
-    // Update each rental with a display ID
-    const updatedRentals = [];
-    for (const rental of rentalsWithoutDisplayId) {
-      // Generate a display ID using our utility function, but with a sequential number
-      // instead of the rental ID substring for better organization
-      const sequentialId = String(updatedRentals.length + 1).padStart(4, '0');
-      const displayId = formatRentalId(rental.startDate, sequentialId, null);
-      
-      const updatedRental = await prisma.vehicleRental.update({
+    const updateOperations = rentalsWithoutDisplayId.map((rental) => {
+      const stableSuffix = rental.id.slice(-4).toUpperCase();
+      const displayId = formatRentalId(rental.startDate, stableSuffix, null);
+      return prisma.vehicleRental.update({
         where: { id: rental.id },
-        data: { displayId }
+        data: { displayId },
       });
-      
-      updatedRentals.push(updatedRental);
-    }
+    });
+    const updatedRentals = await prisma.$transaction(updateOperations);
 
     // Log the action
     await logDataAccess(

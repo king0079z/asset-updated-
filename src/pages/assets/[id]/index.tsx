@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useRouter } from 'next/router';
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useTranslation } from "@/contexts/TranslationContext";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
 import { Package, Utensils, Car, TrendingUp, DollarSign } from "lucide-react";

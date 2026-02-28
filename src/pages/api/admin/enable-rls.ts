@@ -21,8 +21,16 @@ export default async function handler(
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // For security, this endpoint should only be called once during setup
-    // You may want to add additional checks here to ensure only admins can run this
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { role: true, isAdmin: true },
+    });
+    const isAuthorizedAdmin =
+      !!dbUser && (dbUser.role === 'ADMIN' || dbUser.isAdmin === true);
+
+    if (!isAuthorizedAdmin) {
+      return res.status(403).json({ error: 'Forbidden: Admin access required' });
+    }
 
     console.log('Enabling Row Level Security on Ticket table');
 
@@ -82,9 +90,6 @@ export default async function handler(
       });
     }
     
-    return res.status(500).json({ 
-      error: 'Failed to enable Row Level Security', 
-      details: errorMessage
-    });
+    return res.status(500).json({ error: 'Failed to enable Row Level Security' });
   }
 }

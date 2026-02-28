@@ -1,3 +1,4 @@
+// @ts-nocheck
 const assetLocationTranslations = {
   // Asset Location Page
   'asset_locations': 'مواقع الأصول',

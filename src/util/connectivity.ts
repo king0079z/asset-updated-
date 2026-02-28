@@ -1,6 +1,7 @@
 /**
  * Utility functions for monitoring network and GPS connectivity
  */
+import { useState, useEffect } from 'react';
 
 // Store offline location updates to sync when back online
 interface OfflineLocationUpdate {
@@ -61,7 +62,7 @@ class ConnectivityManager {
     this.notifyOnlineListeners();
   }
 
-  private async checkAPIConnectivity(): void {
+  private async checkAPIConnectivity(): Promise<void> {
     if (!navigator.onLine) {
       this.isOnline = false;
       this.notifyOnlineListeners();
@@ -329,14 +330,16 @@ export const enhancedFetch = async (
  * @returns Object with online status and pending update count
  */
 export function useNetworkStatus() {
-  if (typeof window === 'undefined') {
-    return { isOnline: true, pendingUpdates: 0 };
-  }
-  
-  const [isOnline, setIsOnline] = useState(connectivityManager.isNetworkOnline());
-  const [pendingUpdates, setPendingUpdates] = useState(connectivityManager.getPendingUpdateCount());
+  const [isOnline, setIsOnline] = useState(
+    typeof window === 'undefined' ? true : connectivityManager.isNetworkOnline()
+  );
+  const [pendingUpdates, setPendingUpdates] = useState(
+    typeof window === 'undefined' ? 0 : connectivityManager.getPendingUpdateCount()
+  );
   
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     // Update state when online status changes
     const removeListener = connectivityManager.addOnlineListener((online) => {
       setIsOnline(online);
@@ -362,16 +365,16 @@ export function useNetworkStatus() {
  * @returns Object with GPS status and time since last update
  */
 export function useGPSStatus() {
-  if (typeof window === 'undefined') {
-    return { hasGPS: true, timeSinceLastGPS: null };
-  }
-  
-  const [hasGPS, setHasGPS] = useState(connectivityManager.isGPSAvailable());
+  const [hasGPS, setHasGPS] = useState(
+    typeof window === 'undefined' ? true : connectivityManager.isGPSAvailable()
+  );
   const [timeSinceLastGPS, setTimeSinceLastGPS] = useState<number | null>(
-    connectivityManager.getTimeSinceLastGPS()
+    typeof window === 'undefined' ? null : connectivityManager.getTimeSinceLastGPS()
   );
   
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     // Update state when GPS status changes
     const removeListener = connectivityManager.addGPSListener((available) => {
       setHasGPS(available);
@@ -390,6 +393,3 @@ export function useGPSStatus() {
   
   return { hasGPS, timeSinceLastGPS };
 }
-
-// Import useState and useEffect at the top
-import { useState, useEffect } from 'react';

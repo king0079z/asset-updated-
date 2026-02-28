@@ -73,7 +73,7 @@ export default function App({ Component, pageProps }: AppProps) {
 
   useEffect(() => {
     // Set up global error handler
-    setupGlobalErrorHandler();
+    const cleanupGlobalErrorHandler = setupGlobalErrorHandler();
     
     // Optimize theme and language initialization
     const initApp = () => {
@@ -150,6 +150,7 @@ export default function App({ Component, pageProps }: AppProps) {
     });
     
     return () => {
+      cleanupGlobalErrorHandler();
       window.removeEventListener('languagechange', handleLanguageChange);
     };
   }, [handleLanguageChange]);

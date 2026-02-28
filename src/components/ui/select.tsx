@@ -9,7 +9,13 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 
 import { cn } from "@/lib/utils"
 
-const Select = SelectPrimitive.Root
+type SelectProps = React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root> & {
+  className?: string
+}
+
+const Select = ({ className: _className, ...props }: SelectProps) => (
+  <SelectPrimitive.Root {...props} />
+)
 
 const SelectGroup = SelectPrimitive.Group
 

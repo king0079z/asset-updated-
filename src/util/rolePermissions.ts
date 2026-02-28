@@ -46,9 +46,9 @@ export async function applyDefaultRolePermissions(userId: string, role: string) 
       data: {
         role: role as any,
         isAdmin: role === 'ADMIN',
-        pageAccess: defaultPermissions.pageAccess,
+        pageAccess: (defaultPermissions.pageAccess ?? undefined) as any,
         canDeleteDocuments: defaultPermissions.canDeleteDocuments,
-        buttonVisibility: defaultPermissions.buttonVisibility
+        buttonVisibility: (defaultPermissions.buttonVisibility ?? undefined) as any
       }
     });
     

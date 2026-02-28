@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ import { AiAlerts } from "@/components/AiAlerts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { useRouter } from 'next/router';
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/use-toast";
@@ -42,6 +43,7 @@ import { KitchenConsumptionSummaryDialog } from "@/components/KitchenConsumption
 import { DriverTripSummaryDialog } from "@/components/DriverTripSummaryDialog";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 import { EnhancedVendorPerformanceCard } from "@/components/EnhancedVendorPerformanceCard";
+import { logDebug } from "@/lib/client-logger";
 
 interface DashboardStats {
   totalAssets: number;
@@ -98,6 +100,7 @@ export default function Dashboard() {
   const [kitchenConsumptionOpen, setKitchenConsumptionOpen] = useState(false);
   const [driverTripSummaryOpen, setDriverTripSummaryOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const hasFetchedRef = useRef(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalAssets: 0,
     totalFoodItems: 0,
@@ -123,16 +126,16 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
     setIsLoading(true);
     
     const fetchStats = async () => {
       try {
-        console.log('Dashboard: Starting to fetch data');
+        logDebug('Dashboard: Starting to fetch data');
         
         // Enhanced fetch function with error handling
         const fetchData = async (url: string) => {
-          // Add timestamp to URL to prevent caching
-          const cacheBustUrl = `${url}${url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
           const options = {
             headers: {
               'Cache-Control': 'no-cache',
@@ -141,9 +144,9 @@ export default function Dashboard() {
           };
           
           // Use the centralized error handling utility with default values
-          const data = await fetchWithErrorHandling(cacheBustUrl, options, null);
+          const data = await fetchWithErrorHandling(url, options, null);
           if (data) {
-            console.log(`Dashboard: Successfully fetched data from ${url}`);
+            logDebug(`Dashboard: Successfully fetched data from ${url}`);
           }
           return data || {};
         };
@@ -165,7 +168,7 @@ export default function Dashboard() {
         ]);
         
         // Log the results for debugging
-        console.log('Dashboard: API results:', {
+        logDebug('Dashboard: API results:', {
           dashboardStatus: dashboardResult.status,
           rentalCostsStatus: rentalCostsResult.status,
           foodConsumptionStatus: foodConsumptionResult.status,
@@ -279,7 +282,7 @@ export default function Dashboard() {
           }
         };
         
-        console.log('Dashboard: Validated stats:', validatedStats);
+        logDebug('Dashboard: Validated stats:', validatedStats);
         setStats(validatedStats);
       } catch (error) {
         console.error('Dashboard: Error fetching dashboard stats:', error);

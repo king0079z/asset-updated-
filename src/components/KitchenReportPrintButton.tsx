@@ -335,7 +335,7 @@ export function KitchenReportPrintButton({
     if (foodSupplies.length > 0) {
       recommendations.push({
         title: 'Optimize inventory levels',
-        description: 'Review your inventory levels to ensure you're not overstocking items with low usage rates.'
+        description: "Review your inventory levels to ensure you're not overstocking items with low usage rates."
       });
     }
     

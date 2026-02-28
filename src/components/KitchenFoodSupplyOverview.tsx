@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 import { useToast } from '@/components/ui/use-toast';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { Package, AlertTriangle, UtensilsCrossed, RefreshCw } from 'lucide-react';
@@ -208,7 +209,7 @@ export function KitchenFoodSupplyOverview({ kitchenId, kitchenName }: KitchenFoo
               {foodSupplies.length > 5 && (
                 <div className="mt-3 text-center">
                   <Button variant="link" size="sm" asChild>
-                    <a href="/food-supply">{t('view_all_supplies')}</a>
+                    <Link href="/food-supply">{t('view_all_supplies')}</Link>
                   </Button>
                 </div>
               )}

@@ -1,6 +1,6 @@
 const translations = {
   // KitchenConsumptionDialog translations
-  'consumption_details': 'تفاصيل الاستهلاك',
+  'consumption_details_info': 'تفاصيل الاستهلاك',
   'monthly_trend': 'الاتجاه الشهري',
   'summary': 'الملخص',
   'detailed_history': 'التاريخ المفصل',

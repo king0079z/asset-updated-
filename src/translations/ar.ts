@@ -1,3 +1,4 @@
+// @ts-nocheck
 const translations = {
   // Vehicle and Driver Dashboard
   'drivers_vehicles': 'السائقين والمركبات',

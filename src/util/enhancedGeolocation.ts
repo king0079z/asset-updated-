@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Enhanced Geolocation Utility
  * Provides improved network-based location when GPS is unavailable

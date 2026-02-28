@@ -1,9 +1,11 @@
 import { createClient as createClientPrimitive } from '@supabase/supabase-js'
+import { getSupabaseEnv } from './env'
 
 export function createClient() {
+  const { url, anonKey } = getSupabaseEnv()
   const supabase = createClientPrimitive(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    url,
+    anonKey
   )
 
   return supabase

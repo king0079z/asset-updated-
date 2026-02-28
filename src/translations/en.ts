@@ -1,4 +1,4 @@
-const translations = {
+const translations: Record<string, string> = {
   // Vehicle and Driver Dashboard
   'drivers_vehicles': 'Drivers & Vehicles',
   'total_drivers': 'Total Drivers',

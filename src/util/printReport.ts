@@ -90,7 +90,7 @@ export const printReport = (
         const importedNode = printWindow.document.importNode(contentClone, true);
         
         // Ensure all elements are visible
-        const allElements = importedNode.querySelectorAll('*');
+        const allElements = (importedNode as Element).querySelectorAll('*');
         allElements.forEach(el => {
           if (el instanceof HTMLElement) {
             // Remove any display:none styles

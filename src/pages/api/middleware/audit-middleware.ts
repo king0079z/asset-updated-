@@ -2,7 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { AuditLogType, AuditLogSeverity } from '@prisma/client';
-import { logUserActivity } from '@/lib/audit';
 
 type NextApiHandler = (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
 
@@ -186,8 +185,6 @@ export function withAuditLog(
           }
         }).then(() => {
           console.log(`Successfully created user activity log: ${userFriendlyAction}`);
-          // Force disconnect and reconnect to ensure the next query sees this record
-          prisma.$disconnect().catch(e => console.error("Error disconnecting:", e));
         }).catch(error => {
           console.error('Error creating direct user activity log:', error);
         });

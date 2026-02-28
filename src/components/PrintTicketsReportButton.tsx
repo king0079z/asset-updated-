@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import TicketsSummaryReport from './TicketsSummaryReport';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { printContent, printContentWithIframe } from '@/util/print';
 
 // Define ticket status and priority enums to match Prisma schema
@@ -78,27 +79,7 @@ const PrintTicketsReportButton: React.FC<PrintTicketsReportButtonProps> = ({
         return;
       }
       
-      // Render the report component to a string
-      const reportElement = document.createElement('div');
-      reportElement.style.position = 'absolute';
-      reportElement.style.left = '-9999px';
-      document.body.appendChild(reportElement);
-      
-      // Render the report component
-      const ReactDOM = await import('react-dom');
-      const ReactDOMServer = await import('react-dom/server');
-      
-      ReactDOM.render(<TicketsSummaryReport tickets={tickets} />, reportElement);
-      
-      // Wait for rendering to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Get the HTML content
-      const reportHtml = reportElement.innerHTML;
-      
-      // Clean up
-      ReactDOM.unmountComponentAtNode(reportElement);
-      document.body.removeChild(reportElement);
+      const reportHtml = renderToStaticMarkup(<TicketsSummaryReport tickets={tickets} />);
       
       // Try to print using the iframe method first
       try {

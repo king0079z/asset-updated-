@@ -122,6 +122,7 @@ function Sidebar({ className }: SidebarProps) {
   const { isDark, theme, toggleTheme } = useTheme();
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const { setRef } = useRTLOptimization('sidebar');
+  const { hasAccess, isAdmin, loading } = usePageAccess();
   
   // Reference for the sidebar container
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -315,8 +316,6 @@ function Sidebar({ className }: SidebarProps) {
       <div className="flex-1 px-4 py-6 space-y-8 overflow-y-auto scrollbar-none max-h-[calc(100vh-200px)]">
         {/* Get page access information once for all sections */}
         {(() => {
-          const { hasAccess, isAdmin, loading } = usePageAccess();
-          
           // Don't render any menu sections until permissions are loaded
           if (loading) {
             return (

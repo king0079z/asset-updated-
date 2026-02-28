@@ -5,8 +5,16 @@ import { ErrorContext } from './errorLogger';
  */
 export function setupGlobalErrorHandler() {
   if (typeof window !== 'undefined') {
-    // Store original console.error
-    const originalConsoleError = console.error;
+    if (window.__globalErrorHandlerInitialized) {
+      return () => {};
+    }
+    window.__globalErrorHandlerInitialized = true;
+
+    // Store original console.error only once
+    if (!window.__errorHandlerOriginalConsoleError) {
+      window.__errorHandlerOriginalConsoleError = console.error.bind(console);
+    }
+    const originalConsoleError = window.__errorHandlerOriginalConsoleError;
     
     // Track user actions for better error context
     const userActions: string[] = [];
@@ -20,15 +28,16 @@ export function setupGlobalErrorHandler() {
     visitedUrls.push(window.location.href);
     
     // Monitor navigation events
-    window.addEventListener('popstate', () => {
+    const popstateHandler = () => {
       if (visitedUrls.length >= MAX_VISITED_URLS) {
         visitedUrls.shift();
       }
       visitedUrls.push(window.location.href);
-    });
+    };
+    window.addEventListener('popstate', popstateHandler);
     
     // Monitor user clicks to track actions
-    document.addEventListener('click', (event) => {
+    const clickHandler = (event: Event) => {
       try {
         const target = event.target as HTMLElement;
         let actionDescription = '';
@@ -59,7 +68,8 @@ export function setupGlobalErrorHandler() {
       } catch (e) {
         // Ignore errors in the click handler
       }
-    });
+    };
+    document.addEventListener('click', clickHandler);
     
     // Collect device and browser information
     const getDeviceInfo = () => {
@@ -137,6 +147,20 @@ export function setupGlobalErrorHandler() {
         const errorMessage = args.map(arg => 
           typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
+
+        // Ignore expected client-side route cancellation noise.
+        if (errorMessage.includes('Abort fetching component for route')) {
+          return;
+        }
+
+        // Prevent recursive/error-logger noise from being re-logged.
+        if (
+          errorMessage.includes('Failed to send error to server:') ||
+          errorMessage.includes('Failed to process error:') ||
+          errorMessage.includes('Failed to log error:')
+        ) {
+          return;
+        }
         
         // Collect enhanced context information
         const enhancedContext = {
@@ -163,8 +187,16 @@ export function setupGlobalErrorHandler() {
     };
 
     // Handle unhandled promise rejections
-    window.addEventListener('unhandledrejection', (event) => {
+    const unhandledRejectionHandler = (event: PromiseRejectionEvent) => {
       const error = event.reason;
+      const message =
+        typeof error === 'string'
+          ? error
+          : error?.message || 'Unhandled Promise Rejection';
+
+      if (message.includes('Abort fetching component for route')) {
+        return;
+      }
       
       // Collect enhanced context information
       const enhancedContext = {
@@ -180,14 +212,15 @@ export function setupGlobalErrorHandler() {
       };
       
       logErrorToServer({
-        message: error.message || 'Unhandled Promise Rejection',
-        stack: error.stack,
+        message,
+        stack: error?.stack,
         context: enhancedContext
       });
-    });
+    };
+    window.addEventListener('unhandledrejection', unhandledRejectionHandler);
 
     // Handle uncaught exceptions
-    window.addEventListener('error', (event) => {
+    const errorHandler = (event: ErrorEvent) => {
       // Collect enhanced context information
       const enhancedContext = {
         additionalInfo: {
@@ -212,8 +245,20 @@ export function setupGlobalErrorHandler() {
       
       // Prevent the error from being reported to the console
       // event.preventDefault();
-    });
+    };
+    window.addEventListener('error', errorHandler);
+
+    return () => {
+      window.removeEventListener('popstate', popstateHandler);
+      document.removeEventListener('click', clickHandler);
+      window.removeEventListener('unhandledrejection', unhandledRejectionHandler);
+      window.removeEventListener('error', errorHandler);
+      console.error = originalConsoleError;
+      window.__globalErrorHandlerInitialized = false;
+    };
   }
+
+  return () => {};
 }
 
 /**
@@ -224,6 +269,11 @@ export async function logErrorToServer(error: {
   stack?: string;
   context?: ErrorContext;
 }) {
+  const fallbackConsoleError =
+    typeof window !== 'undefined' && window.__errorHandlerOriginalConsoleError
+      ? window.__errorHandlerOriginalConsoleError
+      : console.error.bind(console);
+
   try {
     // Get user info from localStorage if available
     let userId = undefined;
@@ -298,8 +348,10 @@ export async function logErrorToServer(error: {
           // Continue processing queue
           setTimeout(processQueue, 100);
         } catch (e) {
-          // If API call fails, log to console as fallback
-          console.error('Failed to send error to server:', e);
+          // Timeouts/aborts are expected occasionally; skip noisy fallback logs.
+          if (!(e instanceof DOMException && e.name === 'AbortError')) {
+            fallbackConsoleError('Failed to send error to server:', e);
+          }
           
           // Remove from queue after 3 retries
           if (currentError.retryCount >= 2) {
@@ -318,7 +370,7 @@ export async function logErrorToServer(error: {
     }
   } catch (e) {
     // If all else fails, log to console as fallback
-    console.error('Failed to process error:', e);
+    fallbackConsoleError('Failed to process error:', e);
   }
 }
 
@@ -327,5 +379,7 @@ declare global {
   interface Window {
     errorQueue?: Array<any>;
     isProcessingErrorQueue?: boolean;
+    __globalErrorHandlerInitialized?: boolean;
+    __errorHandlerOriginalConsoleError?: typeof console.error;
   }
 }

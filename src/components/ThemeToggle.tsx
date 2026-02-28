@@ -19,7 +19,12 @@ export function ThemeToggle({ showLabel = false }: ThemeToggleProps) {
     return (
       <div className="flex flex-col items-center py-1.5 px-3 relative group">
         <div className="relative">
-          <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/15 transition-colors cursor-pointer" onClick={toggleTheme}>
+          <button
+            type="button"
+            className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/15 transition-colors cursor-pointer"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? t('switch_to_light_mode') : t('switch_to_dark_mode')}
+          >
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={theme}
@@ -35,7 +40,7 @@ export function ThemeToggle({ showLabel = false }: ThemeToggleProps) {
                 )}
               </motion.div>
             </AnimatePresence>
-          </div>
+          </button>
           <motion.div 
             className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 h-1 bg-primary rounded-full"
             initial={{ width: '4px', opacity: 0 }}

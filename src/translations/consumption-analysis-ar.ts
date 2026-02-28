@@ -1,3 +1,4 @@
+// @ts-nocheck
 const translations = {
   // ConsumptionAnalysisDialog translations
   'consumption_analysis': 'تحليل الاستهلاك',

@@ -4,11 +4,19 @@ import { debounce, memoize } from '@/lib/performance';
 // Define available languages
 export type Language = 'en' | 'ar';
 
+type Translator = ((
+  key: string,
+  options?: string | Record<string, string | number>
+) => string) & {
+  language?: Language;
+  dir?: 'ltr' | 'rtl';
+};
+
 // Define translation context type
 type TranslationContextType = {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: Translator;
   dir: 'ltr' | 'rtl';
   isLoading: boolean;
 };
@@ -17,7 +25,8 @@ type TranslationContextType = {
 const TranslationContext = createContext<TranslationContextType>({
   language: 'en',
   setLanguage: () => {},
-  t: (key: string) => key,
+  t: (key: string, options?: string | Record<string, string | number>) =>
+    typeof options === 'string' ? options : key,
   dir: 'ltr',
   isLoading: false
 });
@@ -231,10 +240,33 @@ export const TranslationProvider: React.FC<TranslationProviderProps> = ({ childr
   }), [language, translations]);
 
   // Translation function that uses the memoized getTranslation
-  const t = useCallback((key: string): string => {
-    if (isLoading) return key;
-    return getTranslation(key);
-  }, [isLoading, getTranslation]);
+  const t = useCallback((
+    key: string,
+    options?: string | Record<string, string | number>
+  ): string => {
+    if (isLoading) {
+      return typeof options === 'string' ? options : key;
+    }
+
+    const translated = getTranslation(key);
+    let result =
+      translated === key && typeof options === 'string'
+        ? options
+        : translated;
+
+    if (options && typeof options === 'object') {
+      for (const [tokenKey, tokenValue] of Object.entries(options)) {
+        const safeValue = String(tokenValue);
+        result = result
+          .replace(new RegExp(`\\{\\{${tokenKey}\\}\\}`, 'g'), safeValue)
+          .replace(new RegExp(`\\{${tokenKey}\\}`, 'g'), safeValue);
+      }
+    }
+
+    return result;
+  }, [isLoading, getTranslation]) as Translator;
+  t.language = language;
+  t.dir = isRTL ? 'rtl' : 'ltr';
 
   // Determine text direction based on language
   const dir = useMemo<'ltr' | 'rtl'>(() => 

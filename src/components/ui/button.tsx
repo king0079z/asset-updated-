@@ -45,9 +45,22 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, children, ...props }, ref) => {
     const { t } = useTranslation();
     const Comp = asChild ? Slot : "button"
+    const {
+      whileHover,
+      whileTap,
+      ...restProps
+    } = props as ButtonProps & {
+      whileHover?: unknown;
+      whileTap?: unknown;
+    };
     
     // Enhanced error handling for event handlers
-    const safeProps = { ...props };
+    const safeProps: Record<string, unknown> = { ...restProps };
+    if (asChild) {
+      // Preserve motion props only when delegating to a custom child component.
+      if (whileHover !== undefined) safeProps.whileHover = whileHover;
+      if (whileTap !== undefined) safeProps.whileTap = whileTap;
+    }
     
     // Safely wrap any onClick handlers to prevent crashes
     if (typeof safeProps.onClick === 'function') {

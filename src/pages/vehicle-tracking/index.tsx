@@ -7,7 +7,7 @@ import { useBackgroundGeolocation } from "@/hooks/useBackgroundGeolocation";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
-import { MapPin, Car, AlertTriangle, RefreshCw, BarChart3, Radio, RadioOff, Wifi, WifiOff, HardDrive } from "lucide-react";
+import { MapPin, Car, AlertTriangle, RefreshCw, BarChart3, Radio, Wifi, WifiOff, HardDrive } from "lucide-react";
 import TrackingDeviceManager from "@/components/TrackingDeviceManager";
 import { Skeleton } from "@/components/ui/skeleton";
 import dynamic from "next/dynamic";

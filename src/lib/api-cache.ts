@@ -2,6 +2,8 @@
  * API caching utilities to improve dashboard performance
  */
 
+import { logDebug } from '@/lib/client-logger';
+
 type CacheEntry<T> = {
   data: T;
   timestamp: number;
@@ -13,6 +15,7 @@ type CacheOptions = {
 
 // In-memory cache store
 const cacheStore = new Map<string, CacheEntry<any>>();
+const pendingRequests = new Map<string, Promise<any>>();
 
 // Default cache options
 const defaultOptions: CacheOptions = {
@@ -37,13 +40,20 @@ export async function fetchWithCache<T>(
   const now = Date.now();
   
   if (cachedEntry && (now - cachedEntry.timestamp < cacheOptions.maxAge)) {
-    console.log(`[Cache] Using cached data for ${url}`);
+    logDebug(`[Cache] Using cached data for ${url}`);
     return cachedEntry.data as T;
+  }
+
+  // Reuse any in-flight request for the same URL to avoid duplicate fetches.
+  const pendingRequest = pendingRequests.get(cacheKey);
+  if (pendingRequest) {
+    logDebug(`[Cache] Reusing in-flight request for ${url}`);
+    return pendingRequest as Promise<T>;
   }
   
   // No valid cache, make the actual fetch request
-  console.log(`[Cache] Fetching fresh data for ${url}`);
-  try {
+  logDebug(`[Cache] Fetching fresh data for ${url}`);
+  const requestPromise = (async () => {
     const response = await fetch(url, {
       headers: {
         'Cache-Control': 'no-cache',
@@ -64,16 +74,24 @@ export async function fetchWithCache<T>(
     });
     
     return data as T;
+  })();
+
+  pendingRequests.set(cacheKey, requestPromise);
+
+  try {
+    return await requestPromise;
   } catch (error) {
     console.error(`[Cache] Error fetching ${url}:`, error);
-    
+
     // If we have stale cache, return it as fallback
     if (cachedEntry) {
-      console.log(`[Cache] Returning stale cached data for ${url}`);
+      logDebug(`[Cache] Returning stale cached data for ${url}`);
       return cachedEntry.data as T;
     }
-    
+
     throw error;
+  } finally {
+    pendingRequests.delete(cacheKey);
   }
 }
 

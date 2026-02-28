@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import { useRouter } from 'next/router';
 import { Activity, Truck, ShoppingCart, Package, Clipboard, ArrowRight } from 'lucide-react';

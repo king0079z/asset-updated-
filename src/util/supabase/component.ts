@@ -1,9 +1,11 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseEnv } from './env'
 
 export function createClient() {
+  const { url, anonKey } = getSupabaseEnv()
   const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookieOptions: {
         domain: process.env.NEXT_PUBLIC_CO_DEV_ENV === "preview" ? ".preview.co.dev" : undefined,

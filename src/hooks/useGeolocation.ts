@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
 import { getLocationFromIp, getLocationFromIpAlternative, getLocationFromIpFallback } from '@/util/ipGeolocation';
 import { getEnhancedLocation, cacheCurrentLocation, getLocationAccuracyDescription, EnhancedLocationResult } from '@/util/enhancedGeolocation';

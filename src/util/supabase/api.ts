@@ -1,10 +1,12 @@
 import { createServerClient, serializeCookieHeader } from '@supabase/ssr'
 import { type NextApiRequest, type NextApiResponse } from 'next'
+import { getSupabaseEnv } from './env'
 
 export function createClient(req: NextApiRequest, res: NextApiResponse) {
+  const { url, anonKey } = getSupabaseEnv()
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {

@@ -12,10 +12,7 @@ const nextConfig = {
   swcMinify: false,
   // Exclude problematic API routes
   excludeDefaultMomentLocales: true,
-  // Reduce the number of files processed during build
-  experimental: {
-    cpus: 1
-  },
+  // Keep default CPU parallelism for reasonable compile times in dev/build
   // Disable source maps to reduce file operations
   productionBrowserSourceMaps: false,
   // Disable compression to reduce file operations

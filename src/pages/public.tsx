@@ -5,6 +5,10 @@ export default function PublicPage({ data }: { data?: any[] }) {
 }
 
 export async function getStaticProps() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return { props: {} };
+  }
+
   const supabase = createClient()
 
   const { data, error } = await supabase.from('countries').select()

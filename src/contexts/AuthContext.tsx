@@ -4,6 +4,7 @@ import { User, Provider } from '@supabase/supabase-js';
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from 'next/router';
 import { enhancedFetch } from '@/util/connectivity';
+import { isSupabaseConfigured } from '@/util/supabase/env';
 
 interface AuthContextType {
   user: User | null;
@@ -35,10 +36,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const supabaseConfigured = isSupabaseConfigured();
   const supabase = createClient();
   const { toast } = useToast();
 
+  const ensureSupabaseConfigured = () => {
+    if (supabaseConfigured) return true;
+    toast({
+      variant: "destructive",
+      title: "Missing configuration",
+      description: "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env to enable authentication.",
+    });
+    return false;
+  };
+
   React.useEffect(() => {
+    if (!supabaseConfigured) {
+      setUser(null);
+      setInitializing(false);
+      return;
+    }
+
     const fetchSession = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
@@ -55,7 +73,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [supabase, supabaseConfigured]);
 
   const createUser = async (user: User) => {
     try {
@@ -189,6 +207,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signIn = async (email: string, password: string) => {
+    if (!ensureSupabaseConfigured()) return;
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (!error && data.user) {
       await createUser(data.user);
@@ -210,6 +229,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signUp = async (email: string, password: string) => {
+    if (!ensureSupabaseConfigured()) return;
     const { data, error } = await supabase.auth.signUp({
       email,
       password
@@ -235,6 +255,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signInWithMagicLink = async (email: string) => {
+    if (!ensureSupabaseConfigured()) return;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const { data, error } = await supabase.auth.signInWithOtp({
       email,
@@ -262,6 +283,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signInWithGoogle = async () => {
+    if (!ensureSupabaseConfigured()) return;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google' as Provider,
@@ -281,6 +303,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signOut = async () => {
+    if (!ensureSupabaseConfigured()) return;
     const { error } = await supabase.auth.signOut();
     if (error) {
       toast({
@@ -298,6 +321,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const resetPassword = async (email: string) => {
+    if (!ensureSupabaseConfigured()) return;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${siteUrl}/reset-password`,
@@ -318,6 +342,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const refreshUser = async () => {
+    if (!supabaseConfigured) return;
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {

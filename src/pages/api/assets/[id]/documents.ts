@@ -16,7 +16,7 @@ export default async function handler(
 
   if (authError || !user) {
     console.error("Authentication error:", authError);
-    return res.status(401).json({ message: "Unauthorized", details: authError });
+    return res.status(401).json({ message: "Unauthorized" });
   }
 
   const { id } = req.query;
@@ -25,13 +25,29 @@ export default async function handler(
     return res.status(400).json({ message: "Asset ID is required" });
   }
 
-  // Verify the asset exists
-  const asset = await prisma.asset.findUnique({
-    where: { id },
+  const currentUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { role: true, isAdmin: true, organizationId: true },
+  });
+  if (!currentUser) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  const isPrivilegedUser =
+    currentUser.role === 'ADMIN' ||
+    currentUser.role === 'MANAGER' ||
+    currentUser.isAdmin === true;
+  const assetScope = isPrivilegedUser && currentUser.organizationId
+    ? { organizationId: currentUser.organizationId }
+    : { userId: user.id };
+
+  // Verify the asset exists and is in user's scope
+  const asset = await prisma.asset.findFirst({
+    where: { id, ...assetScope },
   });
 
   if (!asset) {
-    return res.status(404).json({ message: "Asset not found" });
+    return res.status(404).json({ message: "Asset not found or access denied" });
   }
 
   // Handle GET request - Fetch all documents for the asset
@@ -59,6 +75,10 @@ export default async function handler(
       
       if (!documentId) {
         return res.status(400).json({ message: "Document ID is required" });
+      }
+
+      if (!isPrivilegedUser && asset.userId !== user.id) {
+        return res.status(403).json({ message: "Forbidden" });
       }
       
       // Verify the document exists and belongs to the asset

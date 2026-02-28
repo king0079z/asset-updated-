@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';

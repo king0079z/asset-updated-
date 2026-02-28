@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createAuthClient } from "@/util/supabase/api";
+import prisma from "@/lib/prisma";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -30,6 +31,17 @@ export default async function handler(
   }
 
   try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { role: true, isAdmin: true },
+    });
+    const isAuthorizedAdmin =
+      !!dbUser && (dbUser.role === "ADMIN" || dbUser.isAdmin === true);
+
+    if (!isAuthorizedAdmin) {
+      return res.status(403).json({ message: "Forbidden: Admin access required" });
+    }
+
     // Create policies for the assets bucket
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'assets';
 
@@ -129,8 +141,7 @@ export default async function handler(
   } catch (error) {
     console.error("Error setting up storage policies:", error);
     return res.status(500).json({ 
-      message: "Failed to set up storage policies",
-      error: error instanceof Error ? error.message : "Unknown error"
+      message: "Failed to set up storage policies"
     });
   }
 }
