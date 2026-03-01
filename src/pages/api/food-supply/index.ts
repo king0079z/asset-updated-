@@ -1,7 +1,7 @@
-﻿import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
-import { isAdminOrManager } from "@/util/roleCheck";
+import { getUserRoleData } from "@/util/roleCheck";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -206,21 +206,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Check if user is admin or manager
-    const userIsAdminOrManager = await isAdminOrManager(user.id);
-    console.info(`[Food Supplies API] User role check: isAdminOrManager=${userIsAdminOrManager}`);
-    
-    // Check if user has access to food supply page
-    const userPermissions = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { pageAccess: true }
-    });
-    
-    const hasFoodSupplyAccess = userPermissions?.pageAccess && 
-      (userPermissions.pageAccess['/food-supply'] === true);
-    
-    console.info(`[Food Supplies API] User page access check: hasFoodSupplyAccess=${hasFoodSupplyAccess}`);
-    
+    // Single cached DB query for role + pageAccess
+    const roleData = await getUserRoleData(user.id);
+    const userIsAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
+    const hasFoodSupplyAccess = roleData?.pageAccess?.['/food-supply'] === true;
+
     // Build the where clause based on query parameters
     let whereClause: any = userIsAdminOrManager || hasFoodSupplyAccess
       ? {} // Empty where clause returns all food supplies for users with access

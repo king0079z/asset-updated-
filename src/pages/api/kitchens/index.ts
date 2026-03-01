@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { logDataModification, logUserActivity } from '@/lib/audit';
@@ -16,16 +16,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     switch (req.method) {
       case 'GET':
         const kitchens = await prisma.kitchen.findMany({
-          include: {
-            barcodes: {
-              include: {
-                foodSupply: true
-              }
-            }
-          }
+          select: {
+            id: true,
+            name: true,
+            floorNumber: true,
+            description: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { name: 'asc' },
         });
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
-
+        res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
         return res.status(200).json(kitchens);
 
       case 'POST':

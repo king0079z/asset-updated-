@@ -1,7 +1,11 @@
-﻿import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
-import { isAdminOrManager } from "@/util/roleCheck";
+import { getUserRoleData } from "@/util/roleCheck";
+
+// Server-side cache: per-user, 3-minute TTL
+const statsCache = new Map<string, { data: any; ts: number }>();
+const STATS_CACHE_TTL = 3 * 60 * 1000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -17,30 +21,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Check if user is admin or manager
-    const userIsAdminOrManager = await isAdminOrManager(user.id);
-    console.info(`[Food Supply Stats API] User role check: isAdminOrManager=${userIsAdminOrManager}`);
-    
-    // Check if user has access to food supply page
-    const userPermissions = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { pageAccess: true }
-    });
-    
-    const hasFoodSupplyAccess = userPermissions?.pageAccess && 
-      (userPermissions.pageAccess['/food-supply'] === true);
-    
-    console.info(`[Food Supply Stats API] User page access check: hasFoodSupplyAccess=${hasFoodSupplyAccess}`);
+    const { category } = req.query;
+    const cacheKey = `${user.id}:${category || ''}`;
 
-    // Determine if we should show all supplies or just user's supplies
+    // Return cached result if fresh
+    const cached = statsCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < STATS_CACHE_TTL) {
+      res.setHeader('Cache-Control', 'private, max-age=180');
+      return res.status(200).json(cached.data);
+    }
+
+    // Single query for role + pageAccess
+    const roleData = await getUserRoleData(user.id);
+    const userIsAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
+    const hasFoodSupplyAccess = roleData?.pageAccess?.['/food-supply'] === true;
+    
     const showAllSupplies = userIsAdminOrManager || hasFoodSupplyAccess;
-    console.info(`[Food Supply Stats API] Showing all supplies: ${showAllSupplies}`);
 
     const today = new Date();
     const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     // Add category filter if provided
-    const { category } = req.query;
     let whereClause: any = showAllSupplies ? {} : { userId: user.id };
     if (category && typeof category === "string") {
       whereClause = { 
@@ -331,10 +332,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Final totals: direct + recipe-based
     const totalConsumedValue = totalConsumedValueDirect + recipeBasedConsumed;
     const totalWasteCost = expirationWasteCost + ingredientWasteCost;
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
 
-
-    return res.status(200).json({
+    const responseData = {
       totalSupplies,
       expiringSupplies,
       categoryStats,
@@ -346,7 +345,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       wastePercentage: totalConsumedValue > 0 ? (totalWasteCost / totalConsumedValue) * 100 : 0,
       ingredientWasteBreakdown,
       expirationWasteBreakdown
-    });
+    };
+
+    // Store in server-side cache
+    statsCache.set(cacheKey, { data: responseData, ts: Date.now() });
+    res.setHeader('Cache-Control', 'private, max-age=180, stale-while-revalidate=60');
+    return res.status(200).json(responseData);
   } catch (error) {
     console.error("Error fetching food supply stats:", error);
     return res.status(500).json({ error: "Failed to fetch food supply statistics" });
