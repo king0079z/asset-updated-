@@ -152,66 +152,42 @@ export default function BarcodeScannerFood({ kitchenId, onScanComplete, open: ex
 
   const handleScan = async (decodedText: string) => {
     try {
-      // Stop scanning after successful scan
-      if (scannerRef.current) {
-        await scannerRef.current.pause();
-      }
+      if (scannerRef.current) await scannerRef.current.pause();
 
-      console.log(`[Barcode Scanner] Scanning barcode: ${decodedText} for kitchen: ${kitchenId}`);
-
-      // First try with kitchen ID
-      let response = await fetch(`/api/food-supply?barcode=${decodedText}&kitchenId=${kitchenId}`);
+      // 1. Try with current kitchen
+      let response = await fetch(`/api/food-supply?barcode=${encodeURIComponent(decodedText)}&kitchenId=${kitchenId}`);
       let data = await response.json();
-      
-      // If not found in current kitchen, try without kitchen ID
-      if (!response.ok && kitchenId !== 'default') {
-        console.log(`[Barcode Scanner] Not found in kitchen ${kitchenId}, trying without kitchen ID`);
-        response = await fetch(`/api/food-supply?barcode=${decodedText}`);
+
+      // 2. If not found, try any kitchen (cross-kitchen lookup)
+      if (!data.supply) {
+        response = await fetch(`/api/food-supply?barcode=${encodeURIComponent(decodedText)}`);
         data = await response.json();
       }
-      
-      if (response.ok && data.supply) {
-        console.log(`[Barcode Scanner] Found supply: ${JSON.stringify(data.supply)}`);
+
+      if (data.supply) {
         setFoundSupply(data.supply);
         toast({
           title: "Item Found",
-          description: data.supply.kitchenId === kitchenId
-            ? `Found ${data.supply.name} in current kitchen`
-            : `Found ${data.supply.name} in ${data.supply.kitchenName}`,
+          description: `Found ${data.supply.name} in ${data.supply.kitchenName}`,
         });
+      } else if (data.recipeId) {
+        toast({
+          title: "Recipe Barcode",
+          description: `This barcode belongs to recipe: ${data.recipeName}. Use the recipe scanner instead.`,
+          variant: "warning",
+        });
+        if (scannerRef.current) await scannerRef.current.resume();
       } else {
-        console.log(`[Barcode Scanner] Error response: ${JSON.stringify(data)}`);
-        
-        // Check if it's a recipe barcode
-        if (data.recipeId) {
-          toast({
-            title: "Recipe Barcode",
-            description: `This barcode belongs to recipe: ${data.recipeName}. Please use the recipe scanner instead.`,
-            variant: "warning",
-          });
-        } else {
-          toast({
-            title: "Not Found",
-            description: "No food supply found with this barcode",
-            variant: "destructive",
-          });
-        }
-        
-        // Resume scanning if no item found
-        if (scannerRef.current) {
-          await scannerRef.current.resume();
-        }
+        toast({
+          title: "Not Found",
+          description: "No food supply found with this barcode",
+          variant: "destructive",
+        });
+        if (scannerRef.current) await scannerRef.current.resume();
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to search for food supply",
-        variant: "destructive",
-      });
-      // Resume scanning on error
-      if (scannerRef.current) {
-        await scannerRef.current.resume();
-      }
+      toast({ title: "Error", description: "Failed to search for food supply", variant: "destructive" });
+      if (scannerRef.current) await scannerRef.current.resume();
     }
   };
 
