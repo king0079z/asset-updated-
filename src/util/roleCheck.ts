@@ -1,25 +1,27 @@
 import prisma from '@/lib/prisma';
 
-// In-memory role cache: userId -> { role, pageAccess, ts }
-const roleCache = new Map<string, { role: string; pageAccess: any; ts: number }>();
+// In-memory role cache: userId -> cached user data
+type RoleData = { role: string; pageAccess: any; organizationId: string | null; isAdmin: boolean; email: string | null; ts: number };
+const roleCache = new Map<string, RoleData>();
 const ROLE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Fetches user role + pageAccess in a single DB query with caching.
+ * Fetches user role, pageAccess, organizationId, isAdmin in a single cached DB query.
  * Returns null if user not found.
  */
-export async function getUserRoleData(userId: string): Promise<{ role: string; pageAccess: any } | null> {
+export async function getUserRoleData(userId: string): Promise<Omit<RoleData, 'ts'> | null> {
   const cached = roleCache.get(userId);
   if (cached && Date.now() - cached.ts < ROLE_CACHE_TTL) {
-    return { role: cached.role, pageAccess: cached.pageAccess };
+    const { ts, ...data } = cached;
+    return data;
   }
   try {
     const userData = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true, pageAccess: true },
+      select: { role: true, pageAccess: true, organizationId: true, isAdmin: true, email: true },
     });
     if (!userData) return null;
-    roleCache.set(userId, { role: userData.role, pageAccess: userData.pageAccess, ts: Date.now() });
+    roleCache.set(userId, { ...userData, ts: Date.now() });
     return userData;
   } catch {
     return null;

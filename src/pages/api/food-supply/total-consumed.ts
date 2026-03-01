@@ -1,7 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
-import { isAdminOrManager } from "@/util/roleCheck";
+
+// Server-side cache: global, 5-min TTL (same data for all users)
+let _cache: { totalConsumed: number; ts: number } | null = null;
+const CACHE_TTL = 5 * 60 * 1000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -17,29 +20,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    // For the dashboard, we always show all information without any data filtering
-    console.info(`[Food Supply Total Consumed API] Showing all consumption data for dashboard`);
+    // Return cached value if fresh
+    if (_cache && Date.now() - _cache.ts < CACHE_TTL) {
+      res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
+      return res.status(200).json({ totalConsumed: _cache.totalConsumed });
+    }
 
-    // Get total consumed amount in money for all users
-    const consumptionStats = await prisma.foodConsumption.findMany({
-      select: {
-        quantity: true,
-        foodSupply: {
-          select: {
-            pricePerUnit: true
-          }
-        }
-      }
-    });
+    // Use a raw aggregate instead of fetching all rows then reducing in JS
+    const result = await prisma.$queryRaw<[{ total: number }]>`
+      SELECT COALESCE(SUM(fc.quantity * fs."pricePerUnit"), 0) AS total
+      FROM "FoodConsumption" fc
+      JOIN "FoodSupply" fs ON fc."foodSupplyId" = fs.id
+    `;
 
-    const totalConsumed = consumptionStats.reduce((sum, record) => {
-      return sum + (record.quantity * (record.foodSupply.pricePerUnit || 0));
-    }, 0);
+    const totalConsumed = Number(result[0]?.total ?? 0);
+    _cache = { totalConsumed, ts: Date.now() };
 
-    res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
+    res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
     return res.status(200).json({ totalConsumed });
   } catch (error) {
-    console.error('Error getting total consumed amount:', error);
+    console.error('Error getting total consumed:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
