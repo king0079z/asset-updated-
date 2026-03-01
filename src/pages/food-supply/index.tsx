@@ -37,7 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { CardTabs } from "@/components/ui/card-tabs";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, UtensilsCrossed, Package, AlertTriangle, History, Search, Barcode, Utensils, Printer, FileText, ChefHat, BarChart3, LineChart, Trash2, Brain, MapPin } from "lucide-react";
+import { PlusCircle, UtensilsCrossed, Package, AlertTriangle, History, Search, Barcode, Utensils, Printer, FileText, ChefHat, BarChart3, LineChart, Trash2, Brain, MapPin, TrendingUp, Clock, CheckCircle2, ArrowRight, Building2, TrendingDown, Layers, X } from "lucide-react";
 import { AssetReport } from "@/components/AssetReport";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -347,63 +347,70 @@ export default function FoodSupplyPage() {
       />
       <DashboardLayout>
       <div className="flex flex-col space-y-6">
-        {/* Enhanced Header Section */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 dark:from-slate-900 dark:via-blue-900/20 dark:to-purple-900/20 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/50 to-transparent dark:from-white/5"></div>
-          <div className="relative z-10">
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-4 mb-3">
-                  <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-                    <UtensilsCrossed className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
-                      {t('food_supply_management')}
-                    </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mt-1 text-lg">{t('manage_and_track_food_inventory')}</p>
-                  </div>
+
+        {/* ══════════════════════════════════════
+            World-Class Hero Header
+        ══════════════════════════════════════ */}
+        <div className="relative rounded-2xl overflow-hidden">
+          {/* Layered gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(0,0,0,0.12),transparent_60%)]" />
+          {/* Decorative circles */}
+          <div className="absolute -top-10 -right-10 w-52 h-52 rounded-full bg-white/5 blur-2xl" />
+          <div className="absolute -bottom-8 -left-8 w-44 h-44 rounded-full bg-white/5 blur-2xl" />
+          <div className="absolute top-6 right-36 w-20 h-20 rounded-full bg-amber-300/20" />
+
+          <div className="relative z-10 p-7 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            {/* Title + inline stats */}
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="h-14 w-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg ring-1 ring-white/30 flex-shrink-0">
+                  <UtensilsCrossed className="h-7 w-7 text-white" />
                 </div>
-                
-                {/* Quick Stats Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                  <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-                    <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total Items</p>
-                    <p className="text-xl font-bold text-slate-900 dark:text-white">{stats?.totalSupplies || 0}</p>
-                  </div>
-                  <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-                    <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Categories</p>
-                    <p className="text-xl font-bold text-slate-900 dark:text-white">{stats?.categoryStats?.length || 0}</p>
-                  </div>
-                  <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-                    <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Expiring Soon</p>
-                    <p className="text-xl font-bold text-amber-600">{stats?.expiringSupplies || 0}</p>
-                  </div>
-                  <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-lg p-3 border border-white/20">
-                    <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Total Value</p>
-                    <p className="text-xl font-bold text-emerald-600">QAR {(stats?.totalConsumed || 0).toFixed(0)}</p>
-                  </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-white tracking-tight">{t('food_supply_management')}</h1>
+                  <p className="text-amber-100/80 text-sm mt-0.5">{t('manage_and_track_food_inventory')}</p>
                 </div>
               </div>
-              
-              {/* Action Buttons */}
-              <div className="flex flex-wrap gap-3">
-                <PrintFoodSupplyReportButton 
-                  foodSupplies={foodSupplies}
-                  stats={stats}
-                  categories={categories}
-                />
-                <BarcodeManagementDialog />
-                {kitchens.length > 0 && (
-                  <BarcodeScannerFood kitchenId={kitchens[0].id} onScanComplete={loadFoodSupplies} />
-                )}
-                <Dialog open={open} onOpenChange={setOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 shadow-lg">
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      {t('register_new_supply')}
-                    </Button>
-                  </DialogTrigger>
+
+              {/* Inline quick-stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total Items', value: stats?.totalSupplies ?? 0, icon: Package },
+                  { label: 'Categories', value: stats?.categoryStats?.length ?? 0, icon: Layers },
+                  { label: 'Expiring Soon', value: stats?.expiringSupplies ?? 0, icon: AlertTriangle, warn: (stats?.expiringSupplies ?? 0) > 0 },
+                  { label: 'Consumed Value', value: `QAR ${(stats?.totalConsumed ?? 0).toFixed(0)}`, icon: TrendingUp },
+                ].map(({ label, value, icon: Icon, warn }) => (
+                  <div key={label} className={`rounded-xl px-4 py-3 border ${warn ? 'bg-red-500/20 border-red-300/30' : 'bg-white/15 border-white/20'} backdrop-blur-sm`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Icon className="h-3 w-3 text-white/70" />
+                      <p className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">{label}</p>
+                    </div>
+                    <p className={`text-xl font-bold ${warn ? 'text-red-100' : 'text-white'}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2.5 lg:flex-col">
+              <PrintFoodSupplyReportButton
+                foodSupplies={foodSupplies}
+                stats={stats}
+                categories={categories}
+              />
+              <BarcodeManagementDialog />
+              {kitchens.length > 0 && (
+                <BarcodeScannerFood kitchenId={kitchens[0].id} onScanComplete={loadFoodSupplies} />
+              )}
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-white text-orange-600 hover:bg-amber-50 border-0 shadow-lg font-semibold gap-2">
+                    <PlusCircle className="h-4 w-4" />
+                    {t('register_new_supply')}
+                  </Button>
+                </DialogTrigger>
                   <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                       <DialogTitle>{t('register_new_food_supply')}</DialogTitle>
@@ -559,231 +566,134 @@ export default function FoodSupplyPage() {
                     </Form>
                   </DialogContent>
                 </Dialog>
-              </div>
             </div>
+          </div>
+
+          {/* Bottom nav strip */}
+          <div className="relative z-10 border-t border-white/20 grid grid-cols-3 divide-x divide-white/20">
+            {[
+              { label: 'Kitchen Link', icon: Building2, value: 'Kitchens' },
+              { label: 'Track', icon: BarChart3, value: 'Analytics' },
+              { label: 'AI-Powered', icon: Brain, value: 'Insights' },
+            ].map(({ label, icon: Icon, value }) => (
+              <div key={label} className="px-5 py-3 flex items-center gap-3">
+                <Icon className="h-4 w-4 text-amber-200" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-amber-200/70 font-semibold">{label}</p>
+                  <p className="text-sm font-semibold text-white">{value}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Enhanced Quick Actions Section */}
-        <Card className="bg-gradient-to-r from-emerald-50 via-blue-50 to-purple-50 dark:from-emerald-900/20 dark:via-blue-900/20 dark:to-purple-900/20 border-emerald-200 dark:border-emerald-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center">
-                <Package className="h-3 w-3 text-white" />
-              </div>
-              Quick Actions
-            </CardTitle>
-            <CardDescription>Frequently used operations for efficient inventory management</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-              {/* Category Quick Actions with Dialogs */}
-              <CategoryDetailsDialog 
-                category="dairy" 
-                categoryLabel="Dairy"
-                trigger={
-                  <Button 
-                    variant="outline" 
-                    className="h-auto flex-col gap-2 p-4 bg-white/60 hover:bg-white/80 border-blue-200 hover:border-blue-300 hover:bg-blue-50"
-                    onClick={() => setSelectedCategory("dairy")}
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center text-lg">
-                      🥛
-                    </div>
-                    <span className="text-xs font-medium">View Dairy</span>
-                  </Button>
-                }
-              />
-              
-              <CategoryDetailsDialog 
-                category="meat" 
-                categoryLabel="Meat"
-                trigger={
-                  <Button 
-                    variant="outline" 
-                    className="h-auto flex-col gap-2 p-4 bg-white/60 hover:bg-white/80 border-red-200 hover:border-red-300 hover:bg-red-50"
-                    onClick={() => setSelectedCategory("meat")}
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-red-100 flex items-center justify-center text-lg">
-                      🥩
-                    </div>
-                    <span className="text-xs font-medium">View Meat</span>
-                  </Button>
-                }
-              />
-              
-              <CategoryDetailsDialog 
-                category="vegetables" 
-                categoryLabel="Vegetables"
-                trigger={
-                  <Button 
-                    variant="outline" 
-                    className="h-auto flex-col gap-2 p-4 bg-white/60 hover:bg-white/80 border-green-200 hover:border-green-300 hover:bg-green-50"
-                    onClick={() => setSelectedCategory("vegetables")}
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-green-100 flex items-center justify-center text-lg">
-                      🥬
-                    </div>
-                    <span className="text-xs font-medium">View Vegetables</span>
-                  </Button>
-                }
-              />
-
-              <CategoryDetailsDialog 
-                category="fruits" 
-                categoryLabel="Fruits"
-                trigger={
-                  <Button 
-                    variant="outline" 
-                    className="h-auto flex-col gap-2 p-4 bg-white/60 hover:bg-white/80 border-orange-200 hover:border-orange-300 hover:bg-orange-50"
-                    onClick={() => setSelectedCategory("fruits")}
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-orange-100 flex items-center justify-center text-lg">
-                      🍎
-                    </div>
-                    <span className="text-xs font-medium">View Fruits</span>
-                  </Button>
-                }
-              />
-
-              <CategoryDetailsDialog 
-                category="grains" 
-                categoryLabel="Grains"
-                trigger={
-                  <Button 
-                    variant="outline" 
-                    className="h-auto flex-col gap-2 p-4 bg-white/60 hover:bg-white/80 border-amber-200 hover:border-amber-300 hover:bg-amber-50"
-                    onClick={() => setSelectedCategory("grains")}
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center text-lg">
-                      🌾
-                    </div>
-                    <span className="text-xs font-medium">View Grains</span>
-                  </Button>
-                }
-              />
-
-              <CategoryDetailsDialog 
-                category="seafood" 
-                categoryLabel="Seafood"
-                trigger={
-                  <Button 
-                    variant="outline" 
-                    className="h-auto flex-col gap-2 p-4 bg-white/60 hover:bg-white/80 border-cyan-200 hover:border-cyan-300 hover:bg-cyan-50"
-                    onClick={() => setSelectedCategory("seafood")}
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-cyan-100 flex items-center justify-center text-lg">
-                      🐟
-                    </div>
-                    <span className="text-xs font-medium">View Seafood</span>
-                  </Button>
-                }
-              />
-              
-              <Button 
-                variant="outline" 
-                className="h-auto flex-col gap-2 p-4 bg-white/60 hover:bg-white/80 border-purple-200 hover:border-purple-300 hover:bg-purple-50"
-                onClick={() => {
-                  setSelectedCategory("all");
-                  setSearchTerm("");
-                }}
+        {/* ══════════════════════════════════════
+            Category Filter Pills (replaces old Quick Actions card)
+        ══════════════════════════════════════ */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Browse by Category</p>
+            {(selectedCategory !== 'all' || searchTerm) && (
+              <button
+                onClick={() => { setSelectedCategory('all'); setSearchTerm(''); }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                <div className="h-8 w-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <Search className="h-4 w-4 text-purple-600" />
-                </div>
-                <span className="text-xs font-medium">Clear Filters</span>
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                className="h-auto flex-col gap-2 p-4 bg-white/60 hover:bg-white/80 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-50"
-                onClick={() => setOpen(true)}
-              >
-                <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                  <PlusCircle className="h-4 w-4 text-emerald-600" />
-                </div>
-                <span className="text-xs font-medium">Add Supply</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                <X className="h-3 w-3" /> Clear filters
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {/* "All" pill */}
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
+                selectedCategory === 'all'
+                  ? 'bg-foreground text-background shadow-sm'
+                  : 'bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Package className="h-3.5 w-3.5" />
+              All
+              {stats?.totalSupplies ? (
+                <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${selectedCategory === 'all' ? 'bg-white/20 text-white' : 'bg-muted-foreground/20'}`}>
+                  {stats.totalSupplies}
+                </span>
+              ) : null}
+            </button>
 
-        {/* Navigation between Kitchen and Food Supply */}
-        <div className="mb-6">
-          <KitchenFoodSupplyNavigation currentPage="foodSupply" />
+            {/* Category pills with dialog */}
+            {categories.map((cat) => {
+              const count = stats?.categoryStats?.find(s => s.category === cat.value)?._count;
+              const isActive = selectedCategory === cat.value;
+              return (
+                <CategoryDetailsDialog
+                  key={cat.value}
+                  category={cat.value}
+                  categoryLabel={cat.label}
+                  trigger={
+                    <button
+                      onClick={() => setSelectedCategory(cat.value)}
+                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 border ${
+                        isActive
+                          ? 'bg-foreground text-background border-transparent shadow-sm'
+                          : `${cat.color} border-current/20 hover:shadow-sm`
+                      }`}
+                    >
+                      <span className="text-base leading-none">{cat.icon}</span>
+                      {cat.label}
+                      {count !== undefined && (
+                        <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-current/10'}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  }
+                />
+              );
+            })}
+          </div>
         </div>
         
-        {/* Enhanced Dashboard Stats */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 border-0 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-sm font-semibold text-white/90">{t('total_supplies')}</CardTitle>
-              <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <Package className="h-6 w-6 text-white" />
+        {/* ══════════════════════════════════════
+            Premium Stat Cards
+        ══════════════════════════════════════ */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              label: t('total_supplies'), value: stats?.totalSupplies ?? 0, sub: t('active_inventory_items'),
+              icon: Package, gradient: 'from-blue-500 to-indigo-600', bar: 75,
+            },
+            {
+              label: t('expiring_soon'), value: stats?.expiringSupplies ?? 0, sub: t('items_expiring_within_30_days'),
+              icon: AlertTriangle, gradient: 'from-amber-500 to-orange-600',
+              bar: Math.min(((stats?.expiringSupplies ?? 0) / Math.max(stats?.totalSupplies ?? 1, 1)) * 100, 100),
+            },
+            {
+              label: t('recent_activity'), value: stats?.recentSupplies?.length ?? 0, sub: t('new_items_this_week'),
+              icon: History, gradient: 'from-emerald-500 to-teal-600', bar: 60,
+            },
+            {
+              label: t('total_consumed_value'), value: `QAR ${(stats?.totalConsumed ?? 0).toFixed(0)}`, sub: t('total_value_of_consumed_items'),
+              icon: UtensilsCrossed, gradient: 'from-purple-500 to-pink-600', bar: 85,
+            },
+          ].map(({ label, value, sub, icon: Icon, gradient, bar }) => (
+            <div key={label} className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${gradient} text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5`}>
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+              <div className="relative z-10 p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <p className="text-sm font-semibold text-white/90">{label}</p>
+                  <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-4xl font-bold text-white mb-1 tabular-nums">{value}</p>
+                <p className="text-xs text-white/70">{sub}</p>
+                <div className="mt-4 h-1 bg-white/20 rounded-full overflow-hidden">
+                  <div className="h-full bg-white/60 rounded-full" style={{ width: `${bar}%` }} />
+                </div>
               </div>
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="text-4xl font-bold text-white mb-2">{stats?.totalSupplies || 0}</div>
-              <p className="text-sm text-white/80">{t('active_inventory_items')}</p>
-              <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white/60 rounded-full animate-pulse" style={{ width: '75%' }}></div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 border-0 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-sm font-semibold text-white/90">{t('expiring_soon')}</CardTitle>
-              <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-white animate-pulse" />
-              </div>
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="text-4xl font-bold text-white mb-2">{stats?.expiringSupplies || 0}</div>
-              <p className="text-sm text-white/80">{t('items_expiring_within_30_days')}</p>
-              <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white/60 rounded-full animate-pulse" style={{ width: `${Math.min(((stats?.expiringSupplies || 0) / (stats?.totalSupplies || 1)) * 100, 100)}%` }}></div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-green-500 to-teal-600 border-0 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-sm font-semibold text-white/90">{t('recent_activity')}</CardTitle>
-              <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <History className="h-6 w-6 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="text-4xl font-bold text-white mb-2">{stats?.recentSupplies?.length || 0}</div>
-              <p className="text-sm text-white/80">{t('new_items_this_week')}</p>
-              <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white/60 rounded-full animate-pulse" style={{ width: '60%' }}></div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden bg-gradient-to-br from-purple-500 via-pink-500 to-rose-500 border-0 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-              <CardTitle className="text-sm font-semibold text-white/90">{t('total_consumed_value')}</CardTitle>
-              <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <UtensilsCrossed className="h-6 w-6 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent className="relative z-10">
-              <div className="text-4xl font-bold text-white mb-2">
-                QAR {(stats?.totalConsumed || 0).toFixed(2)}
-              </div>
-              <p className="text-sm text-white/80">{t('total_value_of_consumed_items')}</p>
-              <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white/60 rounded-full animate-pulse" style={{ width: '85%' }}></div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          ))}
         </div>
 
         {/* Food Supply Notifications Panel */}
@@ -791,13 +701,13 @@ export default function FoodSupplyPage() {
           <FoodSupplyNotifications />
         </div>
 
-        <CardTabs defaultValue="inventory" className="space-y-4">
-          <CardTabs.List>
+        <CardTabs defaultValue="inventory" className="space-y-5">
+          <CardTabs.List className="bg-muted/50 p-1 rounded-xl gap-1">
             <CardTabs.Trigger value="inventory" icon={<Package className="h-4 w-4" />}>
               {t('inventory')}
             </CardTabs.Trigger>
             <CardTabs.Trigger value="multi-location" icon={<MapPin className="h-4 w-4" />}>
-              Multi-Location Inventory
+              Multi-Location
             </CardTabs.Trigger>
             <CardTabs.Trigger value="kitchens" icon={<Utensils className="h-4 w-4" />}>
               {t('kitchens')}
@@ -806,71 +716,51 @@ export default function FoodSupplyPage() {
               {t('recipes')}
             </CardTabs.Trigger>
             <CardTabs.Trigger value="kitchen-consumption-analysis" icon={<BarChart3 className="h-4 w-4" />}>
-              {t('kitchen_consumption_analysis') || "Kitchen Consumption Analysis"}
+              Analytics
             </CardTabs.Trigger>
           </CardTabs.List>
 
           <CardTabs.Content value="inventory" className="space-y-6">
-            {/* Enhanced Category Distribution */}
-            <Card className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-800/50 border-slate-200 dark:border-slate-700">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                    <BarChart3 className="h-4 w-4 text-white" />
+            {/* Category Distribution */}
+            <Card className="border-0 ring-1 ring-border/60 shadow-sm">
+              <CardHeader className="border-b border-border/50 pb-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center">
+                    <BarChart3 className="h-3.5 w-3.5 text-white" />
                   </div>
                   {t('category_distribution')}
                 </CardTitle>
-                <CardDescription>{t('overview_of_supplies_by_category')} - Click on any category to view detailed breakdown</CardDescription>
+                <CardDescription className="text-xs">{t('overview_of_supplies_by_category')} — click any tile for details</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <CardContent className="pt-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {stats?.categoryStats.map((stat, index) => {
                     const category = categories.find(c => c.value === stat.category);
                     const gradients = [
-                      'from-blue-500 to-cyan-500',
-                      'from-red-500 to-pink-500', 
-                      'from-green-500 to-emerald-500',
-                      'from-orange-500 to-yellow-500',
-                      'from-amber-500 to-orange-500',
-                      'from-purple-500 to-violet-500',
-                      'from-cyan-500 to-blue-500',
-                      'from-pink-500 to-rose-500',
-                      'from-indigo-500 to-purple-500'
+                      'from-blue-500 to-cyan-500', 'from-red-500 to-pink-500',
+                      'from-green-500 to-emerald-500', 'from-orange-500 to-yellow-500',
+                      'from-amber-500 to-orange-500', 'from-purple-500 to-violet-500',
+                      'from-cyan-500 to-blue-500', 'from-pink-500 to-rose-500',
+                      'from-indigo-500 to-purple-500',
                     ];
-                    
+                    const pct = Math.min((stat._count / (stats?.totalSupplies || 1)) * 100, 100);
+
                     return (
-                      <CategoryDetailsDialog 
+                      <CategoryDetailsDialog
                         key={stat.category}
-                        category={stat.category} 
+                        category={stat.category}
                         categoryLabel={category?.label || stat.category}
                         trigger={
-                          <div className={`relative overflow-hidden bg-gradient-to-br ${gradients[index % gradients.length]} text-white rounded-xl p-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 cursor-pointer group`}>
-                            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent group-hover:from-white/20"></div>
-                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              <div className="h-6 w-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                                <Search className="h-3 w-3 text-white" />
-                              </div>
-                            </div>
+                          <div className={`relative overflow-hidden bg-gradient-to-br ${gradients[index % gradients.length]} text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group`}>
+                            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.2),transparent_60%)]" />
                             <div className="relative z-10">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-2xl">{category?.icon || '📦'}</span>
-                                <span className="text-sm font-semibold capitalize opacity-90">{t(stat.category) || stat.category}</span>
+                              <span className="text-2xl leading-none block mb-2">{category?.icon || '📦'}</span>
+                              <p className="text-xs font-semibold capitalize text-white/90 mb-1">{category?.label || stat.category}</p>
+                              <p className="text-2xl font-bold">{stat._count}</p>
+                              <div className="mt-2 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-white/70 rounded-full" style={{ width: `${pct}%` }} />
                               </div>
-                              <div className="flex items-end justify-between mt-2">
-                                <span className="text-3xl font-bold">{stat._count}</span>
-                                <div className="text-xs opacity-75">
-                                  {((stat._count / (stats?.totalSupplies || 1)) * 100).toFixed(1)}%
-                                </div>
-                              </div>
-                              <div className="mt-3 h-2 bg-white/20 rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-white/60 rounded-full transition-all duration-1000 ease-out" 
-                                  style={{ width: `${Math.min((stat._count / (stats?.totalSupplies || 1)) * 100, 100)}%` }}
-                                ></div>
-                              </div>
-                              <div className="mt-2 text-xs opacity-75 group-hover:opacity-100 transition-opacity">
-                                Click to view details
-                              </div>
+                              <p className="mt-1 text-[10px] text-white/60">{pct.toFixed(1)}%</p>
                             </div>
                           </div>
                         }
@@ -882,16 +772,22 @@ export default function FoodSupplyPage() {
             </Card>
 
             {/* Food Supply List */}
-            <Card>
-              <CardHeader>
+            <Card className="border-0 ring-1 ring-border/60 shadow-sm">
+              <CardHeader className="border-b border-border/50 pb-4">
                 <div className="flex justify-between items-center">
-                  <CardTitle>{t('food_supply_list')}</CardTitle>
+                  <div>
+                    <CardTitle className="text-base">{t('food_supply_list')}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {filteredSupplies.length} {filteredSupplies.length === 1 ? 'item' : 'items'}
+                      {(searchTerm || selectedCategory !== 'all') && ' (filtered)'}
+                    </p>
+                  </div>
                   <Dialog onOpenChange={(open) => {
                     if (open) loadConsumptionHistory();
                   }}>
                     <DialogTrigger asChild>
-                      <Button variant="outline">
-                        <FileText className="h-4 w-4 mr-2" />
+                      <Button variant="outline" size="sm" className="gap-2 rounded-lg">
+                        <FileText className="h-4 w-4" />
                         {t('full_consumption_report')}
                       </Button>
                     </DialogTrigger>
@@ -914,42 +810,70 @@ export default function FoodSupplyPage() {
                     </DialogContent>
                   </Dialog>
                 </div>
-                <div className="flex flex-col md:flex-row gap-4 mt-4">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder={t('search_supplies')}
-                        className="pl-8"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                      />
-                    </div>
+                <div className="flex flex-col sm:flex-row gap-3 mt-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder={t('search_supplies')}
+                      className="pl-9 rounded-xl h-9 border-border/60 focus-visible:ring-orange-400/40"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                   </div>
                   <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[160px] h-9 rounded-xl border-border/60">
                       <SelectValue placeholder={t('select_category')} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t('all_categories')}</SelectItem>
                       {categories.map((category) => (
                         <SelectItem key={category.value} value={category.value}>
-                          {t(category.label) || category.label}
+                          {category.icon} {t(category.label) || category.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
                 {isLoading ? (
-                  <div className="flex items-center justify-center py-6">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                  /* Premium skeleton */
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 animate-pulse">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-muted" />
+                          <div className="flex-1 space-y-1.5">
+                            <div className="h-4 bg-muted rounded w-32" />
+                            <div className="h-3 bg-muted rounded w-20" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[...Array(4)].map((__, j) => <div key={j} className="h-14 bg-muted rounded-xl" />)}
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="h-8 bg-muted rounded-lg flex-1" />
+                          <div className="h-8 bg-muted rounded-lg flex-1" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : filteredSupplies.length === 0 ? (
-                  <div className="text-center py-6">
-                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">{t('no_food_supplies_found')}</p>
+                  <div className="flex flex-col items-center justify-center py-20 rounded-2xl border-2 border-dashed border-border">
+                    <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <Package className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="font-semibold mb-1">{t('no_food_supplies_found')}</h3>
+                    <p className="text-sm text-muted-foreground text-center max-w-xs mb-4">
+                      {searchTerm || selectedCategory !== 'all'
+                        ? 'Try adjusting your search or category filter.'
+                        : 'Register your first food supply item to get started.'}
+                    </p>
+                    {!searchTerm && selectedCategory === 'all' && (
+                      <Button onClick={() => setOpen(true)} className="gap-2">
+                        <PlusCircle className="h-4 w-4" /> {t('register_new_supply')}
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -964,128 +888,137 @@ export default function FoodSupplyPage() {
                         />
                       ))}
                     </div>
-                    
-                    {/* Enhanced Desktop view */}
-                    <div className="hidden md:grid gap-6">
+
+                    {/* ── Premium Desktop Grid ── */}
+                    <div className="hidden md:grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                       {filteredSupplies.map((supply) => {
                         const category = categories.find(c => c.value === supply.category);
                         const expirationDate = new Date(supply.expirationDate);
-                        const daysUntilExpiration = Math.ceil((expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-                        const expirationStatus = 
-                          daysUntilExpiration <= 7 ? 'from-red-500 to-red-600' :
-                          daysUntilExpiration <= 30 ? 'from-amber-500 to-orange-500' :
-                          'from-green-500 to-emerald-500';
+                        const daysUntilExpiration = Math.ceil((expirationDate.getTime() - Date.now()) / 86400000);
+                        const isCritical = daysUntilExpiration <= 7;
+                        const isWarning = daysUntilExpiration <= 30 && !isCritical;
+                        const isGood = !isCritical && !isWarning;
 
                         return (
-                          <Card
+                          <div
                             key={supply.id}
-                            className="relative overflow-hidden bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 border-slate-200 dark:border-slate-700 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]"
+                            className={`group relative rounded-2xl border overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+                              isCritical
+                                ? 'border-red-200 dark:border-red-800/40'
+                                : isWarning
+                                  ? 'border-amber-200 dark:border-amber-800/40'
+                                  : 'border-border hover:border-orange-200 dark:hover:border-orange-800/40'
+                            } bg-card`}
                           >
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full -translate-y-16 translate-x-16"></div>
-                            
-                            <CardHeader className="relative z-10">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                                      <Package className="h-5 w-5 text-white" />
-                                    </div>
-                                    <div>
-                                      <CardTitle className="text-xl font-bold">{supply.name}</CardTitle>
-                                      <div className="flex items-center gap-2 mt-1">
-                                        <Badge className={`text-xs px-2 py-1 ${category?.color || 'bg-gray-100'}`}>
-                                          {category?.label || supply.category}
-                                        </Badge>
-                                        <Badge className={`text-xs px-2 py-1 bg-gradient-to-r ${expirationStatus} text-white`}>
-                                          {daysUntilExpiration <= 7 ? '⚠️ Critical' : 
-                                           daysUntilExpiration <= 30 ? '⏰ Soon' : '✅ Good'}
-                                        </Badge>
-                                      </div>
+                            {/* Top accent bar */}
+                            <div className={`h-1 w-full ${
+                              isCritical ? 'bg-gradient-to-r from-red-500 to-rose-500'
+                              : isWarning ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+                              : 'bg-gradient-to-r from-orange-400 to-amber-400 opacity-0 group-hover:opacity-100 transition-opacity'
+                            }`} />
+
+                            <div className="p-4">
+                              {/* Header row */}
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center flex-shrink-0 shadow-sm">
+                                    <span className="text-lg leading-none">{category?.icon || '📦'}</span>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h3 className="font-bold text-sm leading-tight truncate">{supply.name}</h3>
+                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${category?.color || 'bg-muted text-muted-foreground'}`}>
+                                        {category?.label || supply.category}
+                                      </span>
+                                      {isCritical && (
+                                        <span className="text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-full">
+                                          Critical
+                                        </span>
+                                      )}
+                                      {isWarning && (
+                                        <span className="text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                                          Expiring
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
-                                
-                                <div className="flex gap-2">
-                                  <ConsumptionHistoryDialog foodSupplyId={supply.id} foodSupplyName={supply.name} />
-                                  <EditFoodSupplyDialog
-                                    foodSupplyId={supply.id}
-                                    currentPrice={supply.pricePerUnit}
-                                    onUpdate={loadFoodSupplies}
-                                  />
+                                <div className="flex-shrink-0 ml-2">
+                                  {isCritical ? (
+                                    <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                      <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                    </div>
+                                  ) : isWarning ? (
+                                    <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                                      <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                    </div>
+                                  ) : (
+                                    <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                            </CardHeader>
-                            
-                            <CardContent className="relative z-10">
-                              {/* Key Metrics Row */}
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Price per Unit</p>
-                                  <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">QAR {supply.pricePerUnit}</p>
+
+                              {/* Metric grid */}
+                              <div className="grid grid-cols-2 gap-2 mb-3">
+                                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-2.5">
+                                  <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">Unit Price</p>
+                                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">QAR {supply.pricePerUnit}</p>
                                 </div>
-                                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Quantity</p>
-                                  <p className="text-lg font-bold text-blue-700 dark:text-blue-300">{supply.quantity} {supply.unit}</p>
+                                <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 p-2.5">
+                                  <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Quantity</p>
+                                  <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{supply.quantity} {supply.unit}</p>
                                 </div>
-                                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
-                                  <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Total Value</p>
-                                  <p className="text-lg font-bold text-purple-700 dark:text-purple-300">QAR {(supply.quantity * supply.pricePerUnit).toFixed(2)}</p>
+                                <div className="rounded-xl bg-purple-50 dark:bg-purple-900/20 p-2.5">
+                                  <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide">Total Value</p>
+                                  <p className="text-sm font-bold text-purple-700 dark:text-purple-300">QAR {(supply.quantity * supply.pricePerUnit).toFixed(0)}</p>
                                 </div>
-                                <div className={`bg-gradient-to-br p-3 rounded-lg border ${
-                                  daysUntilExpiration <= 7 ? 'from-red-50 to-red-100 border-red-200 dark:from-red-900/20 dark:to-red-800/20 dark:border-red-800' :
-                                  daysUntilExpiration <= 30 ? 'from-amber-50 to-amber-100 border-amber-200 dark:from-amber-900/20 dark:to-amber-800/20 dark:border-amber-800' :
-                                  'from-green-50 to-green-100 border-green-200 dark:from-green-900/20 dark:to-green-800/20 dark:border-green-800'
+                                <div className={`rounded-xl p-2.5 ${
+                                  isCritical ? 'bg-red-50 dark:bg-red-900/20'
+                                  : isWarning ? 'bg-amber-50 dark:bg-amber-900/20'
+                                  : 'bg-green-50 dark:bg-green-900/20'
                                 }`}>
-                                  <p className={`text-xs font-medium ${
-                                    daysUntilExpiration <= 7 ? 'text-red-600 dark:text-red-400' :
-                                    daysUntilExpiration <= 30 ? 'text-amber-600 dark:text-amber-400' :
-                                    'text-green-600 dark:text-green-400'
+                                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${
+                                    isCritical ? 'text-red-600 dark:text-red-400'
+                                    : isWarning ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-green-600 dark:text-green-400'
                                   }`}>Expires in</p>
-                                  <p className={`text-lg font-bold ${
-                                    daysUntilExpiration <= 7 ? 'text-red-700 dark:text-red-300' :
-                                    daysUntilExpiration <= 30 ? 'text-amber-700 dark:text-amber-300' :
-                                    'text-green-700 dark:text-green-300'
-                                  }`}>{daysUntilExpiration} days</p>
+                                  <p className={`text-sm font-bold ${
+                                    isCritical ? 'text-red-700 dark:text-red-300'
+                                    : isWarning ? 'text-amber-700 dark:text-amber-300'
+                                    : 'text-green-700 dark:text-green-300'
+                                  }`}>{daysUntilExpiration < 0 ? 'Expired' : `${daysUntilExpiration}d`}</p>
                                 </div>
                               </div>
 
-                              {/* Additional Info */}
-                              <div className="space-y-3">
-                                {supply.vendor && (
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-300">
-                                      Vendor: {supply.vendor.name}
-                                    </Badge>
-                                  </div>
-                                )}
+                              {/* Vendor + kitchen tags */}
+                              {(supply.vendor || (supply.kitchenSupplies?.length > 0)) && (
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                  {supply.vendor && (
+                                    <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+                                      {supply.vendor.name}
+                                    </span>
+                                  )}
+                                  {supply.kitchenSupplies?.map((ks: any) => (
+                                    <span key={ks.id} className="text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                                      {ks.kitchen?.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
 
-                                {supply.kitchenSupplies && supply.kitchenSupplies.length > 0 && (
-                                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
-                                    <p className="text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Available in Kitchens:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {supply.kitchenSupplies.map((ks: any) => (
-                                        <div key={ks.id} className="bg-white dark:bg-slate-700 rounded-md p-2 border border-slate-200 dark:border-slate-600 text-xs">
-                                          <span className="font-medium text-slate-700 dark:text-slate-300">{ks.kitchen?.name || t('unknown_kitchen')}</span>
-                                          <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-blue-600 dark:text-blue-400">{ks.quantity} {supply.unit}</span>
-                                            <span className="text-amber-600 dark:text-amber-400">Exp: {new Date(ks.expirationDate).toLocaleDateString()}</span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {supply.notes && (
-                                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                                      <span className="font-medium">Notes:</span> {supply.notes}
-                                    </p>
-                                  </div>
-                                )}
+                              {/* Actions */}
+                              <div className="flex gap-2 pt-1 border-t border-border/50">
+                                <ConsumptionHistoryDialog foodSupplyId={supply.id} foodSupplyName={supply.name} />
+                                <EditFoodSupplyDialog
+                                  foodSupplyId={supply.id}
+                                  currentPrice={supply.pricePerUnit}
+                                  onUpdate={loadFoodSupplies}
+                                />
                               </div>
-                            </CardContent>
-                          </Card>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
