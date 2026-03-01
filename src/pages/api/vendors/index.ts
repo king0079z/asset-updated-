@@ -1,60 +1,37 @@
-﻿import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 import { VendorType } from "@prisma/client";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  // Enhanced logging for debugging
-  console.log(`[Vendors API] Processing ${req.method} request to /api/vendors`);
-  
-  // Get the authenticated user
+// Server-side cache for vendor list (no type filter), 5-min TTL
+let _vendorsCache: { data: any[]; ts: number } | null = null;
+const CACHE_TTL = 5 * 60 * 1000;
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const supabase = createClient(req, res);
-  
-  // Log auth attempt
-  console.log(`[Vendors API] Attempting to get authenticated user`);
-  
   const { data: { session }, error: authError } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
+  const user = session?.user ?? null;
 
-  // Log auth result
-  if (authError) {
-    console.error("[Vendors API] Authentication error:", authError);
-    console.error("[Vendors API] Auth error details:", JSON.stringify({
-      name: authError.name,
-      message: authError.message,
-      status: authError.status
-    }));
-  } else if (user) {
-    console.log(`[Vendors API] Successfully authenticated user: ${user.id}`);
-  } else {
-    console.error("[Vendors API] No user found and no auth error");
-  }
-
-  // For GET requests, proceed even without authentication to prevent blocking the UI
-  // This is a temporary fix to allow the application to function
   if (req.method === "GET") {
     try {
       const { type } = req.query;
-      
-      console.log(`[Vendors API] Fetching vendors with type filter: ${type || 'none'}`);
-      
-      const vendors = await prisma.vendor.findMany({
-        where: type ? {
-          type: {
-            has: type as VendorType
-          }
-        } : undefined,
-        orderBy: {
-          name: "asc",
-        },
-      });
-      
-      console.log(`[Vendors API] Successfully fetched ${vendors.length} vendors`);
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
 
+      // Use cache only for unfiltered list
+      if (!type && _vendorsCache && Date.now() - _vendorsCache.ts < CACHE_TTL) {
+        res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
+        return res.status(200).json(_vendorsCache.data);
+      }
+
+      const vendors = await prisma.vendor.findMany({
+        where: type ? { type: { has: type as VendorType } } : undefined,
+        orderBy: { name: "asc" },
+      });
+
+      if (!type) {
+        _vendorsCache = { data: vendors, ts: Date.now() };
+      }
+
+      res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
       return res.status(200).json(vendors);
     } catch (error) {
       console.error("[Vendors API] Error fetching vendors:", error);
@@ -62,17 +39,16 @@ export default async function handler(
     }
   }
 
-  // For non-GET requests, we still require authentication
+  // Non-GET requires auth
   if (authError || !user) {
-    console.error("[Vendors API] Authentication required for non-GET requests");
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   if (req.method === "POST") {
     try {
-      const vendor = await prisma.vendor.create({
-        data: req.body,
-      });
+      const vendor = await prisma.vendor.create({ data: req.body });
+      // Invalidate cache on write
+      _vendorsCache = null;
       return res.status(201).json(vendor);
     } catch (error) {
       console.error("Error creating vendor:", error);

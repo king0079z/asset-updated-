@@ -156,18 +156,8 @@ export default function AssetsPage() {
 
   const loadVendors = async () => {
     try {
-      setVendors([]); // Clear vendors while loading
-      const response = await fetch("/api/vendors", {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to load vendors: ${response.status} ${response.statusText}`);
-      }
-      
+      const response = await fetch("/api/vendors");
+      if (!response.ok) throw new Error(`Failed to load vendors: ${response.status}`);
       const data = await response.json();
       setVendors(data);
     } catch (error) {
@@ -182,18 +172,8 @@ export default function AssetsPage() {
 
   const loadAssets = async () => {
     try {
-      setAssets([]); // Clear assets while loading
-      const response = await fetch("/api/assets", {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to load assets: ${response.status} ${response.statusText}`);
-      }
-      
+      const response = await fetch("/api/assets");
+      if (!response.ok) throw new Error(`Failed to load assets: ${response.status}`);
       const data = await response.json();
       setAssets(data);
     } catch (error) {
@@ -207,8 +187,8 @@ export default function AssetsPage() {
   };
 
   useEffect(() => {
-    loadVendors();
-    loadAssets();
+    // Load vendors and assets in parallel
+    Promise.all([loadVendors(), loadAssets()]);
 
     // Add event listener for dispose asset button
     const handleDisposeAsset = (event: Event) => {
