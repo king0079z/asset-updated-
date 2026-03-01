@@ -53,7 +53,7 @@ interface EnhancedBarcodeScannerProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-type View = 'camera' | 'manual' | 'search' | 'found-supply' | 'found-recipe' | 'not-found';
+type View = 'camera' | 'manual' | 'search' | 'found-supply' | 'found-recipe' | 'not-found' | 'auto-recording' | 'recorded';
 
 /* ═══════════════════════════════════════════════════════════════
    COMPONENT
@@ -110,8 +110,47 @@ export default function EnhancedBarcodeScanner({
     }
   }, []);
 
+  /* autoRecordSupply — immediately records 1 unit then shows success */
+  const autoRecordSupply = useCallback(async (supply: FoodSupply) => {
+    setView('auto-recording');
+    try {
+      const consumeRes = await fetch('/api/food-supply/consume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          supplyId: supply.id,
+          quantity: 1,
+          kitchenId: supply.kitchenId,
+          notes: '',
+        }),
+      });
+      if (!consumeRes.ok) {
+        const err = await consumeRes.json();
+        // Fall back to manual form on error so user can try again
+        setFoundSupply(supply);
+        setView('found-supply');
+        toast({
+          title: 'Could not auto-record',
+          description: err.error || 'Please confirm manually',
+          variant: 'destructive',
+        });
+      } else {
+        setFoundSupply(supply);
+        setView('recorded');
+        window.dispatchEvent(new CustomEvent('food-consumption-recorded', {
+          detail: { supplyId: supply.id, quantity: 1, timestamp: new Date().toISOString() }
+        }));
+        onScanComplete?.();
+      }
+    } catch {
+      setFoundSupply(supply);
+      setView('found-supply');
+      toast({ title: 'Error', description: 'Failed to record consumption', variant: 'destructive' });
+    }
+  }, [onScanComplete, toast]);
+
   /* lookupBarcode — stable (only depends on kitchenId prop) */
-  const lookupBarcode = useCallback(async (code: string) => {
+  const lookupBarcode = useCallback(async (code: string, fromCamera = false) => {
     const trimmed = code.trim();
     if (!trimmed) return;
     setLastScannedCode(trimmed);
@@ -120,12 +159,29 @@ export default function EnhancedBarcodeScanner({
       // 1. Try in current kitchen first
       let res  = await fetch(`/api/food-supply?barcode=${encodeURIComponent(trimmed)}&kitchenId=${kitchenId}`);
       let data = await res.json();
-      if (data.supply) { setFoundSupply(data.supply); setView('found-supply'); return; }
+      if (data.supply) {
+        setIsLookingUp(false);
+        if (fromCamera) {
+          // Camera/barcode scan → auto-record immediately (original behavior)
+          await autoRecordSupply(data.supply);
+        } else {
+          setFoundSupply(data.supply); setView('found-supply');
+        }
+        return;
+      }
 
       // 2. Cross-kitchen fallback
       res  = await fetch(`/api/food-supply?barcode=${encodeURIComponent(trimmed)}`);
       data = await res.json();
-      if (data.supply) { setFoundSupply(data.supply); setView('found-supply'); return; }
+      if (data.supply) {
+        setIsLookingUp(false);
+        if (fromCamera) {
+          await autoRecordSupply(data.supply);
+        } else {
+          setFoundSupply(data.supply); setView('found-supply');
+        }
+        return;
+      }
 
       // 3. Recipe fallback
       res = await fetch(`/api/recipes/${encodeURIComponent(trimmed)}`);
@@ -138,14 +194,14 @@ export default function EnhancedBarcodeScanner({
       setView('not-found');
     } catch { setView('not-found'); }
     finally  { setIsLookingUp(false); }
-  }, [kitchenId]);
+  }, [kitchenId, autoRecordSupply]);
 
-  /* onCode — stable, uses lookupBarcode (stable) */
+  /* onCode — camera scan triggers auto-record */
   const onCode = useCallback(async (raw: string) => {
     if (!raw || scanned.current) return;
     scanned.current = true;           // prevent duplicate fires
     try { await qrRef.current?.pause(); } catch {}
-    await lookupBarcode(raw);
+    await lookupBarcode(raw, true);   // fromCamera=true → auto-record
   }, [lookupBarcode]);
 
   /* onFrame — discard non-fatal parse errors */
@@ -374,6 +430,7 @@ export default function EnhancedBarcodeScanner({
   const qty = consumptionForm.watch('quantity');
 
   const isFoundView   = view === 'found-supply' || view === 'found-recipe';
+  const isRecordedView = view === 'recorded' || view === 'auto-recording';
   const isScannerView = view === 'camera' || view === 'manual' || view === 'search';
 
   /* ════════════════════════════════════════════════════════
@@ -401,16 +458,22 @@ export default function EnhancedBarcodeScanner({
                 </div>
                 <div>
                   <DialogTitle className="text-white font-bold text-base leading-tight">
-                    {view === 'found-supply' ? 'Item Found' : view === 'found-recipe' ? 'Recipe Found' : 'Food Supply Scanner'}
+                    {view === 'found-supply'   ? 'Item Found'
+                     : view === 'found-recipe' ? 'Recipe Found'
+                     : view === 'auto-recording' ? 'Recording…'
+                     : view === 'recorded'     ? 'Consumption Recorded!'
+                     : 'Food Supply Scanner'}
                   </DialogTitle>
                   <DialogDescription className="text-emerald-100/80 text-xs mt-0.5">
-                    {view === 'found-supply'  ? (foundSupply?.kitchenName ?? 'Kitchen Supply')  :
-                     view === 'found-recipe'  ? `${(foundRecipe?.ingredients ?? []).length} ingredients` :
-                     'Scan barcode, enter code, or search by name'}
+                    {view === 'found-supply'     ? (foundSupply?.kitchenName ?? 'Kitchen Supply')
+                     : view === 'found-recipe'   ? `${(foundRecipe?.ingredients ?? []).length} ingredients`
+                     : view === 'auto-recording' ? 'Please wait…'
+                     : view === 'recorded'       ? `${foundSupply?.name ?? 'Item'} · ${foundSupply?.kitchenName ?? ''}`
+                     : 'Scan barcode, enter code, or search by name'}
                   </DialogDescription>
                 </div>
               </div>
-              {isFoundView && (
+              {(isFoundView || isRecordedView) && view !== 'auto-recording' && (
                 <button onClick={resetToScanner}
                   className="h-8 w-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors">
                   <ArrowLeft className="h-4 w-4 text-white" />
@@ -419,16 +482,60 @@ export default function EnhancedBarcodeScanner({
             </div>
           </div>
 
-          {/* ── LOOKUP SPINNER ── */}
-          {isLookingUp && (
+          {/* ── LOOKUP / RECORDING SPINNER ── */}
+          {(isLookingUp || view === 'auto-recording') && (
             <div className="flex flex-col items-center justify-center py-14 gap-4">
               <div className="h-16 w-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 text-emerald-600 animate-spin" />
               </div>
-              <p className="font-semibold text-foreground">Looking up item…</p>
+              <p className="font-semibold text-foreground">
+                {view === 'auto-recording' ? 'Recording consumption…' : 'Looking up item…'}
+              </p>
               {lastScannedCode && (
                 <p className="text-xs text-muted-foreground font-mono bg-muted px-3 py-1 rounded-full">{lastScannedCode}</p>
               )}
+            </div>
+          )}
+
+          {/* ── AUTO-RECORDED SUCCESS ── */}
+          {!isLookingUp && view === 'recorded' && foundSupply && (
+            <div className="p-6 flex flex-col items-center gap-5 text-center">
+              <div className="h-20 w-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xl font-black text-foreground">{foundSupply.name}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  1 {foundSupply.unit} recorded from <span className="font-semibold text-foreground">{foundSupply.kitchenName}</span>
+                </p>
+              </div>
+              <div className="w-full rounded-2xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 px-5 py-3 flex items-center justify-between">
+                <div className="text-left">
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Remaining Stock</p>
+                  <p className="text-2xl font-black text-emerald-700 tabular-nums">{Math.max(0, foundSupply.quantity - 1)}</p>
+                  <p className="text-xs text-muted-foreground">{foundSupply.unit}</p>
+                </div>
+                <div className="h-12 w-12 rounded-xl bg-emerald-200/60 flex items-center justify-center">
+                  <Package className="h-6 w-6 text-emerald-700" />
+                </div>
+              </div>
+              <div className="flex gap-3 w-full">
+                <Button
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-11 font-bold gap-2"
+                  onClick={resetToScanner}
+                >
+                  <ScanLine className="h-4 w-4" />
+                  Scan Another
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-11 px-4 gap-2"
+                  onClick={() => { setView('found-supply'); consumptionForm.reset({ quantity: 1 }); }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Adjust
+                </Button>
+              </div>
             </div>
           )}
 
