@@ -50,7 +50,12 @@ import {
   CheckCircle2,
   Loader2,
   Building2,
-  Trash2
+  Trash2,
+  Wifi,
+  ShieldCheck,
+  ArrowRight,
+  FileText,
+  Settings
 } from 'lucide-react';
 
 interface MLAnalysisData {
@@ -355,24 +360,21 @@ function AIAnalysisContent() {
   if (loading) {
     return (
       <div className="flex flex-col space-y-6">
-        <div className="flex items-center space-x-2">
-          <BrainCircuit className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">{t('ai_analysis')}</h1>
+        {/* Skeleton Hero */}
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-900 via-indigo-950 to-slate-900 p-8 animate-pulse">
+          <div className="h-8 w-64 bg-white/10 rounded-xl mb-3" />
+          <div className="h-4 w-96 bg-white/5 rounded-lg mb-6" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => <div key={i} className="h-20 bg-white/10 rounded-xl" />)}
+          </div>
         </div>
-        <div className="grid gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader className="bg-muted/30 h-20" />
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  <div className="h-4 bg-muted rounded w-3/4" />
-                  <div className="h-4 bg-muted rounded w-1/2" />
-                  <div className="h-4 bg-muted rounded w-5/6" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-32 bg-muted animate-pulse rounded-2xl" />)}
         </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-muted animate-pulse rounded-2xl" />)}
+        </div>
+        <div className="h-64 bg-muted animate-pulse rounded-2xl" />
       </div>
     );
   }
@@ -380,14 +382,21 @@ function AIAnalysisContent() {
   if (error) {
     return (
       <div className="flex flex-col space-y-6">
-        <div className="flex items-center space-x-2">
-          <BrainCircuit className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">{t('ai_analysis')}</h1>
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-900 via-indigo-950 to-slate-900 p-8">
+          <div className="flex items-center gap-3">
+            <div className="h-14 w-14 rounded-2xl bg-white/15 flex items-center justify-center">
+              <BrainCircuit className="h-7 w-7 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-white">{t('ai_analysis')}</h1>
+          </div>
         </div>
-        <Alert variant="destructive">
-          <AlertTitle>{t('error')}</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div className="rounded-2xl border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/10 p-6">
+          <div className="flex items-center gap-3 mb-2">
+            <AlertTriangle className="h-5 w-5 text-rose-600" />
+            <p className="font-bold text-rose-700 dark:text-rose-400">{t('error')}</p>
+          </div>
+          <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
+        </div>
       </div>
     );
   }
@@ -400,280 +409,405 @@ function AIAnalysisContent() {
 
   return (
     <div className="flex flex-col space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <BrainCircuit className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold">{t('ai_analysis')}</h1>
-        </div>
-        <PrintAiAnalysisReportButton data={data} mlData={mlData} />
-      </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t('food_supply_forecast')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Utensils className="h-4 w-4 text-muted-foreground" />
-                <span className="text-2xl font-bold">QAR {food.forecast.monthly.toLocaleString()}</span>
-              </div>
-              <Badge variant={food.trendPercentage > 0 ? "destructive" : "outline"} className="flex items-center space-x-1">
-                {food.trendPercentage > 0 ? (
-                  <ArrowUp className="h-3 w-3" />
-                ) : (
-                  <ArrowDown className="h-3 w-3" />
-                )}
-                <span>{Math.abs(food.trendPercentage).toFixed(1)}%</span>
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">{t('monthly_forecast_based_on_current_consumption')}</p>
-          </CardContent>
-        </Card>
+      {/* ══════════════════════════════════════════
+          WORLD-CLASS HERO BANNER
+      ══════════════════════════════════════════ */}
+      <div className="relative rounded-2xl overflow-hidden shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-900 via-[#1a0a3e] to-indigo-950" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_80%_-5%,rgba(139,92,246,0.45),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_40%_at_0%_90%,rgba(99,102,241,0.15),transparent)]" />
+        <div className="absolute -top-12 -right-12 w-72 h-72 rounded-full bg-violet-500/8 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-32 w-48 h-48 rounded-full bg-indigo-400/8 blur-2xl pointer-events-none" />
+        <div className="absolute top-6 right-40 w-28 h-28 rounded-full bg-purple-400/12 blur-xl pointer-events-none" />
+        {/* Grid overlay */}
+        <div className="absolute inset-0 opacity-[0.025]"
+          style={{ backgroundImage:'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)', backgroundSize:'40px 40px' }} />
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t('vehicle_rental_forecast')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Car className="h-4 w-4 text-muted-foreground" />
-                <span className="text-2xl font-bold">QAR {vehicles.forecast.monthly.toLocaleString()}</span>
+        <div className="relative z-10 p-7 sm:p-8">
+          {/* Top row: title + actions */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-7">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-500/25 border border-violet-400/30 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-violet-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" /> AI Powered
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
+                </span>
               </div>
-              <Badge variant={vehicles.trendPercentage > 0 ? "destructive" : "outline"} className="flex items-center space-x-1">
-                {vehicles.trendPercentage > 0 ? (
-                  <ArrowUp className="h-3 w-3" />
-                ) : (
-                  <ArrowDown className="h-3 w-3" />
-                )}
-                <span>{Math.abs(vehicles.trendPercentage).toFixed(1)}%</span>
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">{t('monthly_forecast_based_on_current_rental')}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t('total_budget_forecast')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="text-2xl font-bold">QAR {forecast.monthly.toLocaleString()}</span>
-              </div>
-              <div className="text-xs font-medium">
-                QAR {forecast.yearly.toLocaleString()}/year
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">{t('combined_monthly_forecast')}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recommendations */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Info className="h-5 w-5 text-primary" />
-            <span>{t('ai_recommendations')}</span>
-          </CardTitle>
-          <CardDescription>
-            {t('smart_suggestions')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {recommendations.map((rec, index) => (
-              <Alert key={index} variant={rec.severity === 'high' ? 'destructive' : rec.severity === 'info' ? 'default' : 'outline'}>
-                <div className="flex items-start">
-                  {rec.severity === 'high' ? (
-                    <AlertTriangle className="h-4 w-4 mr-2 mt-0.5" />
-                  ) : rec.severity === 'medium' ? (
-                    <Info className="h-4 w-4 mr-2 mt-0.5" />
-                  ) : (
-                    <Info className="h-4 w-4 mr-2 mt-0.5" />
-                  )}
-                  <div>
-                    <AlertTitle>{t(rec.category.toLowerCase())}</AlertTitle>
-                    <AlertDescription>{rec.message}</AlertDescription>
-                  </div>
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 rounded-2xl bg-white/12 backdrop-blur-sm ring-1 ring-white/20 flex items-center justify-center shadow-xl flex-shrink-0">
+                  <BrainCircuit className="h-7 w-7 text-violet-300" />
                 </div>
-              </Alert>
+                <div>
+                  <h1 className="text-3xl font-black text-white tracking-tight">{t('ai_analysis')}</h1>
+                  <p className="text-violet-300/60 text-sm mt-0.5">Machine learning insights across all enterprise resources</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-shrink-0">
+              <PrintAiAnalysisReportButton data={data} mlData={mlData} />
+            </div>
+          </div>
+
+          {/* 4 metric chips */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Food Forecast / mo', value: `QAR ${food.forecast.monthly.toLocaleString()}`, icon: Utensils, chip: 'bg-emerald-500/20 border-emerald-400/25',
+                trend: food.trendPercentage, trendLabel: `${Math.abs(food.trendPercentage).toFixed(1)}%` },
+              { label: 'Vehicle Forecast / mo', value: `QAR ${vehicles.forecast.monthly.toLocaleString()}`, icon: Car, chip: 'bg-amber-500/20 border-amber-400/25',
+                trend: vehicles.trendPercentage, trendLabel: `${Math.abs(vehicles.trendPercentage).toFixed(1)}%` },
+              { label: 'Total Budget / mo', value: `QAR ${forecast.monthly.toLocaleString()}`, icon: DollarSign, chip: 'bg-indigo-500/20 border-indigo-400/25', trend: 0, trendLabel: '' },
+              { label: 'Yearly Forecast', value: `QAR ${forecast.yearly.toLocaleString()}`, icon: BarChart4, chip: 'bg-violet-500/20 border-violet-400/25', trend: 0, trendLabel: '' },
+            ].map(({ label, value, icon: Icon, chip, trend, trendLabel }) => (
+              <div key={label} className={`rounded-2xl px-4 py-3.5 border ${chip} backdrop-blur-sm`}>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Icon className="h-3 w-3 text-white/60" />
+                  <p className="text-[9px] uppercase tracking-[0.12em] text-white/50 font-bold">{label}</p>
+                </div>
+                <p className="text-lg font-black text-white tabular-nums leading-tight">{value}</p>
+                {trendLabel && (
+                  <div className={`flex items-center gap-1 mt-1.5 text-[10px] font-semibold ${trend > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {trend > 0 ? <ArrowUp className="h-2.5 w-2.5" /> : <ArrowDown className="h-2.5 w-2.5" />}
+                    {trendLabel} vs prev month
+                  </div>
+                )}
+              </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Key Insight Metrics */}
-      <div className="grid gap-6 md:grid-cols-4">
-        <Card className={`border-l-4 ${insightMetrics.foodTrend.status === 'positive' ? 'border-l-green-500' : insightMetrics.foodTrend.status === 'negative' ? 'border-l-red-500' : 'border-l-blue-500'}`}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Utensils className="h-4 w-4 mr-2" />
-              {t('food_trend')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {insightMetrics.foodTrend.value > 0 ? '+' : ''}{insightMetrics.foodTrend.value}%
+        {/* Bottom strip */}
+        <div className="relative z-10 border-t border-white/10 grid grid-cols-3 divide-x divide-white/10">
+          {[
+            { label: 'Food Analysis', sub: 'Consumption & forecast', icon: Utensils },
+            { label: 'ML Predictions', sub: 'Anomaly detection', icon: Cpu },
+            { label: 'Insights', sub: 'Budget optimization', icon: Lightbulb },
+          ].map(({ label, sub, icon: Icon }) => (
+            <div key={label} className="px-5 py-3 flex items-center gap-3">
+              <div className="h-7 w-7 rounded-lg bg-white/8 flex items-center justify-center">
+                <Icon className="h-3.5 w-3.5 text-violet-300" />
+              </div>
+              <div className="hidden sm:block">
+                <p className="text-xs font-semibold text-white/80">{label}</p>
+                <p className="text-[9px] text-white/40">{sub}</p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {insightMetrics.foodTrend.status === 'positive' 
-                ? t('decreasing_food_costs') 
-                : insightMetrics.foodTrend.status === 'negative'
-                ? t('increasing_food_costs')
-                : t('stable_food_costs')}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className={`border-l-4 ${insightMetrics.vehicleTrend.status === 'positive' ? 'border-l-green-500' : insightMetrics.vehicleTrend.status === 'negative' ? 'border-l-red-500' : 'border-l-blue-500'}`}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Car className="h-4 w-4 mr-2" />
-              {t('vehicle_trend')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {insightMetrics.vehicleTrend.value > 0 ? '+' : ''}{insightMetrics.vehicleTrend.value}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {insightMetrics.vehicleTrend.status === 'positive' 
-                ? t('decreasing_rental_costs') 
-                : insightMetrics.vehicleTrend.status === 'negative'
-                ? t('increasing_rental_costs')
-                : t('stable_rental_costs')}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className={`border-l-4 ${insightMetrics.assetUtilization.status === 'positive' ? 'border-l-green-500' : 'border-l-red-500'}`}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Package className="h-4 w-4 mr-2" />
-              {t('asset_utilization')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {insightMetrics.assetUtilization.value.toFixed(1)}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {insightMetrics.assetUtilization.status === 'positive' 
-                ? t('good_asset_retention') 
-                : t('high_asset_disposal_rate')}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className={`border-l-4 border-l-blue-500`}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center">
-              <Gauge className="h-4 w-4 mr-2" />
-              {t('budget_efficiency')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {insightMetrics.budgetEfficiency.value.toFixed(1)}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {t('forecasted_vs_actual_spending_ratio')}
-            </p>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       </div>
 
-      {/* Multi-Year Budget Forecast */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <BarChart4 className="h-5 w-5 mr-2 text-primary" />
-            {t('multi_year_budget_forecast')}
-          </CardTitle>
-          <CardDescription>
-            {t('projected_budget_description')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div className="grid grid-cols-6 gap-2 text-center text-sm font-medium">
-              <div>{t('year')}</div>
-              <div className="col-span-5">{t('projected_budget')}</div>
+      {/* ══════════════════════════════════════════
+          3 FULL-GRADIENT FORECAST CARDS
+      ══════════════════════════════════════════ */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Food Supply Forecast */}
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+          <div className="relative z-10 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.12em] text-emerald-100/80 font-bold">{t('food_supply_forecast')}</p>
+                <p className="text-[10px] text-emerald-200/50">Monthly projection</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                <Utensils className="h-5 w-5 text-white" />
+              </div>
             </div>
-            
-            {/* Current Year */}
-            <div className="grid grid-cols-6 gap-2 items-center">
-              <div className="text-sm font-medium">{forecast.currentYear}</div>
-              <div className="col-span-5">
-                <div className="flex items-center">
-                  <div className="w-full bg-muted rounded-full h-4 mr-4 overflow-hidden">
-                    <div className="bg-primary h-4 rounded-full" style={{ width: '100%' }}></div>
-                  </div>
-                  <span className="text-sm font-medium whitespace-nowrap">${forecast.yearly.toLocaleString()}</span>
+            <p className="text-3xl font-black tabular-nums mb-3">QAR {food.forecast.monthly.toLocaleString()}</p>
+            <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${food.trendPercentage > 0 ? 'bg-rose-500/30 text-rose-200' : 'bg-emerald-300/20 text-emerald-100'}`}>
+              {food.trendPercentage > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {Math.abs(food.trendPercentage).toFixed(1)}% {food.trendPercentage > 0 ? 'increase' : 'decrease'}
+            </div>
+            <p className="text-[10px] text-emerald-200/60 mt-3">{t('monthly_forecast_based_on_current_consumption')}</p>
+          </div>
+        </div>
+
+        {/* Vehicle Rental Forecast */}
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-amber-600 to-orange-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+          <div className="relative z-10 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.12em] text-amber-100/80 font-bold">{t('vehicle_rental_forecast')}</p>
+                <p className="text-[10px] text-amber-200/50">Monthly projection</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                <Car className="h-5 w-5 text-white" />
+              </div>
+            </div>
+            <p className="text-3xl font-black tabular-nums mb-3">QAR {vehicles.forecast.monthly.toLocaleString()}</p>
+            <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${vehicles.trendPercentage > 0 ? 'bg-rose-500/30 text-rose-200' : 'bg-emerald-300/20 text-emerald-100'}`}>
+              {vehicles.trendPercentage > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {Math.abs(vehicles.trendPercentage).toFixed(1)}% {vehicles.trendPercentage > 0 ? 'increase' : 'decrease'}
+            </div>
+            <p className="text-[10px] text-amber-200/60 mt-3">{t('monthly_forecast_based_on_current_rental')}</p>
+          </div>
+        </div>
+
+        {/* Total Budget Forecast */}
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+          <div className="relative z-10 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.12em] text-indigo-100/80 font-bold">{t('total_budget_forecast')}</p>
+                <p className="text-[10px] text-indigo-200/50">Monthly + yearly</p>
+              </div>
+              <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                <DollarSign className="h-5 w-5 text-white" />
+              </div>
+            </div>
+            <p className="text-3xl font-black tabular-nums mb-2">QAR {forecast.monthly.toLocaleString()}</p>
+            <div className="flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 mb-1">
+              <Calendar className="h-3.5 w-3.5 text-indigo-200" />
+              <span className="text-xs text-indigo-200">Yearly: QAR {forecast.yearly.toLocaleString()}</span>
+            </div>
+            <p className="text-[10px] text-indigo-200/60 mt-2">{t('combined_monthly_forecast')}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════
+          AI RECOMMENDATIONS — Premium Card
+      ══════════════════════════════════════════ */}
+      <div className="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/50">
+          <div className="h-9 w-9 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+            <Sparkles className="h-4.5 w-4.5 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div>
+            <h2 className="font-bold text-base">{t('ai_recommendations')}</h2>
+            <p className="text-xs text-muted-foreground">{t('smart_suggestions')}</p>
+          </div>
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 px-2.5 py-1 rounded-full">
+            <span className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" /> {recommendations.length} alerts
+          </span>
+        </div>
+        <div className="p-5 space-y-3">
+          {recommendations.map((rec, index) => {
+            const sev = rec.severity;
+            const cfg = sev === 'high'
+              ? { bg: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/40', icon: 'bg-rose-100 dark:bg-rose-900/40', iconColor: 'text-rose-600', tag: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300' }
+              : sev === 'medium'
+              ? { bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/40', icon: 'bg-amber-100 dark:bg-amber-900/40', iconColor: 'text-amber-600', tag: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' }
+              : { bg: 'bg-sky-50 dark:bg-sky-900/10 border-sky-200 dark:border-sky-800/40', icon: 'bg-sky-100 dark:bg-sky-900/40', iconColor: 'text-sky-600', tag: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300' };
+            const Icon = sev === 'high' ? AlertTriangle : sev === 'medium' ? Zap : CheckCircle2;
+            return (
+              <div key={index} className={`flex items-start gap-3 rounded-xl border p-4 ${cfg.bg}`}>
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${cfg.icon}`}>
+                  <Icon className={`h-4 w-4 ${cfg.iconColor}`} />
                 </div>
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>{t('food')}: QAR {food.forecast.yearly.toLocaleString()}</span>
-                  <span>{t('vehicles')}: QAR {vehicles.forecast.yearly.toLocaleString()}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="font-semibold text-sm capitalize">{t(rec.category.toLowerCase())}</p>
+                    <span className={`text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${cfg.tag}`}>{sev}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{rec.message}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════
+          4 INSIGHT METRIC CARDS — Full Gradient
+      ══════════════════════════════════════════ */}
+      <div className="grid gap-4 md:grid-cols-4">
+        {/* Food Trend */}
+        {(() => {
+          const s = insightMetrics.foodTrend.status;
+          const grad = s === 'positive' ? 'from-emerald-600 to-teal-700' : s === 'negative' ? 'from-rose-600 to-red-700' : 'from-sky-600 to-blue-700';
+          const StatusIcon = s === 'positive' ? TrendingDown : s === 'negative' ? TrendingUp : Minus;
+          return (
+            <div className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${grad} text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5`}>
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+              <div className="relative z-10 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center">
+                    <Utensils className="h-4.5 w-4.5 text-white" />
+                  </div>
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-white/70 font-bold">{t('food_trend')}</p>
+                </div>
+                <p className="text-4xl font-black tabular-nums mb-2">
+                  {insightMetrics.foodTrend.value > 0 ? '+' : ''}{insightMetrics.foodTrend.value}%
+                </p>
+                <div className="flex items-center gap-1.5 text-white/80 text-xs">
+                  <StatusIcon className="h-3.5 w-3.5" />
+                  <span>{s === 'positive' ? t('decreasing_food_costs') : s === 'negative' ? t('increasing_food_costs') : t('stable_food_costs')}</span>
                 </div>
               </div>
             </div>
-            
-            {/* Future Years */}
-            {forecast.multiYear.map((yearData, index) => {
-              // Calculate percentage relative to current year for the bar width
-              const percentageOfCurrent = (yearData.amount / forecast.yearly) * 100;
-              const foodPercentage = (yearData.foodAmount / yearData.amount) * 100;
-              
-              return (
-                <div key={yearData.year} className="grid grid-cols-6 gap-2 items-center">
-                  <div className="text-sm font-medium">{yearData.year}</div>
-                  <div className="col-span-5">
-                    <div className="flex items-center">
-                      <div className="w-full bg-muted rounded-full h-4 mr-4 overflow-hidden">
-                        <div className="bg-primary h-4 rounded-full" style={{ width: `${percentageOfCurrent}%` }}></div>
-                      </div>
-                      <span className="text-sm font-medium whitespace-nowrap">${yearData.amount.toLocaleString()}</span>
+          );
+        })()}
+
+        {/* Vehicle Trend */}
+        {(() => {
+          const s = insightMetrics.vehicleTrend.status;
+          const grad = s === 'positive' ? 'from-emerald-600 to-teal-700' : s === 'negative' ? 'from-rose-600 to-red-700' : 'from-amber-600 to-orange-700';
+          const StatusIcon = s === 'positive' ? TrendingDown : s === 'negative' ? TrendingUp : Minus;
+          return (
+            <div className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${grad} text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5`}>
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+              <div className="relative z-10 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center">
+                    <Car className="h-4.5 w-4.5 text-white" />
+                  </div>
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-white/70 font-bold">{t('vehicle_trend')}</p>
+                </div>
+                <p className="text-4xl font-black tabular-nums mb-2">
+                  {insightMetrics.vehicleTrend.value > 0 ? '+' : ''}{insightMetrics.vehicleTrend.value}%
+                </p>
+                <div className="flex items-center gap-1.5 text-white/80 text-xs">
+                  <StatusIcon className="h-3.5 w-3.5" />
+                  <span>{s === 'positive' ? t('decreasing_rental_costs') : s === 'negative' ? t('increasing_rental_costs') : t('stable_rental_costs')}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Asset Utilization */}
+        {(() => {
+          const s = insightMetrics.assetUtilization.status;
+          const grad = s === 'positive' ? 'from-violet-600 to-purple-700' : 'from-rose-600 to-red-700';
+          return (
+            <div className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${grad} text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5`}>
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+              <div className="relative z-10 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center">
+                    <Package className="h-4.5 w-4.5 text-white" />
+                  </div>
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-white/70 font-bold">{t('asset_utilization')}</p>
+                </div>
+                <p className="text-4xl font-black tabular-nums mb-2">
+                  {insightMetrics.assetUtilization.value.toFixed(1)}%
+                </p>
+                <div className="flex items-center gap-1.5 text-white/80 text-xs">
+                  {s === 'positive' ? <ShieldCheck className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                  <span>{s === 'positive' ? t('good_asset_retention') : t('high_asset_disposal_rate')}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Budget Efficiency */}
+        <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-600 to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+          <div className="relative z-10 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center">
+                <Gauge className="h-4.5 w-4.5 text-white" />
+              </div>
+              <p className="text-[10px] uppercase tracking-[0.12em] text-white/70 font-bold">{t('budget_efficiency')}</p>
+            </div>
+            <p className="text-4xl font-black tabular-nums mb-2">
+              {insightMetrics.budgetEfficiency.value.toFixed(1)}%
+            </p>
+            <div className="flex items-center gap-1.5 text-white/80 text-xs">
+              <Target className="h-3.5 w-3.5" />
+              <span>{t('forecasted_vs_actual_spending_ratio')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════
+          MULTI-YEAR BUDGET FORECAST — Premium
+      ══════════════════════════════════════════ */}
+      <div className="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/50">
+          <div className="h-9 w-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+            <BarChart4 className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <h2 className="font-bold text-base">{t('multi_year_budget_forecast')}</h2>
+            <p className="text-xs text-muted-foreground">{t('projected_budget_description')}</p>
+          </div>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Header row */}
+          <div className="grid grid-cols-6 gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <div>{t('year')}</div>
+            <div className="col-span-5">{t('projected_budget')}</div>
+          </div>
+
+          {/* Current Year */}
+          <div className="grid grid-cols-6 gap-2 items-center group">
+            <div className="text-sm font-bold text-foreground">{forecast.currentYear}
+              <span className="ml-1.5 text-[9px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide">Now</span>
+            </div>
+            <div className="col-span-5">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 bg-muted rounded-full h-3 overflow-hidden">
+                  <div className="bg-gradient-to-r from-indigo-500 to-violet-500 h-3 rounded-full" style={{ width: '100%' }} />
+                </div>
+                <span className="text-sm font-black tabular-nums whitespace-nowrap">QAR {forecast.yearly.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5 px-0.5">
+                <span className="flex items-center gap-1"><Utensils className="h-2.5 w-2.5 text-emerald-500" />{t('food')}: QAR {food.forecast.yearly.toLocaleString()}</span>
+                <span className="flex items-center gap-1"><Car className="h-2.5 w-2.5 text-amber-500" />{t('vehicles')}: QAR {vehicles.forecast.yearly.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Future Years */}
+          {forecast.multiYear.map((yearData, index) => {
+            const percentageOfCurrent = Math.min((yearData.amount / forecast.yearly) * 100, 100);
+            const colors = ['from-violet-500 to-purple-500', 'from-blue-500 to-indigo-500', 'from-cyan-500 to-blue-500', 'from-teal-500 to-cyan-500'];
+            return (
+              <div key={yearData.year} className="grid grid-cols-6 gap-2 items-center">
+                <div className="text-sm font-semibold text-muted-foreground">{yearData.year}</div>
+                <div className="col-span-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 bg-muted rounded-full h-3 overflow-hidden">
+                      <div className={`bg-gradient-to-r ${colors[index % colors.length]} h-3 rounded-full transition-all duration-700`} style={{ width: `${percentageOfCurrent}%` }} />
                     </div>
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>{t('food')}: QAR {yearData.foodAmount.toLocaleString()}</span>
-                      <span>{t('vehicles')}: QAR {yearData.vehicleAmount.toLocaleString()}</span>
-                    </div>
+                    <span className="text-sm font-black tabular-nums whitespace-nowrap">QAR {yearData.amount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1.5 px-0.5">
+                    <span className="flex items-center gap-1"><Utensils className="h-2.5 w-2.5 text-emerald-500" />{t('food')}: QAR {yearData.foodAmount.toLocaleString()}</span>
+                    <span className="flex items-center gap-1"><Car className="h-2.5 w-2.5 text-amber-500" />{t('vehicles')}: QAR {yearData.vehicleAmount.toLocaleString()}</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </CardContent>
-        <CardFooter className="bg-muted/20 border-t">
-          <div className="text-sm text-muted-foreground">
-            <span className="font-medium">{t('forecast_note')}</span>
-          </div>
-        </CardFooter>
-      </Card>
+              </div>
+            );
+          })}
+        </div>
+        <div className="border-t border-border/50 px-6 py-3 bg-muted/30 flex items-center gap-2">
+          <Info className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+          <p className="text-xs text-muted-foreground">{t('forecast_note')}</p>
+        </div>
+      </div>
 
-      {/* Detailed Analysis Tabs */}
+      {/* ══════════════════════════════════════════
+          DETAILED ANALYSIS TABS — Premium pill style
+      ══════════════════════════════════════════ */}
       <Tabs defaultValue="food" className="w-full" onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="food">{t('food_supply')}</TabsTrigger>
-          <TabsTrigger value="assets">{t('assets')}</TabsTrigger>
-          <TabsTrigger value="vehicles">{t('vehicle_rentals')}</TabsTrigger>
-          <TabsTrigger value="insights">{t('insights')}</TabsTrigger>
-          <TabsTrigger value="ml" className="flex items-center gap-1">
-            <Cpu className="h-4 w-4" />
-            <span>{t('ml_analysis')}</span>
+        <div className="flex items-center gap-2 mb-1">
+          <div className="h-5 w-1 rounded-full bg-gradient-to-b from-violet-500 to-indigo-400" />
+          <h2 className="text-xs font-black uppercase tracking-[0.15em] text-muted-foreground">Detailed Analysis</h2>
+        </div>
+        <TabsList className="h-auto p-1.5 bg-muted/60 rounded-2xl w-full grid grid-cols-5 gap-1 border border-border/40">
+          <TabsTrigger value="food" className="rounded-xl data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 text-xs font-semibold py-2">
+            <Utensils className="h-3.5 w-3.5 flex-shrink-0" /><span className="hidden sm:inline">{t('food_supply')}</span><span className="sm:hidden">Food</span>
+          </TabsTrigger>
+          <TabsTrigger value="assets" className="rounded-xl data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 text-xs font-semibold py-2">
+            <Package className="h-3.5 w-3.5 flex-shrink-0" /><span className="hidden sm:inline">{t('assets')}</span><span className="sm:hidden">Assets</span>
+          </TabsTrigger>
+          <TabsTrigger value="vehicles" className="rounded-xl data-[state=active]:bg-amber-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 text-xs font-semibold py-2">
+            <Car className="h-3.5 w-3.5 flex-shrink-0" /><span className="hidden sm:inline">{t('vehicle_rentals')}</span><span className="sm:hidden">Vehicles</span>
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="rounded-xl data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 text-xs font-semibold py-2">
+            <Lightbulb className="h-3.5 w-3.5 flex-shrink-0" /><span className="hidden sm:inline">{t('insights')}</span><span className="sm:hidden">Insights</span>
+          </TabsTrigger>
+          <TabsTrigger value="ml" className="rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md flex items-center gap-1.5 text-xs font-semibold py-2">
+            <Cpu className="h-3.5 w-3.5 flex-shrink-0" /><span className="hidden sm:inline">{t('ml_analysis')}</span><span className="sm:hidden">ML</span>
           </TabsTrigger>
         </TabsList>
         
@@ -1018,60 +1152,64 @@ function AIAnalysisContent() {
         {/* ML Analysis Tab */}
         <TabsContent value="ml" className="space-y-4 pt-4">
           {mlLoading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-              <h3 className="text-lg font-medium">{t('processing_machine_learning_analysis')}</h3>
-              <p className="text-sm text-muted-foreground mt-2">
-                {t('ml_processing_description')}
-              </p>
+            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-900 p-12 text-center">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_30%,rgba(99,102,241,0.35),transparent)]" />
+              <div className="relative z-10">
+                <div className="h-16 w-16 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-4">
+                  <Loader2 className="h-8 w-8 text-indigo-300 animate-spin" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">{t('processing_machine_learning_analysis')}</h3>
+                <p className="text-sm text-indigo-300/70 max-w-sm mx-auto">{t('ml_processing_description')}</p>
+              </div>
             </div>
           ) : mlError ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t('error_loading_ml_analysis')}</AlertTitle>
-              <AlertDescription>{mlError}</AlertDescription>
-            </Alert>
+            <div className="rounded-2xl border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-900/10 p-6">
+              <div className="flex items-center gap-3 mb-2">
+                <AlertTriangle className="h-5 w-5 text-rose-600" />
+                <p className="font-bold text-rose-700 dark:text-rose-400">{t('error_loading_ml_analysis')}</p>
+              </div>
+              <p className="text-sm text-rose-600 dark:text-rose-300">{mlError}</p>
+            </div>
           ) : !mlData ? (
-            <Alert>
-              <AlertTitle>{t('no_ml_data_available')}</AlertTitle>
-              <AlertDescription>
-                {t('unable_to_load_ml_analysis')}
-              </AlertDescription>
-            </Alert>
+            <div className="rounded-2xl border border-border/60 bg-muted/30 p-10 text-center">
+              <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3">
+                <Cpu className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="font-semibold text-muted-foreground">{t('no_ml_data_available')}</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">{t('unable_to_load_ml_analysis')}</p>
+            </div>
           ) : (
             <>
-              {/* ML Summary Card */}
-              <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Cpu className="h-6 w-6 mr-2 text-blue-600" />
-                    {t('machine_learning_analysis')}
-                  </CardTitle>
-                  <CardDescription>
-                    {t('advanced_predictive_analytics')}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-4 bg-white rounded-lg border border-blue-100 shadow-sm">
-                    <h3 className="text-lg font-semibold flex items-center mb-3">
-                      <BrainCircuit className="h-5 w-5 mr-2 text-blue-600" />
-                      {mlData.insights.summary.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {mlData.insights.summary.description}
-                    </p>
-                    <div className="space-y-3">
-                      {mlData.insights.summary.keyPoints.map((point, index) => (
-                        <div key={index} className="flex items-start">
-                          <div className="bg-blue-100 p-1 rounded-full mr-3 mt-0.5">
-                            <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                          </div>
-                          <p className="text-sm">{point}</p>
-                        </div>
-                      ))}
+              {/* ML Summary Card — world-class dark gradient */}
+              <div className="relative rounded-2xl overflow-hidden shadow-xl">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-900" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_80%_0%,rgba(99,102,241,0.4),transparent)]" />
+                <div className="relative z-10 p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center">
+                      <Cpu className="h-6 w-6 text-indigo-300" />
                     </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-indigo-300/60 font-bold">{t('machine_learning_analysis')}</p>
+                      <h3 className="text-xl font-black text-white">{mlData.insights.summary.title}</h3>
+                    </div>
+                    <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-indigo-500/25 border border-indigo-400/30 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-indigo-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse" /> {t('advanced_predictive_analytics')}
+                    </span>
                   </div>
-                </CardContent>
-              </Card>
+                  <p className="text-sm text-indigo-200/70 mb-4">{mlData.insights.summary.description}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {mlData.insights.summary.keyPoints.map((point, index) => (
+                      <div key={index} className="flex items-start gap-3 bg-white/8 rounded-xl px-4 py-3">
+                        <div className="h-5 w-5 rounded-full bg-indigo-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <CheckCircle2 className="h-3 w-3 text-indigo-300" />
+                        </div>
+                        <p className="text-sm text-white/80 leading-relaxed">{point}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
               
               {/* Kitchen Consumption Anomalies */}
               {mlData.insights.kitchenAnomalies?.items && mlData.insights.kitchenAnomalies.items.length > 0 && (
