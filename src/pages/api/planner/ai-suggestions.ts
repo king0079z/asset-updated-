@@ -10,7 +10,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const supabase = createClient(req, res);
     
     // Check if user is authenticated
-    const { data: { user } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     
     if (!user) {
       console.log(`Path: ${req.url} Unauthorized access attempt`);

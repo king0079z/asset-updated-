@@ -12,7 +12,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('History endpoint called with query:', req.query);
     
     const supabase = createClient(req, res)
-    const { data: { user } } = await supabase.auth.getSession()
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (!user) {
       console.error('History endpoint: Unauthorized access attempt')

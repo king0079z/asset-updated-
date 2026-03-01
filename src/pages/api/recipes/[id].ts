@@ -5,7 +5,8 @@ import { logDataModification } from "@/lib/audit";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const supabase = createClient(req, res);
-  const { data: { user }, error: authError } = await supabase.auth.getSession();
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
   if (authError || !user) {
     return res.status(401).json({ error: 'Unauthorized' });

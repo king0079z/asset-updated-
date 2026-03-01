@@ -13,9 +13,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { id } = req.query;
     const supabase = createClient(req, res);
     
-    const {
-      data: { user },
-    } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (!user) {
       console.error('Path: /api/assets/[id]/maintenance-predictions Unauthorized access attempt');

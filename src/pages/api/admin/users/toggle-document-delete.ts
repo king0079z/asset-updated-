@@ -5,7 +5,8 @@ import prisma from '@/lib/prisma';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Check if user is authenticated and is admin
   const supabase = createClient(req, res);
-  const { data: { user } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });

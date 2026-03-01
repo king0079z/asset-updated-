@@ -65,7 +65,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   
   // For all other methods, require authentication
   // Get authenticated user
-  const { data: { user } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
   
   if (!user) {
     console.warn('Unauthorized access attempt to error logs API');

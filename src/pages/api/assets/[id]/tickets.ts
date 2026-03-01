@@ -29,7 +29,8 @@ export default async function handler(
   try {
     // Create Supabase client and authenticate user
     const supabase = createClient(req, res);
-    const { data: { user } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (!user) {
       logAssetTicketsEvent('Unauthorized access attempt');

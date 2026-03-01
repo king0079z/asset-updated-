@@ -11,7 +11,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Authenticate the user
   const supabase = createClient(req, res);
-  const { data: { user }, error } = await supabase.auth.getSession();
+  const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
   if (error || !user) {
     return res.status(401).json({ error: 'Unauthorized' });
