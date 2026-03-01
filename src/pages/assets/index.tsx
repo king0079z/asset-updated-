@@ -694,29 +694,6 @@ export default function AssetsPage() {
                     <span className="sm:hidden">{t('new_asset')}</span>
                   </Button>
                 </DialogTrigger>
-            <BarcodeScanner
-              onScan={(result) => {
-                // If result is an asset, open details dialog
-                if ('id' in result && result.id) {
-                  setSelectedAsset(result as Asset);
-                  setShowBarcodeDialog(true);
-                }
-                // If result is a barcode (not found), open registration dialog and pre-fill barcode
-                else if ('barcode' in result && result.barcode) {
-                  setIsOpen(true);
-                  // Set barcode in form
-                  form.setValue('barcode', result.barcode);
-                }
-              }}
-            />
-            <Dialog open={isOpen} onOpenChange={setIsOpen}>
-              <DialogTrigger asChild>
-                <Button className="whitespace-nowrap h-10 flex-1 sm:flex-auto" size="default">
-                  <PlusCircle className="mr-2 h-5 w-5" />
-                  <span className="hidden sm:inline">{t('register_new_asset')}</span>
-                  <span className="sm:hidden">{t('new_asset')}</span>
-                </Button>
-              </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>{t('register_new_asset')}</DialogTitle>
