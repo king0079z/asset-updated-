@@ -6,7 +6,6 @@ import { KitchenConsumptionAnalysisTab } from "@/components/KitchenConsumptionAn
 import { MultiLocationInventoryTab } from "@/components/MultiLocationInventoryTab";
 import { BarcodeManagementDialog } from "@/components/BarcodeManagementDialog";
 import { KitchenFoodSupplyNavigation } from "@/components/KitchenFoodSupplyNavigation";
-import BarcodeScannerFood from "@/components/BarcodeScannerFood";
 import EnhancedBarcodeScanner from "@/components/EnhancedBarcodeScanner";
 import { ConsumptionHistoryDialog } from "@/components/ConsumptionHistoryDialog";
 import { EditFoodSupplyDialog } from "@/components/EditFoodSupplyDialog";
@@ -398,24 +397,20 @@ export default function FoodSupplyPage() {
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-2.5 lg:flex-col">
-              {/* Record Food Consumption — primary CTA */}
-              {kitchens.length > 0 && (
-                <>
-                  <Button
-                    onClick={() => setShowConsumptionScanner(true)}
-                    className="bg-white text-emerald-700 hover:bg-emerald-50 border-0 shadow-lg font-semibold gap-2"
-                  >
-                    <ScanLine className="h-4 w-4" />
-                    Record Food Consumption
-                  </Button>
-                  <EnhancedBarcodeScanner
-                    kitchenId={kitchens[0].id}
-                    open={showConsumptionScanner}
-                    onOpenChange={setShowConsumptionScanner}
-                    onScanComplete={loadFoodSupplies}
-                  />
-                </>
-              )}
+              {/* Record Food Consumption — primary CTA (always visible) */}
+              <Button
+                onClick={() => setShowConsumptionScanner(true)}
+                className="bg-white text-emerald-700 hover:bg-emerald-50 border-0 shadow-lg font-semibold gap-2"
+              >
+                <ScanLine className="h-4 w-4" />
+                Record Food Consumption
+              </Button>
+              <EnhancedBarcodeScanner
+                kitchenId={kitchens[0]?.id ?? ''}
+                open={showConsumptionScanner}
+                onOpenChange={setShowConsumptionScanner}
+                onScanComplete={loadFoodSupplies}
+              />
               <PrintFoodSupplyReportButton
                 foodSupplies={foodSupplies}
                 stats={stats}
