@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Building2, Users, ChefHat, LayoutDashboard } from "lucide-react";
-import { fetchWithCache } from '@/lib/api-cache';
 
 export default function KitchensPage() {
   const { user } = useAuth();

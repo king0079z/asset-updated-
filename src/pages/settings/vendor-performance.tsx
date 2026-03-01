@@ -16,7 +16,6 @@ import { useTranslation } from "@/contexts/TranslationContext";
 import { VendorPerformanceCard } from "@/components/VendorPerformanceCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { fetchWithCache } from '@/lib/api-cache';
 
 type Vendor = {
   id: string;
@@ -61,7 +60,7 @@ export default function VendorPerformancePage() {
   const loadVendors = async () => {
     setIsLoading(true);
     try {
-      const response = await fetchWithCache("/api/vendors");
+      const response = await fetch("/api/vendors");
       if (!response.ok) {
         throw new Error("Failed to load vendors");
       }

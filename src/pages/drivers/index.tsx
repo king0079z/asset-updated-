@@ -11,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRouter } from "next/router";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
-import { fetchWithCache } from '@/lib/api-cache';
 
 interface Driver {
   id: string;
@@ -40,7 +39,7 @@ export default function DriversPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetchWithCache("/api/drivers");
+      const response = await fetch("/api/drivers");
       if (response.ok) {
         const data = await response.json();
         setDrivers(data.drivers);

@@ -18,7 +18,6 @@ import Link from "next/link";
 import { formatRentalId, formatRentalDate, calculateRentalDuration } from "@/util/rental";
 import { VehicleRentalMobileCard } from "@/components/VehicleRentalMobileCard";
 import { useTranslation } from "@/contexts/TranslationContext";
-import { fetchWithCache } from '@/lib/api-cache';
 
 interface Vehicle {
   id: string;

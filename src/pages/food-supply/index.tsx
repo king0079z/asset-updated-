@@ -48,7 +48,6 @@ import { RefillFoodSupplyDialog } from "@/components/RefillFoodSupplyDialog";
 import { printContentWithIframe } from '@/util/print';
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useTranslation } from "@/contexts/TranslationContext";
-import { fetchWithCache } from '@/lib/api-cache';
 
 const foodSupplySchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -151,7 +150,7 @@ export default function FoodSupplyPage() {
   const loadFoodSupplies = async () => {
     setIsLoading(true);
     try {
-      const response = await fetchWithCache("/api/food-supply");
+      const response = await fetch("/api/food-supply");
       const data = await response.json();
       setFoodSupplies(data);
 
@@ -216,7 +215,7 @@ export default function FoodSupplyPage() {
   useEffect(() => {
     const loadVendors = async () => {
       try {
-        const response = await fetchWithCache("/api/vendors?type=FOOD_SUPPLY");
+        const response = await fetch("/api/vendors?type=FOOD_SUPPLY");
         const data = await response.json();
         setVendors(data);
       } catch (error) {
@@ -231,7 +230,7 @@ export default function FoodSupplyPage() {
 
     const loadKitchens = async () => {
       try {
-        const response = await fetchWithCache("/api/kitchens");
+        const response = await fetch("/api/kitchens");
         const data = await response.json();
         setKitchens(data);
       } catch (error) {

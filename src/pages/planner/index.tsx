@@ -18,7 +18,6 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, addDays, isBefore, isAfter } from 'date-fns';
-import { fetchWithCache } from '@/lib/api-cache';
 
 type Task = {
   id: string;
@@ -59,7 +58,7 @@ function PlannerPage() {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const response = await fetchWithCache('/api/planner');
+      const response = await fetch('/api/planner');
       if (response.ok) {
         const data = await response.json();
         // Convert date strings to Date objects

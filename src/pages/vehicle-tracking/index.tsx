@@ -18,7 +18,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import VehicleMovementAnalysis from "@/components/VehicleMovementAnalysis";
 import { MovementTypeIndicator } from "@/components/MovementTypeIndicator";
-import { fetchWithCache } from '@/lib/api-cache';
 
 // Dynamically import the map component to avoid SSR issues
 const VehicleMap = dynamic(() => import("@/components/VehicleMap"), {
@@ -103,7 +102,7 @@ export default function VehicleTrackingPage() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetchWithCache("/api/vehicles/tracking");
+        const response = await fetch("/api/vehicles/tracking");
         if (response.ok) {
           const data = await response.json();
           setVehicles(data.vehicles);
@@ -131,7 +130,7 @@ export default function VehicleTrackingPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetchWithCache("/api/vehicles/tracking");
+      const response = await fetch("/api/vehicles/tracking");
       if (response.ok) {
         const data = await response.json();
         setVehicles(data.vehicles);

@@ -82,7 +82,6 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { PrintAssetReportButton } from "@/components/PrintAssetReportButton";
 import AssetDuplicateButton from "@/components/AssetDuplicateButton";
-import { fetchWithCache } from '@/lib/api-cache';
 
 const assetFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
