@@ -93,7 +93,7 @@ export default function EnhancedBarcodeScanner({
   const [scanConfidence, setScanConfidence] = useState(0); // 0-100 confidence %
   const searchDebounce   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const SCANNER_DIV_ID   = 'food-qr-scanner-div';
-  const REQUIRED_MATCHES = 2;  // 2 consistent reads → fire (fast + accurate)
+  const REQUIRED_MATCHES = 1;  // Fire on first valid read — char validation guards against garbage
 
   /* ── Hooks ───────────────────────────────────────────── */
   const { toast }  = useToast();
@@ -222,13 +222,15 @@ export default function EnhancedBarcodeScanner({
     }
   }, [kitchenId, autoRecordSupply]);
 
-  /* isValidBarcode — reject garbled reads (special chars, too short) */
+  /* isValidBarcode — reject garbled reads before they reach the API */
   const isValidBarcode = (code: string) => {
     if (!code || code.length < 4) return false;
-    // Must be printable ASCII only — no control chars, backslash, backtick, etc.
+    // Must be printable ASCII only — no control chars
     if (/[^\x20-\x7E]/.test(code)) return false;
-    // Reject strings with characters that never appear in valid barcodes
-    if (/[\\`'"<>{}|]/.test(code)) return false;
+    // Reject characters that never appear in real barcodes
+    if (/[\\`'"<>{}|~^]/.test(code)) return false;
+    // KIT...SUP... format: must be all alphanumeric + digits (no spaces or punctuation)
+    if (code.startsWith('KIT') && /[^A-Z0-9]/.test(code)) return false;
     return true;
   };
 
@@ -291,7 +293,7 @@ export default function EnhancedBarcodeScanner({
       let started = false;
 
       // Wide rectangle qrbox — Code128 barcodes are wide, not square
-      const scanConfig = { fps: 20, qrbox: { width: 320, height: 120 } };
+      const scanConfig = { fps: 30, qrbox: { width: 320, height: 120 } };
 
       // Strategy 1: enumerate cameras → prefer back camera
       try {
@@ -678,7 +680,7 @@ export default function EnhancedBarcodeScanner({
                                 <Minus className="h-4 w-4" />
                               </button>
                               <Input
-                                type="number" step="0.1" min="0.01"
+                                type="number" step="any" min="0.01"
                                 className="flex-1 text-center text-lg font-bold h-10"
                                 {...field}
                                 onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
