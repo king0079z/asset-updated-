@@ -15,12 +15,13 @@ import * as z from "zod";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTranslation } from "@/contexts/TranslationContext";
 import {
-  Loader2, Check, ScanLine, X, ChefHat, Package, Calendar,
+  Loader2, Check, ScanLine, X, Package, Calendar,
   AlertTriangle, CheckCircle2, Minus, Plus, Search, Camera,
-  Keyboard, ArrowLeft, Utensils, Zap, RefreshCcw, Info,
+  Keyboard, ArrowLeft, Utensils, Zap, RefreshCcw,
   Clock, MapPin, User, BookOpen
 } from "lucide-react";
 
+/* ─────────────────────────── Types ─────────────────────────── */
 interface FoodSupply {
   id: string;
   name: string;
@@ -53,210 +54,244 @@ interface EnhancedBarcodeScannerProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-type ScannerState = 'scanning' | 'found-supply' | 'found-recipe' | 'not-found' | 'error';
+type View = 'camera' | 'manual' | 'search' | 'found-supply' | 'found-recipe' | 'not-found';
 
+/* ═══════════════════════════════════════════════════════════════
+   COMPONENT
+════════════════════════════════════════════════════════════════ */
 export default function EnhancedBarcodeScanner({
   kitchenId, onScanComplete, open: externalOpen, onOpenChange
 }: EnhancedBarcodeScannerProps) {
-  const [internalShowScanner, setInternalShowScanner] = useState(false);
-  const showScanner = externalOpen !== undefined ? externalOpen : internalShowScanner;
-  const setShowScanner = (value: boolean) => {
-    if (onOpenChange) onOpenChange(value);
-    else setInternalShowScanner(value);
+
+  /* ── Dialog open state ───────────────────────────────── */
+  const [internalOpen, setInternalOpen] = useState(false);
+  const showScanner = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setShowScanner = (v: boolean) => {
+    if (onOpenChange) onOpenChange(v);
+    else setInternalOpen(v);
   };
 
-  const [manualCode, setManualCode] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<FoodSupply[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [foundSupply, setFoundSupply] = useState<FoodSupply | null>(null);
-  const [foundRecipe, setFoundRecipe] = useState<Recipe | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const [servingsCount, setServingsCount] = useState(1);
-  const [scannerState, setScannerState] = useState<ScannerState>('scanning');
+  /* ── UI state ────────────────────────────────────────── */
+  const [view, setView]                     = useState<View>('camera');
+  const [manualCode, setManualCode]         = useState('');
+  const [searchQuery, setSearchQuery]       = useState('');
+  const [searchResults, setSearchResults]   = useState<FoodSupply[]>([]);
+  const [isSearching, setIsSearching]       = useState(false);
+  const [foundSupply, setFoundSupply]       = useState<FoodSupply | null>(null);
+  const [foundRecipe, setFoundRecipe]       = useState<Recipe | null>(null);
+  const [isProcessing, setIsProcessing]     = useState(false);
+  const [isLookingUp, setIsLookingUp]       = useState(false);
+  const [servingsCount, setServingsCount]   = useState(1);
   const [lastScannedCode, setLastScannedCode] = useState('');
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('camera');
-  const { toast } = useToast();
-  const { t } = useTranslation();
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const { user } = useAuth();
-  const scannerContainerId = 'enhanced-barcode-scanner-v2';
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [camLoading, setCamLoading]         = useState(false);
+  const [camError, setCamError]             = useState<string | null>(null);
 
+  /* ── Refs ────────────────────────────────────────────── */
+  const qrRef            = useRef<Html5Qrcode | null>(null);
+  const scanned          = useRef(false);                  // single-fire guard
+  const searchDebounce   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const SCANNER_DIV_ID   = 'food-qr-scanner-div';
+
+  /* ── Hooks ───────────────────────────────────────────── */
+  const { toast }  = useToast();
+  const { t }      = useTranslation();
+  const { user }   = useAuth();
   const consumptionForm = useForm<z.infer<typeof consumptionFormSchema>>({
     resolver: zodResolver(consumptionFormSchema),
     defaultValues: { quantity: 1, notes: '' },
   });
 
-  // ── Camera initialization ──────────────────────────────────
-  const stopCamera = useCallback(async () => {
-    if (scannerRef.current) {
-      try {
-        const state = scannerRef.current.getState();
-        if (state === 2) { // SCANNING
-          await scannerRef.current.stop();
-        }
-        scannerRef.current = null;
-      } catch (e) {
-        scannerRef.current = null;
-      }
+  /* ════════════════════════════════════════════════════════
+     CAMERA — exact same pattern as working BarcodeScanner2
+  ════════════════════════════════════════════════════════ */
+  const stopCam = useCallback(async () => {
+    if (qrRef.current) {
+      try { await qrRef.current.stop(); } catch {}
+      qrRef.current = null;
     }
   }, []);
 
-  useEffect(() => {
-    if (!showScanner || activeTab !== 'camera') return;
-    if (foundSupply || foundRecipe) return;
-
-    let cancelled = false;
-    const startCamera = async () => {
-      try {
-        setCameraError(null);
-        await navigator.mediaDevices.getUserMedia({ video: true });
-        if (cancelled) return;
-
-        if (!document.getElementById(scannerContainerId)) return;
-        if (scannerRef.current) return;
-
-        scannerRef.current = new Html5Qrcode(scannerContainerId);
-        const devices = await Html5Qrcode.getCameras();
-        if (!devices?.length) throw new Error("No cameras found");
-
-        const backCamera = devices.find(d =>
-          d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear')
-        ) || devices[0];
-
-        if (cancelled) return;
-        await scannerRef.current.start(
-          backCamera.id,
-          { fps: 12, qrbox: { width: 260, height: 180 }, aspectRatio: 1.5 },
-          handleScan,
-          () => {}
-        );
-      } catch (err: any) {
-        if (cancelled) return;
-        const msg = err?.name === 'NotAllowedError'
-          ? 'Camera access denied. Please allow camera in browser settings.'
-          : 'Could not start camera. Use manual entry below.';
-        setCameraError(msg);
-      }
-    };
-
-    const timer = setTimeout(startCamera, 200);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      stopCamera();
-    };
-  }, [showScanner, activeTab, foundSupply, foundRecipe]);
-
-  // ── Barcode lookup ─────────────────────────────────────────
+  /* lookupBarcode — stable (only depends on kitchenId prop) */
   const lookupBarcode = useCallback(async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
     setLastScannedCode(trimmed);
     setIsLookingUp(true);
-
     try {
-      // 1. Try food supply in current kitchen
-      let res = await fetch(`/api/food-supply?barcode=${encodeURIComponent(trimmed)}&kitchenId=${kitchenId}`);
+      // 1. Try in current kitchen first
+      let res  = await fetch(`/api/food-supply?barcode=${encodeURIComponent(trimmed)}&kitchenId=${kitchenId}`);
       let data = await res.json();
+      if (data.supply) { setFoundSupply(data.supply); setView('found-supply'); return; }
 
-      if (data.supply) {
-        setFoundSupply(data.supply);
-        setScannerState('found-supply');
-        return;
-      }
-
-      // 2. Try food supply in any kitchen (cross-kitchen)
-      res = await fetch(`/api/food-supply?barcode=${encodeURIComponent(trimmed)}`);
+      // 2. Cross-kitchen fallback
+      res  = await fetch(`/api/food-supply?barcode=${encodeURIComponent(trimmed)}`);
       data = await res.json();
+      if (data.supply) { setFoundSupply(data.supply); setView('found-supply'); return; }
 
-      if (data.supply) {
-        setFoundSupply(data.supply);
-        setScannerState('found-supply');
-        return;
-      }
-
-      // 3. Try recipe
+      // 3. Recipe fallback
       res = await fetch(`/api/recipes/${encodeURIComponent(trimmed)}`);
       if (res.ok) {
         const recipe = await res.json();
-        if (recipe?.id) {
-          setFoundRecipe(recipe);
-          setScannerState('found-recipe');
-          return;
-        }
+        if (recipe?.id) { setFoundRecipe(recipe); setView('found-recipe'); return; }
       }
 
-      // 4. Nothing found
-      setScannerState('not-found');
-    } catch (err) {
-      setScannerState('error');
-    } finally {
-      setIsLookingUp(false);
-    }
+      // 4. Not found
+      setView('not-found');
+    } catch { setView('not-found'); }
+    finally  { setIsLookingUp(false); }
   }, [kitchenId]);
 
-  const handleScan = useCallback(async (decodedText: string) => {
-    if (isLookingUp) return;
-    await stopCamera();
-    await lookupBarcode(decodedText);
-  }, [isLookingUp, stopCamera, lookupBarcode]);
+  /* onCode — stable, uses lookupBarcode (stable) */
+  const onCode = useCallback(async (raw: string) => {
+    if (!raw || scanned.current) return;
+    scanned.current = true;           // prevent duplicate fires
+    try { await qrRef.current?.pause(); } catch {}
+    await lookupBarcode(raw);
+  }, [lookupBarcode]);
 
+  /* onFrame — discard non-fatal parse errors */
+  const onFrame = useCallback((err: any) => {
+    const m = typeof err === 'string' ? err : (err?.message || '');
+    if (m.includes('No MultiFormat') || m.includes('QR code parse')) return;
+  }, []);
+
+  /* startCam — stable, tries multiple start strategies */
+  const startCam = useCallback(async () => {
+    if (!document.getElementById(SCANNER_DIV_ID)) return;
+    setCamLoading(true);
+    setCamError(null);
+    scanned.current = false;
+    await stopCam();
+
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setCamError('Camera not supported on this browser.');
+      return setCamLoading(false);
+    }
+    if (!window.isSecureContext) {
+      setCamError('Camera requires a secure (HTTPS) connection.');
+      return setCamLoading(false);
+    }
+
+    try {
+      qrRef.current = new Html5Qrcode(SCANNER_DIV_ID, { verbose: false });
+      let started = false;
+
+      // Strategy 1: enumerate cameras → prefer back camera
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices?.length) {
+          const cam = devices.find(d => /back|rear|environment/i.test(d.label || '')) || devices[0];
+          try {
+            await qrRef.current.start(cam.id, { fps: 15, qrbox: { width: 240, height: 240 } }, onCode, onFrame);
+            started = true;
+          } catch {
+            await qrRef.current.start(cam.id, { fps: 10, qrbox: 200 }, onCode, onFrame);
+            started = true;
+          }
+        }
+      } catch {}
+
+      // Strategy 2: facingMode (works on mobile when enumeration fails)
+      if (!started) {
+        await qrRef.current.start(
+          { facingMode: { ideal: 'environment' } },
+          { fps: 15, qrbox: { width: 240, height: 240 } },
+          onCode, onFrame
+        );
+      }
+    } catch (err: any) {
+      await stopCam();
+      const n = err?.name || String(err?.message || err || '');
+      if (/NotAllowed|PermissionDenied/i.test(n))
+        setCamError('Camera access denied. Allow camera in browser settings, then retry.');
+      else if (/NotFound|DevicesNotFound/i.test(n))
+        setCamError('No camera found on this device. Use the Barcode or Search tabs.');
+      else if (/NotReadable/i.test(n))
+        setCamError('Camera is in use by another app. Close it and retry.');
+      else
+        setCamError('Camera failed to start. Use the Barcode or Search tabs below.');
+    }
+    setCamLoading(false);
+  }, [stopCam, onCode, onFrame]);
+
+  /* Effect 1 — start camera when dialog opens */
+  useEffect(() => {
+    if (!showScanner) return;
+    setView('camera');
+    setFoundSupply(null);
+    setFoundRecipe(null);
+    setCamError(null);
+    setManualCode('');
+    setSearchQuery('');
+    setSearchResults([]);
+    scanned.current = false;
+    consumptionForm.reset();
+
+    const t = setTimeout(() => {
+      if (document.getElementById(SCANNER_DIV_ID)) startCam();
+    }, 450); // give Dialog portal time to mount
+
+    return () => { clearTimeout(t); stopCam(); };
+  }, [showScanner]); // eslint-disable-line
+
+  /* Effect 2 — restart camera when view switches back to camera tab */
+  useEffect(() => {
+    if (!showScanner || view !== 'camera') return;
+    const t = setTimeout(() => {
+      if (document.getElementById(SCANNER_DIV_ID)) startCam();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [view]); // eslint-disable-line
+
+  /* ════════════════════════════════════════════════════════
+     NAME SEARCH (debounced)
+  ════════════════════════════════════════════════════════ */
+  useEffect(() => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (!searchQuery.trim() || searchQuery.length < 2) { setSearchResults([]); return; }
+    searchDebounce.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/food-supply/search?query=${encodeURIComponent(searchQuery)}&kitchenId=${kitchenId}`);
+        if (res.ok) { const d = await res.json(); setSearchResults(d.items || []); }
+      } catch {}
+      setIsSearching(false);
+    }, 350);
+    return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); };
+  }, [searchQuery, kitchenId]);
+
+  /* ════════════════════════════════════════════════════════
+     ACTIONS
+  ════════════════════════════════════════════════════════ */
   const handleManualSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualCode.trim()) return;
     await lookupBarcode(manualCode.trim());
   };
 
-  // ── Name search (debounced) ────────────────────────────────
-  useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    if (!searchQuery.trim() || searchQuery.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    searchDebounceRef.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const res = await fetch(`/api/food-supply/search?query=${encodeURIComponent(searchQuery)}&kitchenId=${kitchenId}`);
-        if (res.ok) {
-          const d = await res.json();
-          setSearchResults(d.items || []);
-        }
-      } catch { /* ignore */ }
-      setIsSearching(false);
-    }, 350);
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [searchQuery, kitchenId]);
-
-  // ── Reset ─────────────────────────────────────────────────
-  const resetScanner = useCallback(async () => {
+  const resetToScanner = useCallback(async () => {
     setFoundSupply(null);
     setFoundRecipe(null);
     setLastScannedCode('');
     setManualCode('');
     setSearchQuery('');
     setSearchResults([]);
-    setScannerState('scanning');
-    setCameraError(null);
     setServingsCount(1);
     consumptionForm.reset();
+    scanned.current = false;
+    setView('camera');
   }, [consumptionForm]);
 
-  const handleDialogClose = async (open: boolean) => {
+  const handleDialogClose = useCallback(async (open: boolean) => {
     if (!open) {
-      await stopCamera();
+      await stopCam();
       setShowScanner(false);
-      resetScanner();
+      resetToScanner();
     } else {
       setShowScanner(open);
     }
-  };
+  }, [stopCam, resetToScanner]); // eslint-disable-line
 
-  // ── Record consumption ─────────────────────────────────────
   const onRecordConsumption = async (values: z.infer<typeof consumptionFormSchema>) => {
     if (!foundSupply) return;
     setIsProcessing(true);
@@ -288,7 +323,6 @@ export default function EnhancedBarcodeScanner({
     }
   };
 
-  // ── Use recipe ─────────────────────────────────────────────
   const handleUseRecipe = async () => {
     if (!foundRecipe || servingsCount <= 0) return;
     setIsProcessing(true);
@@ -325,21 +359,27 @@ export default function EnhancedBarcodeScanner({
     }
   };
 
-  // ── Helpers ────────────────────────────────────────────────
+  /* ════════════════════════════════════════════════════════
+     HELPERS
+  ════════════════════════════════════════════════════════ */
   const getExpiryInfo = (date?: string | null) => {
     if (!date) return null;
-    const d = new Date(date);
-    const now = new Date();
-    const days = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    if (days < 0) return { label: `Expired ${Math.abs(days)}d ago`, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-200' };
-    if (days <= 3) return { label: `Expires in ${days}d`, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' };
-    if (days <= 7) return { label: `Expires in ${days}d`, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' };
+    const d    = new Date(date);
+    const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+    if (days < 0)  return { label: `Expired ${Math.abs(days)}d ago`, color: 'text-rose-600',   bg: 'bg-rose-50   border-rose-200'   };
+    if (days <= 3) return { label: `Expires in ${days}d`,            color: 'text-amber-600',  bg: 'bg-amber-50  border-amber-200'  };
+    if (days <= 7) return { label: `Expires in ${days}d`,            color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' };
     return { label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' };
   };
 
   const qty = consumptionForm.watch('quantity');
 
-  // ════════════════════════════════════════════════════════════
+  const isFoundView   = view === 'found-supply' || view === 'found-recipe';
+  const isScannerView = view === 'camera' || view === 'manual' || view === 'search';
+
+  /* ════════════════════════════════════════════════════════
+     RENDER
+  ════════════════════════════════════════════════════════ */
   return (
     <>
       {externalOpen === undefined && (
@@ -352,7 +392,7 @@ export default function EnhancedBarcodeScanner({
       <Dialog open={showScanner} onOpenChange={handleDialogClose}>
         <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
 
-          {/* ── DIALOG HEADER ── */}
+          {/* ── HEADER ── */}
           <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
             <div className="relative z-10 flex items-center justify-between">
@@ -362,15 +402,17 @@ export default function EnhancedBarcodeScanner({
                 </div>
                 <div>
                   <DialogTitle className="text-white font-bold text-base leading-tight">
-                    {foundSupply ? 'Item Found' : foundRecipe ? 'Recipe Found' : 'Food Supply Scanner'}
+                    {view === 'found-supply' ? 'Item Found' : view === 'found-recipe' ? 'Recipe Found' : 'Food Supply Scanner'}
                   </DialogTitle>
                   <p className="text-emerald-100/80 text-xs mt-0.5">
-                    {foundSupply ? foundSupply.kitchenName : foundRecipe ? `${foundRecipe.ingredients.length} ingredients` : 'Scan or search to register consumption'}
+                    {view === 'found-supply'  ? foundSupply?.kitchenName  :
+                     view === 'found-recipe'  ? `${foundRecipe?.ingredients?.length ?? 0} ingredients` :
+                     'Scan barcode, enter code, or search by name'}
                   </p>
                 </div>
               </div>
-              {(foundSupply || foundRecipe || scannerState === 'not-found') && (
-                <button onClick={resetScanner}
+              {isFoundView && (
+                <button onClick={resetToScanner}
                   className="h-8 w-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors">
                   <ArrowLeft className="h-4 w-4 text-white" />
                 </button>
@@ -378,21 +420,22 @@ export default function EnhancedBarcodeScanner({
             </div>
           </div>
 
-          {/* ── LOOKUP LOADING ── */}
+          {/* ── LOOKUP SPINNER ── */}
           {isLookingUp && (
             <div className="flex flex-col items-center justify-center py-14 gap-4">
               <div className="h-16 w-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 text-emerald-600 animate-spin" />
               </div>
               <p className="font-semibold text-foreground">Looking up item…</p>
-              <p className="text-xs text-muted-foreground font-mono bg-muted px-3 py-1 rounded-full">{lastScannedCode}</p>
+              {lastScannedCode && (
+                <p className="text-xs text-muted-foreground font-mono bg-muted px-3 py-1 rounded-full">{lastScannedCode}</p>
+              )}
             </div>
           )}
 
           {/* ── FOUND: FOOD SUPPLY ── */}
-          {!isLookingUp && foundSupply && (() => {
+          {!isLookingUp && view === 'found-supply' && foundSupply && (() => {
             const expiryInfo = getExpiryInfo(foundSupply.expirationDate);
-            const stockPct = Math.min((foundSupply.quantity / Math.max(foundSupply.quantity * 1.5, 1)) * 100, 100);
             return (
               <div className="p-5 space-y-4">
                 {/* Item card */}
@@ -415,23 +458,18 @@ export default function EnhancedBarcodeScanner({
                         <p className="text-xs text-muted-foreground">{foundSupply.unit} available</p>
                       </div>
                     </div>
-
                     {/* Stock bar */}
-                    <div className="mt-3">
-                      <div className="h-1.5 bg-emerald-200 dark:bg-emerald-800/40 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${stockPct}%` }} />
-                      </div>
+                    <div className="mt-3 h-1.5 bg-emerald-200 dark:bg-emerald-800/40 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: '65%' }} />
                     </div>
                   </div>
-
-                  {/* Meta row */}
                   <div className="border-t border-emerald-200 dark:border-emerald-800/40 grid grid-cols-2 divide-x divide-emerald-200 dark:divide-emerald-800/40">
                     <div className="px-4 py-2.5 flex items-center gap-2">
                       <MapPin className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
-                      <span className="text-xs font-medium text-foreground truncate">{foundSupply.kitchenName}</span>
+                      <span className="text-xs font-medium truncate">{foundSupply.kitchenName}</span>
                     </div>
                     {expiryInfo ? (
-                      <div className={`px-4 py-2.5 flex items-center gap-2`}>
+                      <div className="px-4 py-2.5 flex items-center gap-2">
                         <Calendar className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                         <span className={`text-xs font-medium ${expiryInfo.color}`}>{expiryInfo.label}</span>
                       </div>
@@ -453,7 +491,7 @@ export default function EnhancedBarcodeScanner({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-sm font-semibold">
-                            Consumption Quantity
+                            Quantity to Consume
                             <span className="ml-1 text-muted-foreground font-normal">({foundSupply.unit})</span>
                           </FormLabel>
                           <FormControl>
@@ -463,16 +501,12 @@ export default function EnhancedBarcodeScanner({
                                 className="h-10 w-10 rounded-xl border border-border bg-muted hover:bg-muted/80 flex items-center justify-center flex-shrink-0 transition-colors">
                                 <Minus className="h-4 w-4" />
                               </button>
-                              <div className="flex-1 relative">
-                                <Input
-                                  type="number"
-                                  step="0.1"
-                                  min="0.01"
-                                  className="text-center text-lg font-bold h-10"
-                                  {...field}
-                                  onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                                />
-                              </div>
+                              <Input
+                                type="number" step="0.1" min="0.01"
+                                className="flex-1 text-center text-lg font-bold h-10"
+                                {...field}
+                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                              />
                               <button type="button"
                                 onClick={() => field.onChange(parseFloat((field.value + (field.value >= 10 ? 1 : 0.5)).toFixed(2)))}
                                 className="h-10 w-10 rounded-xl border border-border bg-muted hover:bg-muted/80 flex items-center justify-center flex-shrink-0 transition-colors">
@@ -481,10 +515,9 @@ export default function EnhancedBarcodeScanner({
                             </div>
                           </FormControl>
                           {/* Quick presets */}
-                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                          <div className="flex gap-1.5 flex-wrap mt-1">
                             {[0.5, 1, 2, 5, 10].map(v => (
-                              <button key={v} type="button"
-                                onClick={() => field.onChange(v)}
+                              <button key={v} type="button" onClick={() => field.onChange(v)}
                                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${field.value === v ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'}`}>
                                 {v}
                               </button>
@@ -501,27 +534,24 @@ export default function EnhancedBarcodeScanner({
                         <FormItem>
                           <FormLabel className="text-sm font-semibold">Notes <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Breakfast service, breakfast prep…" {...field} />
+                            <Input placeholder="e.g. Breakfast service…" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-
-                    {/* Summary row */}
                     {qty > 0 && foundSupply.pricePerUnit && (
                       <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2.5 border border-border/50">
                         <span className="text-xs text-muted-foreground">Estimated value consumed</span>
-                        <span className="text-sm font-black text-foreground">QAR {(qty * foundSupply.pricePerUnit).toFixed(2)}</span>
+                        <span className="text-sm font-black">QAR {(qty * foundSupply.pricePerUnit).toFixed(2)}</span>
                       </div>
                     )}
-
                     <div className="flex gap-2 pt-1">
                       <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-11 font-bold" disabled={isProcessing}>
                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                         {isProcessing ? 'Recording…' : 'Record Consumption'}
                       </Button>
-                      <Button type="button" variant="outline" onClick={resetScanner} className="h-11 px-4">
+                      <Button type="button" variant="outline" onClick={resetToScanner} className="h-11 px-4">
                         <RefreshCcw className="h-4 w-4" />
                       </Button>
                     </div>
@@ -532,23 +562,19 @@ export default function EnhancedBarcodeScanner({
           })()}
 
           {/* ── FOUND: RECIPE ── */}
-          {!isLookingUp && foundRecipe && (
+          {!isLookingUp && view === 'found-recipe' && foundRecipe && (
             <div className="p-5 space-y-4">
               <div className="rounded-2xl border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50 dark:bg-indigo-900/10 overflow-hidden">
-                <div className="px-5 py-4">
-                  <div className="flex items-start gap-3">
-                    <div className="h-11 w-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
-                      <BookOpen className="h-5 w-5 text-indigo-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-base text-foreground">{foundRecipe.name}</h3>
-                      {foundRecipe.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{foundRecipe.description}</p>
-                      )}
-                    </div>
+                <div className="px-5 py-4 flex items-start gap-3">
+                  <div className="h-11 w-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
+                    <BookOpen className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-base">{foundRecipe.name}</h3>
+                    {foundRecipe.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{foundRecipe.description}</p>}
                   </div>
                 </div>
-                <div className="border-t border-indigo-200 dark:border-indigo-800/40 grid grid-cols-2 divide-x divide-indigo-200 dark:divide-indigo-800/40">
+                <div className="border-t border-indigo-200 dark:border-indigo-800/40 grid grid-cols-2 divide-x divide-indigo-200">
                   <div className="px-4 py-2.5">
                     <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Ingredients</p>
                     <p className="text-sm font-bold">{foundRecipe.ingredients.length} items</p>
@@ -559,67 +585,56 @@ export default function EnhancedBarcodeScanner({
                   </div>
                 </div>
               </div>
-
-              {/* Servings stepper */}
               <div className="space-y-2">
-                <Label className="text-sm font-semibold">Number of Servings to Use</Label>
+                <Label className="text-sm font-semibold">Number of Servings</Label>
                 <div className="flex items-center gap-2">
-                  <button type="button"
-                    onClick={() => setServingsCount(Math.max(1, servingsCount - 1))}
-                    className="h-11 w-11 rounded-xl border border-border bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors">
+                  <button type="button" onClick={() => setServingsCount(Math.max(1, servingsCount - 1))}
+                    className="h-11 w-11 rounded-xl border border-border bg-muted hover:bg-muted/80 flex items-center justify-center">
                     <Minus className="h-4 w-4" />
                   </button>
-                  <Input
-                    type="number" min="1"
-                    className="flex-1 text-center text-lg font-bold h-11"
-                    value={servingsCount}
-                    onChange={e => setServingsCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  />
-                  <button type="button"
-                    onClick={() => setServingsCount(servingsCount + 1)}
-                    className="h-11 w-11 rounded-xl border border-border bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors">
+                  <Input type="number" min="1" className="flex-1 text-center text-lg font-bold h-11"
+                    value={servingsCount} onChange={e => setServingsCount(Math.max(1, parseInt(e.target.value) || 1))} />
+                  <button type="button" onClick={() => setServingsCount(servingsCount + 1)}
+                    className="h-11 w-11 rounded-xl border border-border bg-muted hover:bg-muted/80 flex items-center justify-center">
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground">Standard recipe serves {foundRecipe.servings} people</p>
               </div>
-
               <div className="flex gap-2">
                 <Button onClick={handleUseRecipe} className="flex-1 h-11 bg-indigo-600 hover:bg-indigo-700 font-bold" disabled={isProcessing}>
                   {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                   {isProcessing ? 'Processing…' : 'Use Recipe'}
                 </Button>
-                <Button variant="outline" onClick={resetScanner} className="h-11 px-4">
-                  <RefreshCcw className="h-4 w-4" />
-                </Button>
+                <Button variant="outline" onClick={resetToScanner} className="h-11 px-4"><RefreshCcw className="h-4 w-4" /></Button>
               </div>
             </div>
           )}
 
           {/* ── NOT FOUND ── */}
-          {!isLookingUp && scannerState === 'not-found' && (
+          {!isLookingUp && view === 'not-found' && (
             <div className="p-5 flex flex-col items-center gap-4 text-center">
               <div className="h-16 w-16 rounded-2xl bg-rose-100 dark:bg-rose-900/20 flex items-center justify-center">
                 <AlertTriangle className="h-8 w-8 text-rose-500" />
               </div>
               <div>
                 <p className="font-bold text-foreground">Item Not Found</p>
-                <p className="text-sm text-muted-foreground mt-1">No food supply or recipe matched</p>
+                <p className="text-sm text-muted-foreground mt-1">No food supply or recipe matched this code</p>
                 {lastScannedCode && (
-                  <p className="text-xs font-mono bg-muted px-3 py-1 rounded-full mt-2 inline-block">{lastScannedCode}</p>
+                  <p className="text-xs font-mono bg-muted px-3 py-1 rounded-full mt-2 inline-block break-all">{lastScannedCode}</p>
                 )}
               </div>
-              <Button onClick={resetScanner} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-                <RefreshCcw className="h-4 w-4" /> Try Again
+              <Button onClick={resetToScanner} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                <RefreshCcw className="h-4 w-4" /> Scan Again
               </Button>
             </div>
           )}
 
-          {/* ── SCANNER / SEARCH UI ── */}
-          {!isLookingUp && !foundSupply && !foundRecipe && scannerState === 'scanning' && (
-            <Tabs value={activeTab} onValueChange={tab => {
-              setActiveTab(tab);
-              if (tab !== 'camera') stopCamera();
+          {/* ── SCANNER / SEARCH TABS ── */}
+          {!isLookingUp && isScannerView && (
+            <Tabs value={view} onValueChange={tab => {
+              if (tab !== 'camera') stopCam();
+              setView(tab as View);
             }} className="w-full">
               <div className="px-5 pt-4">
                 <TabsList className="w-full h-auto p-1 bg-muted/60 rounded-xl grid grid-cols-3 gap-1">
@@ -635,36 +650,49 @@ export default function EnhancedBarcodeScanner({
                 </TabsList>
               </div>
 
-              {/* Camera tab */}
+              {/* ─ Camera tab ─ */}
               <TabsContent value="camera" className="mt-0 p-5">
-                {cameraError ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-4 flex items-start gap-3">
+                {camLoading && (
+                  <div className="flex flex-col items-center justify-center gap-3 py-10">
+                    <Loader2 className="h-8 w-8 text-emerald-600 animate-spin" />
+                    <p className="text-sm text-muted-foreground">Starting camera…</p>
+                  </div>
+                )}
+                {camError && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-4 flex items-start gap-3 mb-3">
                     <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">{cameraError}</p>
-                      <p className="text-xs text-muted-foreground mt-1">Switch to "Barcode" or "Search" tabs to continue.</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="relative rounded-2xl overflow-hidden bg-black" style={{ minHeight: 260 }}>
-                    <div id={scannerContainerId} className="w-full" />
-                    {/* Scan line overlay */}
-                    <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <div className="border-2 border-emerald-400/80 rounded-xl" style={{ height: 140 }}>
-                        <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-emerald-400 rounded-tl-lg" />
-                        <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-emerald-400 rounded-tr-lg" />
-                        <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-emerald-400 rounded-bl-lg" />
-                        <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-emerald-400 rounded-br-lg" />
-                      </div>
+                      <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">{camError}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Use the Barcode or Search tabs instead.</p>
+                      <button onClick={startCam} className="mt-2 text-xs font-bold text-emerald-600 hover:underline flex items-center gap-1">
+                        <RefreshCcw className="h-3 w-3" /> Retry camera
+                      </button>
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-center text-muted-foreground mt-3 flex items-center justify-center gap-1">
-                  <Zap className="h-3 w-3 text-emerald-500" /> Point camera at barcode or QR code
-                </p>
+                {/* Camera feed — always rendered so Html5Qrcode can mount */}
+                <div className={`relative rounded-2xl overflow-hidden bg-black ${camError ? 'hidden' : ''}`} style={{ minHeight: 260 }}>
+                  <div id={SCANNER_DIV_ID} className="w-full" />
+                  {/* Corner bracket overlay */}
+                  {!camLoading && (
+                    <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <div className="border-2 border-emerald-400/80 rounded-xl" style={{ height: 140 }}>
+                        <div className="absolute top-0 left-0  w-5 h-5 border-t-2 border-l-2 border-emerald-400 rounded-tl" />
+                        <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-emerald-400 rounded-tr" />
+                        <div className="absolute bottom-0 left-0  w-5 h-5 border-b-2 border-l-2 border-emerald-400 rounded-bl" />
+                        <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-emerald-400 rounded-br" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {!camError && !camLoading && (
+                  <p className="text-xs text-center text-muted-foreground mt-3 flex items-center justify-center gap-1">
+                    <Zap className="h-3 w-3 text-emerald-500" /> Point camera at food supply barcode or QR code
+                  </p>
+                )}
               </TabsContent>
 
-              {/* Manual barcode tab */}
+              {/* ─ Manual barcode tab ─ */}
               <TabsContent value="manual" className="mt-0 p-5">
                 <form onSubmit={handleManualSearch} className="space-y-4">
                   <div className="space-y-2">
@@ -685,7 +713,7 @@ export default function EnhancedBarcodeScanner({
                         </button>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">Type or paste the barcode code directly, or use a handheld scanner</p>
+                    <p className="text-xs text-muted-foreground">Type or paste the barcode, or use a handheld USB scanner</p>
                   </div>
                   <Button type="submit" className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 font-bold gap-2" disabled={!manualCode.trim()}>
                     <Search className="h-4 w-4" /> Look Up Item
@@ -693,7 +721,7 @@ export default function EnhancedBarcodeScanner({
                 </form>
               </TabsContent>
 
-              {/* Name search tab */}
+              {/* ─ Name search tab ─ */}
               <TabsContent value="search" className="mt-0 p-5">
                 <div className="space-y-3">
                   <div className="relative">
@@ -715,13 +743,13 @@ export default function EnhancedBarcodeScanner({
                   </div>
 
                   {searchResults.length > 0 ? (
-                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                       {searchResults.map(item => {
                         const expiryInfo = getExpiryInfo(item.expirationDate);
                         return (
                           <button key={item.id} type="button"
-                            onClick={() => { setFoundSupply(item); setScannerState('found-supply'); }}
-                            className="w-full text-left rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-emerald-300 transition-all p-3.5 group">
+                            onClick={() => { setFoundSupply(item); setView('found-supply'); }}
+                            className="w-full text-left rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-emerald-300 transition-all p-3.5">
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3 min-w-0">
                                 <div className="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
@@ -751,16 +779,17 @@ export default function EnhancedBarcodeScanner({
                       <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
                       <p className="text-sm">No items found for "{searchQuery}"</p>
                     </div>
-                  ) : searchQuery.length < 2 ? (
+                  ) : (
                     <div className="text-center py-8 text-muted-foreground">
                       <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm">Type at least 2 characters to search</p>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </TabsContent>
             </Tabs>
           )}
+
         </DialogContent>
       </Dialog>
     </>
