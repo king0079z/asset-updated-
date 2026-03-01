@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from "next";
+﻿import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 import { createClient as createAuthClient } from "@/util/supabase/api";
 import prisma from "@/lib/prisma";
@@ -24,7 +24,8 @@ export default async function handler(
 
   // Verify that the user is authenticated and authorized
   const supabase = createAuthClient(req, res);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
   
   if (authError || !user) {
     return res.status(401).json({ message: "Unauthorized" });

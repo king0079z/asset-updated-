@@ -29,7 +29,7 @@ export default async function handler(
   try {
     // Create Supabase client and authenticate user
     const supabase = createClient(req, res);
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getSession();
 
     if (!user) {
       logAssetTicketsEvent('Unauthorized access attempt');
@@ -95,6 +95,8 @@ export default async function handler(
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString()
     }));
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
 
     return res.status(200).json(formattedTickets);
   } catch (error) {

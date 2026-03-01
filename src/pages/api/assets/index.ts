@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from "next";
+﻿import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 import { isAdminOrManager } from "@/util/roleCheck";
@@ -21,10 +21,8 @@ export default async function handler(
   try {
     // Get the authenticated user
     const supabase = createClient(req, res);
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (authError) {
       logApiEvent("Authentication error", authError);
@@ -126,24 +124,33 @@ export default async function handler(
           }
           
           // Search by barcode or assetId, scoped to organization
-          const asset = await prisma.asset.findFirst({
+          let asset = await prisma.asset.findFirst({
             where: {
               OR: searchConditions,
-              // Always scope to organization if available
               ...(organizationId ? { organizationId } : {}),
-              // For admin/manager, don't filter by userId within organization
-              // If no user, don't filter by userId (temporary fix)
               ...(isAdminOrManagerUser || !user ? {} : { userId: user.id })
             },
             include: {
-              vendor: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
+              vendor: { select: { id: true, name: true } },
             },
           });
+
+          // Fallback: if not found and user is admin/manager, try without org scope
+          // (covers cases where asset org is null or different)
+          if (!asset && isAdminOrManagerUser) {
+            asset = await prisma.asset.findFirst({
+              where: { OR: searchConditions },
+              include: { vendor: { select: { id: true, name: true } } },
+            });
+          }
+
+          // Fallback: try without any user/org scope (for scanner use cases)
+          if (!asset && !user) {
+            asset = await prisma.asset.findFirst({
+              where: { OR: searchConditions },
+              include: { vendor: { select: { id: true, name: true } } },
+            });
+          }
 
           if (!asset) {
             logApiEvent(`No asset found with identifier`, { searchTerm });
@@ -151,6 +158,8 @@ export default async function handler(
           }
 
           logApiEvent(`Asset found`, { assetId: asset.id, assetName: asset.name });
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
           return res.status(200).json({ asset });
         }
 

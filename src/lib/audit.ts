@@ -11,6 +11,21 @@ interface AuditLogParams {
   metadata?: any;
 }
 
+function resolveApiBaseUrl(): string | null {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.VERCEL_URL;
+
+  if (!configuredUrl) {
+    return null;
+  }
+
+  return configuredUrl.startsWith('http') ? configuredUrl : `https://${configuredUrl}`;
+}
+
 /**
  * Creates an audit log entry
  * 
@@ -19,18 +34,12 @@ interface AuditLogParams {
  */
 export async function createAuditLog(params: AuditLogParams): Promise<any> {
   try {
-    // Determine if we're running on the client or server
-    const isServer = typeof window === 'undefined';
-    const baseUrl = isServer 
-      ? process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-      : window.location.origin;
-    
-    // Ensure baseUrl has protocol (http:// or https://)
-    const formattedBaseUrl = baseUrl.startsWith('http') 
-      ? baseUrl 
-      : `https://${baseUrl}`;
-    
-    const url = `${formattedBaseUrl}/api/audit`;
+    const baseUrl = resolveApiBaseUrl();
+    if (!baseUrl) {
+      return { error: 'Audit logging unavailable: missing site URL' };
+    }
+
+    const url = `${baseUrl}/api/audit`;
     
     // Add credentials to ensure cookies are sent with the request
     const response = await fetch(url, {
@@ -63,16 +72,10 @@ export async function createAuditLog(params: AuditLogParams): Promise<any> {
  */
 export async function getAuditLogs(filters: Record<string, any> = {}, forceRefresh: boolean = false): Promise<any> {
   try {
-    // Determine if we're running on the client or server
-    const isServer = typeof window === 'undefined';
-    const baseUrl = isServer 
-      ? process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-      : window.location.origin;
-    
-    // Ensure baseUrl has protocol (http:// or https://)
-    const formattedBaseUrl = baseUrl.startsWith('http') 
-      ? baseUrl 
-      : `https://${baseUrl}`;
+    const baseUrl = resolveApiBaseUrl();
+    if (!baseUrl) {
+      return { error: 'Audit logs unavailable: missing site URL' };
+    }
     
     // Convert filters to query string
     const queryParams = new URLSearchParams();
@@ -93,7 +96,7 @@ export async function getAuditLogs(filters: Record<string, any> = {}, forceRefre
     }
 
     console.log(`Fetching audit logs with URL: /api/audit?${queryParams.toString()}`);
-    const response = await fetch(`${formattedBaseUrl}/api/audit?${queryParams.toString()}`);
+    const response = await fetch(`${baseUrl}/api/audit?${queryParams.toString()}`);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -117,18 +120,12 @@ export async function getAuditLogs(filters: Record<string, any> = {}, forceRefre
  */
 export async function verifyAuditLog(id: string, verified: boolean): Promise<any> {
   try {
-    // Determine if we're running on the client or server
-    const isServer = typeof window === 'undefined';
-    const baseUrl = isServer 
-      ? process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-      : window.location.origin;
-    
-    // Ensure baseUrl has protocol (http:// or https://)
-    const formattedBaseUrl = baseUrl.startsWith('http') 
-      ? baseUrl 
-      : `https://${baseUrl}`;
-    
-    const response = await fetch(`${formattedBaseUrl}/api/audit?id=${id}`, {
+    const baseUrl = resolveApiBaseUrl();
+    if (!baseUrl) {
+      return { error: 'Audit verification unavailable: missing site URL' };
+    }
+
+    const response = await fetch(`${baseUrl}/api/audit?id=${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

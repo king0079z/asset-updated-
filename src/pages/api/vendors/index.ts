@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from "next";
+﻿import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 import { VendorType } from "@prisma/client";
@@ -16,10 +16,8 @@ export default async function handler(
   // Log auth attempt
   console.log(`[Vendors API] Attempting to get authenticated user`);
   
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
   // Log auth result
   if (authError) {
@@ -55,6 +53,8 @@ export default async function handler(
       });
       
       console.log(`[Vendors API] Successfully fetched ${vendors.length} vendors`);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
       return res.status(200).json(vendors);
     } catch (error) {
       console.error("[Vendors API] Error fetching vendors:", error);

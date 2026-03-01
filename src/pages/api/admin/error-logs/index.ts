@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { logError, analyzePossibleSolutions } from '@/lib/errorLogger';
@@ -11,14 +11,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Allow POST requests without authentication for client-side error logging
   if (req.method === 'POST') {
     try {
-      // Get user from session if available
+      // Get authenticated user if available
       let user = null;
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        user = session?.user || null;
-      } catch (sessionError) {
-        console.error('Error getting session:', sessionError);
-        // Continue without session data
+        const { data: { user: authUser } } = await supabase.auth.getSession();
+        user = authUser || null;
+      } catch (authError) {
+        console.error('Error getting authenticated user:', authError);
+        // Continue without user data
       }
       
       const { message, stack, context, url, userAgent, severity } = req.body;
@@ -41,8 +41,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Ensure message is a string and not too long
       const safeMessage = typeof message === 'string' ? message.substring(0, 1000) : 'Unknown error';
       
-      // Log the error with a timeout
-      const logPromise = logError({
+      // Queue logging without blocking API response, to avoid timeout noise.
+      void logError({
         message: safeMessage,
         stack,
         context,
@@ -51,17 +51,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         userId: user?.id,
         userEmail: user?.email,
         severity: errorSeverity,
-      });
-      
-      // Set a timeout for the logging operation
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Logging operation timed out')), 3000);
-      });
-      
-      // Race the logging operation against the timeout
-      await Promise.race([logPromise, timeoutPromise]).catch(err => {
-        console.error('Error or timeout in logging operation:', err);
-        // Continue despite error
+      }).catch(err => {
+        console.error('Error in background logging operation:', err);
       });
       
       return res.status(200).json({ success: true });
@@ -73,9 +64,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   
   // For all other methods, require authentication
-  // Get user from session
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user || null;
+  // Get authenticated user
+  const { data: { user } } = await supabase.auth.getSession();
   
   if (!user) {
     console.warn('Unauthorized access attempt to error logs API');

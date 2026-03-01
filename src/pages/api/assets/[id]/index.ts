@@ -10,7 +10,7 @@ async function assetHandler(req: NextApiRequest, res: NextApiResponse) {
 
   // Verify user authentication
   const supabase = createClient(req, res);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getSession();
 
   if (authError || !user) {
     console.error('Authentication error:', authError);

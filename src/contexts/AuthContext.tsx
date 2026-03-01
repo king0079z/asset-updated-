@@ -39,6 +39,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const supabaseConfigured = isSupabaseConfigured();
   const supabase = createClient();
   const { toast } = useToast();
+  const getSiteUrl = () =>
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_SITE_URL || '';
 
   const ensureSupabaseConfigured = () => {
     if (supabaseConfigured) return true;
@@ -256,7 +260,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signInWithMagicLink = async (email: string) => {
     if (!ensureSupabaseConfigured()) return;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const siteUrl = getSiteUrl();
     const { data, error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -284,7 +288,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signInWithGoogle = async () => {
     if (!ensureSupabaseConfigured()) return;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const siteUrl = getSiteUrl();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google' as Provider,
       options: {
@@ -322,7 +326,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const resetPassword = async (email: string) => {
     if (!ensureSupabaseConfigured()) return;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const siteUrl = getSiteUrl();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${siteUrl}/reset-password`,
     });

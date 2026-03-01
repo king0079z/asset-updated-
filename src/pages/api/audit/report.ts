@@ -5,8 +5,8 @@ import { AuditLogType, AuditLogSeverity } from '@prisma/client';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const supabase = createClient(req, res);
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });

@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from "next";
+﻿import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 
@@ -12,10 +12,8 @@ export default async function handler(
 
   try {
     const supabase = createClient(req, res);
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (authError) {
       console.error("Auth error:", authError);
@@ -83,6 +81,8 @@ export default async function handler(
 
     if (validAssets.length === 0 && assets.length > 0) {
       console.warn("No assets with valid location data found");
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
       return res.status(200).json([]);
     }
 

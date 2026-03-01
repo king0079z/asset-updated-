@@ -35,6 +35,7 @@ import TicketCardView from "@/components/TicketCardView";
 import TicketListView from "@/components/TicketListView";
 import { filterTickets, sortTickets } from "@/util/ticketUtils";
 import { TicketStatus, TicketPriority } from "@prisma/client";
+import { fetchWithCache } from '@/lib/api-cache';
 
 interface Ticket {
   id: string;

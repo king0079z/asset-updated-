@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('History endpoint called with query:', req.query);
     
     const supabase = createClient(req, res)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getSession()
 
     if (!user) {
       console.error('History endpoint: Unauthorized access attempt')
@@ -465,6 +465,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
     
     console.log('Returning response with history length:', response.history.length);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
     
     return res.status(200).json(response);
   } catch (error) {

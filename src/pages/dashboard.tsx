@@ -3,6 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fetchWithErrorHandling } from '@/util/apiErrorHandler';
+import { fetchWithCache } from '@/lib/api-cache';
 import { 
   Package, 
   Utensils, 
@@ -131,148 +132,41 @@ export default function Dashboard() {
     setIsLoading(true);
     
     const fetchStats = async () => {
+      // Parse numeric values to ensure they're numbers, not strings
+      const parseNumber = (value: any): number => {
+        if (value === null || value === undefined) return 0;
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          const parsed = parseFloat(value);
+          return isNaN(parsed) ? 0 : parsed;
+        }
+        return 0;
+      };
+
       try {
         logDebug('Dashboard: Starting to fetch data');
-        
-        // Enhanced fetch function with error handling
-        const fetchData = async (url: string) => {
-          const options = {
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
-            }
-          };
-          
-          // Use the centralized error handling utility with default values
-          const data = await fetchWithErrorHandling(url, options, null);
-          if (data) {
-            logDebug(`Dashboard: Successfully fetched data from ${url}`);
-          }
-          return data || {};
-        };
-        
-        // Use Promise.allSettled to fetch all data in parallel
-        // This allows us to continue even if some requests fail
-        const [
-          dashboardResult,
-          rentalCostsResult,
-          foodConsumptionResult,
-          foodValueResult,
-          totalSpentResult
-        ] = await Promise.allSettled([
-          fetchData('/api/dashboard/stats'),
-          fetchData('/api/vehicles/rental-costs'),
-          fetchData('/api/food-supply/total-consumed'),
-          fetchData('/api/food-supply/total-value'),
-          fetchData('/api/dashboard/total-spent')
-        ]);
-        
-        // Log the results for debugging
-        logDebug('Dashboard: API results:', {
-          dashboardStatus: dashboardResult.status,
-          rentalCostsStatus: rentalCostsResult.status,
-          foodConsumptionStatus: foodConsumptionResult.status,
-          foodValueStatus: foodValueResult.status,
-          totalSpentStatus: totalSpentResult.status
-        });
-        
-        // Extract data from successful requests or use defaults
-        const dashboardData = dashboardResult.status === 'fulfilled' ? dashboardResult.value : {
-          totalAssets: 0,
-          totalFoodItems: 0,
-          activeVehicleRentals: 0,
-          lowStockItems: 0,
-          totalFoodCost: 0,
-          totalVehicleCost: 0,
-          recentRentals: [],
-          vehicleStats: [],
-          assetStats: {
-            byStatus: [],
-            totalValue: 0,
-            disposedValue: 0
+
+        // Use cached fetch — 2 min TTL for core stats, 5 min for secondary metrics.
+        // In-flight deduplication is handled by fetchWithCache automatically.
+        const fetchData = async (url: string, maxAge = 5 * 60 * 1000) => {
+          try {
+            const data = await fetchWithCache(url, { maxAge });
+            logDebug(`Dashboard: data for ${url}`, data);
+            return data || {};
+          } catch {
+            return {};
           }
         };
-        
-        const rentalCostsData = rentalCostsResult.status === 'fulfilled' ? rentalCostsResult.value : { 
-          monthlyTotal: 0, 
-          yearlyTotal: 0,
-          monthlyRentalTotal: 0,
-          yearlyRentalTotal: 0,
-          monthlyMaintenanceTotal: 0,
-          yearlyMaintenanceTotal: 0
-        };
-        
-        const totalFoodConsumptionData = foodConsumptionResult.status === 'fulfilled' ? foodConsumptionResult.value : { 
-          totalConsumed: 0 
-        };
-        
-        const totalFoodValueData = foodValueResult.status === 'fulfilled' ? foodValueResult.value : { 
-          totalValue: 0 
-        };
-        
-        const totalAmountSpentData = totalSpentResult.status === 'fulfilled' ? totalSpentResult.value : { 
-          totalAmountSpent: 0, 
-          breakdown: { 
-            foodConsumption: 0, 
-            assetsPurchased: 0, 
-            vehicleRentalCosts: 0 
-          } 
-        };
-        
-        // Check if all requests failed
-        const allFailed = [
-          dashboardResult.status,
-          rentalCostsResult.status,
-          foodConsumptionResult.status,
-          foodValueResult.status,
-          totalSpentResult.status
-        ].every(status => status === 'rejected');
-        
-        if (allFailed) {
-          console.warn("Dashboard: All API requests failed. Using default values.");
-          toast({
-            title: "Warning",
-            description: "Could not load dashboard data. Some information may be missing.",
-            variant: "destructive",
-          });
-        }
-        
-        // Parse numeric values to ensure they're numbers, not strings
-        const parseNumber = (value: any): number => {
-          if (value === null || value === undefined) return 0;
-          if (typeof value === 'number') return value;
-          if (typeof value === 'string') {
-            const parsed = parseFloat(value);
-            return isNaN(parsed) ? 0 : parsed;
-          }
-          return 0;
-        };
-        
-        // Combine all data into a validated stats object
-        const validatedStats = {
+
+        // Phase 1: load core dashboard stats first so the page renders quickly.
+        const dashboardData = await fetchData('/api/dashboard/stats', 2 * 60 * 1000);
+        const baseStats = {
           totalAssets: parseNumber(dashboardData.totalAssets),
           totalFoodItems: parseNumber(dashboardData.totalFoodItems),
           activeVehicleRentals: parseNumber(dashboardData.activeVehicleRentals),
           lowStockItems: parseNumber(dashboardData.lowStockItems),
           totalFoodCost: parseNumber(dashboardData.totalFoodCost),
-          // Use rental+maintenance costs from dedicated API
-          totalVehicleCost: parseNumber(rentalCostsData.monthlyTotal || dashboardData.totalVehicleCost),
-          yearlyVehicleCost: parseNumber(rentalCostsData.yearlyTotal),
-          monthlyRentalTotal: parseNumber(rentalCostsData.monthlyRentalTotal),
-          yearlyRentalTotal: parseNumber(rentalCostsData.yearlyRentalTotal),
-          monthlyMaintenanceTotal: parseNumber(rentalCostsData.monthlyMaintenanceTotal),
-          yearlyMaintenanceTotal: parseNumber(rentalCostsData.yearlyMaintenanceTotal),
-          // Use total food consumption from dedicated API
-          totalFoodConsumption: parseNumber(totalFoodConsumptionData.totalConsumed),
-          // Use total food supply value from dedicated API
-          totalFoodSupplyValue: parseNumber(totalFoodValueData.totalValue),
-          // Use total amount spent from dedicated API
-          totalAmountSpent: parseNumber(totalAmountSpentData.totalAmountSpent),
-          amountSpentBreakdown: {
-            foodConsumption: parseNumber(totalAmountSpentData.breakdown?.foodConsumption),
-            assetsPurchased: parseNumber(totalAmountSpentData.breakdown?.assetsPurchased),
-            vehicleRentalCosts: parseNumber(totalAmountSpentData.breakdown?.vehicleRentalCosts)
-          },
+          totalVehicleCost: parseNumber(dashboardData.totalVehicleCost),
           recentRentals: Array.isArray(dashboardData.recentRentals) ? dashboardData.recentRentals : [],
           vehicleStats: Array.isArray(dashboardData.vehicleStats) ? dashboardData.vehicleStats : [],
           assetStats: {
@@ -281,9 +175,69 @@ export default function Dashboard() {
             disposedValue: parseNumber(dashboardData.assetStats?.disposedValue)
           }
         };
-        
-        logDebug('Dashboard: Validated stats:', validatedStats);
-        setStats(validatedStats);
+        setStats(prev => ({ ...prev, ...baseStats }));
+        setIsLoading(false);
+
+        // Phase 2: hydrate non-critical metrics in parallel.
+        const [rentalCostsResult, foodConsumptionResult, foodValueResult, totalSpentResult] = await Promise.allSettled([
+          fetchData('/api/vehicles/rental-costs'),
+          fetchData('/api/food-supply/total-consumed'),
+          fetchData('/api/food-supply/total-value'),
+          fetchData('/api/dashboard/total-spent')
+        ]);
+
+        logDebug('Dashboard: Secondary API results:', {
+          rentalCostsStatus: rentalCostsResult.status,
+          foodConsumptionStatus: foodConsumptionResult.status,
+          foodValueStatus: foodValueResult.status,
+          totalSpentStatus: totalSpentResult.status
+        });
+
+        const rentalCostsData = rentalCostsResult.status === 'fulfilled' ? rentalCostsResult.value : {
+          monthlyTotal: 0,
+          yearlyTotal: 0,
+          monthlyRentalTotal: 0,
+          yearlyRentalTotal: 0,
+          monthlyMaintenanceTotal: 0,
+          yearlyMaintenanceTotal: 0
+        };
+
+        const totalFoodConsumptionData = foodConsumptionResult.status === 'fulfilled' ? foodConsumptionResult.value : {
+          totalConsumed: 0
+        };
+
+        const totalFoodValueData = foodValueResult.status === 'fulfilled' ? foodValueResult.value : {
+          totalValue: 0
+        };
+
+        const totalAmountSpentData = totalSpentResult.status === 'fulfilled' ? totalSpentResult.value : {
+          totalAmountSpent: 0,
+          breakdown: {
+            foodConsumption: 0,
+            assetsPurchased: 0,
+            vehicleRentalCosts: 0,
+            vehicleMaintenanceCosts: 0
+          }
+        };
+
+        setStats(prev => ({
+          ...prev,
+          totalVehicleCost: parseNumber(rentalCostsData.monthlyTotal || prev.totalVehicleCost),
+          yearlyVehicleCost: parseNumber(rentalCostsData.yearlyTotal),
+          monthlyRentalTotal: parseNumber(rentalCostsData.monthlyRentalTotal),
+          yearlyRentalTotal: parseNumber(rentalCostsData.yearlyRentalTotal),
+          monthlyMaintenanceTotal: parseNumber(rentalCostsData.monthlyMaintenanceTotal),
+          yearlyMaintenanceTotal: parseNumber(rentalCostsData.yearlyMaintenanceTotal),
+          totalFoodConsumption: parseNumber(totalFoodConsumptionData.totalConsumed),
+          totalFoodSupplyValue: parseNumber(totalFoodValueData.totalValue),
+          totalAmountSpent: parseNumber(totalAmountSpentData.totalAmountSpent),
+          amountSpentBreakdown: {
+            foodConsumption: parseNumber(totalAmountSpentData.breakdown?.foodConsumption),
+            assetsPurchased: parseNumber(totalAmountSpentData.breakdown?.assetsPurchased),
+            vehicleRentalCosts: parseNumber(totalAmountSpentData.breakdown?.vehicleRentalCosts),
+            vehicleMaintenanceCosts: parseNumber(totalAmountSpentData.breakdown?.vehicleMaintenanceCosts)
+          }
+        }));
       } catch (error) {
         console.error('Dashboard: Error fetching dashboard stats:', error);
         // Show toast notification for error
@@ -684,7 +638,8 @@ export default function Dashboard() {
               {t('ai_alerts_recommendations')}
             </h2>
             <div className="transform transition-all duration-300 hover:-translate-y-1">
-              <AiAlerts className="w-full h-full shadow-md hover:shadow-lg transition-all duration-300" />
+              {/* Mount AiAlerts only after the main skeleton has cleared to avoid competing on first load */}
+              {!isLoading && <AiAlerts className="w-full h-full shadow-md hover:shadow-lg transition-all duration-300" />}
             </div>
           </div>
 

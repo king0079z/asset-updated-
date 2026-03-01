@@ -11,6 +11,14 @@ import {
 import { logError } from '@/lib/errorLogger';
 import { ErrorSeverity } from "@prisma/client";
 
+// ── Server-side result cache ────────────────────────────────────────────────
+// ML computation is extremely expensive (6 full-table Prisma scans + model runs).
+// Cache the result for 5 minutes so repeated page loads / dashboard visits don't
+// recompute from scratch every time.
+const ML_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const mlCache = new Map<string, { data: any; ts: number }>();
+let mlInFlight: Promise<any> | null = null; // deduplicates concurrent requests
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -23,35 +31,40 @@ export default async function handler(
     console.info('Path: /api/ai-analysis/ml-predictions Starting ML predictions generation');
     
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
-    if (error) {
-      console.error('Auth error in ML predictions:', error);
-      console.error('Auth error details:', JSON.stringify({
-        name: error.name,
-        message: error.message,
-        status: error.status
-      }));
-    } else if (!user) {
-      console.error('No user found and no auth error in ML predictions');
-    }
-    
-    // For GET requests, proceed even without authentication to prevent blocking the UI
-    // This is a temporary fix to allow the application to function
     if (error || !user) {
-      console.warn('Path: /api/ai-analysis/ml-predictions Proceeding with GET request despite auth issues');
+      console.error('Auth error in ML predictions:', error);
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    console.info(`Path: /api/ai-analysis/ml-predictions Processing ML predictions for user: ${user?.id || 'unauthenticated'}`);
-    
-    // Use a default user ID for unauthenticated requests (temporary fix)
-    const userId = user?.id || 'default-user';
+    console.info(`Path: /api/ai-analysis/ml-predictions Processing ML predictions for user: ${user.id}`);
+
+    // ── Server-side cache check (per org — avoids recomputing on every request) ──
+    const cacheKey = `ml_${user.id}`;
+    const cached = mlCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < ML_CACHE_TTL) {
+      console.info('Path: /api/ai-analysis/ml-predictions Returning cached ML result');
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      return res.status(200).json(cached.data);
+    }
+
+    // If another request is already computing, wait for it (deduplicate).
+    if (mlInFlight) {
+      console.info('Path: /api/ai-analysis/ml-predictions Waiting for in-flight ML computation');
+      const data = await mlInFlight;
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      return res.status(200).json(data);
+    }
 
     // Get current date and calculate date ranges
     const today = new Date();
     const startOfYear = new Date(today.getFullYear(), 0, 1);
     const endOfYear = new Date(today.getFullYear(), 11, 31);
 
+    // Wrap the whole computation so concurrent requests share one Promise.
+    mlInFlight = (async () => {
     try {
       console.info('Path: /api/ai-analysis/ml-predictions Fetching data for ML analysis');
       // Fetch all required data for ML analysis - no user filtering as per requirements
@@ -173,29 +186,28 @@ export default async function handler(
 
       console.info('Path: /api/ai-analysis/ml-predictions Successfully generated ML predictions and insights');
 
-      return res.status(200).json({
-        mlAnalysis,
-        insights
-      });
+      const result = { mlAnalysis, insights };
+      // Store in server-side cache and release in-flight lock
+      mlCache.set(cacheKey, { data: result, ts: Date.now() });
+      mlInFlight = null;
+      return result;
     } catch (dataError) {
+      mlInFlight = null;
       console.error('Error fetching or processing data for ML predictions:', dataError);
-      // Log the error for debugging
       await logError({
         message: 'Failed to process data for ML predictions',
         error: dataError instanceof Error ? dataError.message : 'Unknown data processing error',
-        context: {
-          userId: userId,
-          endpoint: '/api/ai-analysis/ml-predictions',
-          timestamp: new Date().toISOString()
-        },
+        context: { userId: user.id, endpoint: '/api/ai-analysis/ml-predictions', timestamp: new Date().toISOString() },
         severity: ErrorSeverity.HIGH
       });
-      
-      return res.status(500).json({ 
-        error: 'Failed to process data for ML predictions',
-        details: dataError instanceof Error ? dataError.message : 'Unknown data processing error'
-      });
+      throw dataError; // rethrow so the outer catch can respond
     }
+    })(); // end mlInFlight IIFE
+
+    const result = await mlInFlight;
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    return res.status(200).json(result);
+
   } catch (error) {
     console.error('Error generating ML predictions:', error);
     // Log the error for debugging

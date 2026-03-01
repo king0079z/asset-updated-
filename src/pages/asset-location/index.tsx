@@ -50,6 +50,7 @@ import { AssetBulkActionsDialog } from "@/components/AssetBulkActionsDialog";
 import { CreateTicketDialog } from "@/components/CreateTicketDialog";
 import { useToast } from "@/components/ui/use-toast";
 import {
+import { fetchWithCache } from '@/lib/api-cache';
   Dialog,
   DialogContent,
   DialogDescription,
@@ -505,7 +506,7 @@ export default function AssetLocation() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch("/api/assets/locations");
+      const response = await fetchWithCache("/api/assets/locations");
       
       if (!response.ok) {
         const data = await response.json();

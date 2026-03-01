@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 
@@ -51,8 +51,8 @@ export default async function handler(
     // Wrap auth check in try-catch to handle potential Supabase errors
     let user;
     try {
-      const { data, error: authError } = await supabase.auth.getUser();
-      user = data?.user;
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      user = session?.user ?? null;
       
       if (authError || !user || !user.id) {
         logApiEvent('Authentication error', authError || 'No user found');

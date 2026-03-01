@@ -8,8 +8,8 @@ import { isAdminManagerOrSupervisor } from '@/util/roleCheck';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Authenticate the user
   const supabase = createClient(req, res);
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -119,6 +119,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
       
       console.log(`[staff-activity] Found ${activities.length} staff activities`);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
 
       return res.status(200).json({
         activities,

@@ -37,7 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const includeMonthly = req.query.includeMonthly === 'true';
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (error || !user) {
       logApiEvent('Authentication error', error);

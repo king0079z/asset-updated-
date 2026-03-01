@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Verify user authentication
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { user }, error } = await supabase.auth.getSession();
 
     if (error || !user) {
       console.error('Authentication error:', error);

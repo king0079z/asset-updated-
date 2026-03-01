@@ -1,5 +1,6 @@
 // @ts-nocheck
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { fetchWithCache } from '@/lib/api-cache';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -306,61 +307,19 @@ function AIAnalysisContent() {
   const { t } = useTranslation();
   const [data, setData] = useState<AnalysisData | null>(null);
   const [mlData, setMlData] = useState<MLAnalysisData | null>(null);
+  const [activeTab, setActiveTab] = useState('food');
   const [loading, setLoading] = useState(true);
-  const [mlLoading, setMlLoading] = useState(true);
+  const [mlLoading, setMlLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mlError, setMlError] = useState<string | null>(null);
+  const hasRequestedMLRef = useRef(false);
 
   useEffect(() => {
     async function fetchAnalysisData() {
       try {
         setLoading(true);
-        
-        // Implement retry logic for better reliability
-        const MAX_RETRIES = 2;
-        let retries = 0;
-        let lastError;
-        
-        while (retries <= MAX_RETRIES) {
-          try {
-            // Add cache-busting parameter
-            const cacheBuster = `_cb=${Date.now()}`;
-            const response = await fetch(`/api/ai-analysis?${cacheBuster}`, {
-              headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-              },
-              credentials: 'include'
-            });
-            
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}));
-              console.error('AI analysis API error response:', errorData);
-              throw new Error(`Failed to fetch analysis data: ${response.status} ${response.statusText}${errorData.error ? ': ' + errorData.error : ''}`);
-            }
-            
-            const analysisData = await response.json();
-            setData(analysisData);
-            
-            // Success, exit retry loop
-            break;
-          } catch (error) {
-            lastError = error;
-            retries++;
-            
-            if (retries <= MAX_RETRIES) {
-              // Exponential backoff: 500ms, 1000ms
-              const delay = Math.pow(2, retries - 1) * 500;
-              console.warn(`Retry ${retries}/${MAX_RETRIES} for AI analysis after ${delay}ms`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-            }
-          }
-        }
-        
-        if (retries > MAX_RETRIES && lastError) {
-          throw lastError;
-        }
+        const analysisData = await fetchWithCache('/api/ai-analysis', { maxAge: 3 * 60 * 1000 });
+        setData(analysisData);
       } catch (err) {
         console.error('Error fetching AI analysis data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load analysis data. Please try again later.');
@@ -368,58 +327,20 @@ function AIAnalysisContent() {
         setLoading(false);
       }
     }
-    
+    fetchAnalysisData();
+  }, []);
+
+  useEffect(() => {
     async function fetchMLAnalysisData() {
+      if (activeTab !== 'ml' || mlData || mlLoading || hasRequestedMLRef.current) return;
+
       try {
+        hasRequestedMLRef.current = true;
         setMlLoading(true);
-        console.log('Fetching ML analysis data...');
-        
-        // Implement retry logic for better reliability
-        const MAX_RETRIES = 2;
-        let retries = 0;
-        let lastError;
-        
-        while (retries <= MAX_RETRIES) {
-          try {
-            // Add cache-busting parameter
-            const cacheBuster = `_cb=${Date.now()}`;
-            const response = await fetch(`/api/ai-analysis/ml-predictions?${cacheBuster}`, {
-              headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-              },
-              credentials: 'include'
-            });
-            
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}));
-              console.error('ML API error response:', errorData);
-              throw new Error(`Failed to fetch ML analysis data: ${response.status} ${response.statusText}${errorData.error ? ': ' + errorData.error : ''}`);
-            }
-            
-            const mlAnalysisData = await response.json();
-            console.log('ML data received:', mlAnalysisData);
-            setMlData(mlAnalysisData);
-            
-            // Success, exit retry loop
-            break;
-          } catch (error) {
-            lastError = error;
-            retries++;
-            
-            if (retries <= MAX_RETRIES) {
-              // Exponential backoff: 500ms, 1000ms
-              const delay = Math.pow(2, retries - 1) * 500;
-              console.warn(`Retry ${retries}/${MAX_RETRIES} for ML analysis after ${delay}ms`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-            }
-          }
-        }
-        
-        if (retries > MAX_RETRIES && lastError) {
-          throw lastError;
-        }
+        // Shared 5-min cache with AiAlerts — if the dashboard already fetched this
+        // (or is still in-flight), we get the result instantly with zero extra network calls.
+        const mlAnalysisData = await fetchWithCache('/api/ai-analysis/ml-predictions', { maxAge: 5 * 60 * 1000 });
+        setMlData(mlAnalysisData);
       } catch (err) {
         console.error('Error fetching ML analysis data:', err);
         setMlError(err instanceof Error ? err.message : 'Failed to load machine learning analysis. Please try again later.');
@@ -428,9 +349,8 @@ function AIAnalysisContent() {
       }
     }
     
-    fetchAnalysisData();
     fetchMLAnalysisData();
-  }, []);
+  }, [activeTab, mlData, mlLoading]);
 
   if (loading) {
     return (
@@ -745,7 +665,7 @@ function AIAnalysisContent() {
       </Card>
 
       {/* Detailed Analysis Tabs */}
-      <Tabs defaultValue="food" className="w-full">
+      <Tabs defaultValue="food" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="food">{t('food_supply')}</TabsTrigger>
           <TabsTrigger value="assets">{t('assets')}</TabsTrigger>

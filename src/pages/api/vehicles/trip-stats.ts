@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { logDataAccess } from '@/lib/audit';
@@ -12,7 +12,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Authenticate the user
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (error || !user) {
       console.error('Authentication error:', error);
@@ -96,6 +97,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.error('Error creating audit log:', logError);
       // Continue execution even if logging fails
     }
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
 
     return res.status(200).json({ 
       totalDuration,

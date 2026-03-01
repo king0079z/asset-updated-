@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { logDataAccess } from '@/lib/audit';
@@ -9,7 +9,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const supabase = createClient(req, res);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
   if (authError || !user) {
     console.error('Authentication error:', authError);

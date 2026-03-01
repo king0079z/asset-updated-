@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { differenceInHours } from 'date-fns';
@@ -13,7 +13,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const supabase = createClient(req, res);
     
     // Check if user is authenticated
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     
     if (authError) {
       console.error(`Path: ${req.url} Authentication error:`, authError);
@@ -285,6 +286,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
         
         console.log(`Path: ${req.url} Successfully generated KPI data`);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
         return res.status(200).json(kpiData);
       } catch (error) {
         console.error(`Path: ${req.url} Error generating KPI data:`, error);

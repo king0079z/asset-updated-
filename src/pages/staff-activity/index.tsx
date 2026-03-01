@@ -1,6 +1,7 @@
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { StaffActivityViewer } from '@/components/StaffActivityViewer';
 import { useTranslation } from '@/contexts/TranslationContext';
+import { fetchWithCache } from '@/lib/api-cache';
 
 export default function StaffActivityPage() {
   const { t } = useTranslation();

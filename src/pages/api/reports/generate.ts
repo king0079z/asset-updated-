@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
@@ -14,7 +14,7 @@ export default async function handler(
 
   // Get the user from Supabase auth
   const supabase = createClient(req, res);
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getSession();
 
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });

@@ -54,12 +54,8 @@ export async function fetchWithCache<T>(
   // No valid cache, make the actual fetch request
   logDebug(`[Cache] Fetching fresh data for ${url}`);
   const requestPromise = (async () => {
-    const response = await fetch(url, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
+    // Let browser + CDN decide caching for GET requests.
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

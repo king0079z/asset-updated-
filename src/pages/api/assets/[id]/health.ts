@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getSession();
 
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -48,6 +48,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Calculate total cost of ownership
     const totalCostOfOwnership = calculateTotalCostOfOwnership(asset);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
 
     return res.status(200).json({
       healthScore: {

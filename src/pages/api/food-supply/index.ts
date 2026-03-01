@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from "next";
+﻿import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 import { isAdminOrManager } from "@/util/roleCheck";
@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const supabase = createClient(req, res);
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getSession();
 
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -75,6 +75,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           
           if (kitchenFoodSupply) {
             console.info(`[Barcode Lookup] Found KitchenFoodSupply entry for this food supply in requested kitchen`);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
             return res.status(200).json({
               supply: {
                 id: foodSupply.id,

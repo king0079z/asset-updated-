@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from "next";
+﻿import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 
@@ -25,6 +25,8 @@ export default async function handler(
       supabase = createClient(req, res);
     } catch (err) {
       console.error("Failed to create Supabase client:", err);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
       return res.status(200).json({ 
         total: 0, 
         tickets: 0, 
@@ -45,7 +47,7 @@ export default async function handler(
     
     let authResponse;
     try {
-      authResponse = await supabase.auth.getUser();
+      authResponse = await supabase.auth.getSession();
     } catch (err) {
       console.error("Error in supabase.auth.getUser():", err);
       return res.status(200).json({ 

@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import { getCurrentUserOrganizationId, validateOrganizationAccess } from '@/util/organizationUtils';
 
@@ -11,7 +11,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const supabase = createClient(req, res);
     
     // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (authError || !user) {
       return res.status(401).json({ error: 'Unauthorized' });
     }

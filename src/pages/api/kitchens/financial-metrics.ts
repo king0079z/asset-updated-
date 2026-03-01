@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 
@@ -31,7 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get the user from Supabase auth
     const supabase = createClient(req, res);
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { session }, error: userError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (userError || !user) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -319,6 +320,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     logApiEvent(`Calculated financial metrics for kitchen ${kitchenId}`, response);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
 
     return res.status(200).json(response);
   } catch (error) {

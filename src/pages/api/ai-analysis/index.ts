@@ -2,6 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from "@/util/supabase/api";
 
+// ── Server-side result cache (3 min TTL) ────────────────────────────────────
+const AI_CACHE_TTL = 3 * 60 * 1000;
+const aiCache = new Map<string, { data: any; ts: number }>();
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -14,11 +18,21 @@ export default async function handler(
 
   try {
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (error || !user) {
       console.error('Auth error:', error);
       return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // ── Cache check (scoped per user) ────────────────────────────────────────
+    const cacheKey = `ai_${user.id}`;
+    const cached = aiCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < AI_CACHE_TTL) {
+      console.info('Path: /api/ai-analysis Returning cached result');
+      res.setHeader('Cache-Control', 'private, max-age=180');
+      return res.status(200).json(cached.data);
     }
 
     // Get current date and calculate date ranges
@@ -429,7 +443,7 @@ export default async function handler(
       message: `Based on current trends, prepare a monthly budget of approximately $${totalMonthlyForecast.toFixed(2)} for food and vehicle expenses combined.`
     });
 
-    return res.status(200).json({
+    const responsePayload = {
       food: {
         currentMonthCost: Number(currentMonthFoodCost.toFixed(2)),
         prevMonthCost: Number(prevMonthFoodCost.toFixed(2)),
@@ -503,7 +517,12 @@ export default async function handler(
           status: 'neutral'
         }
       }
-    });
+    };
+
+    // Store in server-side cache before responding
+    aiCache.set(cacheKey, { data: responsePayload, ts: Date.now() });
+    res.setHeader('Cache-Control', 'private, max-age=180');
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('Error generating AI analysis:', error);
     return res.status(500).json({ 

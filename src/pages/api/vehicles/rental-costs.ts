@@ -26,9 +26,10 @@ export default async function handler(
 
   try {
     const supabase = createClient(req, res);
-    const { data, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
-    if (error || !data.user) {
+    if (error || !user) {
       console.error('Auth error:', error);
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -130,6 +131,7 @@ export default async function handler(
       timestamp: now
     };
 
+    res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
     return res.status(200).json(responseData);
   } catch (error) {
     console.error('Error fetching rental costs:', error);

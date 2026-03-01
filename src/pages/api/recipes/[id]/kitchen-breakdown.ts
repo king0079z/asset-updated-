@@ -4,7 +4,7 @@ import { createClient } from '@/util/supabase/api';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const supabase = createClient(req, res);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getSession();
 
   if (authError || !user) {
     return res.status(401).json({ error: 'Unauthorized' });

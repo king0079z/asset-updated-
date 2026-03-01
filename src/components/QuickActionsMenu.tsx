@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRTLAnimation } from "@/hooks/useRTLAnimation";
 import { usePageAccess } from "@/hooks/usePageAccess";
 import { motion, AnimatePresence } from "framer-motion";
@@ -235,6 +235,8 @@ export function QuickActionsMenu() {
   const { user } = useAuth();
   const [assignmentCount, setAssignmentCount] = useState(0);
   const [isLoadingCount, setIsLoadingCount] = useState(false);
+  const isFetchingCountRef = useRef(false);
+  const lastCountFetchAtRef = useRef(0);
   // Move usePageAccess hook to the top level
   const pageAccessData = usePageAccess();
   
@@ -247,66 +249,67 @@ export function QuickActionsMenu() {
   const [showRegisterSupply, setShowRegisterSupply] = useState(false);
   const [showRegisterAsset, setShowRegisterAsset] = useState(false);
   
-  // Fetch assignment count when user is available
-  useEffect(() => {
-    if (user) {
-      fetchAssignmentCount();
+  const fetchAssignmentCount = useCallback(async (force = false) => {
+    if (!user) return;
+
+    // Throttle fetches to avoid request spam when multiple events fire.
+    const now = Date.now();
+    if (!force && now - lastCountFetchAtRef.current < 15000) {
+      return;
     }
-  }, [user]);
-  
-  // Refresh assignment count when sheet is opened or every 5 seconds when open
-  useEffect(() => {
-    if (sheetOpen && user) {
-      // Fetch immediately when opened
-      fetchAssignmentCount();
-      
-      // Set up periodic refresh while sheet is open
-      const refreshInterval = setInterval(() => {
-        fetchAssignmentCount();
-      }, 5000);
-      
-      // Clean up interval when sheet is closed
-      return () => clearInterval(refreshInterval);
-    }
-  }, [sheetOpen, user]);
-  
-  // Apply RTL fixes to sheet content
-  const { setRef: setSheetRef } = useRTLComponentFix('dialog');
-  const { setRef: setTabsRef } = useRTLComponentFix('navigation');
-  
-  const fetchAssignmentCount = async () => {
-    if (isLoadingCount) return;
-    
+    if (isFetchingCountRef.current) return;
+
+    isFetchingCountRef.current = true;
+    lastCountFetchAtRef.current = now;
     setIsLoadingCount(true);
+
     try {
       const response = await fetch("/api/assignments/count", {
-        // Add cache control headers to prevent caching issues
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        // Add credentials to ensure cookies are sent
-        credentials: 'include'
+        credentials: "include",
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setAssignmentCount(data.total || 0);
       } else {
         console.error("Failed to fetch assignment count:", await response.text());
-        // Set a default value on error
         setAssignmentCount(0);
       }
     } catch (error) {
       console.error("Error fetching assignment count:", error);
-      // Set a default value on network error
       setAssignmentCount(0);
     } finally {
+      isFetchingCountRef.current = false;
       setIsLoadingCount(false);
     }
-  };
+  }, [user]);
 
+  // Fetch assignment count when user becomes available.
+  useEffect(() => {
+    if (user) {
+      fetchAssignmentCount(true);
+    }
+  }, [user, fetchAssignmentCount]);
+  
+  // Refresh assignment count when sheet is opened or periodically while open.
+  useEffect(() => {
+    if (sheetOpen && user) {
+      fetchAssignmentCount(true);
+      
+      // Set up periodic refresh while sheet is open
+      const refreshInterval = setInterval(() => {
+        fetchAssignmentCount();
+      }, 30000);
+      
+      // Clean up interval when sheet is closed
+      return () => clearInterval(refreshInterval);
+    }
+  }, [sheetOpen, user, fetchAssignmentCount]);
+  
+  // Apply RTL fixes to sheet content
+  const { setRef: setSheetRef } = useRTLComponentFix('dialog');
+  const { setRef: setTabsRef } = useRTLComponentFix('navigation');
+  
   // Define public routes where the quick actions menu should not appear
   const publicRoutes = ['/', '/login', '/signup', '/forgot-password', '/magic-link-login', '/reset-password'];
   

@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
@@ -75,8 +75,8 @@ async function ticketsHandler(
     // Wrap auth check in try-catch to handle potential Supabase errors
     let user;
     try {
-      const { data, error: authError } = await supabase.auth.getUser();
-      user = data?.user;
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      user = session?.user ?? null;
       
       if (authError || !user || !user.id) {
         logApiEvent('Authentication error', authError || 'No user found');
@@ -139,6 +139,8 @@ async function ticketsHandler(
         
         // Return tickets as JSON array
         logApiEvent(`Returning ${formattedTickets.length} formatted tickets`);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
         return res.status(200).json(formattedTickets);
       } catch (error) {
         console.error('Error fetching tickets:', error);

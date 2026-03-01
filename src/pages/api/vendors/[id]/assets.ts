@@ -161,10 +161,8 @@ export default async function handler(
   try {
     // Get the authenticated user
     const supabase = createClient(req, res);
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (authError || !user) {
       logApiEvent("Authentication error", authError);

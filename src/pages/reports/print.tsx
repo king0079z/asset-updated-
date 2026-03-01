@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/use-toast";
 import dynamic from "next/dynamic";
 import ReactDOMServer from "react-dom/server";
 import { printContent, printContentWithIframe } from '@/util/print';
+import { fetchWithCache } from '@/lib/api-cache';
 
 interface ReportHistoryItem {
   id: string;
@@ -49,7 +50,7 @@ export default function PrintReportPage() {
   useEffect(() => {
     const fetchReportHistory = async () => {
       try {
-        const response = await fetch("/api/reports/history");
+        const response = await fetchWithCache("/api/reports/history");
         if (response.ok) {
           const data = await response.json();
           setReportHistory(data);
@@ -149,7 +150,7 @@ export default function PrintReportPage() {
       
       // Refresh report history
       try {
-        const historyResponse = await fetch("/api/reports/history");
+        const historyResponse = await fetchWithCache("/api/reports/history");
         if (historyResponse.ok) {
           const historyData = await historyResponse.json();
           setReportHistory(historyData);

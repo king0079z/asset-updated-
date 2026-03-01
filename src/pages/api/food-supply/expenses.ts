@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 
@@ -46,10 +46,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const supabase = createClient(req, res);
       // Handle potential null response from auth.getUser()
-      const authResponse = await supabase.auth.getUser();
+      const authResponse = await supabase.auth.getSession();
       
       if (!authResponse || !authResponse.data) {
         logApiEvent('Authentication response is null or undefined');
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
         return res.status(200).json({ 
           monthlyTotal: 0,
           yearlyTotal: 0,
@@ -64,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       const { data, error: authError } = authResponse;
-      user = data?.user;
+      user = session?.user;
 
       if (authError || !user) {
         logApiEvent('Authentication error', authError);

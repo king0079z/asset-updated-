@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 
@@ -14,7 +14,8 @@ export default async function handler(
   try {
     // Verify admin authentication
     const supabase = createClient(req, res);
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (authError || !user) {
       console.error('Authentication error:', authError);

@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from "@/util/supabase/api";
 import { TicketStatus, TicketPriority } from '@prisma/client';
@@ -27,7 +27,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (error || !user) {
       logApiEvent('Authentication error', error);
@@ -203,6 +204,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
 
       logApiEvent('Successfully retrieved ticket stats');
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
       return res.status(200).json(response);
     } catch (dbError) {
       logApiEvent('Database error', dbError);

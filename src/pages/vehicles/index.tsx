@@ -49,6 +49,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { fetchWithCache } from '@/lib/api-cache';
 
 interface Vehicle {
   id: string;
@@ -160,7 +161,7 @@ export default function VehiclesPage() {
       let costsData;
       
       try {
-        const vehiclesResponse = await fetch('/api/vehicles');
+        const vehiclesResponse = await fetchWithCache('/api/vehicles');
         if (!vehiclesResponse.ok) {
           const errorData = await vehiclesResponse.json().catch(() => ({}));
           console.error('Vehicles API error:', errorData);
@@ -181,7 +182,7 @@ export default function VehiclesPage() {
       
       // Fetch rental costs with better error handling
       try {
-        const costsResponse = await fetch('/api/vehicles/rental-costs');
+        const costsResponse = await fetchWithCache('/api/vehicles/rental-costs');
         if (!costsResponse.ok) {
           const errorData = await costsResponse.json().catch(() => ({}));
           console.error('Rental costs API error:', errorData);

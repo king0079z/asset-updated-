@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { logDataAccess } from '@/lib/audit';
@@ -34,7 +34,8 @@ async function getNotifications(req: NextApiRequest, res: NextApiResponse) {
   try {
     // Authenticate the user
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (error || !user) {
       console.error('Authentication error:', error);
@@ -128,7 +129,8 @@ async function createNotification(req: NextApiRequest, res: NextApiResponse) {
   try {
     // Authenticate the user
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (error || !user) {
       console.error('Authentication error:', error);
@@ -154,7 +156,8 @@ async function updateNotification(req: NextApiRequest, res: NextApiResponse) {
   try {
     // Authenticate the user
     const supabase = createClient(req, res);
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (error || !user) {
       console.error('Authentication error:', error);

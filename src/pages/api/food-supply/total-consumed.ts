@@ -10,7 +10,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const supabase = createClient(req, res);
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (authError || !user) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -35,6 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return sum + (record.quantity * (record.foodSupply.pricePerUnit || 0));
     }, 0);
 
+    res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
     return res.status(200).json({ totalConsumed });
   } catch (error) {
     console.error('Error getting total consumed amount:', error);

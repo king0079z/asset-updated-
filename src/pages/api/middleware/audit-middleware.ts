@@ -40,8 +40,8 @@ export function withAuditLog(
 
     // Get user information from session
     const supabase = createClient(req, res);
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     const userId = user?.id;
     const userEmail = user?.email;
 

@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
@@ -11,7 +11,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const supabase = createClient(req, res);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
   if (authError || !user) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -205,6 +206,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         recommendations: recommendations.length > 0 ? recommendations : [`${kitchen.name} is performing well. Continue monitoring for optimization opportunities.`]
       };
     });
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
 
     return res.status(200).json({
       months: sortedMonths,

@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { isAdminOrManager } from '@/util/roleCheck';
@@ -10,7 +10,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const supabase = createClient(req, res);
     
     // Check if user is authenticated
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getSession();
     
     if (!user) {
       console.log(`Path: ${req.url} Unauthorized access attempt`);
@@ -69,6 +69,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }));
         
         console.log(`Path: ${req.url} Successfully fetched ${tasks.length} tasks`);
+  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+
         return res.status(200).json(formattedTasks);
       } catch (error) {
         console.error(`Path: ${req.url} Error fetching tasks:`, error);

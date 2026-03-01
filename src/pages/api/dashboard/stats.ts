@@ -45,15 +45,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const supabase = createClient(req, res);
-    // Handle potential null response from auth.getUser()
-    const authResponse = await supabase.auth.getUser();
-    
-    if (!authResponse || !authResponse.data) {
-      logApiEvent('Authentication response is null or undefined');
-      return res.status(500).json({ error: 'Authentication service error - Please try again later' });
-    }
-    
-    const { data: { user }, error } = authResponse;
+    // getSession() decodes the JWT from the cookie locally — no Supabase network call.
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (error || !user) {
       logApiEvent('Authentication error', error);
@@ -382,6 +376,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
       
       logApiEvent(`Successfully processed dashboard stats for user: ${user.id}`);
+      res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
       return res.status(200).json(response);
     } catch (dbError) {
       logApiEvent('Database error in dashboard stats', dbError);

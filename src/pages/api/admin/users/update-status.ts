@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
@@ -28,7 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   console.log(`[update-status] Starting request processing: ${new Date().toISOString()}`);
   // Check if user is authenticated and is admin
   const supabase = createClient(req, res);
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getSession();
 
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });

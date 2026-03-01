@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { fetchWithCache } from '@/lib/api-cache';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -133,19 +134,8 @@ export function AiAlerts({ className }: AiAlertsProps) {
       setLoading(true);
       setError(null);
 
-      // 1. Fetch AI analysis as before
-      const response = await fetch('/api/ai-analysis/ml-predictions', {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error fetching AI analysis: ${response.status}`);
-      }
-
-      const data = await response.json();
+      // Use shared in-memory cache (5 min TTL) — deduplicates with AI Analysis page requests.
+      const data = await fetchWithCache('/api/ai-analysis/ml-predictions', { maxAge: 5 * 60 * 1000 });
 
       // Extract the relevant data from the response
       const analysisData: AiAnalysisData = {
@@ -171,100 +161,8 @@ export function AiAlerts({ className }: AiAlertsProps) {
         }
       };
 
-      // 2. Fetch all vehicles
-      const vehiclesRes = await fetch('/api/vehicles', {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      const vehiclesData = await vehiclesRes.json();
-      const vehicles = vehiclesData.vehicles || [];
-
-      // 3. For each vehicle, fetch maintenance history and analyze
-      const now = new Date();
-      const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-      const vendorMaintenanceMap: Record<string, { vendorName: string, count: number, totalCost: number, vehicles: string[] }> = {};
-
-      await Promise.all(
-        vehicles.map(async (vehicle: any) => {
-          // Fetch maintenance history for this vehicle
-          const maintRes = await fetch(`/api/vehicles/${vehicle.id}/maintenance-history`, {
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
-            }
-          });
-          const maintData = await maintRes.json();
-          const maints = maintData.maintenance || [];
-
-          // Filter for last 12 months
-          const recentMaints = maints.filter((m: any) => {
-            const date = new Date(m.maintenanceDate);
-            return date >= oneYearAgo && date <= now;
-          });
-
-          const totalMaintCost = recentMaints.reduce((sum: number, m: any) => sum + (Number(m.cost) || 0), 0);
-
-          // Frequent maintenance: more than 3 in last year
-          if (recentMaints.length >= 3) {
-            analysisData.recommendations.push({
-              category: 'vehicle_rentals',
-              severity: recentMaints.length >= 5 ? 'high' : 'medium',
-              message: `Vehicle "${vehicle.make} ${vehicle.model}" (Plate: ${vehicle.plateNumber}) required ${recentMaints.length} maintenance actions in the last year. Consider reviewing for chronic issues.`
-            });
-          }
-
-          // High maintenance cost: > QAR 10,000 in last year
-          if (totalMaintCost > 10000) {
-            analysisData.recommendations.push({
-              category: 'vehicle_rentals',
-              severity: totalMaintCost > 20000 ? 'high' : 'medium',
-              message: `Vehicle "${vehicle.make} ${vehicle.model}" (Plate: ${vehicle.plateNumber}) incurred QAR ${totalMaintCost.toLocaleString()} in maintenance costs in the last year. Consider replacement or major overhaul.`
-            });
-          }
-
-          // Vehicle health: if < 60%, recommend replacement
-          if (typeof vehicle.healthScore === 'number' && vehicle.healthScore < 60) {
-            analysisData.recommendations.push({
-              category: 'vehicle_rentals',
-              severity: 'high',
-              message: `Vehicle "${vehicle.make} ${vehicle.model}" (Plate: ${vehicle.plateNumber}) health is critically low (${vehicle.healthScore}%). Immediate replacement is recommended.`
-            });
-          }
-
-          // Vendor performance: aggregate maintenance by vendor
-          recentMaints.forEach((m: any) => {
-            if (m.vendor && m.vendor.name) {
-              const vendorId = m.vendor.id || m.vendor.name;
-              if (!vendorMaintenanceMap[vendorId]) {
-                vendorMaintenanceMap[vendorId] = {
-                  vendorName: m.vendor.name,
-                  count: 0,
-                  totalCost: 0,
-                  vehicles: []
-                };
-              }
-              vendorMaintenanceMap[vendorId].count += 1;
-              vendorMaintenanceMap[vendorId].totalCost += Number(m.cost) || 0;
-              if (!vendorMaintenanceMap[vendorId].vehicles.includes(vehicle.plateNumber)) {
-                vendorMaintenanceMap[vendorId].vehicles.push(vehicle.plateNumber);
-              }
-            }
-          });
-        })
-      );
-
-      // Add vendor performance alerts
-      Object.values(vendorMaintenanceMap).forEach(vendor => {
-        if (vendor.count >= 5) {
-          analysisData.recommendations.push({
-            category: 'vendor_performance',
-            severity: vendor.count >= 10 ? 'high' : 'medium',
-            message: `Vendor "${vendor.vendorName}" handled ${vendor.count} vehicle maintenances (QAR ${vendor.totalCost.toLocaleString()}) in the last year for vehicles: ${vendor.vehicles.join(', ')}. Review vendor performance for quality and cost.`
-          });
-        }
-      });
+      // Avoid additional N+1 maintenance API fan-out here; those checks are already part
+      // of backend AI insights and this keeps the dashboard responsive on first paint.
 
       // Add anomalies as high-severity recommendations
       data.insights?.anomalies?.items?.forEach((anomaly: Anomaly) => {
