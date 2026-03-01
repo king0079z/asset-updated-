@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -307,6 +307,7 @@ export function KitchenConsumptionDialog({
               monthlyData={monthlyData}
             />
           </div>
+          <DialogDescription>{t('record_and_view_consumption_history_for_this_kitchen')}</DialogDescription>
         </DialogHeader>
         <div className="mt-4">
           {loading && activeTab !== "consume" ? (

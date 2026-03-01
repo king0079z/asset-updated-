@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
@@ -20,7 +20,6 @@ import {
   Keyboard, ArrowLeft, Utensils, Zap, RefreshCcw,
   Clock, MapPin, User, BookOpen
 } from "lucide-react";
-
 /* ─────────────────────────── Types ─────────────────────────── */
 interface FoodSupply {
   id: string;
@@ -404,11 +403,11 @@ export default function EnhancedBarcodeScanner({
                   <DialogTitle className="text-white font-bold text-base leading-tight">
                     {view === 'found-supply' ? 'Item Found' : view === 'found-recipe' ? 'Recipe Found' : 'Food Supply Scanner'}
                   </DialogTitle>
-                  <p className="text-emerald-100/80 text-xs mt-0.5">
-                    {view === 'found-supply'  ? foundSupply?.kitchenName  :
-                     view === 'found-recipe'  ? `${foundRecipe?.ingredients?.length ?? 0} ingredients` :
+                  <DialogDescription className="text-emerald-100/80 text-xs mt-0.5">
+                    {view === 'found-supply'  ? (foundSupply?.kitchenName ?? 'Kitchen Supply')  :
+                     view === 'found-recipe'  ? `${(foundRecipe?.ingredients ?? []).length} ingredients` :
                      'Scan barcode, enter code, or search by name'}
-                  </p>
+                  </DialogDescription>
                 </div>
               </div>
               {isFoundView && (
@@ -577,7 +576,7 @@ export default function EnhancedBarcodeScanner({
                 <div className="border-t border-indigo-200 dark:border-indigo-800/40 grid grid-cols-2 divide-x divide-indigo-200">
                   <div className="px-4 py-2.5">
                     <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Ingredients</p>
-                    <p className="text-sm font-bold">{foundRecipe.ingredients.length} items</p>
+                    <p className="text-sm font-bold">{(foundRecipe.ingredients ?? []).length} items</p>
                   </div>
                   <div className="px-4 py-2.5">
                     <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Standard Servings</p>

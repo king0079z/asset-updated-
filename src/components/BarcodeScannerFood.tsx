@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, useRef } from 'react';
@@ -297,6 +297,7 @@ export default function BarcodeScannerFood({ kitchenId, onScanComplete, open: ex
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Food Supply Scanner</DialogTitle>
+            <DialogDescription>Scan a barcode to find and record food supply consumption</DialogDescription>
           </DialogHeader>
           
           {foundSupply ? (

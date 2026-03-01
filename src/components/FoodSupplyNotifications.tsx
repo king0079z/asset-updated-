@@ -872,14 +872,14 @@ export function FoodSupplyNotifications({ className, kitchenId }: FoodSupplyNoti
                           <div className="mt-2 space-y-1">
                             <p className="text-muted-foreground line-clamp-1">{recipe.description}</p>
                             <div className="flex flex-wrap gap-1">
-                              {recipe.ingredients.slice(0, 3).map((ingredient, idx) => (
+                              {(recipe.ingredients ?? []).slice(0, 3).map((ingredient, idx) => (
                                 <Badge key={idx} variant="outline" className="bg-gray-50 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400 text-xs">
                                   {ingredient.name}
                                 </Badge>
                               ))}
-                              {recipe.ingredients.length > 3 && (
+                              {(recipe.ingredients ?? []).length > 3 && (
                                 <Badge variant="outline" className="bg-gray-50 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400 text-xs">
-                                  +{recipe.ingredients.length - 3} {t('more')}
+                                  +{(recipe.ingredients ?? []).length - 3} {t('more')}
                                 </Badge>
                               )}
                             </div>

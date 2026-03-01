@@ -9,6 +9,7 @@ import { KitchenFoodSupplyNavigation } from "@/components/KitchenFoodSupplyNavig
 import BarcodeScannerFood from "@/components/BarcodeScannerFood";
 import { ConsumptionHistoryDialog } from "@/components/ConsumptionHistoryDialog";
 import { EditFoodSupplyDialog } from "@/components/EditFoodSupplyDialog";
+import { KitchenConsumptionDialog } from "@/components/KitchenConsumptionDialog";
 import { FoodSupplyMobileCard } from "@/components/FoodSupplyMobileCard";
 import { ForecastingTab } from "@/components/ForecastingTab";
 import { KitchenCompositionAnalytics } from "@/components/KitchenCompositionAnalytics";
@@ -28,7 +29,7 @@ import { FoodSupplyNotifications } from "@/components/FoodSupplyNotifications";
 import { CategoryDetailsDialog } from "@/components/CategoryDetailsDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PrintFoodSupplyReportButton from "@/components/PrintFoodSupplyReportButton";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -414,6 +415,7 @@ export default function FoodSupplyPage() {
                   <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                       <DialogTitle>{t('register_new_food_supply')}</DialogTitle>
+                      <DialogDescription>{t('fill_in_the_details_to_add_a_new_food_supply_item')}</DialogDescription>
                     </DialogHeader>
                     <Form {...form}>
                       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -794,6 +796,7 @@ export default function FoodSupplyPage() {
                     <DialogContent className="max-w-5xl w-[90vw]">
                       <DialogHeader className="sticky top-0 bg-background z-10 pb-4">
                         <DialogTitle>{t('full_consumption_report')}</DialogTitle>
+                        <DialogDescription>{t('complete_history_of_all_food_supply_consumption')}</DialogDescription>
                       </DialogHeader>
                       {isLoadingHistory ? (
                         <div className="flex items-center justify-center p-8">
@@ -1010,6 +1013,17 @@ export default function FoodSupplyPage() {
 
                               {/* Actions */}
                               <div className="flex gap-2 pt-1 border-t border-border/50">
+                                {(supply.kitchenSupplies?.[0]?.kitchenId || supply.kitchenId || kitchens[0]?.id) && (
+                                  <KitchenConsumptionDialog
+                                    kitchenId={supply.kitchenSupplies?.[0]?.kitchenId || supply.kitchenId || kitchens[0]?.id}
+                                    kitchenName={supply.kitchenSupplies?.[0]?.kitchen?.name || supply.kitchen?.name || kitchens[0]?.name || 'Kitchen'}
+                                    preselectedFoodSupplyId={supply.id}
+                                    buttonLabel="Record Consumption"
+                                    buttonVariant="outline"
+                                    buttonSize="sm"
+                                    onSuccess={loadFoodSupplies}
+                                  />
+                                )}
                                 <ConsumptionHistoryDialog foodSupplyId={supply.id} foodSupplyName={supply.name} />
                                 <EditFoodSupplyDialog
                                   foodSupplyId={supply.id}
