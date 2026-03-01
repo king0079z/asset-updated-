@@ -228,8 +228,15 @@ export default function EnhancedBarcodeScanner({
     }
 
     try {
-      qrRef.current = new Html5Qrcode(SCANNER_DIV_ID, { verbose: false });
+      // Enable native BarcodeDetector for much better Code128/linear barcode reading
+      qrRef.current = new Html5Qrcode(SCANNER_DIV_ID, {
+        verbose: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      } as any);
       let started = false;
+
+      // Wide rectangle qrbox — Code128 barcodes are wide, not square
+      const scanConfig = { fps: 20, qrbox: { width: 320, height: 120 } };
 
       // Strategy 1: enumerate cameras → prefer back camera
       try {
@@ -237,10 +244,10 @@ export default function EnhancedBarcodeScanner({
         if (devices?.length) {
           const cam = devices.find(d => /back|rear|environment/i.test(d.label || '')) || devices[0];
           try {
-            await qrRef.current.start(cam.id, { fps: 15, qrbox: { width: 240, height: 240 } }, onCode, onFrame);
+            await qrRef.current.start(cam.id, scanConfig, onCode, onFrame);
             started = true;
           } catch {
-            await qrRef.current.start(cam.id, { fps: 10, qrbox: 200 }, onCode, onFrame);
+            await qrRef.current.start(cam.id, { fps: 15, qrbox: { width: 280, height: 100 } }, onCode, onFrame);
             started = true;
           }
         }
@@ -250,7 +257,7 @@ export default function EnhancedBarcodeScanner({
       if (!started) {
         await qrRef.current.start(
           { facingMode: { ideal: 'environment' } },
-          { fps: 15, qrbox: { width: 240, height: 240 } },
+          scanConfig,
           onCode, onFrame
         );
       }

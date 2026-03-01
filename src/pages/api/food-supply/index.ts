@@ -146,43 +146,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (!kitchenBarcode) {
-        console.info(`[Barcode Lookup] No barcode found for: ${normalizedBarcode}`);
-        
-        // Try to find the barcode in Recipe table as a fallback
-        const recipe = await prisma.recipe.findFirst({
-          where: {
-            barcode: {
-              mode: 'insensitive',
-              equals: normalizedBarcode,
+        // ── Prefix-based fallback for KIT{4}SUP{4}{timestamp} format ──
+        // Handles barcodes that were regenerated (different timestamp) or
+        // where the exact stored value differs from what was scanned.
+        if (normalizedBarcode.startsWith('KIT') && normalizedBarcode.includes('SUP')) {
+          const supIdx = normalizedBarcode.indexOf('SUP');
+          // KIT{kitPrefix}SUP{supPrefix} — first 4 chars each
+          const prefix = normalizedBarcode.substring(0, supIdx + 7); // e.g. "KITCM75SUPCMA0"
+          console.info(`[Barcode Prefix Fallback] Trying prefix: ${prefix}`);
+          
+          kitchenBarcode = await prisma.kitchenBarcode.findFirst({
+            where: {
+              barcode: {
+                startsWith: prefix,
+                mode: 'insensitive',
+              },
             },
-          },
-        });
-        
-        if (recipe) {
-          console.info(`[Barcode Lookup] Found barcode in Recipe table: ${normalizedBarcode}`);
+            include: {
+              foodSupply: true,
+              kitchen: true,
+            },
+          });
+
+          if (!kitchenBarcode) {
+            // Also try matching by embedded kitchen+supply IDs directly
+            const kitPrefix = normalizedBarcode.substring(3, supIdx).toLowerCase();
+            const supPrefix = normalizedBarcode.substring(supIdx + 3, supIdx + 7).toLowerCase();
+            console.info(`[Barcode ID Fallback] kitPrefix=${kitPrefix}, supPrefix=${supPrefix}`);
+            kitchenBarcode = await prisma.kitchenBarcode.findFirst({
+              where: {
+                kitchen:    { id: { startsWith: kitPrefix } },
+                foodSupply: { id: { startsWith: supPrefix } },
+              },
+              include: {
+                foodSupply: true,
+                kitchen: true,
+              },
+            });
+          }
+        }
+
+        if (!kitchenBarcode) {
+          console.info(`[Barcode Lookup] No barcode found for: ${normalizedBarcode}`);
+          
+          // Try to find the barcode in Recipe table as a fallback
+          const recipe = await prisma.recipe.findFirst({
+            where: {
+              barcode: {
+                mode: 'insensitive',
+                equals: normalizedBarcode,
+              },
+            },
+          });
+          
+          if (recipe) {
+            console.info(`[Barcode Lookup] Found barcode in Recipe table: ${normalizedBarcode}`);
+            return res.status(404).json({ 
+              error: "Barcode belongs to a recipe, not a food supply item",
+              recipeId: recipe.id,
+              recipeName: recipe.name
+            });
+          }
+          
           return res.status(404).json({ 
-            error: "Barcode belongs to a recipe, not a food supply item",
-            recipeId: recipe.id,
-            recipeName: recipe.name
+            error: kitchenId 
+              ? "No food supply found for this barcode in the specified kitchen" 
+              : "No food supply found for this barcode",
+            debug: {
+              requestedBarcode: normalizedBarcode,
+              requestedKitchen: kitchenId || 'any'
+            }
           });
         }
-        
-        // Log all barcodes in the system for debugging
-        const allBarcodes = await prisma.kitchenBarcode.findMany({
-          select: { barcode: true, kitchenId: true }
-        });
-        
-        console.info(`[Barcode Debug] Available barcodes in system: ${JSON.stringify(allBarcodes)}`);
-        
-        return res.status(404).json({ 
-          error: kitchenId 
-            ? "No food supply found for this barcode in the specified kitchen" 
-            : "No food supply found for this barcode",
-          debug: {
-            requestedBarcode: normalizedBarcode,
-            requestedKitchen: kitchenId || 'any'
-          }
-        });
       }
 
       console.info(`[Barcode Lookup] Found barcode: ${normalizedBarcode}, Kitchen: ${kitchenBarcode.kitchen.name}`);

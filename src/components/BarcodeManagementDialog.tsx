@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -292,6 +292,7 @@ export function BarcodeManagementDialog() {
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Kitchen Barcodes Management</DialogTitle>
+          <DialogDescription>Generate and manage barcodes that link food supplies to kitchens for quick consumption scanning.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-6">
           <div className="flex flex-wrap gap-4">
