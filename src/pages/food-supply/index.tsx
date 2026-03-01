@@ -7,6 +7,7 @@ import { MultiLocationInventoryTab } from "@/components/MultiLocationInventoryTa
 import { BarcodeManagementDialog } from "@/components/BarcodeManagementDialog";
 import { KitchenFoodSupplyNavigation } from "@/components/KitchenFoodSupplyNavigation";
 import BarcodeScannerFood from "@/components/BarcodeScannerFood";
+import EnhancedBarcodeScanner from "@/components/EnhancedBarcodeScanner";
 import { ConsumptionHistoryDialog } from "@/components/ConsumptionHistoryDialog";
 import { EditFoodSupplyDialog } from "@/components/EditFoodSupplyDialog";
 import { KitchenConsumptionDialog } from "@/components/KitchenConsumptionDialog";
@@ -38,7 +39,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { CardTabs } from "@/components/ui/card-tabs";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, UtensilsCrossed, Package, AlertTriangle, History, Search, Barcode, Utensils, Printer, FileText, ChefHat, BarChart3, LineChart, Trash2, Brain, MapPin, TrendingUp, Clock, CheckCircle2, ArrowRight, Building2, TrendingDown, Layers, X } from "lucide-react";
+import { PlusCircle, UtensilsCrossed, Package, AlertTriangle, History, Search, Barcode, Utensils, Printer, FileText, ChefHat, BarChart3, LineChart, Trash2, Brain, MapPin, TrendingUp, Clock, CheckCircle2, ArrowRight, Building2, TrendingDown, Layers, X, ScanLine } from "lucide-react";
 import { AssetReport } from "@/components/AssetReport";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -79,6 +80,7 @@ type DashboardStats = {
 
 export default function FoodSupplyPage() {
   const [open, setOpen] = useState(false);
+  const [showConsumptionScanner, setShowConsumptionScanner] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [foodSupplies, setFoodSupplies] = useState<any[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -396,15 +398,30 @@ export default function FoodSupplyPage() {
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-2.5 lg:flex-col">
+              {/* Record Food Consumption — primary CTA */}
+              {kitchens.length > 0 && (
+                <>
+                  <Button
+                    onClick={() => setShowConsumptionScanner(true)}
+                    className="bg-white text-emerald-700 hover:bg-emerald-50 border-0 shadow-lg font-semibold gap-2"
+                  >
+                    <ScanLine className="h-4 w-4" />
+                    Record Food Consumption
+                  </Button>
+                  <EnhancedBarcodeScanner
+                    kitchenId={kitchens[0].id}
+                    open={showConsumptionScanner}
+                    onOpenChange={setShowConsumptionScanner}
+                    onScanComplete={loadFoodSupplies}
+                  />
+                </>
+              )}
               <PrintFoodSupplyReportButton
                 foodSupplies={foodSupplies}
                 stats={stats}
                 categories={categories}
               />
               <BarcodeManagementDialog />
-              {kitchens.length > 0 && (
-                <BarcodeScannerFood kitchenId={kitchens[0].id} onScanComplete={loadFoodSupplies} />
-              )}
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-white text-orange-600 hover:bg-amber-50 border-0 shadow-lg font-semibold gap-2">
