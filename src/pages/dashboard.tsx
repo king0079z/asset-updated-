@@ -21,7 +21,15 @@ import {
   ShoppingCart,
   Clipboard,
   Activity,
-  Star
+  Star,
+  TrendingUp,
+  TrendingDown,
+  Zap,
+  Brain,
+  DollarSign,
+  Layers,
+  ChevronRight,
+  Sparkles
 } from "lucide-react";
 import { AiAlerts } from "@/components/AiAlerts";
 import { useAuth } from "@/contexts/AuthContext";
@@ -319,282 +327,283 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className={`dashboard-container flex-1 space-y-5 p-4 sm:p-5 md:p-6 pb-24 sm:pb-24 md:pb-8 ${dir === 'rtl' ? 'text-right' : ''}`}>
-        {/* Welcome Section - More Compact */}
-        <div className="bg-gradient-to-r from-slate-50 to-blue-50 dark:from-gray-800 dark:to-gray-900 rounded-lg p-4 sm:p-5 shadow-sm border border-slate-100 dark:border-gray-700">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+      <div className={`flex-1 space-y-6 p-4 sm:p-5 md:p-6 pb-24 md:pb-10 ${dir === 'rtl' ? 'text-right' : ''}`}>
+
+        {/* ══════════════════════════════════════════════
+            WORLD-CLASS HERO WELCOME BANNER
+        ══════════════════════════════════════════════ */}
+        <div className="relative rounded-2xl overflow-hidden">
+          {/* Background layers */}
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-900" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.35),transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(14,165,233,0.15),transparent_60%)]" />
+          <div className="absolute -top-10 -right-10 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl" />
+          <div className="absolute bottom-0 left-16 w-40 h-40 rounded-full bg-blue-400/10 blur-2xl" />
+          <div className="absolute top-6 right-32 w-20 h-20 rounded-full bg-violet-400/20" />
+
+          {/* Content */}
+          <div className="relative z-10 p-7 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div>
-              <h1 className="dashboard-title text-slate-800 dark:text-slate-100">
-                {t('welcome_back')}{user?.email ? `, ${user.email.split('@')[0]}` : ''}
-              </h1>
-              <p className="dashboard-subtitle text-slate-500 dark:text-slate-400 mt-1">{formattedDate}</p>
-              <p className="dashboard-subtitle text-slate-600 dark:text-slate-300 mt-1.5 max-w-2xl">
-                {t('your_enterprise_dashboard')}
+              {/* Greeting */}
+              <div className="flex items-center gap-3 mb-2">
+                <div className="h-12 w-12 rounded-2xl bg-white/15 backdrop-blur-sm ring-1 ring-white/25 flex items-center justify-center shadow-lg">
+                  <Sparkles className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-indigo-300/80 text-xs font-semibold uppercase tracking-widest">{formattedDate}</p>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                    {t('welcome_back')}{user?.email ? `, ${user.email.split('@')[0]}` : ''} 👋
+                  </h1>
+                </div>
+              </div>
+              <p className="text-slate-300/70 text-sm mt-1 ml-15">{t('your_enterprise_dashboard')}</p>
+
+              {/* 4 quick-stat chips */}
+              <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total Assets', value: stats.totalAssets, icon: Package, accent: 'bg-indigo-500/25 border-indigo-400/30' },
+                  { label: 'Food Items', value: stats.totalFoodItems, icon: Utensils, accent: 'bg-emerald-500/25 border-emerald-400/30' },
+                  { label: 'Active Rentals', value: stats.activeVehicleRentals, icon: Car, accent: 'bg-amber-500/25 border-amber-400/30', warn: stats.activeVehicleRentals > 0 },
+                  { label: 'Low Stock', value: stats.lowStockItems, icon: AlertTriangle, accent: stats.lowStockItems > 0 ? 'bg-rose-500/30 border-rose-400/40' : 'bg-slate-500/20 border-slate-400/20', warn: stats.lowStockItems > 0 },
+                ].map(({ label, value, icon: Icon, accent, warn }) => (
+                  <div key={label} className={`rounded-xl px-4 py-3 border ${accent} backdrop-blur-sm`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Icon className={`h-3 w-3 ${warn ? 'text-rose-300' : 'text-white/70'}`} />
+                      <p className="text-[10px] uppercase tracking-widest text-white/60 font-semibold">{label}</p>
+                    </div>
+                    <p className={`text-2xl font-bold tabular-nums ${warn ? 'text-rose-300' : 'text-white'}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right: total spent hero number */}
+            <div className="flex-shrink-0 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-5 min-w-[220px] text-center shadow-xl">
+              <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200/80 mb-2">{t('total_amount_spent')}</p>
+              <p className="text-3xl font-bold text-white tabular-nums leading-tight">
+                QAR {(stats.totalAmountSpent || 0).toLocaleString()}
               </p>
+              <p className="text-xs text-white/50 mt-1">{t('this_year')}</p>
+              <div className="mt-4 flex flex-col gap-1.5 text-left">
+                {[
+                  { label: t('food_consumption'), value: stats.amountSpentBreakdown?.foodConsumption || 0, color: 'bg-emerald-400' },
+                  { label: t('assets_purchased'), value: stats.amountSpentBreakdown?.assetsPurchased || 0, color: 'bg-indigo-400' },
+                  { label: t('vehicles'), value: (stats.amountSpentBreakdown?.vehicleRentalCosts || 0) + (stats.amountSpentBreakdown?.vehicleMaintenanceCosts || 0), color: 'bg-amber-400' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className={`h-1.5 w-1.5 rounded-full ${color} flex-shrink-0`} />
+                    <span className="text-[10px] text-white/60 flex-1 truncate">{label}</span>
+                    <span className="text-[10px] font-semibold text-white/80 tabular-nums">{value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+              <Button onClick={() => setConsumptionAnalysisOpen(true)} size="sm"
+                className="mt-4 w-full bg-white/20 hover:bg-white/30 text-white border-0 text-xs gap-1.5 backdrop-blur-sm">
+                <BarChart3 className="h-3 w-3" />{t('view_detailed_analysis')}
+              </Button>
+            </div>
+          </div>
+
+          {/* Bottom nav strip */}
+          <div className="relative z-10 border-t border-white/15 grid grid-cols-3 divide-x divide-white/15">
+            {[
+              { label: 'Assets', sublabel: `${stats.totalAssets} registered`, icon: Package, href: '/assets' },
+              { label: 'Food Supply', sublabel: `${stats.totalFoodItems} items`, icon: Utensils, href: '/food-supply' },
+              { label: 'AI Analysis', sublabel: 'Real-time insights', icon: Brain, href: '/ai-analysis' },
+            ].map(({ label, sublabel, icon: Icon, href }) => (
+              <button key={label} onClick={() => router.push(href)}
+                className="px-5 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left group">
+                <Icon className="h-4 w-4 text-indigo-300/70 group-hover:text-white transition-colors" />
+                <div>
+                  <p className="text-xs font-semibold text-white/90">{label}</p>
+                  <p className="text-[10px] text-white/50">{sublabel}</p>
+                </div>
+                <ChevronRight className="h-3 w-3 text-white/30 group-hover:text-white/60 ml-auto transition-colors" />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════
+            PREMIUM KPI CARDS — 4 full-gradient
+        ══════════════════════════════════════════════ */}
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="h-5 w-1 rounded-full bg-indigo-500" />
+            <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{t('key_performance_metrics')}</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+            {/* ── Total Expenditure ── */}
+            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+              <div className="relative z-10 p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">{t('total_amount_spent').replace(/_/g,' ')}</p>
+                    <p className="text-xs text-white/50">{t('this_year')}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <ShoppingCart className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold tabular-nums mb-4">QAR {(stats.totalAmountSpent || 0).toLocaleString()}</p>
+                <div className="space-y-2">
+                  {[
+                    { label: t('food_consumption'), v: stats.amountSpentBreakdown?.foodConsumption || 0, color: 'bg-emerald-400' },
+                    { label: t('assets_purchased'), v: stats.amountSpentBreakdown?.assetsPurchased || 0, color: 'bg-violet-300' },
+                    { label: `${t('vehicles')} & ${t('maintenance')}`, v: (stats.amountSpentBreakdown?.vehicleRentalCosts || 0) + (stats.amountSpentBreakdown?.vehicleMaintenanceCosts || 0), color: 'bg-amber-300' },
+                  ].map(({ label, v, color }) => {
+                    const pct = stats.totalAmountSpent ? (v / stats.totalAmountSpent) * 100 : 0;
+                    return (
+                      <div key={label}>
+                        <div className="flex justify-between text-[10px] text-white/70 mb-0.5">
+                          <span>{label}</span><span className="font-semibold text-white/90">{v.toLocaleString()}</span>
+                        </div>
+                        <div className="h-1 bg-white/15 rounded-full overflow-hidden">
+                          <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button onClick={() => setConsumptionAnalysisOpen(true)}
+                  className="mt-4 w-full text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-lg py-1.5 flex items-center justify-center gap-1.5 transition-colors">
+                  <BarChart3 className="h-3 w-3" />{t('view_detailed_analysis')}
+                </button>
+              </div>
+            </div>
+
+            {/* ── Total Asset Value ── */}
+            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+              <div className="relative z-10 p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">{t('total_asset_value')}</p>
+                    <p className="text-xs text-white/50">{t('current_valuation')}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <Package className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold tabular-nums mb-4">QAR {(stats.assetStats?.totalValue || 0).toLocaleString()}</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {(stats.assetStats?.byStatus || []).slice(0, 4).map(s => (
+                    <div key={s.status} className="bg-white/10 rounded-lg px-3 py-2">
+                      <p className="text-white/60 text-[10px] uppercase tracking-wide">{s.status}</p>
+                      <p className="font-bold text-white text-sm">{s.count}</p>
+                    </div>
+                  ))}
+                  {(stats.assetStats?.byStatus || []).length === 0 && (
+                    <div className="col-span-2 bg-white/10 rounded-lg px-3 py-2 text-center">
+                      <p className="text-white/60 text-xs">{stats.totalAssets} total assets tracked</p>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => router.push('/assets')}
+                  className="mt-4 w-full text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-lg py-1.5 flex items-center justify-center gap-1.5 transition-colors">
+                  <ArrowRight className="h-3 w-3" />View All Assets
+                </button>
+              </div>
+            </div>
+
+            {/* ── Food Supply Value ── */}
+            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+              <div className="relative z-10 p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">{t('food_supply_value')}</p>
+                    <p className="text-xs text-white/50">{t('current_inventory')}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <Utensils className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold tabular-nums mb-4">QAR {(stats.totalFoodSupplyValue || 0).toLocaleString()}</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center bg-white/10 rounded-lg px-3 py-2">
+                    <span className="text-xs text-white/70">Total Items</span>
+                    <span className="text-sm font-bold">{stats.totalFoodItems}</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-white/10 rounded-lg px-3 py-2">
+                    <span className="text-xs text-white/70">Total Consumed</span>
+                    <span className="text-sm font-bold">QAR {(stats.totalFoodConsumption || 0).toLocaleString()}</span>
+                  </div>
+                  {stats.lowStockItems > 0 && (
+                    <div className="flex items-center gap-2 bg-rose-500/30 border border-rose-400/30 rounded-lg px-3 py-2">
+                      <AlertTriangle className="h-3.5 w-3.5 text-rose-300" />
+                      <span className="text-xs text-rose-200 font-semibold">{stats.lowStockItems} low-stock items</span>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setKitchenConsumptionOpen(true)}
+                  className="mt-4 w-full text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-lg py-1.5 flex items-center justify-center gap-1.5 transition-colors">
+                  <BarChart3 className="h-3 w-3" />{t('view_kitchen_consumption')}
+                </button>
+              </div>
+            </div>
+
+            {/* ── Vehicle & Maintenance Costs ── */}
+            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-amber-600 to-orange-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+              <div className="relative z-10 p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">{t('total_rental_fees')} & {t('maintenance')}</p>
+                    <p className="text-xs text-white/50">{t('this_year')}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <Car className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold tabular-nums mb-4">QAR {(stats.yearlyVehicleCost || 0).toLocaleString()}</p>
+                <div className="space-y-2">
+                  {[
+                    { label: 'Yearly Rental', value: stats.yearlyRentalTotal || 0 },
+                    { label: 'Yearly Maintenance', value: stats.yearlyMaintenanceTotal || 0 },
+                    { label: 'Monthly Total', value: stats.totalVehicleCost || 0 },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex justify-between items-center bg-white/10 rounded-lg px-3 py-2">
+                      <span className="text-xs text-white/70">{label}</span>
+                      <span className="text-sm font-bold tabular-nums">QAR {value.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setDriverTripSummaryOpen(true)}
+                  className="mt-4 w-full text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-lg py-1.5 flex items-center justify-center gap-1.5 transition-colors">
+                  <FileText className="h-3 w-3" />{t('view_driver_trip_summary')}
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Key Performance Metrics */}
-        <div className="dashboard-section">
-          <h2 className="section-header flex items-center text-slate-800 dark:text-slate-100">
-            <Activity className={`${dir === 'rtl' ? 'ml-1.5' : 'mr-1.5'} h-4 w-4 text-indigo-600 dark:text-indigo-400`} />
-            {t('key_performance_metrics')}
-          </h2>
-          <div className="dashboard-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Total Amount Spent Card */}
-            <Card className="enhanced-card relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 opacity-50 group-hover:opacity-80 transition-opacity duration-300"></div>
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-              <CardHeader className="relative pb-2 pt-4">
-                <div className="absolute -top-3 left-3 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-all duration-300">
-                  <ShoppingCart className="h-5 w-5 text-white" />
-                </div>
-                <div className="ml-8">
-                  <CardTitle className="card-title text-indigo-900 dark:text-indigo-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-200 transition-colors">
-                    {t('total_amount_spent').replace(/_/g, ' ')}
-                  </CardTitle>
-                  <CardDescription className="card-description text-indigo-700 dark:text-indigo-400">
-                    {t('this_year')}
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-2 pb-4 relative z-10">
-                <div className="flex flex-col">
-                  <span className="metric-value text-slate-800 dark:text-slate-100 mb-2 group-hover:text-indigo-900 dark:group-hover:text-indigo-200 transition-colors">
-                    QAR {(stats.totalAmountSpent || 0).toLocaleString()}
-                  </span>
-                  <div className="mt-2 space-y-3">
-                    <div className="space-y-1.5 transform transition-transform duration-300 group-hover:translate-x-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('food_consumption')}</span>
-                        <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">QAR {(stats.amountSpentBreakdown?.foodConsumption || 0).toLocaleString()}</span>
-                      </div>
-                      <Progress 
-                        value={stats.totalAmountSpent ? (stats.amountSpentBreakdown?.foodConsumption || 0) / stats.totalAmountSpent * 100 : 0} 
-                        className="h-2 bg-slate-100 dark:bg-slate-700 group-hover:bg-slate-50 dark:group-hover:bg-slate-600 transition-colors" 
-                        indicatorClassName="bg-emerald-500 group-hover:bg-emerald-400 transition-colors" 
-                      />
-                    </div>
-                    
-                    <div className="space-y-1.5 transform transition-transform duration-300 group-hover:translate-x-1 delay-75">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('assets_purchased')}</span>
-                        <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-400">QAR {(stats.amountSpentBreakdown?.assetsPurchased || 0).toLocaleString()}</span>
-                      </div>
-                      <Progress 
-                        value={stats.totalAmountSpent ? (stats.amountSpentBreakdown?.assetsPurchased || 0) / stats.totalAmountSpent * 100 : 0} 
-                        className="h-2 bg-slate-100 dark:bg-slate-700 group-hover:bg-slate-50 dark:group-hover:bg-slate-600 transition-colors" 
-                        indicatorClassName="bg-indigo-500 group-hover:bg-indigo-400 transition-colors" 
-                      />
-                    </div>
-                    
-                    <div className="space-y-1.5 transform transition-transform duration-300 group-hover:translate-x-1 delay-150">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                          {t('vehicle_rentals')} + {t('maintenance')}
-                        </span>
-                        <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-                          QAR {(
-                            (stats.amountSpentBreakdown?.vehicleRentalCosts || 0) +
-                            (stats.amountSpentBreakdown?.vehicleMaintenanceCosts || 0)
-                          ).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        <span>{t('rental')}:</span>
-                        <span>QAR {(stats.amountSpentBreakdown?.vehicleRentalCosts || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400">
-                        <span>{t('maintenance')}:</span>
-                        <span>QAR {(stats.amountSpentBreakdown?.vehicleMaintenanceCosts || 0).toLocaleString()}</span>
-                      </div>
-                      <Progress 
-                        value={stats.totalAmountSpent
-                          ? (
-                              ((stats.amountSpentBreakdown?.vehicleRentalCosts || 0) +
-                              (stats.amountSpentBreakdown?.vehicleMaintenanceCosts || 0)) /
-                              stats.totalAmountSpent * 100
-                            )
-                          : 0
-                        }
-                        className="h-2 bg-slate-100 dark:bg-slate-700 group-hover:bg-slate-50 dark:group-hover:bg-slate-600 transition-colors" 
-                        indicatorClassName="bg-amber-500 group-hover:bg-amber-400 transition-colors" 
-                      />
-                    </div>
-                    
-                    <Button 
-                      onClick={() => setConsumptionAnalysisOpen(true)}
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full mt-2 bg-white/50 dark:bg-slate-800/50 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 group-hover:border-blue-300 dark:group-hover:border-blue-700 transition-all flex items-center justify-center"
-                    >
-                      <BarChart3 className="h-4 w-4 mr-2 text-blue-500" />
-                      <span className="hidden xs:inline">{t('view_detailed_analysis')}</span>
-                      <span className="xs:hidden">{t('analysis')}</span>
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-blue-300 dark:via-blue-700 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            </Card>
-
-            {/* Total Asset Value Card */}
-            <Card className="enhanced-card relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 opacity-50 group-hover:opacity-80 transition-opacity duration-300"></div>
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
-              <CardHeader className="relative pb-2 pt-4">
-                <div className="absolute -top-3 left-3 w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-all duration-300">
-                  <Package className="h-5 w-5 text-white" />
-                </div>
-                <div className="ml-8">
-                  <CardTitle className="card-title text-indigo-900 dark:text-indigo-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-200 transition-colors">
-                    {t('total_asset_value')}
-                  </CardTitle>
-                  <CardDescription className="card-description text-indigo-700 dark:text-indigo-400">
-                    {t('current_valuation')}
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-2 pb-4 relative z-10">
-                <div className="flex flex-col">
-                  <span className="metric-value text-slate-800 dark:text-slate-100 mb-2 group-hover:text-purple-900 dark:group-hover:text-purple-200 transition-colors">
-                    QAR {(stats.assetStats.totalValue).toLocaleString()}
-                  </span>
-                  <div className="flex items-center text-xs">
-                    <div className="flex items-center bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-2 py-1 rounded-full font-medium">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                        <path d="M18 15l-6-6-6 6"/>
-                      </svg>
-                      <span>1%</span>
-                    </div>
-                    <span className="text-slate-500 dark:text-slate-400 ml-2">vs last month</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Food Supply Value Card */}
-            <Card className="enhanced-card relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 opacity-50 group-hover:opacity-80 transition-opacity duration-300"></div>
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-600"></div>
-              <CardHeader className="relative pb-2 pt-4">
-                <div className="absolute -top-3 left-3 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-all duration-300">
-                  <Utensils className="h-5 w-5 text-white" />
-                </div>
-                <div className="ml-8">
-                  <CardTitle className="card-title text-emerald-900 dark:text-emerald-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-200 transition-colors">
-                    {t('food_supply_value')}
-                  </CardTitle>
-                  <CardDescription className="card-description text-emerald-700 dark:text-emerald-400">
-                    {t('current_inventory')}
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-2 pb-4 relative z-10">
-                <div className="flex flex-col">
-                  <span className="metric-value text-slate-800 dark:text-slate-100 mb-2 group-hover:text-emerald-900 dark:group-hover:text-emerald-200 transition-colors">
-                    QAR {(stats.totalFoodSupplyValue || 0).toLocaleString()}
-                  </span>
-                  <div className="flex items-center text-xs mb-3">
-                    <div className="flex items-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded-full font-medium">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                        <path d="M6 9l6 6 6-6"/>
-                      </svg>
-                      <span>2%</span>
-                    </div>
-                    <span className="text-slate-500 dark:text-slate-400 ml-2">vs last month</span>
-                  </div>
-                  <Button 
-                    onClick={() => setKitchenConsumptionOpen(true)}
-                    variant="outline" 
-                    size="sm" 
-                    className="btn-compact w-full bg-white/50 dark:bg-slate-800/50 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all flex items-center justify-center"
-                  >
-                    <BarChart3 className="h-3 w-3 mr-1.5 text-emerald-500" />
-                    <span className="hidden xs:inline">{t('view_kitchen_consumption')}</span>
-                    <span className="xs:hidden">{t('consumption')}</span>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Total Rental Fees Card (now includes maintenance) */}
-            <Card className="enhanced-card relative group">
-              <div className="absolute inset-0 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 opacity-50 group-hover:opacity-80 transition-opacity duration-300"></div>
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-600"></div>
-              <CardHeader className="relative pb-2 pt-4">
-                <div className="absolute -top-3 left-3 w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-all duration-300">
-                  <Car className="h-5 w-5 text-white" />
-                </div>
-                <div className="ml-8">
-                  <CardTitle className="card-title text-amber-900 dark:text-amber-300 group-hover:text-amber-700 dark:group-hover:text-amber-200 transition-colors">
-                    {t('total_rental_fees')} + {t('maintenance')}
-                  </CardTitle>
-                  <CardDescription className="card-description text-amber-700 dark:text-amber-400">
-                    {t('this_year')}
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-2 pb-4 relative z-10">
-                <div className="flex flex-col">
-                  <span className="metric-value text-slate-800 dark:text-slate-100 mb-2 group-hover:text-amber-900 dark:group-hover:text-amber-200 transition-colors">
-                    QAR {(stats.yearlyVehicleCost || 0).toLocaleString()}
-                  </span>
-                  <div className="flex flex-col gap-1 text-xs mb-3">
-                    <div className="flex justify-between">
-                      <span className="font-medium text-amber-700 dark:text-amber-400">{t('rental')}:</span>
-                      <span className="text-slate-700 dark:text-slate-300">QAR {(stats.yearlyRentalTotal || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-amber-700 dark:text-amber-400">{t('maintenance')}:</span>
-                      <span className="text-slate-700 dark:text-slate-300">QAR {(stats.yearlyMaintenanceTotal || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="mt-1 flex items-center text-xs bg-amber-50 dark:bg-amber-900/20 p-2 rounded border border-amber-100 dark:border-amber-800/50">
-                      <Calendar className="h-3 w-3 text-amber-600 dark:text-amber-400 mr-1.5" />
-                      <span className="text-amber-800 dark:text-amber-300 font-medium">Monthly: QAR {(stats.totalVehicleCost || 0).toLocaleString()}</span>
-                    </div>
-                  </div>
-                  <Button 
-                    onClick={() => setDriverTripSummaryOpen(true)}
-                    variant="outline" 
-                    size="sm" 
-                    className="btn-compact w-full bg-white/50 dark:bg-slate-800/50 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all flex items-center justify-center"
-                  >
-                    <FileText className="h-3 w-3 mr-1.5 text-amber-500" />
-                    <span className="hidden xs:inline">{t('view_driver_trip_summary')}</span>
-                    <span className="xs:hidden">{t('trip_summary')}</span>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Budget Overview Cards */}
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card dark:bg-gray-800 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-gray-700 shadow-sm">
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold flex items-center text-slate-800 dark:text-slate-100">
-                <BarChart3 className={`${dir === 'rtl' ? 'ml-2' : 'mr-2'} h-5 w-5 text-slate-700 dark:text-slate-300`} />
-                {t('financial_overview')}
-              </h2>
-              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
-                {t('track_enterprise_expenses')}
-              </p>
+        {/* ══════════════════════════════════════════════
+            FINANCIAL OVERVIEW — Enhanced Cards
+        ══════════════════════════════════════════════ */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-card border border-border/60 px-5 py-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                <BarChart3 className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="font-bold text-base text-foreground">{t('financial_overview')}</h2>
+                <p className="text-xs text-muted-foreground">{t('track_enterprise_expenses')}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 sm:gap-3 bg-slate-50 dark:bg-gray-700 px-3 sm:px-4 py-2 rounded-lg border border-slate-200 dark:border-gray-600 shadow-sm mt-2 md:mt-0">
-              <span className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300">Total Expenses:</span>
-              <span className="text-sm sm:text-lg font-bold text-slate-800 dark:text-slate-100">
-                {formatCurrency(stats.totalAmountSpent || 0)}
-              </span>
+            <div className="flex items-center gap-2 bg-muted/60 rounded-xl px-4 py-2">
+              <TrendingUp className="h-4 w-4 text-indigo-500" />
+              <span className="text-xs text-muted-foreground font-medium">Total Expenses:</span>
+              <span className="text-sm font-bold text-foreground tabular-nums">{formatCurrency(stats.totalAmountSpent || 0)}</span>
             </div>
           </div>
-          
-          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {/* Vehicle Rentals Card with Monthly and Yearly Costs */}
+
+          <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             <MotionCard delay={0.1}>
-              <EnhancedRentalCostsCard 
+              <EnhancedRentalCostsCard
                 monthlyTotal={stats.totalVehicleCost}
                 yearlyTotal={stats.yearlyVehicleCost || stats.totalVehicleCost * 12}
                 monthlyRentalTotal={stats.monthlyRentalTotal}
@@ -603,57 +612,50 @@ export default function Dashboard() {
                 yearlyMaintenanceTotal={stats.yearlyMaintenanceTotal}
               />
             </MotionCard>
-
-            {/* Food Supply Expenses Card */}
             <MotionCard delay={0.2}>
-              <EnhancedFoodExpensesCard 
-                monthlyTotal={stats.totalFoodCost} 
-                yearlyTotal={stats.totalFoodCost * 12} 
+              <EnhancedFoodExpensesCard
+                monthlyTotal={stats.totalFoodCost}
+                yearlyTotal={stats.totalFoodCost * 12}
                 totalFoodItems={stats.totalFoodItems}
                 lowStockItems={stats.lowStockItems}
               />
             </MotionCard>
-
-            {/* Assets Overview Card */}
             <MotionCard delay={0.3} className="sm:col-span-2 lg:col-span-1">
-              <EnhancedAssetsOverviewCard 
-                totalAssets={stats.totalAssets} 
-                assetStats={stats.assetStats} 
+              <EnhancedAssetsOverviewCard
+                totalAssets={stats.totalAssets}
+                assetStats={stats.assetStats}
               />
             </MotionCard>
           </div>
         </div>
 
-        {/* Quick Actions & AI Alerts Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Quick Actions - Left Side */}
+        {/* ══════════════════════════════════════════════
+            BOTTOM GRID: Quick Actions | AI Alerts | Vendors
+        ══════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Quick Actions */}
           <EnhancedQuickActionsSection />
-          
-          {/* AI Alerts & Recommendations - Middle */}
+
+          {/* AI Alerts */}
           <div>
-            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center text-slate-800 dark:text-slate-100">
-              <div className="p-1.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 mr-2">
-                <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600 dark:text-indigo-400" />
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                <Brain className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
               </div>
-              {t('ai_alerts_recommendations')}
-            </h2>
-            <div className="transform transition-all duration-300 hover:-translate-y-1">
-              {/* Mount AiAlerts only after the main skeleton has cleared to avoid competing on first load */}
-              {!isLoading && <AiAlerts className="w-full h-full shadow-md hover:shadow-lg transition-all duration-300" />}
+              <h2 className="font-bold text-sm text-foreground">{t('ai_alerts_recommendations')}</h2>
             </div>
+            {!isLoading && <AiAlerts className="w-full h-full shadow-sm hover:shadow-md transition-shadow duration-200" />}
           </div>
 
-          {/* Vendor Performance Reminders - Right Side */}
+          {/* Vendor Performance */}
           <div>
-            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center text-slate-800 dark:text-slate-100">
-              <div className="p-1.5 rounded-full bg-purple-100 dark:bg-purple-900/30 mr-2">
-                <Star className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" />
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <Star className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
               </div>
-              {t('vendor_performance')}
-            </h2>
-            <div className="transform transition-all duration-300 hover:-translate-y-1">
-              <EnhancedVendorPerformanceCard />
+              <h2 className="font-bold text-sm text-foreground">{t('vendor_performance')}</h2>
             </div>
+            <EnhancedVendorPerformanceCard />
           </div>
         </div>
       </div>
