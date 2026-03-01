@@ -55,7 +55,19 @@ import {
   Tag,
   Trash2, 
   Truck,
-  User
+  User,
+  TrendingUp,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Grid3X3,
+  List,
+  SlidersHorizontal,
+  X,
+  ArrowUpDown,
+  Layers,
+  ShieldCheck,
+  Download
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -171,6 +183,7 @@ export default function AssetsPage() {
   };
 
   const loadAssets = async () => {
+    setIsLoadingAssets(true);
     try {
       const response = await fetch("/api/assets");
       if (!response.ok) throw new Error(`Failed to load assets: ${response.status}`);
@@ -183,6 +196,8 @@ export default function AssetsPage() {
         description: error instanceof Error ? error.message : "Failed to load assets",
         variant: "destructive",
       });
+    } finally {
+      setIsLoadingAssets(false);
     }
   };
 
@@ -250,6 +265,12 @@ export default function AssetsPage() {
   const [isDisposing, setIsDisposing] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [isLoadingAssets, setIsLoadingAssets] = useState(true);
+  // Search / filter / view state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   const moveFormSchema = z.object({
     floorNumber: z.string().min(1, "Floor number is required"),
@@ -591,18 +612,88 @@ export default function AssetsPage() {
   };
 
   const assetCounts = getAssetsByType();
+  const activeAssets = assets.filter(a => a.status === 'ACTIVE').length;
+  const transitAssets = assets.filter(a => a.status === 'IN_TRANSIT').length;
+  const totalValue = assets.reduce((sum, a) => sum + (a.purchaseAmount || 0), 0);
+
+  const filteredAssets = assets.filter(asset => {
+    const matchesSearch = !searchQuery ||
+      asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      asset.assetId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (asset.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (asset.vendor?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = typeFilter === 'all' || asset.type === typeFilter;
+    const matchesStatus = statusFilter === 'all' || asset.status === statusFilter;
+    return matchesSearch && matchesType && matchesStatus;
+  });
 
   const { t } = useTranslation();
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t('assets_management')}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{t('track_and_manage_enterprise_assets')}</p>
-          </div>
-          <div className="flex gap-2 sm:gap-3">
+        {/* ══════════════════════════════════════
+            World-Class Hero Header
+        ══════════════════════════════════════ */}
+        <div className="relative rounded-2xl overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(0,0,0,0.12),transparent_60%)]" />
+          <div className="absolute -top-12 -right-12 w-56 h-56 rounded-full bg-white/5 blur-2xl" />
+          <div className="absolute -bottom-8 -left-8 w-44 h-44 rounded-full bg-white/5 blur-2xl" />
+          <div className="absolute top-8 right-40 w-24 h-24 rounded-full bg-violet-400/20" />
+
+          <div className="relative z-10 p-7 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="h-14 w-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg ring-1 ring-white/30 flex-shrink-0">
+                  <Package className="h-7 w-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-white tracking-tight">{t('assets_management')}</h1>
+                  <p className="text-violet-100/80 text-sm mt-0.5">{t('track_and_manage_enterprise_assets')}</p>
+                </div>
+              </div>
+              {/* Inline stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total Assets', value: assets.length, icon: Box },
+                  { label: 'Active', value: activeAssets, icon: CheckCircle2 },
+                  { label: 'In Transit', value: transitAssets, icon: Truck, warn: transitAssets > 0 },
+                  { label: 'Total Value', value: `QAR ${totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, icon: Tag },
+                ].map(({ label, value, icon: Icon, warn }) => (
+                  <div key={label} className={`rounded-xl px-4 py-3 border ${warn ? 'bg-amber-400/20 border-amber-300/30' : 'bg-white/15 border-white/20'} backdrop-blur-sm`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Icon className="h-3 w-3 text-white/70" />
+                      <p className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">{label}</p>
+                    </div>
+                    <p className="text-xl font-bold text-white tabular-nums">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2.5">
+              <BarcodeScanner
+                onScan={(result) => {
+                  if ('id' in result && result.id) {
+                    setSelectedAsset(result as Asset);
+                    setShowBarcodeDialog(true);
+                  } else if ('barcode' in result && result.barcode) {
+                    setIsOpen(true);
+                    form.setValue('barcode', result.barcode);
+                  }
+                }}
+              />
+              <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-white text-indigo-700 hover:bg-indigo-50 border-0 shadow-lg font-semibold gap-2">
+                    <PlusCircle className="h-4 w-4" />
+                    <span className="hidden sm:inline">{t('register_new_asset')}</span>
+                    <span className="sm:hidden">{t('new_asset')}</span>
+                  </Button>
+                </DialogTrigger>
             <BarcodeScanner
               onScan={(result) => {
                 // If result is an asset, open details dialog
@@ -849,450 +940,395 @@ export default function AssetsPage() {
                         </div>
                       )}
                     </FormItem>
-                    <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={isSubmitting}
-                    >
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
                       {isSubmitting ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          {t('registering')}
-                        </>
-                      ) : (
-                        t('register_asset')
-                      )}
+                        <><svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>{t('registering')}</>
+                      ) : t('register_asset')}
                     </Button>
                   </form>
                 </Form>
               </DialogContent>
             </Dialog>
+            </div>
+          </div>
+
+          {/* Bottom strip */}
+          <div className="relative z-10 border-t border-white/20 grid grid-cols-3 divide-x divide-white/20">
+            {[
+              { label: 'Track', icon: MapPin, value: 'Location' },
+              { label: 'Monitor', icon: BarChart3, value: 'Analytics' },
+              { label: 'Secure', icon: ShieldCheck, value: 'Compliance' },
+            ].map(({ label, icon: Icon, value }) => (
+              <div key={label} className="px-5 py-3 flex items-center gap-3">
+                <Icon className="h-4 w-4 text-violet-200" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-violet-200/70 font-semibold">{label}</p>
+                  <p className="text-sm font-semibold text-white">{value}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Dashboard Overview */}
+        {/* ══════════════════════════════════════
+            Premium Stat Cards
+        ══════════════════════════════════════ */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
-          <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-white to-blue-50 dark:from-blue-950/50 dark:via-background dark:to-blue-950/50 transition-all duration-300 hover:shadow-md">
-            <div className="absolute inset-0 bg-grid-black/5 [mask-image:linear-gradient(0deg,transparent,black)]" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{t('total_assets')}</CardTitle>
-              <div className="rounded-full p-2.5 bg-blue-100 dark:bg-blue-900/50">
-                <Box className="h-5 w-5 text-blue-700 dark:text-blue-400" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold tracking-tight">{assets.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {t('registered_assets_in_system')}
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 via-white to-green-50 dark:from-green-950/50 dark:via-background dark:to-green-950/50 transition-all duration-300 hover:shadow-md">
-            <div className="absolute inset-0 bg-grid-black/5 [mask-image:linear-gradient(0deg,transparent,black)]" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{t('total_asset_value')}</CardTitle>
-              <div className="rounded-full p-2.5 bg-green-100 dark:bg-green-900/50">
-                <Tag className="h-5 w-5 text-green-700 dark:text-green-400" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold tracking-tight truncate">
-                QAR {assets.reduce((sum, asset) => sum + (asset.purchaseAmount || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {t('total_value_of_active_assets')}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 via-white to-green-50 dark:from-green-950/50 dark:via-background dark:to-green-950/50 transition-all duration-300 hover:shadow-md">
-            <div className="absolute inset-0 bg-grid-black/5 [mask-image:linear-gradient(0deg,transparent,black)]" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{t('active_vendors')}</CardTitle>
-              <div className="rounded-full p-2.5 bg-green-100 dark:bg-green-900/50">
-                <Truck className="h-5 w-5 text-green-700 dark:text-green-400" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold tracking-tight">{vendors.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {t('connected_suppliers_and_vendors')}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="relative overflow-hidden bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-purple-950/50 dark:via-background dark:to-purple-950/50 transition-all duration-300 hover:shadow-md">
-            <div className="absolute inset-0 bg-grid-black/5 [mask-image:linear-gradient(0deg,transparent,black)]" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{t('asset_types')}</CardTitle>
-              <div className="rounded-full p-2.5 bg-purple-100 dark:bg-purple-900/50">
-                <BarChart3 className="h-5 w-5 text-purple-700 dark:text-purple-400" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-center">
-                  <div className="rounded-full p-1.5 bg-blue-100 dark:bg-blue-900/50">
-                    <Sofa className="h-4 w-4 text-blue-700 dark:text-blue-400" />
-                  </div>
-                  <div className="flex-1 mx-3">
-                    <div className="w-full h-2 bg-blue-100 dark:bg-blue-900/50 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500 dark:bg-blue-400 rounded-full transition-all"
-                        style={{ width: assets.length ? `${(assetCounts.FURNITURE / assets.length) * 100}%` : '0%' }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-sm font-medium">{assetCounts.FURNITURE}</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="rounded-full p-1.5 bg-green-100 dark:bg-green-900/50">
-                    <Package className="h-4 w-4 text-green-700 dark:text-green-400" />
-                  </div>
-                  <div className="flex-1 mx-3">
-                    <div className="w-full h-2 bg-green-100 dark:bg-green-900/50 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-green-500 dark:bg-green-400 rounded-full transition-all"
-                        style={{ width: assets.length ? `${(assetCounts.EQUIPMENT / assets.length) * 100}%` : '0%' }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-sm font-medium">{assetCounts.EQUIPMENT}</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="rounded-full p-1.5 bg-purple-100 dark:bg-purple-900/50">
-                    <Computer className="h-4 w-4 text-purple-700 dark:text-purple-400" />
-                  </div>
-                  <div className="flex-1 mx-3">
-                    <div className="w-full h-2 bg-purple-100 dark:bg-purple-900/50 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-purple-500 dark:bg-purple-400 rounded-full transition-all"
-                        style={{ width: assets.length ? `${(assetCounts.ELECTRONICS / assets.length) * 100}%` : '0%' }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-sm font-medium">{assetCounts.ELECTRONICS}</span>
+          {/* Total Assets */}
+          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+            <div className="relative z-10 p-5">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-sm font-semibold text-white/90">{t('total_assets')}</p>
+                <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                  <Box className="h-5 w-5 text-white" />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              <p className="text-4xl font-bold tabular-nums mb-1">{assets.length}</p>
+              <p className="text-xs text-white/70">{t('registered_assets_in_system')}</p>
+              <div className="mt-4 flex gap-2 text-xs text-white/70">
+                <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-green-400 inline-block" />{activeAssets} active</span>
+                <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />{transitAssets} transit</span>
+              </div>
+            </div>
+          </div>
+          {/* Total Value */}
+          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+            <div className="relative z-10 p-5">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-sm font-semibold text-white/90">{t('total_asset_value')}</p>
+                <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                  <Tag className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <p className="text-3xl font-bold tabular-nums mb-1 truncate">
+                QAR {totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </p>
+              <p className="text-xs text-white/70">{t('total_value_of_active_assets')}</p>
+              <div className="mt-4 h-1 bg-white/20 rounded-full overflow-hidden">
+                <div className="h-full bg-white/60 rounded-full" style={{ width: '80%' }} />
+              </div>
+            </div>
+          </div>
+          {/* Vendors */}
+          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+            <div className="relative z-10 p-5">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-sm font-semibold text-white/90">{t('active_vendors')}</p>
+                <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                  <Truck className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <p className="text-4xl font-bold tabular-nums mb-1">{vendors.length}</p>
+              <p className="text-xs text-white/70">{t('connected_suppliers_and_vendors')}</p>
+              <div className="mt-4 h-1 bg-white/20 rounded-full overflow-hidden">
+                <div className="h-full bg-white/60 rounded-full" style={{ width: '65%' }} />
+              </div>
+            </div>
+          </div>
+          {/* Asset Types breakdown */}
+          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.08),transparent_60%)]" />
+            <div className="relative z-10 p-5">
+              <div className="flex items-start justify-between mb-3">
+                <p className="text-sm font-semibold text-white/90">{t('asset_types')}</p>
+                <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center">
+                  <Layers className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <div className="space-y-2.5">
+                {[
+                  { label: 'Furniture', count: assetCounts.FURNITURE, icon: Sofa, color: 'bg-blue-400' },
+                  { label: 'Equipment', count: assetCounts.EQUIPMENT, icon: Package, color: 'bg-emerald-400' },
+                  { label: 'Electronics', count: assetCounts.ELECTRONICS, icon: Computer, color: 'bg-violet-400' },
+                ].map(({ label, count, icon: Icon, color }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <Icon className="h-3.5 w-3.5 text-white/60 flex-shrink-0" />
+                    <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className={`h-full ${color} rounded-full`} style={{ width: assets.length ? `${(count / assets.length) * 100}%` : '0%' }} />
+                    </div>
+                    <span className="text-xs font-bold text-white/90 w-4 text-right tabular-nums">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <Card>
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <CardTitle>{t('assets_list')}</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {t('manage_and_track_all_registered_assets')}
-              </p>
+        {/* ══════════════════════════════════════
+            Assets List Card
+        ══════════════════════════════════════ */}
+        <Card className="border-0 ring-1 ring-border/60 shadow-sm">
+          <CardHeader className="border-b border-border/50 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">{t('assets_list')}</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {filteredAssets.length} of {assets.length} {t('manage_and_track_all_registered_assets')}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" className="gap-2 h-8 rounded-lg"
+                  onClick={() => {
+                    const exportData = assets.map(a => ({ 'Asset ID': a.assetId, 'Name': a.name, 'Type': a.type, 'Description': a.description || '', 'Floor': a.floorNumber, 'Room': a.roomNumber, 'Status': a.status, 'Vendor': a.vendor?.name || '' }));
+                    exportToExcel(exportData, `assets-${new Date().toISOString().split('T')[0]}`);
+                  }}>
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{t('export')}</span>
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2 h-8 rounded-lg"
+                  onClick={() => setViewMode(v => v === 'table' ? 'grid' : 'table')}>
+                  {viewMode === 'table' ? <Grid3X3 className="h-3.5 w-3.5" /> : <List className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{viewMode === 'table' ? 'Grid' : 'Table'}</span>
+                </Button>
+              </div>
             </div>
-            <div className="grid grid-cols-3 sm:flex sm:flex-row gap-2 sm:gap-3">
-              {/* Mobile-friendly action buttons with improved touch targets */}
-              <Button 
-                variant="outline" 
-                size="default" 
-                className="h-10 w-full justify-center"
-                onClick={() => {
-                  const exportData = assets.map(asset => ({
-                    'Asset ID': asset.assetId,
-                    'Name': asset.name,
-                    'Type': asset.type,
-                    'Description': asset.description || '',
-                    'Floor': asset.floorNumber,
-                    'Room': asset.roomNumber,
-                    'Status': asset.status,
-                    'Vendor': asset.vendor?.name || '',
-                  }));
-                  exportToExcel(exportData, `assets-${new Date().toISOString().split('T')[0]}`);
-                }}
-              >
-                <Package className="h-5 w-5 sm:mr-2" />
-                <span className="hidden sm:inline whitespace-nowrap">{t('export')}</span>
-              </Button>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="default" 
-                    className="h-10 w-full justify-center"
-                  >
-                    <QrCode className="h-5 w-5 sm:mr-2" />
-                    <span className="hidden sm:inline whitespace-nowrap">{t('scan')}</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{t('scan_asset_barcode')}</DialogTitle>
-                    <DialogDescription>
-                      {t('use_camera_to_scan')}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="mt-4">
-                    <BarcodeScanner />
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <Button 
-                variant="outline" 
-                size="default" 
-                className="h-10 w-full justify-center"
-                onClick={() => {
-                  // Create a new window for the full report
-                  const printWindow = window.open('', '', 'width=1000,height=800');
-                  if (!printWindow) return;
 
-                  // Write the document HTML
-                  printWindow.document.write(`
-                    <html>
-                      <head>
-                        <title>Assets Report</title>
-                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
-                        <style>
-                          @media print {
-                            body { padding: 20px; }
-                            @page { size: A4 landscape; margin: 20mm; }
-                            table { page-break-inside: auto; }
-                            tr { page-break-inside: avoid; page-break-after: auto; }
-                          }
-                        </style>
-                      </head>
-                      <body class="p-8">
-                        <div class="max-w-[1200px] mx-auto">
-                          <div class="text-center mb-8">
-                            <h1 class="text-3xl font-bold mb-2">Assets Report</h1>
-                            <p class="text-gray-600">Generated on ${new Date().toLocaleDateString()}</p>
-                          </div>
-                          <table class="min-w-full bg-white border border-gray-300">
-                            <thead>
-                              <tr class="bg-gray-100">
-                                <th class="py-2 px-4 border text-left">Asset ID</th>
-                                <th class="py-2 px-4 border text-left">Name</th>
-                                <th class="py-2 px-4 border text-left">Type</th>
-                                <th class="py-2 px-4 border text-left">Description</th>
-                                <th class="py-2 px-4 border text-left">Location</th>
-                                <th class="py-2 px-4 border text-left">Vendor</th>
-                                <th class="py-2 px-4 border text-left">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              ${assets.map(asset => `
-                                <tr class="border-t">
-                                  <td class="py-2 px-4 border">${asset.assetId}</td>
-                                  <td class="py-2 px-4 border">${asset.name}</td>
-                                  <td class="py-2 px-4 border">${asset.type}</td>
-                                  <td class="py-2 px-4 border">${asset.description || '-'}</td>
-                                  <td class="py-2 px-4 border">Floor ${asset.floorNumber}, Room ${asset.roomNumber}</td>
-                                  <td class="py-2 px-4 border">${asset.vendor?.name || '-'}</td>
-                                  <td class="py-2 px-4 border">${asset.status}</td>
-                                </tr>
-                              `).join('')}
-                            </tbody>
-                          </table>
-                          <div class="text-center text-gray-600 text-sm mt-8">
-                            <p>This report was automatically generated by the Asset Management System</p>
-                          </div>
-                        </div>
-                        <script>
-                          window.onload = () => {
-                            window.print();
-                          };
-                        </script>
-                      </body>
-                    </html>
-                  `);
-                  printWindow.document.close();
-                }}
-              >
-                <ClipboardList className="h-5 w-5 sm:mr-2" />
-                <span className="hidden sm:inline whitespace-nowrap">{t('print_report')}</span>
-              </Button>
+            {/* Search + filter bar */}
+            <div className="flex flex-col sm:flex-row gap-2 mt-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, ID, vendor…"
+                  className="pl-9 h-9 rounded-xl border-border/60 focus-visible:ring-indigo-400/40"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full sm:w-[140px] h-9 rounded-xl border-border/60">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="FURNITURE">Furniture</SelectItem>
+                  <SelectItem value="EQUIPMENT">Equipment</SelectItem>
+                  <SelectItem value="ELECTRONICS">Electronics</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-[140px] h-9 rounded-xl border-border/60">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="IN_TRANSIT">In Transit</SelectItem>
+                  <SelectItem value="DISPOSED">Disposed</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardHeader>
-          <CardContent>
+
+          <CardContent className="p-0">
             {/* Mobile view */}
-            <div className="md:hidden grid gap-4">
-              {assets.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8">
-                  <p className="text-lg font-semibold">{t('no_assets_found') || "No assets found"}</p>
-                  <p className="text-sm mt-2">
-                    {t('no_assets_found_description') ||
-                      "No assets are currently registered for your organization. If you just registered, make sure you are logged in and have the correct permissions."}
-                  </p>
+            <div className="md:hidden p-4 grid gap-4">
+              {isLoadingAssets ? (
+                <div className="space-y-3 animate-pulse">
+                  {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-muted rounded-xl" />)}
+                </div>
+              ) : filteredAssets.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mb-4">
+                    <Package className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <p className="font-semibold mb-1">{t('no_assets_found') || 'No assets found'}</p>
+                  <p className="text-sm text-muted-foreground max-w-xs">{t('no_assets_found_description') || 'No assets registered yet.'}</p>
                 </div>
               ) : (
-                assets.map((asset) => (
-                  <AssetMobileCard
-                    key={asset.id}
-                    asset={asset}
-                    onViewDetails={(asset) => {
-                      setSelectedAsset(asset);
-                      setShowBarcodeDialog(true);
-                    }}
-                    onEdit={(asset) => {
-                      setSelectedAsset(asset);
-                      setShowEditDialog(true);
-                    }}
-                    onPrintReport={(asset) => {
-                      setSelectedAsset(asset);
-                      handlePrintReport(asset);
-                    }}
+                filteredAssets.map((asset) => (
+                  <AssetMobileCard key={asset.id} asset={asset}
+                    onViewDetails={a => { setSelectedAsset(a); setShowBarcodeDialog(true); }}
+                    onEdit={a => { setSelectedAsset(a); setShowEditDialog(true); }}
+                    onPrintReport={a => { setSelectedAsset(a); handlePrintReport(a); }}
                   />
                 ))
               )}
             </div>
-            
-            {/* Desktop view */}
-            <div className="hidden md:block rounded-md border">
-              {assets.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12">
-                  <p className="text-lg font-semibold">{t('no_assets_found') || "No assets found"}</p>
-                  <p className="text-sm mt-2">
-                    {t('no_assets_found_description') ||
-                      "No assets are currently registered for your organization. If you just registered, make sure you are logged in and have the correct permissions."}
-                  </p>
+
+            {/* Desktop: Table or Grid view */}
+            <div className="hidden md:block">
+              {isLoadingAssets ? (
+                <div className="p-6 space-y-3 animate-pulse">
+                  <div className="h-10 bg-muted rounded-lg" />
+                  {[...Array(6)].map((_, i) => <div key={i} className="h-16 bg-muted/60 rounded-lg" />)}
+                </div>
+              ) : filteredAssets.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                    <Package className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <p className="font-semibold mb-1">{t('no_assets_found') || 'No assets found'}</p>
+                  <p className="text-sm text-muted-foreground max-w-sm mb-4">{t('no_assets_found_description') || 'No assets registered. Register your first asset to get started.'}</p>
+                  <Button onClick={() => setIsOpen(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                    <PlusCircle className="h-4 w-4" /> Register First Asset
+                  </Button>
+                </div>
+              ) : viewMode === 'grid' ? (
+                /* ── Grid View ── */
+                <div className="p-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filteredAssets.map(asset => {
+                    const typeConfig = asset.type === 'FURNITURE'
+                      ? { icon: Sofa, bg: 'bg-blue-100 dark:bg-blue-900/30', color: 'text-blue-600 dark:text-blue-400', grad: 'from-blue-500 to-indigo-500', label: 'Furniture' }
+                      : asset.type === 'EQUIPMENT'
+                        ? { icon: Package, bg: 'bg-emerald-100 dark:bg-emerald-900/30', color: 'text-emerald-600 dark:text-emerald-400', grad: 'from-emerald-500 to-teal-500', label: 'Equipment' }
+                        : { icon: Computer, bg: 'bg-purple-100 dark:bg-purple-900/30', color: 'text-purple-600 dark:text-purple-400', grad: 'from-violet-500 to-purple-500', label: 'Electronics' };
+                    const TypeIcon = typeConfig.icon;
+                    return (
+                      <div key={asset.id}
+                        className="group relative rounded-2xl border border-border bg-card hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden cursor-pointer"
+                        onClick={() => { setSelectedAsset(asset); setShowBarcodeDialog(true); }}>
+                        <div className={`h-1 w-full bg-gradient-to-r ${typeConfig.grad} opacity-70 group-hover:opacity-100 transition-opacity`} />
+                        <div className="p-4">
+                          <div className="flex items-start gap-3 mb-3">
+                            <div className={`h-10 w-10 rounded-xl ${typeConfig.bg} flex items-center justify-center flex-shrink-0`}>
+                              {asset.imageUrl ? (
+                                <Image src={asset.imageUrl} alt={asset.name} width={40} height={40} className="rounded-xl object-cover w-10 h-10" unoptimized />
+                              ) : (
+                                <TypeIcon className={`h-5 w-5 ${typeConfig.color}`} />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-sm truncate">{asset.name}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{asset.assetId}</p>
+                            </div>
+                            <Badge className={`flex-shrink-0 text-[10px] h-5 px-1.5 ${
+                              asset.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0'
+                              : asset.status === 'DISPOSED' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0'
+                              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0'
+                            }`}>
+                              <span className={`h-1.5 w-1.5 rounded-full mr-1 inline-block ${asset.status === 'ACTIVE' ? 'bg-emerald-500' : asset.status === 'DISPOSED' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                              {asset.status}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <MapPin className="h-3 w-3" />
+                              <span>Floor {asset.floorNumber}, Rm {asset.roomNumber}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <Truck className="h-3 w-3" />
+                              <span className="truncate">{asset.vendor?.name || '—'}</span>
+                            </div>
+                            {asset.purchaseAmount && (
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Tag className="h-3 w-3" />
+                                <span>QAR {asset.purchaseAmount.toLocaleString()}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5 text-muted-foreground">
+                              <TypeIcon className="h-3 w-3" />
+                              <span>{typeConfig.label}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 pt-2 border-t border-border/50" onClick={e => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" className="flex-1 h-7 text-xs gap-1"
+                              onClick={() => { setSelectedAsset(asset); setShowEditDialog(true); }}>
+                              <Edit className="h-3 w-3" /> Edit
+                            </Button>
+                            <AssetDuplicateButton asset={asset} onDuplicationComplete={loadAssets} />
+                            <PrintAssetReportButton asset={asset} variant="ghost" size="icon" className="h-7 w-7">
+                              <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+                            </PrintAssetReportButton>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
+                /* ── Table View ── */
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-[100px]">{t('asset_id')}</TableHead>
-                      <TableHead>{t('asset_details')}</TableHead>
-                      <TableHead>{t('type')}</TableHead>
-                      <TableHead>{t('location')}</TableHead>
-                      <TableHead>{t('vendor')}</TableHead>
-                      <TableHead>{t('status')}</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableHead className="w-[110px] text-xs font-semibold uppercase tracking-wide">{t('asset_id')}</TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide">{t('asset_details')}</TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide">{t('type')}</TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide">{t('location')}</TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide">{t('vendor')}</TableHead>
+                      <TableHead className="text-xs font-semibold uppercase tracking-wide">{t('status')}</TableHead>
+                      <TableHead className="w-[120px]" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {assets.map((asset) => (
-                      <TableRow
-                        key={asset.id}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => {
-                          setSelectedAsset(asset);
-                          setShowBarcodeDialog(true);
-                        }}
-                      >
-                        <TableCell className="font-medium">{asset.assetId}</TableCell>
+                    {filteredAssets.map((asset) => (
+                      <TableRow key={asset.id}
+                        className="cursor-pointer hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors group"
+                        onClick={() => { setSelectedAsset(asset); setShowBarcodeDialog(true); }}>
+                        <TableCell>
+                          <span className="font-mono text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded">{asset.assetId}</span>
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <div className="relative h-10 w-10 rounded-full overflow-hidden border bg-muted">
+                            <div className="relative h-9 w-9 rounded-xl overflow-hidden border bg-muted flex-shrink-0">
                               {asset.imageUrl ? (
-                                <Image
-                                  src={asset.imageUrl}
-                                  alt={asset.name}
-                                  fill
-                                  className="object-cover"
-                                  sizes="40px"
-                                  priority
-                                  unoptimized
-                                />
+                                <Image src={asset.imageUrl} alt={asset.name} fill className="object-cover" sizes="36px" unoptimized />
                               ) : (
-                                <div className="flex h-full w-full items-center justify-center bg-muted">
-                                  <Package className="h-5 w-5 text-muted-foreground" />
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <Package className="h-4 w-4 text-muted-foreground" />
                                 </div>
                               )}
                             </div>
                             <div>
-                              <div className="font-medium">{asset.name}</div>
+                              <p className="font-semibold text-sm">{asset.name}</p>
                               {asset.description && (
-                                <div className="text-sm text-muted-foreground truncate max-w-[200px]">
-                                  {asset.description}
-                                </div>
+                                <p className="text-xs text-muted-foreground truncate max-w-[180px]">{asset.description}</p>
                               )}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className={`rounded-full p-2 ${
-                              asset.type === "FURNITURE" ? "bg-blue-100 dark:bg-blue-900/50" :
-                              asset.type === "EQUIPMENT" ? "bg-green-100 dark:bg-green-900/50" :
-                              "bg-purple-100 dark:bg-purple-900/50"
+                            <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${
+                              asset.type === 'FURNITURE' ? 'bg-blue-100 dark:bg-blue-900/30'
+                              : asset.type === 'EQUIPMENT' ? 'bg-emerald-100 dark:bg-emerald-900/30'
+                              : 'bg-violet-100 dark:bg-violet-900/30'
                             }`}>
-                              {asset.type === "FURNITURE" && <Sofa className="h-4 w-4 text-blue-700 dark:text-blue-400" />}
-                              {asset.type === "EQUIPMENT" && <Package className="h-4 w-4 text-green-700 dark:text-green-400" />}
-                              {asset.type === "ELECTRONICS" && <Computer className="h-4 w-4 text-purple-700 dark:text-purple-400" />}
+                              {asset.type === 'FURNITURE' && <Sofa className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />}
+                              {asset.type === 'EQUIPMENT' && <Package className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+                              {asset.type === 'ELECTRONICS' && <Computer className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />}
                             </div>
-                            <span className={`text-sm font-medium ${
-                              asset.type === "FURNITURE" ? "text-blue-700 dark:text-blue-400" :
-                              asset.type === "EQUIPMENT" ? "text-green-700 dark:text-green-400" :
-                              "text-purple-700 dark:text-purple-400"
-                            }`}>{asset.type}</span>
+                            <span className="text-xs font-medium capitalize">{asset.type.toLowerCase()}</span>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="rounded-full p-2 bg-muted">
-                              <MapPin className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium">Floor {asset.floorNumber}</span>
-                              <span className="text-xs text-muted-foreground">Room {asset.roomNumber}</span>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                            <div>
+                              <p className="text-xs font-medium">Floor {asset.floorNumber}</p>
+                              <p className="text-[10px] text-muted-foreground">Room {asset.roomNumber}</p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="rounded-full p-2 bg-muted">
-                              <Truck className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <span className="text-sm">{asset.vendor?.name || '-'}</span>
-                          </div>
+                          <span className="text-xs text-muted-foreground">{asset.vendor?.name || '—'}</span>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={asset.status === 'ACTIVE' ? 'default' : 
-                                    asset.status === 'DISPOSED' ? 'destructive' : 
-                                    'secondary'}
-                            className="flex items-center gap-1"
-                          >
-                            <div className={`w-1.5 h-1.5 rounded-full ${
-                              asset.status === 'ACTIVE' ? 'bg-green-500' :
-                              asset.status === 'DISPOSED' ? 'bg-red-500' :
-                              'bg-yellow-500'
-                            }`} />
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
+                            asset.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            : asset.status === 'DISPOSED' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                          }`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${asset.status === 'ACTIVE' ? 'bg-emerald-500' : asset.status === 'DISPOSED' ? 'bg-red-500' : 'bg-amber-500'}`} />
                             {asset.status}
-                          </Badge>
+                          </span>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedAsset(asset);
-                                setShowEditDialog(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4 text-muted-foreground" />
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" className="h-7 w-7"
+                              onClick={() => { setSelectedAsset(asset); setShowEditDialog(true); }}>
+                              <Edit className="h-3.5 w-3.5 text-muted-foreground" />
                             </Button>
-                            <AssetDuplicateButton 
-                              asset={asset}
-                              onDuplicationComplete={loadAssets}
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                            >
-                              <Info className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                            <PrintAssetReportButton
-                              asset={asset}
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                              }}
-                            >
-                              <Printer className="h-4 w-4 text-muted-foreground" />
+                            <AssetDuplicateButton asset={asset} onDuplicationComplete={loadAssets} />
+                            <PrintAssetReportButton asset={asset} variant="ghost" size="icon" className="h-7 w-7">
+                              <Printer className="h-3.5 w-3.5 text-muted-foreground" />
                             </PrintAssetReportButton>
                           </div>
                         </TableCell>
