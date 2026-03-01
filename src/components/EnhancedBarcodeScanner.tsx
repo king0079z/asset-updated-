@@ -89,10 +89,11 @@ export default function EnhancedBarcodeScanner({
   const qrRef            = useRef<Html5Qrcode | null>(null);
   const scanned          = useRef(false);                  // single-fire guard
   const scanBuffer       = useRef<string[]>([]);           // multi-read confirmation
+  const scanCache        = useRef<Map<string, any>>(new Map()); // cache recent lookups
   const [scanConfidence, setScanConfidence] = useState(0); // 0-100 confidence %
   const searchDebounce   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const SCANNER_DIV_ID   = 'food-qr-scanner-div';
-  const REQUIRED_MATCHES = 3; // same code must appear this many times in last 7 reads
+  const REQUIRED_MATCHES = 2;  // 2 consistent reads → fire (fast + accurate)
 
   /* ── Hooks ───────────────────────────────────────────── */
   const { toast }  = useToast();
@@ -163,51 +164,62 @@ export default function EnhancedBarcodeScanner({
     }
   }, [kitchenId, onScanComplete, toast]);
 
-  /* lookupBarcode — stable (only depends on kitchenId prop) */
+  /* lookupBarcode — single parallel API call, with in-memory cache */
   const lookupBarcode = useCallback(async (code: string, fromCamera = false) => {
     const trimmed = code.trim();
     if (!trimmed) return;
     setLastScannedCode(trimmed);
     setIsLookingUp(true);
+
     try {
-      // 1. Try in current kitchen first
-      let res  = await fetch(`/api/food-supply?barcode=${encodeURIComponent(trimmed)}&kitchenId=${kitchenId}`);
-      let data = await res.json();
-      if (data.supply) {
+      // ── Check cache first (instant response for repeated scans) ──────────
+      const cacheKey = `${trimmed}|${kitchenId}`;
+      if (scanCache.current.has(cacheKey)) {
+        const cached = scanCache.current.get(cacheKey);
         setIsLookingUp(false);
-        if (fromCamera) {
-          // Camera/barcode scan → auto-record immediately (original behavior)
-          await autoRecordSupply(data.supply);
+        if (cached.supply) {
+          if (fromCamera) await autoRecordSupply(cached.supply);
+          else { setFoundSupply(cached.supply); setView('found-supply'); }
+        } else if (cached.recipe) {
+          setFoundRecipe(cached.recipe); setView('found-recipe');
         } else {
-          setFoundSupply(data.supply); setView('found-supply');
+          setView('not-found');
         }
         return;
       }
 
-      // 2. Cross-kitchen fallback
-      res  = await fetch(`/api/food-supply?barcode=${encodeURIComponent(trimmed)}`);
-      data = await res.json();
+      // ── Single parallel API call — all lookups happen server-side ────────
+      const res = await fetch('/api/food-supply/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode: trimmed, kitchenId }),
+      });
+
+      const data = res.ok ? await res.json() : {};
+
+      // Cache result for 60 seconds
+      scanCache.current.set(cacheKey, data);
+      setTimeout(() => scanCache.current.delete(cacheKey), 60_000);
+
+      setIsLookingUp(false);
+
       if (data.supply) {
-        setIsLookingUp(false);
-        if (fromCamera) {
-          await autoRecordSupply(data.supply);
-        } else {
-          setFoundSupply(data.supply); setView('found-supply');
-        }
+        if (fromCamera) await autoRecordSupply(data.supply);
+        else { setFoundSupply(data.supply); setView('found-supply'); }
         return;
       }
 
-      // 3. Recipe fallback
-      res = await fetch(`/api/recipes/${encodeURIComponent(trimmed)}`);
-      if (res.ok) {
-        const recipe = await res.json();
-        if (recipe?.id) { setFoundRecipe(recipe); setView('found-recipe'); return; }
+      if (data.recipe?.id) {
+        setFoundRecipe(data.recipe); setView('found-recipe');
+        return;
       }
 
-      // 4. Not found
       setView('not-found');
-    } catch { setView('not-found'); }
-    finally  { setIsLookingUp(false); }
+    } catch {
+      setView('not-found');
+    } finally {
+      setIsLookingUp(false);
+    }
   }, [kitchenId, autoRecordSupply]);
 
   /* isValidBarcode — reject garbled reads (special chars, too short) */
@@ -389,6 +401,7 @@ export default function EnhancedBarcodeScanner({
     scanned.current = false;
     scanBuffer.current = [];
     setScanConfidence(0);
+    // Don't clear scanCache — keep it so repeat scans of same barcode are instant
     setView('camera');
   }, [consumptionForm]);
 
