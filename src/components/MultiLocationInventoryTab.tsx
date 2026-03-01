@@ -100,9 +100,9 @@ export function MultiLocationInventoryTab() {
   )
 
   const allInventoryItems = filteredLocations.flatMap(location => 
-    location.locationInventories
+    (location.locationInventories ?? [])
       .filter(item => 
-        item.foodSupply?.name.toLowerCase().includes(searchTerm.toLowerCase())
+        item.foodSupply?.name?.toLowerCase().includes(searchTerm.toLowerCase())
       )
       .map(item => ({
         ...item,

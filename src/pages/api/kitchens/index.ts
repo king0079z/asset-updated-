@@ -23,6 +23,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             description: true,
             createdAt: true,
             updatedAt: true,
+            barcodes: {
+              select: { id: true }
+            },
           },
           orderBy: { name: 'asc' },
         });

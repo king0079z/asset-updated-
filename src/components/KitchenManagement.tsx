@@ -207,7 +207,7 @@ export function KitchenManagement() {
                   <div className="flex items-center space-x-2 text-sm">
                     <Barcode className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">
-                      {kitchen.barcodes.length} {t('active_barcodes')}
+                      {(kitchen.barcodes ?? []).length} {t('active_barcodes')}
                     </span>
                   </div>
                 </CardContent>

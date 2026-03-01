@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             select: {
               id: true,
               quantity: true,
-              lastUpdated: true,
+              updatedAt: true,
               foodSupply: {
                 select: {
                   id: true,
@@ -34,13 +34,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Transform the data to include calculated values
       const locationsWithStats = locations.map(location => {
-        const totalItems = location.inventories.length
-        const totalValue = location.inventories.reduce((sum, inv) => 
+        const inventories = location.inventories || []
+        const totalItems = inventories.length
+        const totalValue = inventories.reduce((sum, inv) => 
           sum + (inv.quantity * (inv.foodSupply?.pricePerUnit || 0)), 0
         )
-        // minStockLevel is not available, so lowStockItems cannot be calculated
         const lowStockItems = 0
-        const expiringItems = location.inventories.filter(inv => {
+        const expiringItems = inventories.filter(inv => {
           if (!inv.foodSupply?.expirationDate) return false
           const daysUntilExpiration = Math.ceil(
             (new Date(inv.foodSupply.expirationDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
@@ -48,8 +48,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return daysUntilExpiration <= 30
         }).length
 
+        // Map inventories -> locationInventories to match frontend expectations
+        const locationInventories = inventories.map(inv => ({
+          id: inv.id,
+          quantity: inv.quantity,
+          minStockLevel: null,
+          maxStockLevel: null,
+          lastUpdated: inv.updatedAt?.toISOString?.() ?? new Date().toISOString(),
+          foodSupply: inv.foodSupply ?? null,
+        }))
+
         return {
-          ...location,
+          id: location.id,
+          name: location.name,
+          type: location.type,
+          locationInventories,
           stats: {
             totalItems,
             totalValue,
