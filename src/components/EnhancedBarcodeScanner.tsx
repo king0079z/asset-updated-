@@ -115,22 +115,33 @@ export default function EnhancedBarcodeScanner({
 
   /* autoRecordSupply — immediately records 1 unit then shows success */
   const autoRecordSupply = useCallback(async (supply: FoodSupply) => {
+    // Use supply's kitchenId, or fall back to the scanner's own kitchenId prop
+    const resolvedKitchenId = supply.kitchenId || kitchenId;
+
+    // Enrich supply with resolved kitchenId so the form also works correctly
+    const enrichedSupply: FoodSupply = {
+      ...supply,
+      kitchenId: resolvedKitchenId,
+      kitchenName: supply.kitchenName === 'Unknown Kitchen' && !supply.kitchenId
+        ? 'Default Kitchen'
+        : supply.kitchenName,
+    };
+
     setView('auto-recording');
     try {
       const consumeRes = await fetch('/api/food-supply/consume', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          supplyId: supply.id,
+          supplyId: enrichedSupply.id,
           quantity: 1,
-          kitchenId: supply.kitchenId,
+          kitchenId: resolvedKitchenId,
           notes: '',
         }),
       });
       if (!consumeRes.ok) {
         const err = await consumeRes.json();
-        // Fall back to manual form on error so user can try again
-        setFoundSupply(supply);
+        setFoundSupply(enrichedSupply);
         setView('found-supply');
         toast({
           title: 'Could not auto-record',
@@ -138,19 +149,19 @@ export default function EnhancedBarcodeScanner({
           variant: 'destructive',
         });
       } else {
-        setFoundSupply(supply);
+        setFoundSupply(enrichedSupply);
         setView('recorded');
         window.dispatchEvent(new CustomEvent('food-consumption-recorded', {
-          detail: { supplyId: supply.id, quantity: 1, timestamp: new Date().toISOString() }
+          detail: { supplyId: enrichedSupply.id, quantity: 1, timestamp: new Date().toISOString() }
         }));
         onScanComplete?.();
       }
     } catch {
-      setFoundSupply(supply);
+      setFoundSupply(enrichedSupply);
       setView('found-supply');
       toast({ title: 'Error', description: 'Failed to record consumption', variant: 'destructive' });
     }
-  }, [onScanComplete, toast]);
+  }, [kitchenId, onScanComplete, toast]);
 
   /* lookupBarcode — stable (only depends on kitchenId prop) */
   const lookupBarcode = useCallback(async (code: string, fromCamera = false) => {
@@ -394,6 +405,8 @@ export default function EnhancedBarcodeScanner({
   const onRecordConsumption = async (values: z.infer<typeof consumptionFormSchema>) => {
     if (!foundSupply) return;
     setIsProcessing(true);
+    // Use supply's kitchenId or fall back to the scanner's own kitchenId prop
+    const resolvedKitchenId = foundSupply.kitchenId || kitchenId;
     try {
       const res = await fetch('/api/food-supply/consume', {
         method: 'POST',
@@ -401,7 +414,7 @@ export default function EnhancedBarcodeScanner({
         body: JSON.stringify({
           supplyId: foundSupply.id,
           quantity: values.quantity,
-          kitchenId: foundSupply.kitchenId,
+          kitchenId: resolvedKitchenId,
           notes: values.notes,
         }),
       });
