@@ -88,8 +88,11 @@ export default function EnhancedBarcodeScanner({
   /* ── Refs ────────────────────────────────────────────── */
   const qrRef            = useRef<Html5Qrcode | null>(null);
   const scanned          = useRef(false);                  // single-fire guard
+  const scanBuffer       = useRef<string[]>([]);           // multi-read confirmation
+  const [scanConfidence, setScanConfidence] = useState(0); // 0-100 confidence %
   const searchDebounce   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const SCANNER_DIV_ID   = 'food-qr-scanner-div';
+  const REQUIRED_MATCHES = 3; // same code must appear this many times in last 7 reads
 
   /* ── Hooks ───────────────────────────────────────────── */
   const { toast }  = useToast();
@@ -196,10 +199,39 @@ export default function EnhancedBarcodeScanner({
     finally  { setIsLookingUp(false); }
   }, [kitchenId, autoRecordSupply]);
 
-  /* onCode — camera scan triggers auto-record */
+  /* isValidBarcode — reject garbled reads (special chars, too short) */
+  const isValidBarcode = (code: string) => {
+    if (!code || code.length < 4) return false;
+    // Must be printable ASCII only — no control chars, backslash, backtick, etc.
+    if (/[^\x20-\x7E]/.test(code)) return false;
+    // Reject strings with characters that never appear in valid barcodes
+    if (/[\\`'"<>{}|]/.test(code)) return false;
+    return true;
+  };
+
+  /* onCode — multi-read confirmation before firing (eliminates misreads) */
   const onCode = useCallback(async (raw: string) => {
     if (!raw || scanned.current) return;
-    scanned.current = true;           // prevent duplicate fires
+
+    // 1. Validate — discard garbled reads immediately
+    if (!isValidBarcode(raw)) return;
+
+    // 2. Add to rolling buffer (keep last 7 reads)
+    scanBuffer.current.push(raw);
+    if (scanBuffer.current.length > 7) scanBuffer.current.shift();
+
+    // 3. Count how many of the last 7 match this exact code
+    const matches = scanBuffer.current.filter(c => c === raw).length;
+    const confidence = Math.round((matches / REQUIRED_MATCHES) * 100);
+    setScanConfidence(Math.min(100, confidence));
+
+    // 4. Only fire when we have REQUIRED_MATCHES consistent reads
+    if (matches < REQUIRED_MATCHES) return;
+
+    // 5. Lock and process
+    scanned.current = true;
+    scanBuffer.current = [];
+    setScanConfidence(100);
     try { await qrRef.current?.pause(); } catch {}
     await lookupBarcode(raw, true);   // fromCamera=true → auto-record
   }, [lookupBarcode]);
@@ -289,6 +321,9 @@ export default function EnhancedBarcodeScanner({
     scanned.current = false;
     consumptionForm.reset();
 
+    scanBuffer.current = [];
+    setScanConfidence(0);
+
     const t = setTimeout(() => {
       if (document.getElementById(SCANNER_DIV_ID)) startCam();
     }, 450); // give Dialog portal time to mount
@@ -341,6 +376,8 @@ export default function EnhancedBarcodeScanner({
     setServingsCount(1);
     consumptionForm.reset();
     scanned.current = false;
+    scanBuffer.current = [];
+    setScanConfidence(0);
     setView('camera');
   }, [consumptionForm]);
 
@@ -764,11 +801,11 @@ export default function EnhancedBarcodeScanner({
               </div>
 
               {/* ─ Camera tab ─ */}
-              <TabsContent value="camera" className="mt-0 p-5">
+              <TabsContent value="camera" className="mt-0 p-4">
                 {camLoading && (
                   <div className="flex flex-col items-center justify-center gap-3 py-10">
                     <Loader2 className="h-8 w-8 text-emerald-600 animate-spin" />
-                    <p className="text-sm text-muted-foreground">Starting camera…</p>
+                    <p className="text-sm text-muted-foreground font-medium">Starting camera…</p>
                   </div>
                 )}
                 {camError && (
@@ -783,26 +820,85 @@ export default function EnhancedBarcodeScanner({
                     </div>
                   </div>
                 )}
-                {/* Camera feed — always rendered so Html5Qrcode can mount */}
-                <div className={`relative rounded-2xl overflow-hidden bg-black ${camError ? 'hidden' : ''}`} style={{ minHeight: 260 }}>
+
+                {/* Camera feed container */}
+                <div className={`relative rounded-2xl overflow-hidden bg-black shadow-xl ${camError ? 'hidden' : ''}`}
+                     style={{ minHeight: 270 }}>
                   <div id={SCANNER_DIV_ID} className="w-full" />
-                  {/* Corner bracket overlay */}
-                  {!camLoading && (
-                    <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <div className="border-2 border-emerald-400/80 rounded-xl" style={{ height: 140 }}>
-                        <div className="absolute top-0 left-0  w-5 h-5 border-t-2 border-l-2 border-emerald-400 rounded-tl" />
-                        <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-emerald-400 rounded-tr" />
-                        <div className="absolute bottom-0 left-0  w-5 h-5 border-b-2 border-l-2 border-emerald-400 rounded-bl" />
-                        <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-emerald-400 rounded-br" />
+
+                  {/* Overlay: darkened sides + bright center strip for Code128 */}
+                  {!camLoading && !camError && (
+                    <>
+                      {/* Dark vignette on top/bottom */}
+                      <div className="absolute inset-0 pointer-events-none"
+                           style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 28%, transparent 72%, rgba(0,0,0,0.55) 100%)' }} />
+
+                      {/* Scan target rectangle — wide for Code128 linear barcodes */}
+                      <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ height: 100 }}>
+                        {/* Bright border */}
+                        <div className={`absolute inset-0 rounded-lg border-2 transition-all duration-300 ${
+                          scanConfidence >= 100 ? 'border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.6)]'
+                          : scanConfidence > 0  ? 'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.4)]'
+                          : 'border-white/70'
+                        }`} />
+
+                        {/* Corner accents */}
+                        {['top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-lg',
+                          'top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-lg',
+                          'bottom-0 left-0 border-b-[3px] border-l-[3px] rounded-bl-lg',
+                          'bottom-0 right-0 border-b-[3px] border-r-[3px] rounded-br-lg',
+                        ].map((cls, i) => (
+                          <div key={i} className={`absolute w-6 h-6 ${cls} transition-colors duration-300 ${
+                            scanConfidence >= 100 ? 'border-emerald-400'
+                            : scanConfidence > 0  ? 'border-yellow-400'
+                            : 'border-white'
+                          }`} />
+                        ))}
+
+                        {/* Animated scan line */}
+                        <div className="absolute inset-x-0 overflow-hidden" style={{ top: 0, bottom: 0 }}>
+                          <div className="absolute left-0 right-0 h-0.5 bg-emerald-400/80 shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                               style={{ animation: 'scanLine 1.8s ease-in-out infinite' }} />
+                        </div>
                       </div>
-                    </div>
+                    </>
                   )}
                 </div>
+
+                {/* Confidence bar + hint */}
                 {!camError && !camLoading && (
-                  <p className="text-xs text-center text-muted-foreground mt-3 flex items-center justify-center gap-1">
-                    <Zap className="h-3 w-3 text-emerald-500" /> Point camera at food supply barcode or QR code
-                  </p>
+                  <div className="mt-3 space-y-2">
+                    {scanConfidence > 0 && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Scan confidence</span>
+                          <span className={`text-xs font-black ${scanConfidence >= 100 ? 'text-emerald-600' : 'text-yellow-600'}`}>
+                            {Math.min(100, scanConfidence)}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-200 ${scanConfidence >= 100 ? 'bg-emerald-500' : 'bg-yellow-400'}`}
+                            style={{ width: `${Math.min(100, scanConfidence)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
+                      <Zap className="h-3 w-3 text-emerald-500" />
+                      Hold barcode steady inside the frame · auto-records on detection
+                    </p>
+                  </div>
                 )}
+
+                {/* Inline CSS for scan line animation */}
+                <style>{`
+                  @keyframes scanLine {
+                    0%   { top: 8%;  opacity: 0.4; }
+                    50%  { top: 88%; opacity: 1;   }
+                    100% { top: 8%;  opacity: 0.4; }
+                  }
+                `}</style>
               </TabsContent>
 
               {/* ─ Manual barcode tab ─ */}
