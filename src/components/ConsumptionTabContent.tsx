@@ -2,7 +2,9 @@ import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BarChart3, PieChart, Trash2, Info } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { BarChart3, PieChart, Trash2, Info, Calendar, Search, X } from "lucide-react";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -53,27 +55,36 @@ export function ConsumptionTabContent({ kitchenId, kitchenName }: Props) {
   const [data, setData] = useState<ConsumptionDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [itemSearch, setItemSearch] = useState('');
 
-  useEffect(() => {
+  // Default date range: last 30 days
+  const defaultEnd = new Date().toISOString().slice(0, 10);
+  const defaultStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [endDate, setEndDate] = useState(defaultEnd);
+
+  const fetchData = (start: string, end: string) => {
     setLoading(true);
     setError(null);
     setData(null);
-    fetch(`/api/kitchens/consumption-details?kitchenId=${kitchenId}`)
+    fetch(`/api/kitchens/consumption-details?kitchenId=${kitchenId}&startDate=${start}&endDate=${end}`)
       .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
+        if (!res.ok) throw new Error(await res.text());
         return res.json();
       })
-      .then((json) => {
-        setData(json);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(t("error_fetching_data"));
-        setLoading(false);
-      });
-  }, [kitchenId, t]);
+      .then((json) => { setData(json); setLoading(false); })
+      .catch(() => { setError(t("error_fetching_data")); setLoading(false); });
+  };
+
+  useEffect(() => { fetchData(startDate, endDate); }, [kitchenId]);
+
+  const handleApplyFilter = () => fetchData(startDate, endDate);
+  const handleResetFilter = () => {
+    setStartDate(defaultStart);
+    setEndDate(defaultEnd);
+    setItemSearch('');
+    fetchData(defaultStart, defaultEnd);
+  };
 
   if (loading) {
     return (
@@ -102,8 +113,41 @@ export function ConsumptionTabContent({ kitchenId, kitchenName }: Props) {
   // (API does not provide direct breakdown, so show totals and monthly trends)
   const { totalConsumption, totalWaste, kitchenEfficiency, waste, monthlyConsumption, topWastedItems, recommendations } = data;
 
+  // Filter items by search query
+  const filteredItems = (data.items ?? []).filter(item =>
+    !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase()) || item.category?.toLowerCase().includes(itemSearch.toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
+      {/* Date Range + Search Filter Bar */}
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">From</Label>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-8 text-sm w-36" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">To</Label>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-8 text-sm w-36" />
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <Label className="text-xs text-muted-foreground mb-1 block">Search ingredient</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-1.5 h-4 w-4 text-muted-foreground" />
+                <Input value={itemSearch} onChange={e => setItemSearch(e.target.value)} placeholder="Filter by name…" className="pl-7 h-8 text-sm" />
+              </div>
+            </div>
+            <Button size="sm" onClick={handleApplyFilter} className="h-8">
+              <Calendar className="h-3.5 w-3.5 mr-1.5" />Apply
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleResetFilter} className="h-8">
+              <X className="h-3.5 w-3.5 mr-1.5" />Reset
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-100 dark:border-blue-900/30">

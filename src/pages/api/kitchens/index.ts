@@ -13,9 +13,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Resolve calling user's organization for scoping
+    const userRecord = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { organizationId: true }
+    });
+    const orgId = userRecord?.organizationId ?? null;
+
     switch (req.method) {
       case 'GET':
         const kitchens = await prisma.kitchen.findMany({
+          where: orgId ? { OR: [{ organizationId: orgId }, { organizationId: null }] } : {},
           select: {
             id: true,
             name: true,
@@ -34,11 +42,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       case 'POST':
         const { name, floorNumber, description } = req.body;
+
+        // Enforce subscription kitchen limit
+        if (orgId) {
+          const subscription = await prisma.subscription.findUnique({
+            where: { organizationId: orgId },
+            select: { maxKitchens: true }
+          });
+          if (subscription) {
+            const kitchenCount = await prisma.kitchen.count({ where: { organizationId: orgId } });
+            if (kitchenCount >= subscription.maxKitchens) {
+              return res.status(403).json({
+                error: `Kitchen limit reached. Your plan allows up to ${subscription.maxKitchens} kitchen${subscription.maxKitchens !== 1 ? 's' : ''}.`
+              });
+            }
+          }
+        }
+
         const kitchen = await prisma.kitchen.create({
           data: {
             name,
             floorNumber,
-            description
+            description,
+            ...(orgId ? { organizationId: orgId } : {})
           }
         });
         

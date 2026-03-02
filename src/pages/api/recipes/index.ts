@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
@@ -13,10 +13,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // Resolve calling user's organization for scoping
+  const userRecord = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { organizationId: true }
+  });
+  const orgId = userRecord?.organizationId ?? null;
+  const orgFilter = orgId ? { OR: [{ organizationId: orgId }, { organizationId: null }] } : {};
+
   // GET - Retrieve all recipes
   if (req.method === 'GET') {
     try {
-      const { popular, subrecipesOnly } = req.query;
+      const { popular, subrecipesOnly, kitchenId } = req.query;
       
       // Handle popular recipes request
       if (popular === 'true') {
@@ -24,6 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         
         // Get recipes with their usage counts
         const recipes = await prisma.recipe.findMany({
+          where: orgFilter,
           include: {
             ingredients: {
               include: {
@@ -71,10 +80,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
       
-      // Regular recipe listing, with optional subrecipe filtering
-      const whereClause: any = {};
+      // Regular recipe listing, with optional subrecipe filtering + org scoping
+      const whereClause: any = { ...orgFilter };
       if (subrecipesOnly === 'true') {
         whereClause.isSubrecipe = true;
+      }
+      // If kitchenId provided, further filter to recipes used in that kitchen
+      if (kitchenId && typeof kitchenId === 'string') {
+        const usedRecipeIds = await prisma.recipeUsage.findMany({
+          where: { kitchenId },
+          select: { recipeId: true },
+          distinct: ['recipeId'],
+        });
+        // Show recipes used in this kitchen + any recipe with no usages yet (so new recipes are visible everywhere)
+        const usedIds = usedRecipeIds.map(u => u.recipeId);
+        const noUsageRecipes = await prisma.recipe.findMany({
+          where: { ...orgFilter, usages: { none: {} } },
+          select: { id: true }
+        });
+        const noUsageIds = noUsageRecipes.map(r => r.id);
+        whereClause.id = { in: [...new Set([...usedIds, ...noUsageIds])] };
       }
 
       const recipes = await prisma.recipe.findMany({
@@ -238,6 +263,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
+      // Enforce subscription recipe limit
+      if (orgId) {
+        const subscription = await prisma.subscription.findUnique({
+          where: { organizationId: orgId },
+          select: { maxRecipes: true }
+        });
+        if (subscription) {
+          const recipeCount = await prisma.recipe.count({ where: { organizationId: orgId } });
+          if (recipeCount >= subscription.maxRecipes) {
+            return res.status(403).json({
+              error: `Recipe limit reached. Your plan allows up to ${subscription.maxRecipes} recipe${subscription.maxRecipes !== 1 ? 's' : ''}.`
+            });
+          }
+        }
+      }
+
       // Calculate total cost and cost per serving
       let totalCost = 0;
 
@@ -331,6 +372,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           sellingPrice: sellingPrice || 0,
           userId: user.id,
           isSubrecipe: !!isSubrecipe,
+          ...(orgId ? { organizationId: orgId } : {}),
           ingredients: {
             create: ingredientCreates
           }

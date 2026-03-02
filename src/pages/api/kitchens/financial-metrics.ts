@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 
@@ -137,11 +137,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }, 0);
 
-    // Calculate profit (this is an estimation based on consumed food supplies)
-    // In a real system, you would need actual sales data to calculate profit accurately
-    // For this example, we'll assume a 40% markup on consumed food supplies
-    const markup = 0.4; // 40% markup
-    const estimatedProfit = totalConsumed * markup;
+    // Profit is calculated below from actual recipe selling prices, not a hardcoded markup
 
     // Get recipe usage data for this kitchen
     const recipeUsages = await prisma.recipeUsage.findMany({

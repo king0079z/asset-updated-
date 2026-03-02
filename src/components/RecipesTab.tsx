@@ -76,6 +76,9 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'main' | 'subrecipe'>('all');
+
   // State for EnhancedRecipeManagementDialog
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const [subrecipeDialogOpen, setSubrecipeDialogOpen] = useState(false);
@@ -503,20 +506,42 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <input 
-                      type="text" 
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
                       placeholder={t('search_recipes')} 
                       className="pl-9 h-10 w-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </div>
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant={filterType === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilterType(f => f === 'all' ? 'main' : f === 'main' ? 'subrecipe' : 'all')}
+                    title={`Filter: ${filterType}`}
+                  >
                     <Filter className="h-3.5 w-3.5 mr-1.5" />
-                    {t('filter')}
+                    {filterType === 'all' ? t('all') : filterType === 'main' ? t('main_recipes') || 'Main' : t('subrecipes') || 'Subrecipes'}
                   </Button>
                 </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {recipes.map((recipe) => {
+                {recipes
+                  .filter(r => {
+                    const q = searchQuery.trim().toLowerCase();
+                    const matchesSearch = !q ||
+                      r.name.toLowerCase().includes(q) ||
+                      (r.description || '').toLowerCase().includes(q) ||
+                      r.ingredients.some(ing =>
+                        ing.type === 'food' ? (ing as RecipeIngredientFood).name.toLowerCase().includes(q) : false
+                      );
+                    const matchesFilter =
+                      filterType === 'all' ||
+                      (filterType === 'main' && !r.isSubrecipe) ||
+                      (filterType === 'subrecipe' && r.isSubrecipe);
+                    return matchesSearch && matchesFilter;
+                  })
+                  .map((recipe) => {
                   const ingredientIssues = checkIngredientIssues(recipe, 1, new Set());
                   const hasIssues = ingredientIssues.length > 0;
                   return (
@@ -699,6 +724,18 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
                   </div>
                 )})}
               </div>
+              {recipes.filter(r => {
+                const q = searchQuery.trim().toLowerCase();
+                const matchesSearch = !q || r.name.toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q);
+                const matchesFilter = filterType === 'all' || (filterType === 'main' && !r.isSubrecipe) || (filterType === 'subrecipe' && r.isSubrecipe);
+                return matchesSearch && matchesFilter;
+              }).length === 0 && (searchQuery || filterType !== 'all') && (
+                <div className="text-center py-10 text-muted-foreground">
+                  <Search className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p>No recipes match your search.</p>
+                  <button className="text-xs underline mt-1" onClick={() => { setSearchQuery(''); setFilterType('all'); }}>Clear filters</button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

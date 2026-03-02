@@ -23,6 +23,7 @@ import { WasteHistoryDialog } from './WasteHistoryDialog';
 import { EnhancedWasteTrackingDialog } from './EnhancedWasteTrackingDialog';
 import { FoodSupplyNotifications } from './FoodSupplyNotifications';
 import { RecipesTab } from './RecipesTab';
+import { KitchenOperationsTab } from './KitchenOperationsTab';
 import { KitchenAIAnalysis } from './KitchenAIAnalysis';
 import { KitchenWasteAnalysis } from './KitchenWasteAnalysis';
 import { KitchenFoodSupplyForm } from './KitchenFoodSupplyForm';
@@ -39,7 +40,8 @@ import {
   Utensils, 
   Building2, 
   ChefHat, 
-  AlertTriangle, 
+  AlertTriangle,
+  AlertCircle,
   Package, 
   Trash2, 
   History,
@@ -57,7 +59,8 @@ import {
   TrendingUp,
   Clock,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  ClipboardList
 } from 'lucide-react';
 
 interface Kitchen {
@@ -482,10 +485,32 @@ export function UserKitchenPageSimplified() {
                     <CardTabs.Trigger value="consumption" icon={<BarChart3 className="h-4 w-4" />}>
                       {t('consumption')}
                     </CardTabs.Trigger>
+                    <CardTabs.Trigger value="operations" icon={<ClipboardList className="h-4 w-4" />}>
+                      Operations
+                    </CardTabs.Trigger>
                   </CardTabs.List>
 
                   {/* ── Overview Tab ── */}
                   <CardTabs.Content value="overview" className="mt-5">
+                    {/* Real-time inventory alerts */}
+                    {(lowStockItems.length > 0 || expiringItems.length > 0) && (
+                      <div className="mb-4 space-y-2">
+                        {lowStockItems.length > 0 && (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-800 dark:bg-orange-900/20 dark:border-orange-700 dark:text-orange-300">
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                            <span><strong>{lowStockItems.length}</strong> item{lowStockItems.length !== 1 ? 's' : ''} running low on stock: {lowStockItems.slice(0, 3).map(i => i.name).join(', ')}{lowStockItems.length > 3 ? ` +${lowStockItems.length - 3} more` : ''}</span>
+                            <button className="ml-auto text-xs underline" onClick={() => setActiveTab('inventory')}>View</button>
+                          </div>
+                        )}
+                        {expiringItems.length > 0 && (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300">
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                            <span><strong>{expiringItems.length}</strong> item{expiringItems.length !== 1 ? 's' : ''} expiring within 7 days: {expiringItems.slice(0, 3).map(i => i.name).join(', ')}{expiringItems.length > 3 ? ` +${expiringItems.length - 3} more` : ''}</span>
+                            <button className="ml-auto text-xs underline" onClick={() => setActiveTab('inventory')}>View</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {/* World-class metric cards */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                       {statCards.map((card) => {
@@ -817,6 +842,15 @@ export function UserKitchenPageSimplified() {
                   {/* ── Recipes Tab ── */}
                   <CardTabs.Content value="recipes" className="mt-5">
                     <RecipesTab kitchenId={selectedKitchen.id} />
+                  </CardTabs.Content>
+
+                  {/* ── Operations Tab ── */}
+                  <CardTabs.Content value="operations" className="mt-5">
+                    <KitchenOperationsTab
+                      kitchenId={selectedKitchen.id}
+                      kitchenName={selectedKitchen.name}
+                      allKitchens={kitchens}
+                    />
                   </CardTabs.Content>
 
                   {/* ── Consumption Tab ── */}

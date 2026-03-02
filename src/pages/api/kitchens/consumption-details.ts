@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Get kitchenId from query parameters
-    const { kitchenId } = req.query;
+    const { kitchenId, startDate: startDateParam, endDate: endDateParam } = req.query;
 
     // Use the provided kitchenId without fallbacks to other kitchens
     const targetKitchenId = kitchenId as string;
@@ -33,6 +33,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    // Build date range filter (default: last 30 days)
+    const endDate = endDateParam ? new Date(endDateParam as string) : new Date();
+    const startDate = startDateParam
+      ? new Date(startDateParam as string)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    endDate.setHours(23, 59, 59, 999);
+    startDate.setHours(0, 0, 0, 0);
+    const dateFilter = { gte: startDate, lte: endDate };
+
     // Get kitchen details
     const kitchen = await prisma.kitchen.findUnique({
       where: { id: targetKitchenId }
@@ -42,10 +51,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Kitchen not found' });
     }
 
-    // Get consumption data for the kitchen
+    // Get consumption data for the kitchen within date range
     const consumptions = await prisma.foodConsumption.findMany({
       where: {
-        kitchenId: targetKitchenId
+        kitchenId: targetKitchenId,
+        date: dateFilter,
       },
       orderBy: {
         date: 'desc'

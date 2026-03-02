@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
@@ -204,10 +204,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       for (const d of disposalActions) {
         await tx.foodDisposal.create({ data: d });
       }
-      // Update all foodSupply quantities
+      // Update all foodSupply quantities (global) + KitchenFoodSupply quantities (per-kitchen)
       for (const u of updateActions) {
         await tx.foodSupply.update({
           where: { id: u.id },
+          data: { quantity: { decrement: u.decrement } },
+        });
+        // Keep per-kitchen inventory in sync if it exists
+        await tx.kitchenFoodSupply.updateMany({
+          where: { kitchenId, foodSupplyId: u.id },
           data: { quantity: { decrement: u.decrement } },
         });
       }

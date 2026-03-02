@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { format, subMonths } from 'date-fns';
@@ -236,10 +236,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       consumptionByItem[name].quantity += item.quantity;
     });
 
-    // Calculate trends for most consumed items
-    // For simplicity, we'll use a random trend between -10 and +15
+    // Calculate real per-item trends: compare last 3 months vs prior 3 months
+    const threeMonthsAgo = subMonths(new Date(), 3);
+    const recentItemQty: Record<string, number> = {};
+    const olderItemQty: Record<string, number> = {};
+    consumptionData.forEach(item => {
+      const name = item.foodSupply.name;
+      if (new Date(item.date) >= threeMonthsAgo) {
+        recentItemQty[name] = (recentItemQty[name] || 0) + item.quantity;
+      } else {
+        olderItemQty[name] = (olderItemQty[name] || 0) + item.quantity;
+      }
+    });
     Object.keys(consumptionByItem).forEach(key => {
-      consumptionByItem[key].trend = Math.round((Math.random() * 25 - 10) * 10) / 10;
+      const recent = recentItemQty[key] || 0;
+      const older = olderItemQty[key] || 0;
+      let trend = 0;
+      if (older > 0) {
+        trend = ((recent - older) / older) * 100;
+      } else if (recent > 0) {
+        trend = 100;
+      }
+      consumptionByItem[key].trend = Math.round(Math.max(Math.min(trend, 200), -100) * 10) / 10;
     });
 
     // Get most wasted items
@@ -404,22 +422,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       action: 'Review Seasonal Menu Options'
     });
 
-    // Generate recommendations
+    // Generate data-driven recommendations based on actual kitchen metrics
+    const topConsumedNames = Object.entries(consumptionByItem)
+      .sort((a, b) => b[1].quantity - a[1].quantity)
+      .slice(0, 2)
+      .map(([name]) => name);
+    const topWastedNames = Object.entries(wasteByItem)
+      .sort((a, b) => b[1].quantity - a[1].quantity)
+      .slice(0, 2)
+      .map(([name]) => name);
+    const topWasteReasonEntry = Object.entries(wasteByReason).sort((a, b) => b[1] - a[1])[0];
+    const topWasteReason = topWasteReasonEntry ? topWasteReasonEntry[0] : null;
+    const wasteRatio = totalCost > 0 ? (totalWasteCost / totalCost) * 100 : 0;
     const recommendations = {
       inventoryOptimization: [
-        'Implement a first-in, first-out (FIFO) inventory system to reduce waste from expired items.',
-        'Conduct weekly inventory audits to identify slow-moving items before they expire.',
-        'Adjust order quantities based on historical consumption data to prevent overstocking.'
+        topConsumedNames.length > 0
+          ? `${topConsumedNames.join(' and ')} are your highest-consumption items — ensure stock levels support at least 2 weeks of usage.`
+          : 'Track consumption patterns over the next month to identify high-velocity items for priority stocking.',
+        'Apply FIFO (first-in, first-out) rotation especially for perishables to cut expiry waste.',
+        costTrend > 10
+          ? `Costs rose ${Math.round(costTrend)}% last month — review order quantities and supplier pricing for frequently used items.`
+          : 'Review order frequencies monthly and adjust quantities based on 30-day rolling consumption averages.'
       ],
       wasteReduction: [
-        'Train staff on proper food storage techniques to extend shelf life.',
-        'Implement a "waste log" to track reasons for disposal and identify patterns.',
-        'Repurpose excess ingredients in daily specials before they expire.'
+        topWastedNames.length > 0
+          ? `${topWastedNames.join(' and ')} account for the most waste — schedule them into meals earlier in the week.`
+          : 'Log disposal reasons consistently so patterns can be identified and addressed.',
+        topWasteReason === 'expired'
+          ? 'Expiry is the leading waste cause — order smaller, more frequent batches for perishables.'
+          : topWasteReason === 'overproduction'
+          ? 'Overproduction is driving waste — align batch sizes more closely with daily demand forecasts.'
+          : 'Train kitchen staff on proper storage temperatures and container sealing to extend shelf life.',
+        wasteRatio > 15
+          ? `Waste is ${Math.round(wasteRatio)}% of total cost — consider running a weekly waste audit to identify the biggest opportunities.`
+          : 'Repurpose excess pre-cut ingredients into staff meals or specials before they expire.'
       ],
       costSaving: [
-        'Negotiate with suppliers for volume discounts on frequently used items.',
-        'Compare prices across multiple vendors for key ingredients.',
-        'Standardize recipes to ensure consistent portioning and reduce overuse.'
+        topConsumedNames.length > 0
+          ? `Negotiate volume discounts for ${topConsumedNames[0]} — it is your most-consumed ingredient.`
+          : 'Request quarterly pricing reviews from your primary suppliers for your top 5 ingredients.',
+        'Compare vendor quotes for items where multiple suppliers are available.',
+        costTrend > 5
+          ? 'Costs are trending up — standardise portion sizes in all recipes to prevent over-use of expensive ingredients.'
+          : 'Maintain current cost controls and review menu pricing quarterly against ingredient cost movements.'
       ]
     };
 

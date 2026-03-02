@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
@@ -431,8 +431,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         wastePercentage = 0;
       }
 
-      // Consumption trend (mock for now)
-      const consumptionTrend = Math.random() * 20 - 10;
+      // Consumption trend: real comparison of current vs previous period for this kitchen
+      const prevKitchenTotal = previousConsumptions
+        .filter(c => c.kitchenId === kitchen.id)
+        .reduce((sum, c) => sum + c.quantity, 0);
+      let consumptionTrend = 0;
+      if (prevKitchenTotal > 0) {
+        consumptionTrend = ((totalConsumed - prevKitchenTotal) / prevKitchenTotal) * 100;
+      } else if (totalConsumed > 0) {
+        consumptionTrend = 100;
+      }
+      consumptionTrend = Math.round(Math.max(Math.min(consumptionTrend, 200), -100) * 10) / 10;
 
       // Most consumed items (ingredients, recipes, subrecipes)
       const consumptionByItem = new Map();
@@ -600,57 +609,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }))
       .sort((a, b) => b.percentage - a.percentage);
     
-    // If no waste reasons are available, add some mock data
-    if (response.summary.topWasteReasons.length === 0) {
-      response.summary.topWasteReasons = [
-        { reason: 'expired', percentage: 45, cost: response.summary.totalWasteCost * 0.45 },
-        { reason: 'quality_issues', percentage: 25, cost: response.summary.totalWasteCost * 0.25 },
-        { reason: 'overproduction', percentage: 20, cost: response.summary.totalWasteCost * 0.2 },
-        { reason: 'damaged', percentage: 10, cost: response.summary.totalWasteCost * 0.1 }
-      ];
-    } else {
-      // Make sure we have the correct waste reasons
-      const hasExpired = response.summary.topWasteReasons.some(r => r.reason === 'expired');
-      const hasQualityIssues = response.summary.topWasteReasons.some(r => r.reason === 'quality_issues');
-      const hasOverproduction = response.summary.topWasteReasons.some(r => r.reason === 'overproduction');
-      const hasDamaged = response.summary.topWasteReasons.some(r => r.reason === 'damaged');
-      
-      // Add missing reasons with small percentages if they don't exist
-      if (!hasExpired) {
-        response.summary.topWasteReasons.push({ 
-          reason: 'expired', 
-          percentage: 5, 
-          cost: response.summary.totalWasteCost * 0.05 
-        });
-      }
-      
-      if (!hasQualityIssues) {
-        response.summary.topWasteReasons.push({ 
-          reason: 'quality_issues', 
-          percentage: 3, 
-          cost: response.summary.totalWasteCost * 0.03 
-        });
-      }
-      
-      if (!hasOverproduction) {
-        response.summary.topWasteReasons.push({ 
-          reason: 'overproduction', 
-          percentage: 2, 
-          cost: response.summary.totalWasteCost * 0.02 
-        });
-      }
-      
-      if (!hasDamaged) {
-        response.summary.topWasteReasons.push({ 
-          reason: 'damaged', 
-          percentage: 1, 
-          cost: response.summary.totalWasteCost * 0.01 
-        });
-      }
-      
-      // Re-sort by percentage
-      response.summary.topWasteReasons.sort((a, b) => b.percentage - a.percentage);
-    }
+    // Return only real waste data — no mock injection
+    response.summary.topWasteReasons.sort((a, b) => b.percentage - a.percentage);
     
     return res.status(200).json(response);
   } catch (error) {

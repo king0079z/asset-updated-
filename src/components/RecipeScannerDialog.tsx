@@ -69,7 +69,10 @@ export function RecipeScannerDialog({ kitchenId, open, onOpenChange, onScanCompl
             await navigator.mediaDevices.getUserMedia({ video: true });
             
             if (!scannerRef.current) {
-              scannerRef.current = new Html5Qrcode(scannerContainerId);
+              scannerRef.current = new Html5Qrcode(scannerContainerId, {
+                verbose: false,
+                experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+              } as any);
               
               const devices = await Html5Qrcode.getCameras();
               if (devices && devices.length > 0) {
@@ -82,8 +85,8 @@ export function RecipeScannerDialog({ kitchenId, open, onOpenChange, onScanCompl
                 await scannerRef.current.start(
                   backCamera.id,
                   {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 },
+                    fps: 30,
+                    qrbox: { width: 300, height: 120 },
                     aspectRatio: 1,
                   },
                   handleScan,
@@ -228,11 +231,15 @@ export function RecipeScannerDialog({ kitchenId, open, onOpenChange, onScanCompl
       if (!response.ok) {
         const errorData = await response.json();
         
-        // Handle insufficient ingredients error
+        // Handle insufficient ingredients error — show specific shortfalls
         if (errorData.insufficientIngredients) {
+          const details = errorData.insufficientIngredients
+            .slice(0, 3)
+            .map((i: any) => `${i.name}: need ${i.required} ${i.unit}, have ${i.available}`)
+            .join('; ');
           toast({
-            title: t('insufficient_ingredients'),
-            description: t('not_enough_ingredients_for_recipe'),
+            title: 'Insufficient ingredients',
+            description: details || 'Not enough stock for this recipe.',
             variant: "destructive",
           });
           return;
