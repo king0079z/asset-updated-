@@ -72,55 +72,31 @@ export default async function handler(
       return res.status(400).json({ message: "File size too large. Maximum size is 10MB." });
     }
 
-    // Create a more organized file structure with user ID and timestamp
+    // Build a flat, unique filename: userId_timestamp_originalname
     const timestamp = Date.now();
-    const sanitizedFileName = file.originalFilename?.replace(/[^a-zA-Z0-9.-]/g, '_') || 'unnamed';
-    const fileName = `${user.id}/${timestamp}/${sanitizedFileName}`;
+    const sanitizedFileName = (file.originalFilename || 'image')
+      .replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${user.id}_${timestamp}_${sanitizedFileName}`;
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'assets';
-    
-    console.info("Attempting to upload to bucket:", bucket);
-    
-    // First, ensure the path exists by creating an empty file
-    const { error: pathError } = await supabase.storage
-      .from(bucket)
-      .upload(`${user.id}/${timestamp}/.keep`, new Uint8Array(0), {
-        upsert: true
-      });
 
-    if (pathError) {
-      console.error("Error creating path:", pathError);
-      return res.status(500).json({ 
-        message: "Failed to create upload path",
-        error: pathError.message
-      });
-    }
+    console.info("Uploading to bucket:", bucket, "path:", fileName);
 
-    // Now upload the actual file
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(fileName, fileData, {
-        contentType: file.mimetype || "image/jpeg",
-        upsert: true // Allow overwriting in case of retry
+        contentType: file.mimetype || 'image/jpeg',
+        upsert: true,
       });
 
     if (error) {
-      console.error("Error uploading file:", {
-        error,
-        bucket,
-        fileName,
-        contentType: file.mimetype
-      });
-      return res.status(500).json({ 
-        message: "Failed to upload file",
+      console.error("Supabase upload error:", error);
+      return res.status(500).json({
+        message: "Failed to upload file to storage",
         error: error.message,
-        details: {
-          name: error.name,
-          message: error.message
-        }
       });
     }
 
-    console.info("File uploaded successfully:", data.path);
+    console.info("Upload successful:", data.path);
 
     const { data: { publicUrl } } = supabase.storage
       .from(bucket)
