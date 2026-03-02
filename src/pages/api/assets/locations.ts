@@ -19,32 +19,29 @@ export default async function handler(
     if (authError) {
       return res.status(401).json({ message: "Authentication error", error: authError.message });
     }
-
     if (!user) {
       return res.status(401).json({ message: "Unauthorized - No user found" });
     }
 
     const roleData = await getUserRoleData(user.id);
     const organizationId = roleData?.organizationId ?? null;
-    const isAdminOrManagerUser = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER' || roleData?.isAdmin === true;
+    const isAdminOrManagerUser =
+      roleData?.role === 'ADMIN' ||
+      roleData?.role === 'MANAGER' ||
+      roleData?.isAdmin === true;
 
-    // Build where clause based on role
-    let whereClause: any = {
-      location: { isNot: null }
-    };
-
+    // Scope: admins/managers see all org assets, regular users see their own
+    let whereClause: any = {};
     if (isAdminOrManagerUser && organizationId) {
-      // Admins/Managers see all org assets
       whereClause.organizationId = organizationId;
     } else if (organizationId) {
-      // Regular users see only their own assets within the org
       whereClause.userId = user.id;
       whereClause.organizationId = organizationId;
     } else {
-      // Fallback: user's own assets
       whereClause.userId = user.id;
     }
 
+    // Return ALL assets (with and without GPS location)
     const assets = await prisma.asset.findMany({
       where: whereClause,
       select: {
@@ -72,24 +69,23 @@ export default async function handler(
         imageUrl: true,
         assetId: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Filter out assets with invalid location data
-    const validAssets = assets.filter(asset => {
-      if (
-        !asset.location ||
-        typeof asset.location.latitude !== 'number' ||
-        typeof asset.location.longitude !== 'number' ||
-        isNaN(asset.location.latitude) ||
-        isNaN(asset.location.longitude)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    // Separate assets into those with and without valid GPS
+    const result = assets.map(asset => ({
+      ...asset,
+      hasGps: !!(
+        asset.location &&
+        typeof asset.location.latitude === 'number' &&
+        typeof asset.location.longitude === 'number' &&
+        !isNaN(asset.location.latitude) &&
+        !isNaN(asset.location.longitude)
+      ),
+    }));
 
     res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=15');
-    return res.status(200).json(validAssets);
+    return res.status(200).json(result);
   } catch (error) {
     console.error("Error fetching asset locations:", error);
     return res.status(500).json({
