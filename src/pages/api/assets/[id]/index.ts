@@ -115,6 +115,7 @@ async function assetHandler(req: NextApiRequest, res: NextApiResponse) {
         roomNumber,
         purchaseAmount,
         purchaseDate,
+        imageUrl,
       } = req.body;
 
       // Get the current asset data to compare changes
@@ -151,6 +152,7 @@ async function assetHandler(req: NextApiRequest, res: NextApiResponse) {
             ? Number(purchaseAmount)
             : null,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
+          ...(imageUrl !== undefined ? { imageUrl: imageUrl || null } : {}),
         },
       });
 

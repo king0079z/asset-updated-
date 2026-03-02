@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Truck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Truck, Upload, X, ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useTranslation } from "@/contexts/TranslationContext";
@@ -41,26 +41,67 @@ export function EditAssetDialog({ asset, open, onOpenChange, onAssetUpdated }: E
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<Partial<Asset> | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [removeImage, setRemoveImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Update formData when asset changes
   useEffect(() => {
-    if (asset) {
+    if (asset && open) {
       setFormData(asset);
+      setImagePreview(null);
+      setImageFile(null);
+      setRemoveImage(false);
     }
-  }, [asset]);
+  }, [asset, open]);
 
   if (!asset || !formData) return null;
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setRemoveImage(false);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    setRemoveImage(true);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
+      let imageUrl: string | null | undefined = undefined; // undefined = don't change
+
+      // Upload new image if selected
+      if (imageFile) {
+        setIsUploadingImage(true);
+        const formDataImg = new FormData();
+        formDataImg.append('image', imageFile);
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formDataImg });
+        setIsUploadingImage(false);
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({}));
+          throw new Error(err.message || 'Failed to upload image');
+        }
+        const { url } = await uploadRes.json();
+        imageUrl = url;
+      } else if (removeImage) {
+        imageUrl = null; // explicitly remove
+      }
+
       const response = await fetch(`/api/assets/${asset.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name,
           description: formData.description,
@@ -70,6 +111,7 @@ export function EditAssetDialog({ asset, open, onOpenChange, onAssetUpdated }: E
           roomNumber: formData.roomNumber,
           purchaseAmount: formData.purchaseAmount ? Number(formData.purchaseAmount) : null,
           purchaseDate: formData.purchaseDate || null,
+          ...(imageUrl !== undefined ? { imageUrl } : {}),
         }),
       });
 
@@ -77,21 +119,18 @@ export function EditAssetDialog({ asset, open, onOpenChange, onAssetUpdated }: E
         throw new Error(t('failed_to_update_asset'));
       }
 
-      toast({
-        title: t('success'),
-        description: t('asset_updated_successfully'),
-      });
-
+      toast({ title: t('success'), description: t('asset_updated_successfully') });
       onAssetUpdated();
       onOpenChange(false);
     } catch (error) {
       toast({
         title: t('error'),
-        description: t('failed_to_update_asset'),
+        description: error instanceof Error ? error.message : t('failed_to_update_asset'),
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+      setIsUploadingImage(false);
     }
   };
 
@@ -269,9 +308,93 @@ export function EditAssetDialog({ asset, open, onOpenChange, onAssetUpdated }: E
               id="description"
               value={formData.description || ''}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={4}
+              rows={3}
               className="resize-none"
             />
+          </div>
+
+          {/* ── Image Section ─────────────────────────────────────────── */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center gap-1.5">
+              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+              Asset Image
+            </label>
+
+            {/* Current / Preview image */}
+            {(imagePreview || (formData.imageUrl && !removeImage)) ? (
+              <div className="relative rounded-xl overflow-hidden border border-border bg-muted/20 group" style={{ height: "180px" }}>
+                <img
+                  src={imagePreview || formData.imageUrl}
+                  alt="Asset"
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).src = ''; }}
+                />
+                {/* Overlay actions */}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white text-slate-900 text-sm font-semibold hover:bg-slate-100 transition-colors"
+                  >
+                    <Upload className="h-4 w-4" /> Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" /> Remove
+                  </button>
+                </div>
+                {/* "New" badge if replaced */}
+                {imagePreview && (
+                  <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">
+                    New
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* No image / removed state */
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-2 h-36 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/10 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/10 transition-colors"
+              >
+                <Upload className="h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">Click to upload an image</p>
+                <p className="text-xs text-muted-foreground/60">JPG, PNG, WEBP, HEIC, GIF up to 10MB</p>
+              </div>
+            )}
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageChange}
+            />
+
+            {/* Bottom action strip when image exists */}
+            {(imagePreview || (formData.imageUrl && !removeImage)) && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 font-medium"
+                >
+                  <Upload className="h-3 w-3" /> Change image
+                </button>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="flex items-center gap-1 text-red-500 hover:text-red-600 font-medium"
+                >
+                  <X className="h-3 w-3" /> Remove
+                </button>
+                {imageFile && <span className="ml-auto text-emerald-600 font-medium">✓ New image ready to upload</span>}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end space-x-3 pt-2">
@@ -283,8 +406,13 @@ export function EditAssetDialog({ asset, open, onOpenChange, onAssetUpdated }: E
             >
               {t('cancel')}
             </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? t('updating') : t('update_asset')}
+            <Button type="submit" disabled={isLoading} className="gap-2">
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {isUploadingImage ? 'Uploading image...' : t('updating')}
+                </>
+              ) : t('update_asset')}
             </Button>
           </div>
         </form>
