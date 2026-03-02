@@ -14,6 +14,9 @@ type Asset = {
   purchaseAmount?: number;
   purchaseDate?: string;
   lastMovedAt?: string | Date;
+  assignedToName?: string | null;
+  assignedToEmail?: string | null;
+  assignedAt?: string | null;
   location?: {
     id: string;
     building?: string;
@@ -444,6 +447,18 @@ export const AssetReportDetailed: React.FC<AssetReportDetailedProps> = ({ assets
                       <div>
                         <p className="text-sm text-gray-500 mb-1">Purchase Date</p>
                         <p className="font-medium text-gray-900">{formatDate(asset.purchaseDate)}</p>
+                      </div>
+                      <div className={asset.assignedToName ? "col-span-2 border border-green-200 bg-green-50 rounded-lg p-3" : "col-span-2 border border-dashed border-gray-300 bg-gray-50 rounded-lg p-3"}>
+                        <p className="text-sm text-gray-500 mb-1 font-semibold">Assigned To</p>
+                        {asset.assignedToName ? (
+                          <div>
+                            <p className="font-bold text-green-800 text-base">{asset.assignedToName}</p>
+                            {asset.assignedToEmail && <p className="text-sm text-green-700">{asset.assignedToEmail}</p>}
+                            {asset.assignedAt && <p className="text-xs text-green-600 mt-0.5">Assigned: {new Date(asset.assignedAt).toLocaleDateString()}</p>}
+                          </div>
+                        ) : (
+                          <p className="text-gray-400 italic">Not assigned to anyone</p>
+                        )}
                       </div>
                     </div>
                   </div>

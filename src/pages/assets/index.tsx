@@ -102,7 +102,6 @@ const assetFormSchema = z.object({
   vendorId: z.string().min(1, "Please select a vendor"),
   floorNumber: z.string().min(1, "Floor number is required"),
   roomNumber: z.string().min(1, "Room number is required"),
-  barcode: z.string().min(1, "Barcode is required"),
   imageUrl: z.string().optional(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
@@ -159,7 +158,6 @@ export default function AssetsPage() {
       vendorId: "",
       floorNumber: "",
       roomNumber: "",
-      barcode: "",
       imageUrl: "",
       latitude: null,
       longitude: null,
@@ -682,7 +680,6 @@ export default function AssetsPage() {
                     setShowBarcodeDialog(true);
                   } else if ('barcode' in result && result.barcode) {
                     setIsOpen(true);
-                    form.setValue('barcode', result.barcode);
                   }
                 }}
               />
@@ -796,19 +793,11 @@ export default function AssetsPage() {
                         )}
                       />
                     </div>
-                    <FormField
-                      control={form.control}
-                      name="barcode"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('barcode') || "Barcode"}</FormLabel>
-                          <FormControl>
-                            <Input placeholder={t('asset_barcode_placeholder') || "Enter or scan barcode"} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {/* Barcode & QR code are auto-generated on asset creation */}
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700 flex items-center gap-2">
+                      <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <span>Barcode &amp; QR code are <strong>automatically generated</strong> when the asset is created. You can print them from the asset details.</span>
+                    </div>
                     <FormField
                       control={form.control}
                       name="description"

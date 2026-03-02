@@ -27,8 +27,12 @@ import {
   FileText,
   ExternalLink,
   Briefcase,
+  UserCheck,
+  User,
+  UserX,
 } from "lucide-react";
 import { EditAssetDialog } from "./EditAssetDialog";
+import { AssignAssetDialog } from "./AssignAssetDialog";
 import { useRef, useState, useEffect } from "react";
 import { useReactToPrint } from "react-to-print";
 import Barcode from "react-barcode";
@@ -62,6 +66,10 @@ interface Asset {
   };
   createdAt: string;
   lastMovedAt?: string;
+  assignedToName?: string | null;
+  assignedToEmail?: string | null;
+  assignedToId?: string | null;
+  assignedAt?: string | null;
 }
 
 interface Ticket {
@@ -153,10 +161,12 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
   const printRef = useRef<HTMLDivElement>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateTicketDialogOpen, setIsCreateTicketDialogOpen] = useState(false);
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [history, setHistory] = useState<AssetHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
+  const [currentAsset, setCurrentAsset] = useState(asset);
 
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
@@ -222,6 +232,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
 
   useEffect(() => {
     if (open && asset) {
+      setCurrentAsset(asset);
       fetchTickets();
       fetchHistory();
     }
@@ -242,6 +253,15 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <DialogTitle>{t('asset_details')}</DialogTitle>
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAssignDialogOpen(true)}
+                className="flex items-center gap-2 text-xs sm:text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
+              >
+                <UserCheck className="h-4 w-4" />
+                <span>{currentAsset?.assignedToName ? 'Reassign' : 'Assign To'}</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -279,10 +299,24 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
         </DialogHeader>
 
         <EditAssetDialog
-          asset={asset}
+          asset={currentAsset}
           open={isEditDialogOpen}
           onOpenChange={setIsEditDialogOpen}
           onAssetUpdated={handleAssetUpdated}
+        />
+
+        <AssignAssetDialog
+          asset={currentAsset}
+          open={isAssignDialogOpen}
+          onOpenChange={setIsAssignDialogOpen}
+          onAssigned={() => {
+            // Refetch the asset to get updated assignment
+            fetch(`/api/assets/${asset?.id}`)
+              .then(r => r.ok ? r.json() : null)
+              .then(data => { if (data?.asset) setCurrentAsset(data.asset); })
+              .catch(() => {});
+            fetchHistory();
+          }}
         />
 
         <CreateTicketDialog
@@ -508,6 +542,59 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                           </div>
                         </div>
                       )}
+                      <Separator />
+                      {/* Assignment Info */}
+                      <div className="flex items-start gap-2">
+                        <UserCheck className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="font-medium">Assignment</p>
+                          {currentAsset?.assignedToName ? (
+                            <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                                    {currentAsset.assignedToName[0]?.toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-semibold text-emerald-900">{currentAsset.assignedToName}</p>
+                                    {currentAsset.assignedToEmail && (
+                                      <p className="text-xs text-emerald-700">{currentAsset.assignedToEmail}</p>
+                                    )}
+                                    {currentAsset.assignedAt && (
+                                      <p className="text-xs text-emerald-600 mt-0.5">
+                                        Since {new Date(currentAsset.assignedAt).toLocaleDateString()}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setIsAssignDialogOpen(true)}
+                                  className="h-7 text-xs text-emerald-700 hover:bg-emerald-100"
+                                >
+                                  <Edit className="h-3 w-3 mr-1" /> Change
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-slate-400">
+                                <User className="h-4 w-4" />
+                                <span className="text-sm">Not assigned</span>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsAssignDialogOpen(true)}
+                                className="h-7 text-xs border-indigo-300 text-indigo-600 hover:bg-indigo-50"
+                              >
+                                <UserCheck className="h-3 w-3 mr-1" /> Assign
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                       <div className="flex items-start gap-2">
                         <Calendar className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1">
