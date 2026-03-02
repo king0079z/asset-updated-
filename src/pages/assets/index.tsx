@@ -99,7 +99,7 @@ const assetFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
   type: z.enum(["FURNITURE", "EQUIPMENT", "ELECTRONICS"]),
-  vendorId: z.string().min(1, "Please select a vendor"),
+  vendorId: z.string().optional(),
   floorNumber: z.string().min(1, "Floor number is required"),
   roomNumber: z.string().min(1, "Room number is required"),
   imageUrl: z.string().optional(),
@@ -180,10 +180,11 @@ export default function AssetsPage() {
     }
   };
 
-  const loadAssets = async () => {
+  const loadAssets = async (bypassCache = false) => {
     setIsLoadingAssets(true);
     try {
-      const response = await fetch("/api/assets");
+      const url = bypassCache ? "/api/assets?refresh=1" : "/api/assets";
+      const response = await fetch(url, bypassCache ? { headers: { 'Cache-Control': 'no-cache' } } : undefined);
       if (!response.ok) throw new Error(`Failed to load assets: ${response.status}`);
       const data = await response.json();
       setAssets(data);
@@ -419,7 +420,7 @@ export default function AssetsPage() {
       setIsOpen(false);
       form.reset();
       setPreviewImage(null);
-      loadAssets();
+      loadAssets(true); // bypass cache so new asset appears immediately
 
       toast({
         title: "Success",
@@ -743,14 +744,14 @@ export default function AssetsPage() {
                       name="vendorId"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{t('vendor')}</FormLabel>
+                          <FormLabel>{t('vendor')} <span className="text-muted-foreground text-xs font-normal">(optional)</span></FormLabel>
                           <Select
                             onValueChange={field.onChange}
                             defaultValue={field.value}
                           >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder={t('select_vendor')} />
+                                <SelectValue placeholder={vendors.length > 0 ? t('select_vendor') : "No vendors yet — skip if none"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>

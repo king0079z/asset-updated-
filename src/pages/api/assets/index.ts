@@ -82,10 +82,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ asset });
       }
 
-      // --- List path: check server cache ---
+      // --- List path: check server cache (skip cache when explicitly refreshing) ---
       const cacheKey = user?.id ?? '__anon__';
+      const bypassCache = req.headers['cache-control'] === 'no-cache' || req.query.refresh === '1';
       const cached = assetsCache.get(cacheKey);
-      if (cached && Date.now() - cached.ts < ASSETS_CACHE_TTL) {
+      if (!bypassCache && cached && Date.now() - cached.ts < ASSETS_CACHE_TTL) {
         res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
         return res.status(200).json(cached.data);
       }
@@ -111,8 +112,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           orderBy: { createdAt: 'desc' },
         });
       } else if (user && organizationId) {
+        // Users with org: show their assets (org-scoped or unscoped)
         assets = await prisma.asset.findMany({
-          where: { userId: user.id, organizationId },
+          where: { userId: user.id, OR: [{ organizationId }, { organizationId: null }] },
+          select: assetSelect,
+          orderBy: { createdAt: 'desc' },
+        });
+      } else if (user) {
+        // User without org: show only their own assets
+        assets = await prisma.asset.findMany({
+          where: { userId: user.id },
           select: assetSelect,
           orderBy: { createdAt: 'desc' },
         });

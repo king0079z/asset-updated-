@@ -1,7 +1,8 @@
-﻿import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 import { logDataModification, logUserActivity } from "@/lib/audit";
+import { getUserRoleData } from "@/util/roleCheck";
 
 function generateAssetId(type: string) {
   const prefix = type.substring(0, 2).toUpperCase();
@@ -43,7 +44,9 @@ export default async function handler(
       return res.status(401).json({ message: "Unauthorized", details: authError });
     }
 
-    console.log("Processing asset creation for user:", user.id);
+    // Get user's organization and role
+    const roleData = await getUserRoleData(user.id);
+    const organizationId = roleData?.organizationId ?? null;
 
     const {
       name,
@@ -61,36 +64,25 @@ export default async function handler(
       purchaseDate,
     } = req.body;
 
-    console.log("Received asset data:", {
-      name,
-      type,
-      vendorId,
-      hasImage: !!imageUrl,
-      hasLocation: !!(latitude && longitude),
-      purchaseAmount,
-      purchaseDate
-    });
-
-    // Validate required fields
-    if (!name || !type || !vendorId) {
+    // Validate required fields (vendorId is optional)
+    if (!name || !type) {
       return res.status(400).json({
         message: "Missing required fields",
-        required: ["name", "type", "vendorId"],
-        received: { name, type, vendorId }
+        required: ["name", "type"],
+        received: { name, type }
       });
     }
 
-    // Validate vendor exists
-    const vendor = await prisma.vendor.findUnique({
-      where: { id: vendorId }
-    });
-
-    if (!vendor) {
-      console.error("Vendor not found:", vendorId);
-      return res.status(400).json({
-        message: "Invalid vendor ID",
-        details: { providedVendorId: vendorId }
-      });
+    // Validate vendor only if provided
+    let vendor = null;
+    if (vendorId) {
+      vendor = await prisma.vendor.findUnique({ where: { id: vendorId } });
+      if (!vendor) {
+        return res.status(400).json({
+          message: "Invalid vendor ID",
+          details: { providedVendorId: vendorId }
+        });
+      }
     }
 
     const assetId = generateAssetId(type);
@@ -154,7 +146,8 @@ export default async function handler(
           roomNumber: roomNumber || null,
           status: "ACTIVE",
           userId: user.id,
-          vendorId,
+          vendorId: vendorId || null,
+          organizationId: organizationId || null,
           purchaseAmount: purchaseAmount ? parseFloat(purchaseAmount) : null,
           purchaseDate: parsedPurchaseDate,
           location: latitude && longitude ? {
@@ -215,7 +208,7 @@ export default async function handler(
         name,
         type,
         vendorId,
-        vendorName: vendor.name,
+        vendorName: vendor?.name ?? null,
         floorNumber,
         roomNumber,
         purchaseAmount: purchaseAmount ? parseFloat(purchaseAmount) : null,
@@ -240,7 +233,7 @@ export default async function handler(
         assetId: asset.assetId,
         assetName: name,
         assetType: type,
-        vendorName: vendor.name,
+        vendorName: vendor?.name ?? null,
         location: floorNumber && roomNumber ? `Floor ${floorNumber}, Room ${roomNumber}` : 'Not specified',
         purchaseAmount: purchaseAmount ? parseFloat(purchaseAmount) : null,
         purchaseDate: purchaseDate || null,
