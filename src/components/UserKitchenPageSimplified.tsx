@@ -849,7 +849,7 @@ export function UserKitchenPageSimplified() {
                     <KitchenOperationsTab
                       kitchenId={selectedKitchen.id}
                       kitchenName={selectedKitchen.name}
-                      allKitchens={kitchens}
+                      allKitchens={assignments.map(a => ({ id: a.kitchen.id, name: a.kitchen.name }))}
                     />
                   </CardTabs.Content>
 
