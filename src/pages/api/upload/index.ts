@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@/util/supabase/api";
 import formidable from "formidable";
 import fs from "fs";
@@ -46,24 +46,30 @@ export default async function handler(
 
     const fileData = await fs.promises.readFile(file.filepath);
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    // Validate file type — accept all common image formats
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+      'image/gif', 'image/heic', 'image/heif', 'image/avif',
+      'image/bmp', 'image/tiff', 'image/svg+xml',
+    ];
     const mimeType = file.mimetype?.toLowerCase() || '';
-    
-    console.info("File MIME type validation:", { 
-      providedType: mimeType, 
-      isAllowed: allowedTypes.includes(mimeType),
-      allowedTypes
-    });
-    
-    if (!allowedTypes.includes(mimeType)) {
-      return res.status(400).json({ message: "Invalid file type. Only JPEG and PNG are allowed." });
+
+    // Also allow by file extension as a fallback (some cameras send generic MIME types)
+    const ext = (file.originalFilename?.split('.').pop() || '').toLowerCase();
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif', 'bmp', 'tiff', 'svg'];
+    const isAllowedByMime = allowedTypes.includes(mimeType);
+    const isAllowedByExt = allowedExtensions.includes(ext);
+
+    if (!isAllowedByMime && !isAllowedByExt) {
+      return res.status(400).json({
+        message: `Unsupported file type: ${mimeType || ext || 'unknown'}. Allowed: JPG, PNG, WEBP, GIF, HEIC, AVIF, BMP.`
+      });
     }
 
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      return res.status(400).json({ message: "File size too large. Maximum size is 5MB." });
+      return res.status(400).json({ message: "File size too large. Maximum size is 10MB." });
     }
 
     // Create a more organized file structure with user ID and timestamp
