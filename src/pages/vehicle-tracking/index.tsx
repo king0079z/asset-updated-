@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,9 @@ import { useBackgroundGeolocation } from "@/hooks/useBackgroundGeolocation";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
-import { MapPin, Car, AlertTriangle, RefreshCw, BarChart3, Radio, Wifi, WifiOff, HardDrive } from "lucide-react";
+import { MapPin, Car, AlertTriangle, RefreshCw, BarChart3, Radio, Wifi, WifiOff, HardDrive, Search, Filter, XCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import TrackingDeviceManager from "@/components/TrackingDeviceManager";
 import { Skeleton } from "@/components/ui/skeleton";
 import dynamic from "next/dynamic";
@@ -44,6 +47,7 @@ interface Vehicle {
 export default function VehicleTrackingPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("map");
@@ -82,70 +86,47 @@ export default function VehicleTrackingPage() {
     timestamp: lastUpdated?.getTime() || Date.now()
   } : null;
   
-  // Log the current location state for debugging
-  useEffect(() => {
-    if (userLocation) {
-      console.log('User location updated:', {
-        latitude: userLocation.coords.latitude,
-        longitude: userLocation.coords.longitude,
-        accuracy: userLocation.coords.accuracy,
-        isUsingFallbackLocation
-      });
-    }
-  }, [userLocation, isUsingFallbackLocation]);
+  // list tab search/filter state
+  const [listSearch, setListSearch] = useState('');
+  const [listFilter, setListFilter] = useState<string>('ALL');
 
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Fetch vehicles data
-    const fetchVehicles = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch("/api/vehicles/tracking");
-        if (response.ok) {
-          const data = await response.json();
-          setVehicles(data.vehicles);
-        } else {
-          const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-          console.error("Failed to fetch vehicles:", errorData);
-          setError(errorData.error || "Failed to fetch vehicles");
-        }
-      } catch (error) {
-        console.error("Error fetching vehicles:", error);
-        setError("Network error when fetching vehicle data");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchVehicles();
-    // Set up polling for vehicle locations (every 30 seconds)
-    const intervalId = setInterval(fetchVehicles, 30000);
-    
-    return () => clearInterval(intervalId);
-  }, []);
-
-  const refreshVehicleData = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchVehicles = useCallback(async () => {
     try {
+      setLoading(true);
+      setError(null);
       const response = await fetch("/api/vehicles/tracking");
       if (response.ok) {
         const data = await response.json();
         setVehicles(data.vehicles);
       } else {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        console.error("Failed to fetch vehicles:", errorData);
         setError(errorData.error || "Failed to fetch vehicles");
       }
-    } catch (error) {
-      console.error("Error refreshing vehicle data:", error);
+    } catch {
       setError("Network error when fetching vehicle data");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchVehicles();
+    const intervalId = setInterval(fetchVehicles, 30000);
+    return () => clearInterval(intervalId);
+  }, [fetchVehicles]);
+
+  const refreshVehicleData = fetchVehicles;
+
+  // Filtered list for the List tab
+  const filteredListVehicles = vehicles.filter(v => {
+    const matchesSearch = !listSearch || 
+      v.name.toLowerCase().includes(listSearch.toLowerCase()) ||
+      v.licensePlate.toLowerCase().includes(listSearch.toLowerCase());
+    const matchesFilter = listFilter === 'ALL' || v.status === listFilter;
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <ProtectedRoute>
@@ -297,7 +278,7 @@ export default function VehicleTrackingPage() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => window.location.href = '/vehicle-tracking/movement-analysis'}
+                            onClick={() => router.push('/vehicle-tracking/movement-analysis')}
                           >
                             {t('analyze') || 'Analyze'}
                           </Button>
@@ -422,6 +403,10 @@ export default function VehicleTrackingPage() {
                       <span className="text-sm">{t('rented')}</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                      <span className="text-sm">Retired</span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full bg-gray-400"></div>
                       <span className="text-sm">{t('no_location_data')}</span>
                     </div>
@@ -433,8 +418,43 @@ export default function VehicleTrackingPage() {
             <TabsContent value="list" className="mt-4">
               <Card className="shadow-sm">
                 <CardHeader className="pb-3">
-                  <CardTitle>{t('vehicle_list')}</CardTitle>
-                  <CardDescription>{t('all_tracked_vehicles')}</CardDescription>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <CardTitle>{t('vehicle_list')}</CardTitle>
+                      <CardDescription>
+                        {filteredListVehicles.length} of {vehicles.length} vehicles
+                        {listFilter !== 'ALL' ? ` · ${listFilter}` : ''}
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search name or plate..."
+                          className="pl-8 w-48"
+                          value={listSearch}
+                          onChange={e => setListSearch(e.target.value)}
+                        />
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="gap-1">
+                            <Filter className="h-4 w-4" />
+                            {listFilter === 'ALL' ? 'All' : listFilter}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {['ALL', 'available', 'rented', 'maintenance', 'retired'].map(s => (
+                            <DropdownMenuItem key={s} onClick={() => setListFilter(s)} className={listFilter === s ? 'bg-muted' : ''}>
+                              {s === 'ALL' ? 'All Vehicles' : s.charAt(0).toUpperCase() + s.slice(1)}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
@@ -449,52 +469,54 @@ export default function VehicleTrackingPage() {
                         </div>
                       ))}
                     </div>
-                  ) : vehicles.length === 0 ? (
+                  ) : filteredListVehicles.length === 0 ? (
                     <div className="text-center py-10">
                       <Car className="mx-auto h-12 w-12 text-gray-400" />
                       <h3 className="mt-2 text-sm font-semibold text-gray-900">{t('no_vehicles_found')}</h3>
-                      <p className="mt-1 text-sm text-gray-500">{t('no_vehicles_description')}</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {listSearch || listFilter !== 'ALL' ? 'Try adjusting your search or filter.' : t('no_vehicles_description')}
+                      </p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {vehicles.map((vehicle) => (
-                        <div key={vehicle.id} className="flex items-center p-4 border rounded-lg hover:bg-slate-50 transition-colors">
-                          <div className="flex-shrink-0">
-                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">
-                              <Car className="h-5 w-5 text-slate-600" />
+                    <div className="space-y-3">
+                      {filteredListVehicles.map((vehicle) => {
+                        const statusColorMap: Record<string, string> = {
+                          available: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                          rented: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                          maintenance: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+                          retired: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                        };
+                        const statusClass = statusColorMap[vehicle.status] || 'bg-gray-100 text-gray-800';
+                        return (
+                          <div key={vehicle.id} className="flex items-center p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                            <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                              <Car className="h-5 w-5 text-slate-600 dark:text-slate-300" />
                             </div>
-                          </div>
-                          <div className="ml-4 flex-1">
-                            <div className="flex items-center justify-between">
-                              <h3 className="text-sm font-medium">{vehicle.name}</h3>
-                              <Badge 
-                                variant={
-                                  vehicle.status === "available" ? "success" : 
-                                  vehicle.status === "maintenance" ? "warning" : "default"
-                                }
-                              >
-                                {t(vehicle.status)}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-gray-500">{vehicle.licensePlate}</p>
-                            <div className="mt-1 flex items-center text-xs text-gray-500">
-                              {vehicle.location ? (
-                                <>
-                                  <MapPin className="h-3 w-3 mr-1" />
-                                  <span>
-                                    {t('last_updated')}: {new Date(vehicle.location.lastUpdated).toLocaleString()}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="flex items-center">
-                                  <AlertTriangle className="h-3 w-3 mr-1 text-yellow-500" />
-                                  {t('no_location_data')}
+                            <div className="ml-4 flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <h3 className="text-sm font-medium truncate">{vehicle.name}</h3>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${statusClass}`}>
+                                  {vehicle.status.charAt(0).toUpperCase() + vehicle.status.slice(1)}
                                 </span>
-                              )}
+                              </div>
+                              <p className="text-sm text-muted-foreground font-mono">{vehicle.licensePlate}</p>
+                              <div className="mt-1 flex items-center text-xs text-muted-foreground">
+                                {vehicle.location ? (
+                                  <>
+                                    <MapPin className="h-3 w-3 mr-1 text-green-500" />
+                                    <span>Updated: {new Date(vehicle.location.lastUpdated).toLocaleString()}</span>
+                                  </>
+                                ) : (
+                                  <span className="flex items-center text-yellow-600 dark:text-yellow-400">
+                                    <AlertTriangle className="h-3 w-3 mr-1" />
+                                    No location data
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -507,7 +529,7 @@ export default function VehicleTrackingPage() {
             
             <TabsContent value="devices" className="mt-4">
               <div className="mb-4 flex justify-end">
-                <Button variant="outline" onClick={() => window.location.href = '/vehicle-tracking/device-integration'}>
+                <Button variant="outline" onClick={() => router.push('/vehicle-tracking/device-integration')}>
                   <HardDrive className="h-4 w-4 mr-2" />
                   Device Integration Guide
                 </Button>

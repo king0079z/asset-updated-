@@ -142,14 +142,23 @@ export default function VehiclesPage() {
     fetchVehicles();
   }, []);
 
+  // Composed search + status filter — both apply together
   useEffect(() => {
-    const filtered = vehicles.filter((vehicle) =>
-      vehicle.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.plateNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.model.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredVehicles(filtered);
-  }, [searchTerm, vehicles]);
+    let result = vehicles;
+    if (activeFilter !== 'ALL') {
+      result = result.filter(v => v.status === activeFilter);
+    }
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(v =>
+        v.name.toLowerCase().includes(q) ||
+        v.plateNumber.toLowerCase().includes(q) ||
+        v.model.toLowerCase().includes(q) ||
+        (v.color || '').toLowerCase().includes(q)
+      );
+    }
+    setFilteredVehicles(result);
+  }, [searchTerm, activeFilter, vehicles]);
 
   const fetchVehicles = async () => {
     try {
@@ -167,7 +176,6 @@ export default function VehiclesPage() {
           throw new Error(`Failed to fetch vehicles: ${vehiclesResponse.status} ${vehiclesResponse.statusText}`);
         }
         vehiclesData = await vehiclesResponse.json();
-        console.log('Vehicles data fetched successfully:', vehiclesData);
       } catch (vehiclesError) {
         console.error('Error fetching vehicles:', vehiclesError);
         toast({
@@ -188,7 +196,6 @@ export default function VehiclesPage() {
           throw new Error(`Failed to fetch rental costs: ${costsResponse.status} ${costsResponse.statusText}`);
         }
         costsData = await costsResponse.json();
-        console.log('Rental costs data fetched successfully');
       } catch (costsError) {
         console.error('Error fetching rental costs:', costsError);
         toast({
@@ -235,12 +242,7 @@ export default function VehiclesPage() {
 
   const filterByStatus = (status: string) => {
     setActiveFilter(status);
-    if (status === 'ALL') {
-      setFilteredVehicles(vehicles);
-    } else {
-      const filtered = vehicles.filter((vehicle) => vehicle.status === status);
-      setFilteredVehicles(filtered);
-    }
+    // The useEffect above will re-run and apply both search + status filter
   };
 
   const statsCards = [
@@ -333,8 +335,15 @@ export default function VehiclesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Vehicles List</CardTitle>
-                <CardDescription>Manage and monitor your vehicle fleet</CardDescription>
+                <CardDescription>
+                  Showing {filteredVehicles.length} of {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''}
+                  {activeFilter !== 'ALL' ? ` · ${activeFilter}` : ''}
+                  {searchTerm ? ` · "${searchTerm}"` : ''}
+                </CardDescription>
               </div>
+              <Button variant="ghost" size="sm" onClick={fetchVehicles} disabled={isLoading}>
+                <Loader2 className={`h-4 w-4 ${isLoading ? 'animate-spin' : 'opacity-0'}`} />
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -384,6 +393,13 @@ export default function VehiclesPage() {
                   >
                     <Wrench className="h-4 w-4 mr-2 text-yellow-500" />
                     In Maintenance
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => filterByStatus('RETIRED')}
+                    className={activeFilter === 'RETIRED' ? 'bg-muted' : ''}
+                  >
+                    <XCircle className="h-4 w-4 mr-2 text-red-500" />
+                    Retired
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -517,7 +533,7 @@ export default function VehiclesPage() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleViewDetails(vehicle)}
-                                  className="hidden group-hover:flex items-center"
+                                  className="flex items-center"
                                 >
                                   View Details
                                 </Button>

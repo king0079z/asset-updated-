@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { logDataAccess } from '@/lib/audit';
@@ -26,17 +26,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { action: 'VEHICLE_TRACKING_VIEW', description: 'User viewed vehicle tracking data' }
     );
 
+    // Scope to caller's organization
+    const userRecord = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { organizationId: true }
+    });
+    const orgId = userRecord?.organizationId ?? null;
+
     // Fetch vehicles with their latest location data
     const vehicles = await prisma.vehicle.findMany({
+      where: orgId ? { OR: [{ organizationId: orgId }, { organizationId: null }] } : {},
       select: {
         id: true,
         name: true,
-        plateNumber: true, // Changed from licensePlate to match schema
+        plateNumber: true,
         status: true,
+        make: true,
+        model: true,
+        year: true,
+        type: true,
         vehicleLocations: {
-          orderBy: {
-            timestamp: 'desc',
-          },
+          orderBy: { timestamp: 'desc' },
           take: 1,
           select: {
             latitude: true,
@@ -51,19 +61,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const transformedVehicles = vehicles.map(vehicle => ({
       id: vehicle.id,
       name: vehicle.name,
-      licensePlate: vehicle.plateNumber, // Map plateNumber to licensePlate for frontend
-      status: vehicle.status.toLowerCase(), // Convert to lowercase to match frontend expectations
-      location: vehicle.vehicleLocations && vehicle.vehicleLocations.length > 0 
+      licensePlate: vehicle.plateNumber,
+      plateNumber: vehicle.plateNumber,
+      status: vehicle.status.toLowerCase(),
+      make: vehicle.make,
+      model: vehicle.model,
+      year: vehicle.year,
+      type: vehicle.type,
+      location: vehicle.vehicleLocations?.length > 0
         ? {
             lat: vehicle.vehicleLocations[0].latitude,
             lng: vehicle.vehicleLocations[0].longitude,
             lastUpdated: vehicle.vehicleLocations[0].timestamp.toISOString(),
-          } 
+          }
         : undefined,
     }));
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
 
-
+    res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=10');
     return res.status(200).json({ vehicles: transformedVehicles });
   } catch (error) {
     console.error('Error fetching vehicle tracking data:', error);

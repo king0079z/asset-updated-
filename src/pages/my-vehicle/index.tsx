@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -292,9 +292,8 @@ function VehicleAssignmentHistory({ userId }: { userId?: string }) {
               </TableHeader>
               <TableBody>
                 {vehicleTrips.map((trip) => (
-                  <>
-                    <TableRow 
-                      key={trip.id} 
+                  <React.Fragment key={trip.id}>
+                  <TableRow 
                       className="hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                       onClick={() => setExpandedTripId(expandedTripId === trip.id ? null : trip.id)}
                     >
@@ -430,7 +429,7 @@ function VehicleAssignmentHistory({ userId }: { userId?: string }) {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
@@ -441,7 +440,39 @@ function VehicleAssignmentHistory({ userId }: { userId?: string }) {
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {vehicleTrips.length > 0 ? `Showing ${vehicleTrips.length} trips` : 'No trips found'}
         </p>
-        <Button variant="outline" size="sm" className="gap-1">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="gap-1"
+          onClick={() => {
+            if (vehicleTrips.length === 0) return;
+            const headers = ['Vehicle', 'Plate', 'Start Time', 'End Time', 'Distance (km)', 'Duration', 'Status'];
+            const rows = vehicleTrips.map(trip => [
+              trip.vehicle.name,
+              trip.vehicle.plateNumber,
+              new Date(trip.startTime).toLocaleString(),
+              trip.endTime ? new Date(trip.endTime).toLocaleString() : 'Active',
+              (trip.distance || 0).toFixed(2),
+              trip.endTime 
+                ? (() => {
+                    const ms = new Date(trip.endTime).getTime() - new Date(trip.startTime).getTime();
+                    const h = Math.floor(ms / 3600000);
+                    const m = Math.floor((ms % 3600000) / 60000);
+                    return `${h}h ${m}m`;
+                  })()
+                : 'In Progress',
+              trip.completionStatus || 'UNKNOWN',
+            ]);
+            const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `trip-history-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+        >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           Export History
         </Button>
@@ -1148,7 +1179,9 @@ export default function MyVehiclePage() {
                             <p className="text-sm font-medium text-muted-foreground">{t('rental_end')}</p>
                           </div>
                           <p className="text-lg font-semibold">
-                            {new Date(vehicle.rentals[0].endDate).toLocaleDateString()}
+                            {vehicle.rentals[0].endDate
+                              ? new Date(vehicle.rentals[0].endDate).toLocaleDateString()
+                              : 'Open-ended'}
                           </p>
                         </div>
                         

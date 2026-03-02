@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { logDataAccess } from '@/lib/audit';
@@ -52,39 +52,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Calculate total distance traveled by this vehicle with this user
-    const vehicleLocations = await prisma.vehicleLocation.findMany({
+    // Calculate total distance from completed trips by this user on this vehicle
+    // Using VehicleTrip records is more accurate than raw GPS points (per-user, pre-calculated)
+    const userTrips = await prisma.vehicleTrip.findMany({
       where: {
         vehicleId: vehicle.id,
-        // Note: VehicleLocation doesn't have userId field according to the schema
+        userId: user.id,
       },
-      orderBy: {
-        timestamp: 'asc',
-      },
+      select: { distance: true }
     });
-
-    // Calculate total distance from location points
-    let totalDistance = 0;
-    if (vehicleLocations.length > 1) {
-      for (let i = 1; i < vehicleLocations.length; i++) {
-        const prevLocation = vehicleLocations[i - 1];
-        const currLocation = vehicleLocations[i];
-        
-        // Calculate distance between consecutive points
-        const distance = calculateDistance(
-          prevLocation.latitude,
-          prevLocation.longitude,
-          currLocation.latitude,
-          currLocation.longitude
-        );
-        
-        // Only add reasonable distances (less than 10km between consecutive points)
-        // This helps filter out GPS jumps
-        if (distance < 10) {
-          totalDistance += distance;
-        }
-      }
-    }
+    const totalDistance = userTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
 
     // Log the access
     try {
@@ -109,18 +86,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Error fetching assigned vehicle:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
-}
-
-// Function to calculate distance between two coordinates in kilometers
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Radius of the earth in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  const distance = R * c; // Distance in km
-  return distance;
 }
