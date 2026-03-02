@@ -7,7 +7,7 @@ import { useBackgroundGeolocation } from "@/hooks/useBackgroundGeolocation";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
-import { MapPin, Car, AlertTriangle, Gauge, Clock, RotateCw, Wifi, WifiOff, Route, Home, Navigation, History, CheckCircle, XCircle, AlertCircle, Zap, ZapOff, Database, Smartphone } from "lucide-react";
+import { MapPin, Car, AlertTriangle, Gauge, Clock, RotateCw, Wifi, WifiOff, Route, Home, Navigation, History, CheckCircle, XCircle, AlertCircle, Zap, ZapOff, Database, Smartphone, User } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -944,201 +944,176 @@ export default function MyVehiclePage() {
   return (
     <ProtectedRoute>
       <DashboardLayout>
-        <div className="flex flex-col gap-6">
-          <div className="flex justify-between items-center">
+        <div className="flex flex-col gap-6 pb-8">
+
+          {/* ── Page Header ── */}
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight dark:text-slate-100">{t('my_vehicle')}</h1>
-              <p className="text-muted-foreground dark:text-slate-300">
-                {t('my_vehicle_description')}
-              </p>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Car className="h-5 w-5 text-primary" />
+                </div>
+                <h1 className="text-2xl font-bold tracking-tight">{t('my_vehicle')}</h1>
+              </div>
+              <p className="text-sm text-muted-foreground ml-11">{t('my_vehicle_description')}</p>
             </div>
-            <Button 
-              onClick={() => window.location.reload()} 
-              variant="outline" 
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+              size="sm"
               className="gap-2"
               disabled={loading}
             >
               <RotateCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              {t('refresh')}
+              Refresh
             </Button>
           </div>
 
           {error && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                {error}
-              </AlertDescription>
-            </Alert>
+            <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl text-red-800 dark:text-red-300 text-sm">
+              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+              <p>{error}</p>
+            </div>
           )}
 
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Skeleton className="h-[300px] w-full rounded-lg" />
-              <Skeleton className="h-[300px] w-full rounded-lg" />
-              <Skeleton className="h-[200px] w-full rounded-lg" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-[280px] w-full rounded-xl" />)}
             </div>
           ) : !vehicle ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('no_vehicle_assigned')}</CardTitle>
-                <CardDescription>{t('no_vehicle_assigned_description')}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center justify-center py-10">
-                <Car className="h-16 w-16 text-slate-300 mb-4" />
-                <p className="text-center text-slate-500 max-w-md mb-6">
-                  {t('contact_admin_for_vehicle')}
-                </p>
-                <div className="flex justify-center">
-                  <Link href="/admin/vehicle-assignments">
-                    <Button variant="outline">
-                      Go to Vehicle Assignments
-                    </Button>
-                  </Link>
+            <Card className="shadow-sm">
+              <CardContent className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="p-5 rounded-full bg-muted mb-5">
+                  <Car className="h-10 w-10 text-muted-foreground" />
                 </div>
+                <h2 className="text-lg font-semibold mb-2">{t('no_vehicle_assigned')}</h2>
+                <p className="text-sm text-muted-foreground max-w-sm mb-6">{t('contact_admin_for_vehicle')}</p>
+                <Link href="/admin/vehicle-assignments">
+                  <Button variant="outline" size="sm">Go to Vehicle Assignments</Button>
+                </Link>
               </CardContent>
             </Card>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Vehicle Details Card */}
-                <Card className="shadow-md overflow-hidden border-slate-200 transition-all hover:shadow-lg">
-                  <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-primary/10 border-b">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <Car className="h-5 w-5 text-primary" />
-                          {vehicle.name}
-                        </CardTitle>
-                        <CardDescription className="font-medium text-slate-600">
-                          {vehicle.make} {vehicle.model} ({vehicle.year})
-                        </CardDescription>
-                      </div>
-                      <Badge 
-                        variant={vehicle.status === "RENTED" ? "default" : "outline"}
-                        className="capitalize font-medium animate-fade-in"
-                      >
-                        {vehicle.status.toLowerCase()}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {vehicle.imageUrl && (
-                      <div className="w-full h-48 relative">
-                        <img 
-                          src={vehicle.imageUrl} 
-                          alt={vehicle.name} 
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
-                          <Badge className="bg-white/90 text-black hover:bg-white/100 border-none">
-                            {vehicle.plateNumber}
-                          </Badge>
+              {/* ── Stats Row ── */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="flex flex-col gap-0.5 p-4 rounded-xl border bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total Distance</p>
+                  <p className="text-2xl font-bold">{totalDistance.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">km</span></p>
+                </div>
+                <div className="flex flex-col gap-0.5 p-4 rounded-xl border bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wide">Rental Rate</p>
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                    {vehicle.rentalAmount ? `QAR ${vehicle.rentalAmount.toLocaleString()}` : '—'}
+                    <span className="text-sm font-normal text-blue-600/70 dark:text-blue-400/70"> /mo</span>
+                  </p>
+                </div>
+                <div className="flex flex-col gap-0.5 p-4 rounded-xl border bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wide">Status</p>
+                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 capitalize">{vehicle.status.toLowerCase()}</p>
+                </div>
+                <div className="flex flex-col gap-0.5 p-4 rounded-xl border bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20">
+                  <p className="text-xs text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wide">GPS</p>
+                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-300 mt-1">
+                    {isTracking ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Tracking
+                      </span>
+                    ) : 'Inactive'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* ── Vehicle Details Card ── */}
+                <Card className="shadow-sm overflow-hidden">
+                  <div className="relative">
+                    {vehicle.imageUrl ? (
+                      <div className="h-44 relative overflow-hidden">
+                        <img src={vehicle.imageUrl} alt={vehicle.name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                        <div className="absolute bottom-0 left-0 p-4">
+                          <h3 className="text-white font-bold text-lg leading-none">{vehicle.name}</h3>
+                          <p className="text-white/80 text-sm mt-1">{vehicle.make} {vehicle.model} · {vehicle.year}</p>
                         </div>
+                        <code className="absolute top-3 right-3 bg-white/90 text-black text-xs font-mono px-2.5 py-1 rounded-lg shadow">
+                          {vehicle.plateNumber}
+                        </code>
+                      </div>
+                    ) : (
+                      <div className="h-24 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center px-5 gap-4">
+                        <div className="p-3 rounded-xl bg-white/60 dark:bg-black/20 shadow-sm">
+                          <Car className="h-7 w-7 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-lg leading-none">{vehicle.name}</h3>
+                          <p className="text-muted-foreground text-sm mt-0.5">{vehicle.make} {vehicle.model} · {vehicle.year}</p>
+                        </div>
+                        <code className="ml-auto bg-muted text-xs font-mono px-2.5 py-1 rounded-lg border">
+                          {vehicle.plateNumber}
+                        </code>
                       </div>
                     )}
-                    
-                    <div className="p-4 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Car className="h-4 w-4 text-primary" />
-                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{t('plate_number')}</span>
-                          </div>
-                          <p className="text-sm font-semibold dark:text-slate-200">{vehicle.plateNumber}</p>
+                  </div>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Plate', value: vehicle.plateNumber, mono: true },
+                        vehicle.color ? { label: 'Color', value: vehicle.color } : null,
+                        vehicle.mileage != null ? { label: 'Mileage', value: `${vehicle.mileage.toLocaleString()} km` } : null,
+                        vehicle.registrationExp ? { label: 'Reg. Expires', value: new Date(vehicle.registrationExp).toLocaleDateString() } : null,
+                      ].filter(Boolean).map((item, i) => (
+                        <div key={i} className="p-3 rounded-lg bg-muted/50 border">
+                          <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
+                          <p className={`text-sm font-semibold ${item.mono ? 'font-mono' : ''}`}>{item.value}</p>
                         </div>
-                        
-                        {vehicle.color && (
-                          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 transition-colors hover:bg-slate-100">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: vehicle.color }}></div>
-                              <span className="text-xs font-medium text-slate-500">{t('color')}</span>
-                            </div>
-                            <p className="text-sm font-semibold capitalize">{vehicle.color}</p>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        {vehicle.mileage !== undefined && vehicle.mileage !== null && (
-                          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 transition-colors hover:bg-slate-100">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Gauge className="h-4 w-4 text-primary" />
-                              <span className="text-xs font-medium text-slate-500">{t('mileage')}</span>
-                            </div>
-                            <p className="text-sm font-semibold">{vehicle.mileage.toLocaleString()} km</p>
-                          </div>
-                        )}
-                        
-                        {vehicle.registrationExp && (
-                          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 transition-colors hover:bg-slate-100">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Clock className="h-4 w-4 text-primary" />
-                              <span className="text-xs font-medium text-slate-500">{t('registration_expires')}</span>
-                            </div>
-                            <p className="text-sm font-semibold">{new Date(vehicle.registrationExp).toLocaleDateString()}</p>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {!vehicle.imageUrl && (
-                        <div className="flex items-center justify-center p-6 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                          <div className="flex flex-col items-center text-center">
-                            <Car className="h-12 w-12 text-slate-300 mb-2" />
-                            <p className="text-sm text-slate-500">No vehicle image available</p>
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Current Trip Card with Automatic Trip Management */}
-                <Card className="shadow-md overflow-hidden border-slate-200 transition-all hover:shadow-lg">
-                  <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-                    <div className="flex justify-between items-start">
+                {/* ── Current Trip Card ── */}
+                <Card className="shadow-sm overflow-hidden">
+                  <CardHeader className="pb-3 border-b bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <Route className="h-5 w-5 text-primary" />
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Route className="h-4 w-4 text-primary" />
                           {t('current_trip')}
                         </CardTitle>
-                        <CardDescription className="font-medium text-slate-600">
-                          {t('automatic_trip_management')}
-                        </CardDescription>
+                        <CardDescription className="text-xs mt-0.5">{t('automatic_trip_management')}</CardDescription>
                       </div>
-                      <Badge 
-                        variant="outline"
-                        className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
-                      >
-                        Enhanced
-                      </Badge>
+                      <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
+                        Auto
+                      </span>
                     </div>
                   </CardHeader>
                   <CardContent className="p-4">
-                    <AutomaticTripManager 
+                    <AutomaticTripManager
                       backgroundTracking={true}
-                      autoStartDistance={0.8} // 800 meters
-                      autoEndDistance={0.1} // 100 meters
+                      autoStartDistance={0.8}
+                      autoEndDistance={0.1}
                     />
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Account Details Card - Moved to top with improved UI */}
-              <Card className="shadow-sm border-primary/10">
-                <CardHeader className="pb-3 bg-primary/5">
+              {/* Account Details Card */}
+              <Card className="shadow-sm overflow-hidden">
+                <CardHeader className="pb-3 border-b bg-muted/30">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <User className="h-4 w-4 text-primary" />
                         {t('account_details')}
                       </CardTitle>
-                      <CardDescription>{t('rental_information')}</CardDescription>
+                      <CardDescription className="text-xs mt-0.5">{t('rental_information')}</CardDescription>
                     </div>
-                    {vehicle.rentals && vehicle.rentals.length > 0 && (
-                      <Badge className="capitalize bg-primary/20 text-primary hover:bg-primary/30 border-none">
+                    {vehicle.rentals?.[0] && (
+                      <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700 capitalize">
                         {vehicle.rentals[0].status.toLowerCase()}
-                      </Badge>
+                      </span>
                     )}
                   </div>
                 </CardHeader>
