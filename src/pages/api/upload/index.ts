@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@/util/supabase/api";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import formidable from "formidable";
 import fs from "fs";
 
@@ -18,101 +19,116 @@ export default async function handler(
   }
 
   try {
-    // Get the authenticated user
+    // Authenticate the calling user
     const supabase = createClient(req, res);
     const { data: { session }, error: authError } = await supabase.auth.getSession();
     const user = session?.user ?? null;
 
     if (authError || !user) {
-      console.error("Authentication error:", authError);
-      return res.status(401).json({ message: "Unauthorized", details: authError });
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    console.info("Processing upload for user:", user.id);
-
+    // Parse the multipart form
     const form = formidable({});
-    const [fields, files] = await form.parse(req);
+    const [, files] = await form.parse(req);
 
     if (!files.image?.[0]) {
-      return res.status(400).json({ message: "No image provided" });
+      return res.status(400).json({ message: "No image file provided (field name must be 'image')" });
     }
 
     const file = files.image[0];
-    console.info("File details:", {
-      name: file.originalFilename,
-      type: file.mimetype,
-      size: file.size
-    });
 
-    const fileData = await fs.promises.readFile(file.filepath);
-
-    // Validate file type — accept all common image formats
-    const allowedTypes = [
+    // ── Validate file type ────────────────────────────────────────────────────
+    const allowedMimes = [
       'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
       'image/gif', 'image/heic', 'image/heif', 'image/avif',
       'image/bmp', 'image/tiff', 'image/svg+xml',
     ];
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif', 'bmp', 'tiff', 'svg'];
     const mimeType = file.mimetype?.toLowerCase() || '';
-
-    // Also allow by file extension as a fallback (some cameras send generic MIME types)
     const ext = (file.originalFilename?.split('.').pop() || '').toLowerCase();
-    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif', 'bmp', 'tiff', 'svg'];
-    const isAllowedByMime = allowedTypes.includes(mimeType);
-    const isAllowedByExt = allowedExtensions.includes(ext);
 
-    if (!isAllowedByMime && !isAllowedByExt) {
+    if (!allowedMimes.includes(mimeType) && !allowedExts.includes(ext)) {
       return res.status(400).json({
-        message: `Unsupported file type: ${mimeType || ext || 'unknown'}. Allowed: JPG, PNG, WEBP, GIF, HEIC, AVIF, BMP.`
+        message: `Unsupported file type "${mimeType || ext}". Allowed: JPG, PNG, WEBP, GIF, HEIC, AVIF, BMP.`,
       });
     }
 
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      return res.status(400).json({ message: "File size too large. Maximum size is 10MB." });
+    // ── Validate size (10 MB) ─────────────────────────────────────────────────
+    if (file.size > 10 * 1024 * 1024) {
+      return res.status(400).json({ message: "File too large. Maximum is 10 MB." });
     }
 
-    // Build a flat, unique filename: userId_timestamp_originalname
-    const timestamp = Date.now();
-    const sanitizedFileName = (file.originalFilename || 'image')
-      .replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fileName = `${user.id}_${timestamp}_${sanitizedFileName}`;
+    const fileData = await fs.promises.readFile(file.filepath);
+
+    // ── Storage client ────────────────────────────────────────────────────────
+    // Prefer the service-role key so we bypass RLS and can create the bucket.
+    // If it's not configured we fall back to the user's session (may fail if
+    // the bucket doesn't exist or RLS blocks it).
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    const storage = serviceRoleKey
+      ? createAdminClient(supabaseUrl, serviceRoleKey).storage
+      : supabase.storage;
+
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'assets';
 
-    console.info("Uploading to bucket:", bucket, "path:", fileName);
+    // ── Auto-create the bucket if it doesn't exist (requires service role) ────
+    if (serviceRoleKey) {
+      const { data: buckets } = await storage.listBuckets();
+      const exists = buckets?.some((b) => b.name === bucket);
+      if (!exists) {
+        const { error: bucketErr } = await storage.createBucket(bucket, {
+          public: true,
+          fileSizeLimit: 10 * 1024 * 1024,
+        });
+        if (bucketErr && !bucketErr.message.toLowerCase().includes('already exist')) {
+          console.error("Could not create storage bucket:", bucketErr.message);
+          return res.status(500).json({
+            message: "Storage bucket could not be created",
+            error: bucketErr.message,
+          });
+        }
+      }
+    }
 
-    const { data, error } = await supabase.storage
+    // ── Upload ────────────────────────────────────────────────────────────────
+    const timestamp = Date.now();
+    const safeName = (file.originalFilename || 'image').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${user.id}_${timestamp}_${safeName}`;
+
+    console.info(`Uploading to bucket="${bucket}" path="${fileName}"`);
+
+    const { data, error: uploadError } = await storage
       .from(bucket)
       .upload(fileName, fileData, {
         contentType: file.mimetype || 'image/jpeg',
         upsert: true,
       });
 
-    if (error) {
-      console.error("Supabase upload error:", error);
+    // Clean up temp file regardless of outcome
+    await fs.promises.unlink(file.filepath).catch(() => {});
+
+    if (uploadError) {
+      console.error("Supabase storage upload error:", uploadError.message);
       return res.status(500).json({
-        message: "Failed to upload file to storage",
-        error: error.message,
+        message: "Failed to upload image to storage",
+        error: uploadError.message,
+        hint: !serviceRoleKey
+          ? "Set SUPABASE_SERVICE_ROLE_KEY in your Vercel environment variables so the server can create the storage bucket and bypass RLS."
+          : undefined,
       });
     }
 
-    console.info("Upload successful:", data.path);
-
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(data.path);
-
-    // Clean up the temporary file
-    await fs.promises.unlink(file.filepath).catch(error => {
-      console.error("Error cleaning up temporary file:", error);
-    });
+    const { data: { publicUrl } } = storage.from(bucket).getPublicUrl(data.path);
 
     return res.status(200).json({ url: publicUrl });
-  } catch (error) {
-    console.error("Error handling upload:", error);
-    return res.status(500).json({ 
+  } catch (err) {
+    console.error("Upload handler error:", err);
+    return res.status(500).json({
       message: "Internal server error",
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: err instanceof Error ? err.message : String(err),
     });
   }
 }
