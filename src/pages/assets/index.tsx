@@ -456,115 +456,145 @@ export default function AssetsPage() {
   const handlePrintReport = async (assetToPrint?: Asset) => {
     const targetAsset = assetToPrint || selectedAsset;
     if (!targetAsset) return;
-    
+
     try {
-      // Show loading toast
-      toast({
-        title: "Generating report",
-        description: "Please wait while we prepare your report...",
-      });
-      
-      // Fetch history data
-      const response = await fetch(`/api/assets/${targetAsset.id}/history`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('History API error response:', errorData);
-        throw new Error(`Failed to fetch history: ${response.status} ${response.statusText}`);
-      }
-      
-      const historyData = await response.json();
-      
-      // Fetch tickets data
-      const ticketsResponse = await fetch(`/api/assets/${targetAsset.id}/tickets`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!ticketsResponse.ok) {
-        console.warn('Failed to fetch tickets, continuing without tickets data');
-      }
-      
-      const ticketsData = ticketsResponse.ok ? await ticketsResponse.json() : [];
-      
-      // Prepare asset data with tickets
-      const assetWithTickets = {
-        ...targetAsset,
-        tickets: ticketsData
+      toast({ title: "Generating report", description: "Please wait while we prepare your report..." });
+
+      // Fetch history + tickets in parallel
+      const [historyRes, ticketsRes] = await Promise.allSettled([
+        fetch(`/api/assets/${targetAsset.id}/history`, { headers: { 'Cache-Control': 'no-cache' } }),
+        fetch(`/api/assets/${targetAsset.id}/tickets`,  { headers: { 'Cache-Control': 'no-cache' } }),
+      ]);
+
+      const historyData = historyRes.status === 'fulfilled' && historyRes.value.ok
+        ? await historyRes.value.json() : {};
+      const ticketsData = ticketsRes.status === 'fulfilled' && ticketsRes.value.ok
+        ? await ticketsRes.value.json() : [];
+
+      const asset = { ...targetAsset, history: historyData?.history ?? [], tickets: ticketsData };
+
+      // ── Build the printable HTML ───────────────────────────────────────────
+      const fmt = (d: string | null | undefined) => {
+        if (!d) return '—';
+        try { return new Date(d).toLocaleDateString(); } catch { return '—'; }
       };
-      
-      // Open new window for printing
-      const printWindow = window.open('', '_blank', 'width=1000,height=800');
-      if (!printWindow) {
-        throw new Error('Unable to open print window. Please check your popup blocker settings.');
-      }
+      const statusClass: Record<string, string> = {
+        ACTIVE: 'background:#d1fae5;color:#065f46',
+        DISPOSED: 'background:#fee2e2;color:#991b1b',
+        MAINTENANCE: 'background:#fef3c7;color:#92400e',
+        IN_TRANSIT: 'background:#ede9fe;color:#5b21b6',
+        DAMAGED: 'background:#ffedd5;color:#9a3412',
+        CRITICAL: 'background:#fee2e2;color:#7f1d1d',
+        LIKE_NEW: 'background:#ecfdf5;color:#064e3b',
+      };
+      const sc = statusClass[asset.status] ?? 'background:#f3f4f6;color:#374151';
 
-      // Write the document HTML with proper styling
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Asset Report - ${selectedAsset.name}</title>
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
-            <style>
-              @media print {
-                body { padding: 20px; }
-                @page { size: A4; margin: 20mm; }
-                .print-content, .print-content * {
-                  visibility: visible !important;
-                }
-                * {
-                  -webkit-print-color-adjust: exact !important;
-                  print-color-adjust: exact !important;
-                }
-              }
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-              }
-            </style>
-          </head>
-          <body>
-            <div id="report-content"></div>
-          </body>
-        </html>
-      `);
+      const historyRows = (asset.history as any[]).slice(0, 15).map(h => `
+        <tr>
+          <td style="padding:6px 8px;font-size:12px;font-weight:600;color:#374151;">${(h.action || '').replace(/_/g,' ')}</td>
+          <td style="padding:6px 8px;font-size:11px;color:#6b7280;">${h.createdAt ? new Date(h.createdAt).toLocaleString() : '—'}</td>
+        </tr>`).join('');
 
-      // Import the AssetReportDetailed component and render it
-      const { AssetReportDetailed } = await import('@/components/AssetReportDetailed');
-      const { createRoot } = await import('react-dom/client');
-      
-      const root = printWindow.document.getElementById('report-content');
-      if (root) {
-        const reactRoot = createRoot(root);
-        
-        // Use the detailed report component with the asset and history data
-        reactRoot.render(
-          <AssetReportDetailed 
-            assets={[assetWithTickets]} 
-            isFullReport={false} 
-          />
-        );
-        
-        // Wait for rendering to complete before printing
-        setTimeout(() => {
-          printWindow.focus();
-          printWindow.print();
-          
-          // Success toast
-          toast({
-            title: "Report generated",
-            description: "Your asset report has been generated successfully.",
-          });
-        }, 1000);
+      const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Asset Report – ${asset.name}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111827;background:#fff;padding:24px}
+  @page{size:A4;margin:15mm}
+  @media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  h2{font-size:18px;font-weight:700}
+  .hdr{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:20px 24px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+  .badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .card{border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px;overflow:hidden}
+  .card-hdr{background:#f9fafb;padding:10px 16px;border-bottom:1px solid #e5e7eb;font-weight:600;font-size:13px;color:#374151}
+  .card-body{padding:14px 16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .lbl{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+  .val{font-size:13px;font-weight:500;color:#111827}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid #e5e7eb}
+  tr:nth-child(even){background:#f9fafb}
+  .footer{margin-top:20px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:center}
+</style></head>
+<body>
+  <div class="hdr">
+    <div>
+      <div style="font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Asset Report</div>
+      <h2>${asset.name}</h2>
+      <div style="font-size:12px;opacity:.8;margin-top:4px">ID: ${asset.assetId} &nbsp;·&nbsp; Generated: ${new Date().toLocaleString()}</div>
+    </div>
+    <span class="badge" style="${sc}">${asset.status}</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:${isValidImageUrl(asset.imageUrl) ? '180px 1fr' : '1fr'};gap:14px;margin-bottom:14px">
+    ${isValidImageUrl(asset.imageUrl) ? `<img src="${asset.imageUrl}" style="width:180px;height:180px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb" alt="">` : ''}
+    <div class="card" style="margin-bottom:0">
+      <div class="card-hdr">Asset Information</div>
+      <div class="card-body">
+        <div class="grid">
+          <div><div class="lbl">Type</div><div class="val">${asset.type || '—'}</div></div>
+          <div><div class="lbl">Asset ID</div><div class="val" style="font-family:monospace">${asset.assetId}</div></div>
+          <div><div class="lbl">Purchase Amount</div><div class="val">${asset.purchaseAmount ? `QAR ${Number(asset.purchaseAmount).toLocaleString()}` : '—'}</div></div>
+          <div><div class="lbl">Purchase Date</div><div class="val">${fmt(asset.purchaseDate)}</div></div>
+          <div><div class="lbl">Floor</div><div class="val">${asset.floorNumber || '—'}</div></div>
+          <div><div class="lbl">Room</div><div class="val">${asset.roomNumber || '—'}</div></div>
+          ${asset.vendor ? `<div style="grid-column:span 2"><div class="lbl">Vendor</div><div class="val">${(asset.vendor as any).name}</div></div>` : ''}
+        </div>
+        ${asset.description ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f3f4f6"><div class="lbl">Description</div><div style="font-size:12px;color:#374151;margin-top:2px">${asset.description}</div></div>` : ''}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">Assignment</div>
+    <div class="card-body">
+      ${asset.assignedToName
+        ? `<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:10px">
+             <div style="font-weight:600;color:#065f46">${asset.assignedToName}</div>
+             ${asset.assignedToEmail ? `<div style="font-size:12px;color:#047857;margin-top:2px">${asset.assignedToEmail}</div>` : ''}
+             ${asset.assignedAt ? `<div style="font-size:11px;color:#6b7280;margin-top:4px">Since ${fmt(asset.assignedAt)}</div>` : ''}
+           </div>`
+        : `<div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:6px;padding:10px;color:#9ca3af;font-size:13px">Not assigned to anyone</div>`
       }
-      
-      printWindow.document.close();
+    </div>
+  </div>
+
+  ${(asset.history as any[]).length > 0 ? `
+  <div class="card">
+    <div class="card-hdr">Activity History (${(asset.history as any[]).length} events)</div>
+    <div class="card-body" style="padding:0">
+      <table>
+        <thead><tr><th>Action</th><th>Date</th></tr></thead>
+        <tbody>${historyRows}</tbody>
+      </table>
+      ${(asset.history as any[]).length > 15 ? `<div style="padding:8px 16px;font-size:11px;color:#9ca3af">+ ${(asset.history as any[]).length - 15} more events</div>` : ''}
+    </div>
+  </div>` : ''}
+
+  <div class="footer">Asset Management System &nbsp;·&nbsp; ${new Date().toLocaleString()} &nbsp;·&nbsp; ${asset.assetId}</div>
+</body></html>`;
+
+      // ── Print via hidden iframe (no popup, not blocked by popup blockers) ──
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
+      if (!iframeDoc) throw new Error('Could not initialize print frame');
+
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+
+      // Small delay so the iframe renders, then print
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 2000);
+        toast({ title: "Report generated", description: "Your asset report has been sent to the printer." });
+      }, 500);
+
     } catch (error) {
       console.error('Error generating report:', error);
       toast({
@@ -577,38 +607,26 @@ export default function AssetsPage() {
 
   const handlePrintBarcode = () => {
     if (!selectedAsset) return;
-    
-    const printWindow = window.open('', '', 'width=400,height=400');
-    if (!printWindow) return;
+    const barcodeVal = selectedAsset.barcode || selectedAsset.assetId;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Barcode – ${selectedAsset.name}</title>
+      <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;text-align:center;padding:30px}h2{font-size:16px;margin-bottom:4px}p{font-size:12px;color:#555;margin-bottom:20px}img{max-width:300px}@page{size:A6;margin:10mm}</style>
+      </head><body>
+      <h2>${selectedAsset.name}</h2>
+      <p>Asset ID: ${selectedAsset.assetId}</p>
+      <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(barcodeVal)}&scale=3&includetext&textxalign=center" alt="barcode" />
+      </body></html>`;
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Print Barcode</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-            .barcode-container { margin: 20px 0; }
-            .asset-info { margin-bottom: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="asset-info">
-            <h2>${selectedAsset.name}</h2>
-            <p>Asset ID: ${selectedAsset.assetId}</p>
-          </div>
-          <div class="barcode-container">
-            <img src="https://bwipjs-api.metafloor.com/?bcid=code128&text=${selectedAsset.barcode}&scale=3&includetext&textxalign=center" />
-          </div>
-          <script>
-            window.onload = () => {
-              window.print();
-              window.close();
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+    if (!doc) return;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 2000);
+    }, 600);
   };
 
   const getAssetsByType = () => {
