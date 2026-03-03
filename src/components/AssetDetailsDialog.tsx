@@ -159,7 +159,7 @@ const getPriorityColor = (priority: string) => {
 function isValidImageUrl(url: string | null | undefined): url is string {
   if (!url || typeof url !== 'string') return false;
   const trimmed = url.trim();
-  if (!trimmed || /[\r\n\t]/.test(trimmed)) return false;
+  if (!trimmed || /[\r\n\t]/.test(trimmed) || /%0[DA]/i.test(trimmed)) return false;
   try {
     const p = new URL(trimmed);
     return p.protocol === 'http:' || p.protocol === 'https:';

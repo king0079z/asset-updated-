@@ -143,7 +143,7 @@ const TableSkeleton = () => (
 function isValidImageUrl(url: string | null | undefined): url is string {
   if (!url || typeof url !== 'string') return false;
   const trimmed = url.trim();
-  if (!trimmed || /[\r\n\t]/.test(trimmed)) return false;
+  if (!trimmed || /[\r\n\t]/.test(trimmed) || /%0[DA]/i.test(trimmed)) return false;
   try {
     const parsed = new URL(trimmed);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
