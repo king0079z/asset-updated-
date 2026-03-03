@@ -1312,7 +1312,8 @@ export default function AssetsPage() {
       <AssetDetailsDialog 
         asset={selectedAsset} 
         open={showBarcodeDialog} 
-        onOpenChange={setShowBarcodeDialog} 
+        onOpenChange={setShowBarcodeDialog}
+        onAssetUpdated={() => loadAssets(true)}
       />
 
       <EditAssetDialog
@@ -1320,7 +1321,7 @@ export default function AssetsPage() {
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
         onAssetUpdated={() => {
-          loadAssets();
+          loadAssets(true); // bypass cache so updated imageUrl appears immediately
           if (selectedAsset) {
             fetchHistory(selectedAsset.id);
           }

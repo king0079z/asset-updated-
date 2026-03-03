@@ -99,6 +99,7 @@ interface AssetDetailsDialogProps {
   asset: Asset | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAssetUpdated?: () => void;
 }
 
 const getStatusIcon = (status: string) => {
@@ -155,7 +156,7 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
-export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDialogProps) {
+export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }: AssetDetailsDialogProps) {
   const { t } = useTranslation();
   const { isButtonVisible } = useButtonVisibility();
   const printRef = useRef<HTMLDivElement>(null);
@@ -172,10 +173,25 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
     content: () => printRef.current,
   });
 
-  const handleAssetUpdated = () => {
+  const handleAssetUpdated = async () => {
     setIsEditDialogOpen(false);
-    // Refresh the asset details by closing and reopening the details dialog
-    onOpenChange(false);
+    // Fetch the latest asset data and update the dialog in-place so the new image shows immediately
+    if (asset?.id) {
+      try {
+        const res = await fetch(`/api/assets?assetId=${asset.assetId}&refresh=1`, {
+          headers: { 'Cache-Control': 'no-cache' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const updated = data?.asset ?? data;
+          if (updated?.id) setCurrentAsset(updated as Asset);
+        }
+      } catch {
+        // non-critical — dialog still open with old data
+      }
+    }
+    // Tell the parent page to also refresh its list (bypasses cache)
+    onAssetUpdated?.();
   };
 
   const fetchTickets = async () => {
@@ -246,6 +262,9 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
 
   if (!asset) return null;
 
+  // Always use the most up-to-date asset data for display (currentAsset is refreshed after edits)
+  const displayAsset = currentAsset || asset;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
@@ -282,11 +301,11 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                 <span className="hidden xs:inline">{t('edit_asset')}</span>
                 <span className="xs:hidden">{t('edit')}</span>
               </Button>
-              {asset.status !== 'DISPOSED' && isButtonVisible('dispose_asset') && (
+              {displayAsset.status !== 'DISPOSED' && isButtonVisible('dispose_asset') && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.dispatchEvent(new CustomEvent('dispose-asset', { detail: asset }))}
+                  onClick={() => window.dispatchEvent(new CustomEvent('dispose-asset', { detail: displayAsset }))}
                   className="flex items-center gap-2 text-xs sm:text-sm text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -335,14 +354,14 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                 <div className="flex flex-col items-center space-y-4" ref={printRef}>
                   <h3 className="text-sm font-medium text-muted-foreground">{t('barcode')}</h3>
                   <Barcode 
-                    value={asset.barcode || asset.assetId} 
+                    value={displayAsset.barcode || displayAsset.assetId} 
                     width={1.5}
                     height={50}
                     format="CODE128"
                     displayValue={true}
                   />
                   <div className="text-sm text-muted-foreground">
-                    {t('asset_id')}: {asset.assetId}
+                    {t('asset_id')}: {displayAsset.assetId}
                   </div>
                 </div>
                 
@@ -351,23 +370,23 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                   <h3 className="text-sm font-medium text-muted-foreground">{t('qr_code')}</h3>
                   <div className="w-[150px] h-[150px]">
                     <QRCode 
-                      value={asset.barcode || asset.assetId}
+                      value={displayAsset.barcode || displayAsset.assetId}
                       size={150}
                       level="H"
                     />
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {t('asset_id')}: {asset.assetId}
+                    {t('asset_id')}: {displayAsset.assetId}
                   </div>
                 </div>
               </div>
               
               <div className="mt-6 flex justify-center">
                 <PrintBarcodeButton
-                  barcodeValue={asset.barcode || asset.assetId}
-                  displayText={asset.assetId}
-                  title={asset.name}
-                  subtitle={`${t('asset_id')}: ${asset.assetId}`}
+                  barcodeValue={displayAsset.barcode || displayAsset.assetId}
+                  displayText={displayAsset.assetId}
+                  title={displayAsset.name}
+                  subtitle={`${t('asset_id')}: ${displayAsset.assetId}`}
                   variant="outline"
                 />
               </div>
@@ -404,11 +423,11 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
           <TabsContent value="details">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                {asset.imageUrl ? (
+                {displayAsset.imageUrl ? (
                   <div className="relative aspect-video rounded-lg overflow-hidden">
                     <img
-                      src={asset.imageUrl}
-                      alt={asset.name}
+                      src={displayAsset.imageUrl}
+                      alt={displayAsset.name}
                       className="object-cover w-full h-full"
                     />
                   </div>
@@ -420,16 +439,16 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                 <Card>
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-2xl font-semibold">{asset.name}</h3>
-                      <Badge className={getStatusColor(asset.status)}>
+                      <h3 className="text-2xl font-semibold">{displayAsset.name}</h3>
+                      <Badge className={getStatusColor(displayAsset.status)}>
                         <span className="flex items-center gap-1">
-                          {getStatusIcon(asset.status)}
-                          {asset.status}
+                          {getStatusIcon(displayAsset.status)}
+                          {displayAsset.status}
                         </span>
                       </Badge>
                     </div>
                     <p className="text-muted-foreground">
-                      {asset.description}
+                      {displayAsset.description}
                     </p>
                   </CardContent>
                 </Card>
@@ -443,7 +462,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                         <Box className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1">
                           <p className="font-medium">{t('asset_type')}</p>
-                          <p className="text-sm text-muted-foreground">{asset.type}</p>
+                          <p className="text-sm text-muted-foreground">{displayAsset.type}</p>
                         </div>
                       </div>
                       <Separator />
@@ -451,37 +470,27 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                         <Hash className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1">
                           <p className="font-medium">{t('asset_id')}</p>
-                          <p className="text-sm text-muted-foreground">{asset.assetId}</p>
+                          <p className="text-sm text-muted-foreground">{displayAsset.assetId}</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
                         <DollarSign className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1">
                           <p className="font-medium">{t('purchase_details')}</p>
-                          {asset.purchaseAmount && (
-                            <p className="text-sm text-muted-foreground">{t('amount')}: QAR {asset.purchaseAmount.toLocaleString()}</p>
+                          {displayAsset.purchaseAmount && (
+                            <p className="text-sm text-muted-foreground">{t('amount')}: QAR {displayAsset.purchaseAmount.toLocaleString()}</p>
                           )}
                           <p className="text-sm text-muted-foreground">
                             {t('date')}: {
                               (() => {
                                 try {
-                                  // Check if purchase date exists and is not null or empty
-                                  if (!asset.purchaseDate || asset.purchaseDate === "null" || asset.purchaseDate === "") {
+                                  if (!displayAsset.purchaseDate || displayAsset.purchaseDate === "null" || displayAsset.purchaseDate === "") {
                                     return t('not_specified');
                                   }
-                                  
-                                  // Handle different date formats
-                                  const date = new Date(asset.purchaseDate);
-                                  
-                                  // Check if the date is valid
-                                  if (isNaN(date.getTime())) {
-                                    return t('not_specified');
-                                  }
-                                  
-                                  // Format the date
+                                  const date = new Date(displayAsset.purchaseDate);
+                                  if (isNaN(date.getTime())) return t('not_specified');
                                   return date.toLocaleDateString();
-                                } catch (error) {
-                                  console.error('Error formatting purchase date:', error, asset.purchaseDate);
+                                } catch {
                                   return t('not_specified');
                                 }
                               })()
@@ -489,30 +498,30 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                           </p>
                         </div>
                       </div>
-                      {(asset.floorNumber || asset.roomNumber) && (
+                      {(displayAsset.floorNumber || displayAsset.roomNumber) && (
                         <div className="flex items-start gap-2">
                           <Building2 className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                           <div className="flex-1">
                             <p className="font-medium">{t('building_details')}</p>
-                            {asset.floorNumber && (
-                              <p className="text-sm text-muted-foreground">{t('floor')}: {asset.floorNumber}</p>
+                            {displayAsset.floorNumber && (
+                              <p className="text-sm text-muted-foreground">{t('floor')}: {displayAsset.floorNumber}</p>
                             )}
-                            {asset.roomNumber && (
-                              <p className="text-sm text-muted-foreground">{t('room')}: {asset.roomNumber}</p>
+                            {displayAsset.roomNumber && (
+                              <p className="text-sm text-muted-foreground">{t('room')}: {displayAsset.roomNumber}</p>
                             )}
                           </div>
                         </div>
                       )}
-                      {asset.location && (
+                      {displayAsset.location && (
                         <div className="flex items-start gap-2">
                           <MapPin className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                           <div className="flex-1">
                             <p className="font-medium">{t('location')}</p>
-                            {asset.location.address ? (
-                              <p className="text-sm text-muted-foreground break-words">{asset.location.address}</p>
+                            {displayAsset.location.address ? (
+                              <p className="text-sm text-muted-foreground break-words">{displayAsset.location.address}</p>
                             ) : (
                               <p className="text-sm text-muted-foreground">
-                                {asset.location.latitude.toFixed(6)}, {asset.location.longitude.toFixed(6)}
+                                {displayAsset.location.latitude.toFixed(6)}, {displayAsset.location.longitude.toFixed(6)}
                               </p>
                             )}
                             <div className="mt-2">
@@ -521,8 +530,8 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                                 size="sm"
                                 className="h-8 text-xs"
                                 onClick={() => {
-                                  if (asset.location) {
-                                    window.open(`https://www.google.com/maps/search/?api=1&query=${asset.location.latitude},${asset.location.longitude}`, '_blank');
+                                  if (displayAsset.location) {
+                                    window.open(`https://www.google.com/maps/search/?api=1&query=${displayAsset.location.latitude},${displayAsset.location.longitude}`, '_blank');
                                   }
                                 }}
                               >
@@ -533,12 +542,12 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                           </div>
                         </div>
                       )}
-                      {asset.vendor && (
+                      {displayAsset.vendor && (
                         <div className="flex items-start gap-2">
                           <Briefcase className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                           <div className="flex-1">
                             <p className="font-medium">{t('vendor')}</p>
-                            <p className="text-sm text-muted-foreground">{asset.vendor.name}</p>
+                            <p className="text-sm text-muted-foreground">{displayAsset.vendor.name}</p>
                           </div>
                         </div>
                       )}
@@ -599,9 +608,9 @@ export function AssetDetailsDialog({ asset, open, onOpenChange }: AssetDetailsDi
                         <Calendar className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1">
                           <p className="font-medium">{t('dates')}</p>
-                          <p className="text-sm text-muted-foreground">{t('created')}: {new Date(asset.createdAt).toLocaleDateString()}</p>
-                          {asset.lastMovedAt && (
-                            <p className="text-sm text-muted-foreground">{t('last_moved')}: {new Date(asset.lastMovedAt).toLocaleDateString()}</p>
+                          <p className="text-sm text-muted-foreground">{t('created')}: {new Date(displayAsset.createdAt).toLocaleDateString()}</p>
+                          {displayAsset.lastMovedAt && (
+                            <p className="text-sm text-muted-foreground">{t('last_moved')}: {new Date(displayAsset.lastMovedAt).toLocaleDateString()}</p>
                           )}
                         </div>
                       </div>

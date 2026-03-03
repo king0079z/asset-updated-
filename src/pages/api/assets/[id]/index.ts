@@ -128,13 +128,10 @@ async function assetHandler(req: NextApiRequest, res: NextApiResponse) {
       }
 
       const allowedStatuses = ['ACTIVE', 'IN_TRANSIT', 'DISPOSED', 'MAINTENANCE', 'DAMAGED', 'CRITICAL', 'LIKE_NEW'];
-      const allowedTypes = ['FURNITURE', 'EQUIPMENT', 'ELECTRONICS'];
       if (status && !allowedStatuses.includes(status)) {
         return res.status(400).json({ error: 'Invalid asset status' });
       }
-      if (type && !allowedTypes.includes(type)) {
-        return res.status(400).json({ error: 'Invalid asset type' });
-      }
+      // type is a free-text field — no enum restriction on update
 
       // Update the asset
       const updatedAsset = await prisma.asset.update({
