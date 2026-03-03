@@ -6,8 +6,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Only allow in non-production or with a secret header
   if (req.method !== "GET") return res.status(405).end();
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim() || undefined;
   const bucket = (process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'assets').trim();
 
   const result: Record<string, any> = {
@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const admin = createAdminClient(supabaseUrl, serviceRoleKey);
+    const admin = createAdminClient(supabaseUrl, serviceRoleKey as string);
 
     // List buckets
     const { data: buckets, error: listErr } = await admin.storage.listBuckets();

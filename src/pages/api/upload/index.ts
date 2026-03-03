@@ -62,11 +62,10 @@ export default async function handler(
     const fileData = await fs.promises.readFile(file.filepath);
 
     // ── Storage client ────────────────────────────────────────────────────────
-    // Prefer the service-role key so we bypass RLS and can create the bucket.
-    // If it's not configured we fall back to the user's session (may fail if
-    // the bucket doesn't exist or RLS blocks it).
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // Trim ALL env vars — Vercel can introduce trailing \r\n when pasting values,
+    // which corrupts URLs (stored as %0D%0A in the path).
+    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+    const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim() || undefined;
 
     const storage = serviceRoleKey
       ? createAdminClient(supabaseUrl, serviceRoleKey).storage
