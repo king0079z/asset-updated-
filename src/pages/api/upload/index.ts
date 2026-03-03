@@ -74,11 +74,12 @@ export default async function handler(
 
     const bucket = (process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'assets').trim();
 
-    // ── Auto-create the bucket if it doesn't exist (requires service role) ────
+    // ── Ensure bucket exists AND is public (requires service role) ────────────
     if (serviceRoleKey) {
       const { data: buckets } = await storage.listBuckets();
-      const exists = buckets?.some((b) => b.name === bucket);
-      if (!exists) {
+      const existing = buckets?.find((b) => b.name === bucket);
+      if (!existing) {
+        // Create as public
         const { error: bucketErr } = await storage.createBucket(bucket, {
           public: true,
           fileSizeLimit: 10 * 1024 * 1024,
@@ -90,6 +91,13 @@ export default async function handler(
             error: bucketErr.message,
           });
         }
+      } else if (!existing.public) {
+        // Bucket exists but is private — update it to public
+        await storage.updateBucket(bucket, {
+          public: true,
+          fileSizeLimit: 10 * 1024 * 1024,
+        });
+        console.info(`Bucket "${bucket}" updated to public`);
       }
     }
 

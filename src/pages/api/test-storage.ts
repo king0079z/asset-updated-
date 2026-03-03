@@ -27,17 +27,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // List buckets
     const { data: buckets, error: listErr } = await admin.storage.listBuckets();
     result.listBucketsError = listErr?.message ?? null;
-    result.buckets = buckets?.map(b => b.name) ?? [];
-    result.targetBucketExists = buckets?.some(b => b.name === bucket) ?? false;
+    result.buckets = buckets?.map(b => ({ name: b.name, public: b.public })) ?? [];
+    const existing = buckets?.find(b => b.name === bucket);
+    result.targetBucketExists = !!existing;
+    result.targetBucketIsPublic = existing?.public ?? false;
 
-    // If bucket doesn't exist, try to create it
-    if (!result.targetBucketExists) {
+    if (!existing) {
+      // Create as public
       const { error: createErr } = await admin.storage.createBucket(bucket, {
         public: true,
         fileSizeLimit: 10 * 1024 * 1024,
       });
       result.bucketCreateError = createErr?.message ?? null;
       result.bucketCreated = !createErr;
+    } else if (!existing.public) {
+      // Update to public
+      const { error: updateErr } = await admin.storage.updateBucket(bucket, {
+        public: true,
+        fileSizeLimit: 10 * 1024 * 1024,
+      });
+      result.bucketUpdatedToPublic = !updateErr;
+      result.bucketUpdateError = updateErr?.message ?? null;
     }
 
     // Try uploading a tiny test file
