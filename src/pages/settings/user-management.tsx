@@ -103,27 +103,62 @@ export default function UserManagementPage() {
   const [subscriptionPlan, setSubscriptionPlan] = useState("BASIC");
   const { toast } = useToast();
 
+  const safeJson = async (res: Response | null): Promise<any[]> => {
+    if (!res || !res.ok) return [];
+    try {
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
+    } catch {
+      return [];
+    }
+  };
+
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const customRolesRes = await fetch("/api/admin/custom-roles");
-      const customRolesData = await customRolesRes.json();
+      // Load custom roles first (separate try so it never blocks user loading)
+      let customRolesData: CustomRole[] = [];
+      try {
+        const customRolesRes = await fetch("/api/admin/custom-roles");
+        if (customRolesRes.ok) {
+          const d = await customRolesRes.json();
+          if (Array.isArray(d)) customRolesData = d;
+        }
+      } catch { /* non-fatal */ }
       setCustomRoles(customRolesData);
-      const roleMap = customRolesData.reduce((m: Record<string, string>, r: CustomRole) => { m[r.id] = r.name; return m; }, {});
-      const addRoleNames = (users: User[]) => users.map(u => u.customRoleId && roleMap[u.customRoleId] ? { ...u, customRoleName: roleMap[u.customRoleId] } : u);
 
+      const roleMap = customRolesData.reduce(
+        (m: Record<string, string>, r: CustomRole) => { m[r.id] = r.name; return m; },
+        {}
+      );
+      const addRoleNames = (users: User[]) =>
+        users.map(u =>
+          u.customRoleId && roleMap[u.customRoleId]
+            ? { ...u, customRoleName: roleMap[u.customRoleId] }
+            : u
+        );
+
+      // Fetch all user lists in parallel — individual failures fall back to []
       const [pendRes, appRes, rejRes, pagesRes] = await Promise.all([
-        fetch("/api/admin/users?status=PENDING"),
-        fetch("/api/admin/users?status=APPROVED"),
-        fetch("/api/admin/users?status=REJECTED"),
-        fetch("/api/admin/pages"),
+        fetch("/api/admin/users?status=PENDING").catch(() => null),
+        fetch("/api/admin/users?status=APPROVED").catch(() => null),
+        fetch("/api/admin/users?status=REJECTED").catch(() => null),
+        fetch("/api/admin/pages").catch(() => null),
       ]);
 
-      setPendingUsers(addRoleNames(await pendRes.json()));
-      setApprovedUsers(addRoleNames(await appRes.json()));
-      setRejectedUsers(addRoleNames(await rejRes.json()));
-      setAvailablePages(await pagesRes.json());
-    } catch {
+      const [pendData, appData, rejData, pagesData] = await Promise.all([
+        safeJson(pendRes),
+        safeJson(appRes),
+        safeJson(rejRes),
+        safeJson(pagesRes),
+      ]);
+
+      setPendingUsers(addRoleNames(pendData));
+      setApprovedUsers(addRoleNames(appData));
+      setRejectedUsers(addRoleNames(rejData));
+      setAvailablePages(pagesData);
+    } catch (err) {
+      console.error("Error loading data:", err);
       toast({ title: "Error", description: "Failed to load users", variant: "destructive" });
     } finally {
       setLoading(false);
