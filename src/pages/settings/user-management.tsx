@@ -1,45 +1,26 @@
 import { SimpleDashboardLayout } from "@/components/SimpleDashboardLayout";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { 
-  CheckCircle, XCircle, UserCog, Settings, Search, Users, UserPlus, UserX, 
-  Filter, RefreshCw, Key, Mail, Copy, AlertCircle 
-} from "lucide-react";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import RoleDefaultPermissionsManager from "@/components/RoleDefaultPermissionsManager";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  CheckCircle, XCircle, UserCog, Settings, Search, Users, UserPlus, UserX,
+  Filter, RefreshCw, Key, Mail, Copy, AlertCircle, ShieldCheck, Building2,
+} from "lucide-react";
 
 type User = {
   id: string;
@@ -48,7 +29,7 @@ type User = {
   isAdmin: boolean;
   role: string;
   customRoleId?: string;
-  customRoleName?: string; // Add this field to store the custom role name
+  customRoleName?: string;
   pageAccess: Record<string, boolean> | null;
   canDeleteDocuments?: boolean;
   buttonVisibility?: Record<string, boolean> | null;
@@ -57,10 +38,7 @@ type User = {
   licenseKey?: string;
 };
 
-type Page = {
-  path: string;
-  name: string;
-};
+type Page = { path: string; name: string };
 
 type CustomRole = {
   id: string;
@@ -75,44 +53,39 @@ function CustomRoleOptions() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadCustomRoles = async () => {
-      try {
-        const response = await fetch("/api/admin/custom-roles");
-        if (response.ok) {
-          const data = await response.json();
-          setCustomRoles(data);
-        }
-      } catch (error) {
-        console.error("Error loading custom roles:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCustomRoles();
+    fetch("/api/admin/custom-roles")
+      .then(r => r.ok ? r.json() : [])
+      .then(setCustomRoles)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return <div className="px-2 py-1 text-sm text-muted-foreground">Loading custom roles...</div>;
-  }
-
-  if (customRoles.length === 0) {
-    return null;
-  }
-
+  if (loading || customRoles.length === 0) return null;
   return (
     <>
       <div className="py-2">
-        <div className="px-2 text-xs font-medium">Custom Roles</div>
+        <div className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Custom Roles</div>
       </div>
-      {customRoles.map((role) => (
-        <SelectItem key={role.id} value={role.name}>
-          {role.name}
-        </SelectItem>
+      {customRoles.map(role => (
+        <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
       ))}
     </>
   );
 }
+
+const UserAvatar = ({ email }: { email: string }) => {
+  const initials = email.slice(0, 2).toUpperCase();
+  const colors = [
+    "from-violet-500 to-purple-600", "from-blue-500 to-indigo-600", "from-emerald-500 to-teal-600",
+    "from-rose-500 to-pink-600", "from-amber-500 to-orange-600",
+  ];
+  const colorIdx = email.charCodeAt(0) % colors.length;
+  return (
+    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colors[colorIdx]} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
+      {initials}
+    </div>
+  );
+};
 
 export default function UserManagementPage() {
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
@@ -133,1108 +106,588 @@ export default function UserManagementPage() {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      // Load custom roles first
-      const customRolesResponse = await fetch("/api/admin/custom-roles");
-      const customRolesData = await customRolesResponse.json();
+      const customRolesRes = await fetch("/api/admin/custom-roles");
+      const customRolesData = await customRolesRes.json();
       setCustomRoles(customRolesData);
-      
-      // Create a map of custom role IDs to names for quick lookup
-      const customRoleMap = customRolesData.reduce((map: Record<string, string>, role: CustomRole) => {
-        map[role.id] = role.name;
-        return map;
-      }, {});
-      
-      // Helper function to add custom role names to users
-      const addCustomRoleNames = (users: User[]) => {
-        return users.map(user => {
-          if (user.customRoleId && customRoleMap[user.customRoleId]) {
-            return {
-              ...user,
-              customRoleName: customRoleMap[user.customRoleId]
-            };
-          }
-          return user;
-        });
-      };
+      const roleMap = customRolesData.reduce((m: Record<string, string>, r: CustomRole) => { m[r.id] = r.name; return m; }, {});
+      const addRoleNames = (users: User[]) => users.map(u => u.customRoleId && roleMap[u.customRoleId] ? { ...u, customRoleName: roleMap[u.customRoleId] } : u);
 
-      // Load pending users
-      const pendingResponse = await fetch("/api/admin/users?status=PENDING");
-      const pendingData = await pendingResponse.json();
-      setPendingUsers(addCustomRoleNames(pendingData));
+      const [pendRes, appRes, rejRes, pagesRes] = await Promise.all([
+        fetch("/api/admin/users?status=PENDING"),
+        fetch("/api/admin/users?status=APPROVED"),
+        fetch("/api/admin/users?status=REJECTED"),
+        fetch("/api/admin/pages"),
+      ]);
 
-      // Load approved users
-      const approvedResponse = await fetch("/api/admin/users?status=APPROVED");
-      const approvedData = await approvedResponse.json();
-      setApprovedUsers(addCustomRoleNames(approvedData));
-
-      // Load rejected users
-      const rejectedResponse = await fetch("/api/admin/users?status=REJECTED");
-      const rejectedData = await rejectedResponse.json();
-      setRejectedUsers(addCustomRoleNames(rejectedData));
-
-      // Load available pages
-      const pagesResponse = await fetch("/api/admin/pages");
-      const pagesData = await pagesResponse.json();
-      setAvailablePages(pagesData);
-    } catch (error) {
-      console.error("Error loading users:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load users",
-        variant: "destructive",
-      });
+      setPendingUsers(addRoleNames(await pendRes.json()));
+      setApprovedUsers(addRoleNames(await appRes.json()));
+      setRejectedUsers(addRoleNames(await rejRes.json()));
+      setAvailablePages(await pagesRes.json());
+    } catch {
+      toast({ title: "Error", description: "Failed to load users", variant: "destructive" });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  useEffect(() => { loadUsers(); }, []);
 
   const handleStatusChange = async (userId: string, status: string) => {
     try {
-      const response = await fetch("/api/admin/users/update-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const res = await fetch("/api/admin/users/update-status", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, status }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to update user status");
-      }
-
-      toast({
-        title: "Success",
-        description: `User has been ${status.toLowerCase()} successfully.`,
-      });
-
-      // Reload users to reflect changes
+      if (!res.ok) throw new Error();
+      toast({ title: "Success", description: `User ${status.toLowerCase()} successfully.` });
       loadUsers();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update user status",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error", description: "Failed to update user status", variant: "destructive" });
     }
   };
 
   const generateSubscriptionKey = async () => {
     if (!selectedUser) return;
-    
     setIsGeneratingKey(true);
     setGeneratedLicenseKey(null);
-    
     try {
       let organizationId = selectedUser.organizationId;
-      
-      // If the user doesn't have an organization, create one for them
       if (!organizationId) {
-        // Create an organization for the user
-        const createOrgResponse = await fetch('/api/organizations', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            name: `${selectedUser.email.split('@')[0]}'s Organization`,
-            userId: selectedUser.id
-          }),
+        const orgRes = await fetch("/api/organizations", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: `${selectedUser.email.split("@")[0]}'s Organization`, userId: selectedUser.id }),
         });
-        
-        if (!createOrgResponse.ok) {
-          const data = await createOrgResponse.json();
-          throw new Error(data.error || "Failed to create organization for user");
-        }
-        
-        const orgData = await createOrgResponse.json();
+        if (!orgRes.ok) { const d = await orgRes.json(); throw new Error(d.error || "Failed to create organization"); }
+        const orgData = await orgRes.json();
         organizationId = orgData.organization.id;
-        
-        toast({
-          title: "Organization Created",
-          description: `Created organization for ${selectedUser.email}`,
-        });
+        toast({ title: "Organization Created", description: `Created org for ${selectedUser.email}` });
       }
-      
-      // Get the current user's email from the auth context
-      const currentUserResponse = await fetch("/api/users/permissions");
-      const currentUserData = await currentUserResponse.json();
-      
-      // First, ensure the current user is added as a temporary owner of the organization
-      // This is needed to bypass the permission check in the subscription endpoint
-      const addOwnerResponse = await fetch(`/api/organizations/${organizationId}/members`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          email: currentUserData.email, // Use the email from the current user data
-          role: 'OWNER',
-          // This is a special flag to indicate this is a temporary ownership for admin purposes
-          adminOperation: true
-        }),
+      const curUserRes = await fetch("/api/users/permissions");
+      const curUser = await curUserRes.json();
+      await fetch(`/api/organizations/${organizationId}/members`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: curUser.email, role: "OWNER", adminOperation: true }),
       });
-      
-      if (!addOwnerResponse.ok) {
-        console.log("Warning: Could not add admin as temporary owner, proceeding anyway");
-        // Continue anyway as the admin check should still allow the operation
-      }
-      
-      // Generate a subscription key
-      const response = await fetch(`/api/organizations/${organizationId}/subscription`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          plan: subscriptionPlan, 
-          durationMonths: parseInt(subscriptionDuration) 
-        }),
+      const subRes = await fetch(`/api/organizations/${organizationId}/subscription`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: subscriptionPlan, durationMonths: parseInt(subscriptionDuration) }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to generate subscription key");
-      }
-
-      const data = await response.json();
-      setGeneratedLicenseKey(data.licenseKey);
-      
-      // Get the user's role (use the selected role from the dropdown)
-      // If it's a custom role, we need to handle that differently
-      let userRole = selectedUser.role;
-      
-      // Calculate expiration date
-      const expirationDate = new Date();
-      expirationDate.setMonth(expirationDate.getMonth() + parseInt(subscriptionDuration));
-      
-      // Store the role information with the license key and send email
-      const sendKeyResponse = await fetch('/api/admin/users/send-subscription-key', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: selectedUser.id,
-          licenseKey: data.licenseKey,
-          role: userRole,
-          plan: subscriptionPlan,
-          expirationDate: expirationDate.toISOString()
-        }),
+      if (!subRes.ok) { const d = await subRes.json(); throw new Error(d.error || "Failed to generate key"); }
+      const subData = await subRes.json();
+      setGeneratedLicenseKey(subData.licenseKey);
+      const expDate = new Date();
+      expDate.setMonth(expDate.getMonth() + parseInt(subscriptionDuration));
+      const sendRes = await fetch("/api/admin/users/send-subscription-key", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUser.id, licenseKey: subData.licenseKey, role: selectedUser.role, plan: subscriptionPlan, expirationDate: expDate.toISOString() }),
       });
-      
-      if (!sendKeyResponse.ok) {
-        const errorData = await sendKeyResponse.json();
-        throw new Error(errorData.error || "Failed to send subscription key to user");
-      }
-      
-      // Also update the user's role to match the selected role
-      await handleRoleChange(selectedUser.id, userRole);
-      
-      toast({
-        title: "Success",
-        description: "Subscription key generated and sent to user's email",
-      });
-      
-      // Reload users to reflect changes
+      if (!sendRes.ok) { const d = await sendRes.json(); throw new Error(d.error || "Failed to send key"); }
+      await handleRoleChange(selectedUser.id, selectedUser.role);
+      toast({ title: "Success", description: "Subscription key generated and emailed to user" });
       loadUsers();
-    } catch (error) {
-      console.error("Error generating subscription key:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to generate subscription key",
-        variant: "destructive",
-      });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to generate key", variant: "destructive" });
     } finally {
       setIsGeneratingKey(false);
     }
   };
-  
-  const sendSubscriptionKeyEmail = async (email: string, licenseKey: string) => {
-    try {
-      // This would be implemented to send an email with the subscription key
-      // For now, we'll just show a success message
-      toast({
-        title: "Email Sent",
-        description: `Subscription key has been sent to ${email}`,
-      });
-      return true;
-    } catch (error) {
-      console.error("Error sending email:", error);
-      toast({
-        title: "Warning",
-        description: "Generated key successfully but failed to send email. Please copy and send manually.",
-        variant: "destructive",
-      });
-      return false;
-    }
-  };
-  
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied!",
-      description: "License key copied to clipboard",
-    });
+    toast({ title: "Copied!", description: "License key copied to clipboard" });
   };
 
   const handlePageAccessChange = async (userId: string, pagePath: string, enabled: boolean) => {
+    const u = [...approvedUsers, ...pendingUsers, ...rejectedUsers].find(u => u.id === userId);
+    if (!u) return;
+    const pageAccess = { ...(u.pageAccess || {}), [pagePath]: enabled };
     try {
-      // Get current user
-      const user = [...approvedUsers, ...pendingUsers, ...rejectedUsers].find(u => u.id === userId);
-      if (!user) return;
-
-      // Create or update pageAccess object
-      const pageAccess = { ...(user.pageAccess || {}) };
-      pageAccess[pagePath] = enabled;
-
-      const response = await fetch("/api/admin/users/update-page-access", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const res = await fetch("/api/admin/users/update-page-access", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, pageAccess }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to update page access");
-      }
-
-      toast({
-        title: "Success",
-        description: `Page access updated successfully.`,
-      });
-
-      // Reload users to reflect changes
+      if (!res.ok) throw new Error();
+      toast({ title: "Updated", description: "Page access updated" });
       loadUsers();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update page access",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error", description: "Failed to update page access", variant: "destructive" });
     }
   };
-  
+
   const handleRoleChange = async (userId: string, roleName: string) => {
     try {
-      // Check if this is a standard role or custom role
-      const isStandardRole = ['ADMIN', 'MANAGER', 'STAFF'].includes(roleName);
-      
-      let requestBody: any = { userId };
-      
-      if (isStandardRole) {
-        // For standard roles, just pass the role name
-        requestBody.role = roleName;
+      const isStandard = ["ADMIN", "MANAGER", "STAFF"].includes(roleName);
+      let body: any = { userId };
+      if (isStandard) {
+        body.role = roleName;
       } else {
-        // For custom roles, find the custom role ID by name
-        const customRole = customRoles.find(role => role.name === roleName);
-        if (customRole) {
-          requestBody.customRoleId = customRole.id;
-        } else {
-          throw new Error(`Custom role "${roleName}" not found`);
-        }
+        const cr = customRoles.find(r => r.name === roleName);
+        if (cr) body.customRoleId = cr.id;
+        else throw new Error(`Custom role "${roleName}" not found`);
       }
-      
-      const response = await fetch("/api/admin/users/update-role", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
+      const res = await fetch("/api/admin/users/update-role", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to update user role");
-      }
-
-      // Find the user whose role was changed
-      const user = [...approvedUsers, ...pendingUsers, ...rejectedUsers].find(u => u.id === userId);
-      if (user && user.organizationId) {
-        // Get the organization's subscription
-        const subscriptionResponse = await fetch(`/api/organizations/${user.organizationId}/subscription`);
-        if (subscriptionResponse.ok) {
-          const subscriptionData = await subscriptionResponse.json();
-          
-          if (subscriptionData.licenseKey) {
-            // Calculate expiration date based on the current subscription
-            let expirationDate = new Date();
-            if (subscriptionData.endDate) {
-              expirationDate = new Date(subscriptionData.endDate);
-            } else {
-              // Default to 12 months if no end date is set
-              expirationDate.setMonth(expirationDate.getMonth() + 12);
-            }
-            
-            // Update the license key role information
-            await fetch('/api/admin/users/send-subscription-key', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                userId: userId,
-                licenseKey: subscriptionData.licenseKey,
-                role: roleName,
-                plan: subscriptionData.plan,
-                expirationDate: expirationDate.toISOString()
-              }),
-            });
-            
-            toast({
-              title: "Success",
-              description: `User role updated to ${roleName} successfully. Subscription key has been updated with the new role permissions.`,
-            });
-          } else {
-            toast({
-              title: "Success",
-              description: `User role updated to ${roleName} successfully. Default permissions for this role have been applied.`,
+      if (!res.ok) throw new Error();
+      const u = [...approvedUsers, ...pendingUsers, ...rejectedUsers].find(u => u.id === userId);
+      if (u?.organizationId) {
+        const subRes = await fetch(`/api/organizations/${u.organizationId}/subscription`);
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          if (subData.licenseKey) {
+            const expDate = subData.endDate ? new Date(subData.endDate) : (() => { const d = new Date(); d.setMonth(d.getMonth() + 12); return d; })();
+            await fetch("/api/admin/users/send-subscription-key", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId, licenseKey: subData.licenseKey, role: roleName, plan: subData.plan, expirationDate: expDate.toISOString() }),
             });
           }
-        } else {
-          toast({
-            title: "Success",
-            description: `User role updated to ${roleName} successfully. Default permissions for this role have been applied.`,
-          });
         }
-      } else {
-        toast({
-          title: "Success",
-          description: `User role updated to ${roleName} successfully. Default permissions for this role have been applied.`,
-        });
       }
-
-      // Reload users to reflect changes
+      toast({ title: "Success", description: `Role updated to ${roleName}` });
       loadUsers();
-    } catch (error) {
-      console.error("Error updating role:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update user role",
-        variant: "destructive",
-      });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Failed to update role", variant: "destructive" });
     }
   };
-  
+
   const handleDocumentDeletePermissionChange = async (userId: string, canDeleteDocuments: boolean) => {
     try {
-      const response = await fetch("/api/admin/users/toggle-document-delete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const res = await fetch("/api/admin/users/toggle-document-delete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, canDeleteDocuments }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to update document delete permission");
-      }
-
-      toast({
-        title: "Success",
-        description: `Document delete permission ${canDeleteDocuments ? 'enabled' : 'disabled'} successfully.`,
-      });
-
-      // Reload users to reflect changes
+      if (!res.ok) throw new Error();
+      toast({ title: "Updated", description: `Document delete ${canDeleteDocuments ? "enabled" : "disabled"}` });
       loadUsers();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update document delete permission",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error", description: "Failed to update permission", variant: "destructive" });
     }
   };
-  
+
   const handleButtonVisibilityChange = async (userId: string, buttonId: string, enabled: boolean) => {
+    const u = [...approvedUsers, ...pendingUsers, ...rejectedUsers].find(u => u.id === userId);
+    if (!u) return;
+    const buttonVisibility = { ...(u.buttonVisibility || {}), [buttonId]: enabled };
     try {
-      // Get current user
-      const user = [...approvedUsers, ...pendingUsers, ...rejectedUsers].find(u => u.id === userId);
-      if (!user) return;
-
-      // Create or update buttonVisibility object
-      const buttonVisibility = { ...(user.buttonVisibility || {}) };
-      buttonVisibility[buttonId] = enabled;
-
-      const response = await fetch("/api/admin/users/update-button-visibility", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const res = await fetch("/api/admin/users/update-button-visibility", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, buttonVisibility }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to update button visibility");
-      }
-
-      toast({
-        title: "Success",
-        description: `Button visibility updated successfully.`,
-      });
-
-      // Reload users to reflect changes
+      if (!res.ok) throw new Error();
+      toast({ title: "Updated", description: "Button visibility updated" });
       loadUsers();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update button visibility",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Error", description: "Failed to update button visibility", variant: "destructive" });
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "PENDING":
-        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 border-yellow-300">Pending</Badge>;
-      case "APPROVED":
-        return <Badge variant="success" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 border-green-300">Approved</Badge>;
-      case "REJECTED":
-        return <Badge variant="destructive" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 border-red-300">Rejected</Badge>;
-      default:
-        return <Badge>{status}</Badge>;
-    }
-  };
-
-  const getRoleBadge = (user: User) => {
-    // If user has a custom role name, display that instead of the standard role
-    if (user.customRoleName) {
-      return <Badge variant="outline" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 border-green-300">{user.customRoleName}</Badge>;
-    }
-    
-    // Otherwise, display the standard role
+  const getRoleBadgeClass = (user: User) => {
+    if (user.customRoleName) return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300";
     switch (user.role) {
-      case "ADMIN":
-        return <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300 border-purple-300">Admin</Badge>;
-      case "MANAGER":
-        return <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 border-blue-300">Manager</Badge>;
-      case "STAFF":
-        return <Badge className="bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300">Staff</Badge>;
-      default:
-        return <Badge variant="outline" className="bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300">{user.role}</Badge>;
+      case "ADMIN":   return "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300";
+      case "MANAGER": return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300";
+      default:        return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300";
     }
   };
 
-  const filteredApprovedUsers = approvedUsers.filter(user => 
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredApproved = approvedUsers.filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredPending = pendingUsers.filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredRejected = rejectedUsers.filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  const PermissionToggle = ({ label, userId, field, value }: { label: string; userId: string; field: string; value: boolean }) => (
+    <div className="flex items-center justify-between py-2.5 px-3 rounded-xl border border-border hover:bg-muted/30 transition-colors">
+      <Label className="text-sm cursor-pointer">{label}</Label>
+      <Switch checked={value} onCheckedChange={checked => handleButtonVisibilityChange(userId, field, checked)} />
+    </div>
   );
 
-  const filteredPendingUsers = pendingUsers.filter(user => 
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  const LoadingState = () => (
+    <div className="flex flex-col items-center justify-center py-20 gap-3">
+      <div className="animate-spin rounded-full h-10 w-10 border-2 border-violet-500 border-t-transparent" />
+      <p className="text-sm text-muted-foreground">Loading users...</p>
+    </div>
   );
 
-  const filteredRejectedUsers = rejectedUsers.filter(user => 
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  const EmptyState = ({ icon: Icon, message, onClear }: { icon: any; message: string; onClear?: () => void }) => (
+    <div className="flex flex-col items-center justify-center py-16 rounded-2xl border-2 border-dashed border-muted text-center">
+      <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+        <Icon className="h-7 w-7 text-muted-foreground/50" />
+      </div>
+      <p className="font-medium text-muted-foreground">{message}</p>
+      {onClear && <Button variant="link" className="mt-2 text-xs" onClick={onClear}>Clear search</Button>}
+    </div>
   );
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadUsers();
-  };
 
   return (
     <ProtectedRoute requireAdmin={true}>
       <SimpleDashboardLayout>
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
-              <p className="text-muted-foreground mt-1">Manage user access, roles, and permissions</p>
+        <div className="space-y-8">
+
+          {/* ── Hero ───────────────────────────────────────────────────── */}
+          <div className="relative rounded-2xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
+            <div className="absolute -bottom-10 -left-10 w-52 h-52 rounded-full bg-white/10 blur-3xl" />
+
+            <div className="relative z-10 px-8 py-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center flex-shrink-0">
+                  <Users className="h-7 w-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-white tracking-tight">User Management</h1>
+                  <p className="text-violet-200 text-sm mt-0.5">Manage access, roles, and permissions across your organization</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+                  <Input
+                    placeholder="Search users..."
+                    className="pl-9 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:bg-white/15 w-64 rounded-xl"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <Button variant="ghost" size="icon" className="text-white/80 hover:text-white hover:bg-white/15 rounded-xl"
+                  onClick={() => { setRefreshing(true); loadUsers(); }} disabled={refreshing}>
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2 self-end sm:self-auto">
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-                {refreshing ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Refreshing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh
-                  </>
-                )}
-              </Button>
+
+            {/* Stats */}
+            <div className="relative z-10 px-8 pb-8 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { label: "Total Users", value: pendingUsers.length + approvedUsers.length + rejectedUsers.length, icon: Users },
+                { label: "Approved", value: approvedUsers.length, icon: CheckCircle },
+                { label: "Pending", value: pendingUsers.length, icon: UserPlus },
+                { label: "Rejected", value: rejectedUsers.length, icon: UserX },
+              ].map(s => (
+                <div key={s.label} className="bg-white/15 backdrop-blur border border-white/20 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-violet-200 font-medium">{s.label}</span>
+                    <s.icon className="h-4 w-4 text-white/60" />
+                  </div>
+                  <p className="text-2xl font-bold text-white">{s.value}</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
-            <div className="relative w-full sm:w-auto flex-1 max-w-sm">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search users..."
-                className="pl-8 w-full"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Users className="h-4 w-4" />
-              <span>
-                {approvedUsers.length} approved · {pendingUsers.length} pending · {rejectedUsers.length} rejected
-              </span>
-            </div>
-          </div>
-
+          {/* ── Tabs ───────────────────────────────────────────────────── */}
           <Tabs defaultValue="pending" className="w-full">
-            <TabsList className="mb-4 w-full sm:w-auto grid grid-cols-2 sm:inline-flex sm:grid-cols-none gap-1 sm:gap-0">
-              <TabsTrigger value="pending" className="flex items-center">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Pending {pendingUsers.length > 0 && `(${pendingUsers.length})`}
-              </TabsTrigger>
-              <TabsTrigger value="approved" className="flex items-center">
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Approved {approvedUsers.length > 0 && `(${approvedUsers.length})`}
-              </TabsTrigger>
-              <TabsTrigger value="rejected" className="flex items-center">
-                <UserX className="h-4 w-4 mr-2" />
-                Rejected {rejectedUsers.length > 0 && `(${rejectedUsers.length})`}
-              </TabsTrigger>
-              <TabsTrigger value="role-permissions" className="flex items-center">
-                <Settings className="h-4 w-4 mr-2" /> 
-                Role Permissions
-              </TabsTrigger>
+            <TabsList className="bg-muted/60 p-1 rounded-2xl h-auto gap-1 flex flex-wrap">
+              {[
+                { value: "pending", icon: UserPlus, label: "Pending", count: pendingUsers.length, color: "data-[state=active]:text-amber-700" },
+                { value: "approved", icon: CheckCircle, label: "Approved", count: approvedUsers.length, color: "data-[state=active]:text-emerald-700" },
+                { value: "rejected", icon: UserX, label: "Rejected", count: rejectedUsers.length, color: "data-[state=active]:text-red-700" },
+                { value: "role-permissions", icon: Settings, label: "Role Permissions", count: null, color: "" },
+              ].map(tab => (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${tab.color}`}
+                >
+                  <tab.icon className="h-4 w-4" />
+                  {tab.label}
+                  {tab.count !== null && tab.count > 0 && (
+                    <span className="ml-1 bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300 text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                      {tab.count}
+                    </span>
+                  )}
+                </TabsTrigger>
+              ))}
             </TabsList>
 
-            <TabsContent value="pending">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle>Pending Users</CardTitle>
-                  <CardDescription>
-                    Users waiting for approval to access the system
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-                    </div>
-                  ) : filteredPendingUsers.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
-                      {searchQuery ? (
-                        <>
-                          <Filter className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
-                          <p>No pending users match your search</p>
-                          <Button variant="link" onClick={() => setSearchQuery("")}>Clear search</Button>
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
-                          <p>No pending users found</p>
-                        </>
-                      )}
+            {/* ── Pending Tab ─────────────────────────────────────────── */}
+            <TabsContent value="pending" className="mt-6">
+              <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="px-6 py-5 border-b border-border">
+                  <h2 className="text-lg font-bold">Pending Users</h2>
+                  <p className="text-sm text-muted-foreground">Users awaiting approval to access the system</p>
+                </div>
+                {loading ? <LoadingState /> :
+                  filteredPending.length === 0 ? (
+                    <div className="p-6">
+                      <EmptyState icon={searchQuery ? Filter : UserPlus}
+                        message={searchQuery ? "No pending users match your search" : "No pending users — you're all caught up!"}
+                        onClear={searchQuery ? () => setSearchQuery("") : undefined} />
                     </div>
                   ) : (
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Email</TableHead>
-                            <TableHead className="hidden md:table-cell">Registration Date</TableHead>
-                            <TableHead className="hidden sm:table-cell">Status</TableHead>
-                            <TableHead>Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredPendingUsers.map((user) => (
-                            <TableRow key={user.id}>
-                              <TableCell className="font-medium">{user.email}</TableCell>
-                              <TableCell className="hidden md:table-cell">
-                                {new Date(user.createdAt).toLocaleDateString()}
-                              </TableCell>
-                              <TableCell className="hidden sm:table-cell">{getStatusBadge(user.status)}</TableCell>
-                              <TableCell>
-                                <div className="flex flex-wrap gap-2">
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="flex items-center text-blue-600 dark:text-blue-500 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950"
-                                        onClick={() => setSelectedUser(user)}
-                                      >
-                                        <Key className="mr-1 h-4 w-4" />
-                                        Generate Key
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="sm:max-w-md">
-                                      <DialogHeader>
-                                        <DialogTitle>Generate Subscription Key</DialogTitle>
-                                        <DialogDescription>
-                                          Create a subscription key for {selectedUser?.email}
-                                        </DialogDescription>
-                                      </DialogHeader>
-                                      
-                                      <div className="grid gap-4 py-4">
-                                        <div className="grid grid-cols-4 items-center gap-4">
-                                          <Label htmlFor="plan" className="text-right">
-                                            Plan
-                                          </Label>
-                                          <Select 
-                                            value={subscriptionPlan} 
-                                            onValueChange={setSubscriptionPlan}
-                                            defaultValue="BASIC"
-                                          >
-                                            <SelectTrigger className="col-span-3">
-                                              <SelectValue placeholder="Select plan" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="BASIC">Basic</SelectItem>
-                                              <SelectItem value="PROFESSIONAL">Professional</SelectItem>
-                                              <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                        <div className="grid grid-cols-4 items-center gap-4">
-                                          <Label htmlFor="duration" className="text-right">
-                                            Duration
-                                          </Label>
-                                          <Select 
-                                            value={subscriptionDuration} 
-                                            onValueChange={setSubscriptionDuration}
-                                            defaultValue="12"
-                                          >
-                                            <SelectTrigger className="col-span-3">
-                                              <SelectValue placeholder="Select duration" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="3">3 months</SelectItem>
-                                              <SelectItem value="6">6 months</SelectItem>
-                                              <SelectItem value="12">12 months</SelectItem>
-                                              <SelectItem value="24">24 months</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                        <div className="grid grid-cols-4 items-center gap-4">
-                                          <Label htmlFor="role" className="text-right">
-                                            Role
-                                          </Label>
-                                          <Select 
-                                            defaultValue="STAFF"
-                                            onValueChange={(value) => {
-                                              if (selectedUser) {
-                                                setSelectedUser({
-                                                  ...selectedUser,
-                                                  role: value
-                                                });
-                                              }
-                                            }}
-                                          >
-                                            <SelectTrigger className="col-span-3">
-                                              <SelectValue placeholder="Select role" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="ADMIN">Admin</SelectItem>
-                                              <SelectItem value="MANAGER">Manager</SelectItem>
-                                              <SelectItem value="STAFF">Staff</SelectItem>
-                                              
-                                              {/* Custom roles will be loaded here */}
-                                              <CustomRoleOptions />
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                        
-                                        {generatedLicenseKey && (
-                                          <Alert className="mt-4 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800">
-                                            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                                            <AlertTitle className="text-green-800 dark:text-green-400">Key Generated Successfully</AlertTitle>
-                                            <AlertDescription className="text-green-700 dark:text-green-300">
-                                              <div className="mt-2 p-2 bg-white dark:bg-green-950 rounded border border-green-200 dark:border-green-800 flex items-center justify-between">
-                                                <code className="font-mono text-sm">{generatedLicenseKey}</code>
-                                                <Button 
-                                                  size="sm" 
-                                                  variant="ghost" 
-                                                  className="h-8 w-8 p-0"
-                                                  onClick={() => copyToClipboard(generatedLicenseKey)}
-                                                >
-                                                  <Copy className="h-4 w-4" />
-                                                </Button>
-                                              </div>
-                                              <p className="text-xs mt-2">
-                                                This key has been sent to the user's email. They will need to enter it when they log in again.
-                                              </p>
-                                            </AlertDescription>
-                                          </Alert>
-                                        )}
-                                      </div>
-                                      
-                                      <DialogFooter className="sm:justify-between">
-                                        <div className="flex items-center">
-                                          <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex items-center gap-1"
-                                            onClick={() => {
-                                              if (selectedUser && generatedLicenseKey) {
-                                                window.location.href = `mailto:${selectedUser.email}?subject=Your Subscription Key&body=Here is your subscription key: ${generatedLicenseKey}%0D%0A%0D%0APlease enter this key when you log in to activate your account.`;
-                                              }
-                                            }}
-                                            disabled={!generatedLicenseKey}
-                                          >
-                                            <Mail className="h-4 w-4" />
-                                            Email Manually
+                    <div className="divide-y divide-border">
+                      {filteredPending.map(user => (
+                        <div key={user.id} className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/20 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <UserAvatar email={user.email} />
+                            <div>
+                              <p className="font-semibold text-sm">{user.email}</p>
+                              <p className="text-xs text-muted-foreground">Registered {new Date(user.createdAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* Generate Key Dialog */}
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button size="sm" variant="outline" className="rounded-xl border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-950 gap-1.5"
+                                  onClick={() => setSelectedUser(user)}>
+                                  <Key className="h-4 w-4" /> Generate Key
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Generate Subscription Key</DialogTitle>
+                                  <DialogDescription>Create a subscription key for {selectedUser?.email}</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                  <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label className="text-right text-sm">Plan</Label>
+                                    <Select value={subscriptionPlan} onValueChange={setSubscriptionPlan}>
+                                      <SelectTrigger className="col-span-3 rounded-xl"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="BASIC">Basic</SelectItem>
+                                        <SelectItem value="PROFESSIONAL">Professional</SelectItem>
+                                        <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label className="text-right text-sm">Duration</Label>
+                                    <Select value={subscriptionDuration} onValueChange={setSubscriptionDuration}>
+                                      <SelectTrigger className="col-span-3 rounded-xl"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="3">3 months</SelectItem>
+                                        <SelectItem value="6">6 months</SelectItem>
+                                        <SelectItem value="12">12 months</SelectItem>
+                                        <SelectItem value="24">24 months</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label className="text-right text-sm">Role</Label>
+                                    <Select defaultValue="STAFF" onValueChange={v => selectedUser && setSelectedUser({ ...selectedUser, role: v })}>
+                                      <SelectTrigger className="col-span-3 rounded-xl"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="ADMIN">Admin</SelectItem>
+                                        <SelectItem value="MANAGER">Manager</SelectItem>
+                                        <SelectItem value="STAFF">Staff</SelectItem>
+                                        <CustomRoleOptions />
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  {generatedLicenseKey && (
+                                    <Alert className="bg-emerald-50 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800 rounded-xl">
+                                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                                      <AlertTitle className="text-emerald-800 dark:text-emerald-300">Key Generated!</AlertTitle>
+                                      <AlertDescription>
+                                        <div className="mt-2 flex items-center gap-2 bg-white dark:bg-emerald-900 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-700">
+                                          <code className="font-mono text-sm flex-1 break-all">{generatedLicenseKey}</code>
+                                          <Button size="icon" variant="ghost" className="h-8 w-8 flex-shrink-0"
+                                            onClick={() => copyToClipboard(generatedLicenseKey)}>
+                                            <Copy className="h-4 w-4" />
                                           </Button>
                                         </div>
-                                        <Button 
-                                          type="submit" 
-                                          onClick={generateSubscriptionKey}
-                                          disabled={isGeneratingKey}
-                                        >
-                                          {isGeneratingKey ? 'Generating...' : generatedLicenseKey ? 'Regenerate Key' : 'Generate Key'}
-                                        </Button>
-                                      </DialogFooter>
-                                    </DialogContent>
-                                  </Dialog>
-                                  
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="flex items-center text-green-600 dark:text-green-500 border-green-200 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-950"
-                                    onClick={() => {
-                                      handleStatusChange(user.id, "APPROVED");
-                                      toast({
-                                        title: "Default Access Granted",
-                                        description: "Basic page access has been automatically granted to this user. You can modify their access in the Approved Users tab.",
-                                      });
-                                    }}
-                                  >
-                                    <CheckCircle className="mr-1 h-4 w-4" />
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="flex items-center text-red-600 dark:text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950"
-                                    onClick={() => handleStatusChange(user.id, "REJECTED")}
-                                  >
-                                    <XCircle className="mr-1 h-4 w-4" />
-                                    Reject
-                                  </Button>
+                                        <p className="text-xs mt-2 text-emerald-700 dark:text-emerald-400">Key sent to user's email automatically.</p>
+                                      </AlertDescription>
+                                    </Alert>
+                                  )}
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                                <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
+                                  <Button type="button" variant="outline" size="sm" className="rounded-xl gap-2"
+                                    disabled={!generatedLicenseKey}
+                                    onClick={() => selectedUser && generatedLicenseKey && (window.location.href = `mailto:${selectedUser.email}?subject=Your Subscription Key&body=Here is your subscription key: ${generatedLicenseKey}`)}>
+                                    <Mail className="h-4 w-4" /> Email Manually
+                                  </Button>
+                                  <Button onClick={generateSubscriptionKey} disabled={isGeneratingKey} className="rounded-xl">
+                                    {isGeneratingKey ? "Generating…" : generatedLicenseKey ? "Regenerate" : "Generate Key"}
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
 
-            <TabsContent value="approved">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle>Approved Users</CardTitle>
-                  <CardDescription>
-                    Manage page access and permissions for approved users
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-                    </div>
-                  ) : filteredApprovedUsers.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
-                      {searchQuery ? (
-                        <>
-                          <Filter className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
-                          <p>No approved users match your search</p>
-                          <Button variant="link" onClick={() => setSearchQuery("")}>Clear search</Button>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
-                          <p>No approved users found</p>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {filteredApprovedUsers.map((user) => (
-                        <Card key={user.id} className="overflow-hidden border-2 border-muted">
-                          <div className="bg-muted/50 px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <div>
-                              <h3 className="text-lg font-medium flex flex-wrap items-center gap-2">
-                                {user.email}
-                                <div className="flex gap-1.5">
-                                  {getStatusBadge(user.status)}
-                                  {getRoleBadge(user)}
-                                </div>
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                Registered on {new Date(user.createdAt).toLocaleDateString()}
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-red-600 dark:text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950"
-                              onClick={() => handleStatusChange(user.id, "REJECTED")}
-                            >
-                              <UserX className="mr-1.5 h-4 w-4" />
-                              Revoke Access
+                            <Button size="sm" variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950 gap-1.5"
+                              onClick={() => { handleStatusChange(user.id, "APPROVED"); toast({ title: "Access Granted", description: "Default page access granted. Modify in Approved tab." }); }}>
+                              <CheckCircle className="h-4 w-4" /> Approve
+                            </Button>
+                            <Button size="sm" variant="outline" className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 gap-1.5"
+                              onClick={() => handleStatusChange(user.id, "REJECTED")}>
+                              <XCircle className="h-4 w-4" /> Reject
                             </Button>
                           </div>
-                          
-                          <div className="p-6 grid gap-6">
-                            <div className="p-4 rounded-lg bg-muted/30 border">
-                              <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center">
-                                  <UserCog className="h-5 w-5 mr-2 text-muted-foreground" />
-                                  <Label className="font-medium text-base">User Role</Label>
-                                </div>
-                                <Select 
-                                  // Use customRoleName if available, otherwise use standard role
-                                  defaultValue={user.customRoleName || user.role} 
-                                  onValueChange={(value) => handleRoleChange(user.id, value)}
-                                >
-                                  <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Select role" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="ADMIN">Admin</SelectItem>
-                                    <SelectItem value="MANAGER">Manager</SelectItem>
-                                    <SelectItem value="STAFF">Staff</SelectItem>
-                                    
-                                    {/* Custom roles will be loaded here */}
-                                    <CustomRoleOptions />
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {user.role === 'ADMIN' ? 
-                                  'Admin can access all features and manage users.' : 
-                                  user.role === 'MANAGER' ? 
-                                  'Manager can access all features except admin settings.' : 
-                                  'Staff can only access features they have been granted permission to.'}
-                              </p>
-                            </div>
-                            
-                            <div className="p-4 rounded-lg bg-muted/30 border">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <Label className="font-medium text-base">Document Delete Permission</Label>
-                                  <p className="text-sm text-muted-foreground mt-1">
-                                    When enabled, this user can delete documents from assets
-                                  </p>
-                                </div>
-                                <Switch
-                                  checked={user.canDeleteDocuments || false}
-                                  onCheckedChange={(checked) => handleDocumentDeletePermissionChange(user.id, checked)}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="p-4 rounded-lg bg-muted/30 border">
-                              <div className="flex items-center mb-4">
-                                <Label className="font-medium text-base">Button Visibility Permissions</Label>
-                              </div>
-                              <p className="text-sm text-muted-foreground mb-4">
-                                Control which buttons are visible to this user
-                              </p>
-                              
-                              <div className="space-y-4">
-                                <div className="p-2 border rounded-md bg-background/50">
-                                  <h4 className="font-medium mb-2">Assets Page Buttons</h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div className="flex items-center justify-between border p-2 rounded-md">
-                                      <Label htmlFor={`dispose-asset-btn-${user.id}`}>Dispose Asset Button</Label>
-                                      <Switch
-                                        id={`dispose-asset-btn-${user.id}`}
-                                        checked={(user.buttonVisibility?.['dispose_asset'] === true)}
-                                        onCheckedChange={(checked) => handleButtonVisibilityChange(user.id, 'dispose_asset', checked)}
-                                      />
-                                    </div>
-                                    <div className="flex items-center justify-between border p-2 rounded-md">
-                                      <Label htmlFor={`assets-button-${user.id}`}>Assets Button</Label>
-                                      <Switch
-                                        id={`assets-button-${user.id}`}
-                                        checked={(user.buttonVisibility?.['assets_button'] === true)}
-                                        onCheckedChange={(checked) => handleButtonVisibilityChange(user.id, 'assets_button', checked)}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                <div className="p-2 border rounded-md bg-background/50">
-                                  <h4 className="font-medium mb-2">Food Supply Page Buttons</h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div className="flex items-center justify-between border p-2 rounded-md">
-                                      <Label htmlFor={`edit-food-supply-btn-${user.id}`}>Edit Food Supply Button</Label>
-                                      <Switch
-                                        id={`edit-food-supply-btn-${user.id}`}
-                                        checked={(user.buttonVisibility?.['edit_food_supply'] === true)}
-                                        onCheckedChange={(checked) => handleButtonVisibilityChange(user.id, 'edit_food_supply', checked)}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                <div className="p-2 border rounded-md bg-background/50">
-                                  <h4 className="font-medium mb-2">Kitchen Page Buttons</h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div className="flex items-center justify-between border p-2 rounded-md">
-                                      <Label htmlFor={`kitchen-consumption-btn-${user.id}`}>Kitchen Consumption Button</Label>
-                                      <Switch
-                                        id={`kitchen-consumption-btn-${user.id}`}
-                                        checked={(user.buttonVisibility?.['kitchen_consumption'] === true)}
-                                        onCheckedChange={(checked) => handleButtonVisibilityChange(user.id, 'kitchen_consumption', checked)}
-                                      />
-                                    </div>
-                                    <div className="flex items-center justify-between border p-2 rounded-md">
-                                      <Label htmlFor={`kitchen-waste-tracking-btn-${user.id}`}>Waste Tracking Button</Label>
-                                      <Switch
-                                        id={`kitchen-waste-tracking-btn-${user.id}`}
-                                        checked={(user.buttonVisibility?.['kitchen_waste_tracking'] === true)}
-                                        onCheckedChange={(checked) => handleButtonVisibilityChange(user.id, 'kitchen_waste_tracking', checked)}
-                                      />
-                                    </div>
-                                    <div className="flex items-center justify-between border p-2 rounded-md">
-                                      <Label htmlFor={`kitchen-food-supply-btn-${user.id}`}>Add Food Supply Button</Label>
-                                      <Switch
-                                        id={`kitchen-food-supply-btn-${user.id}`}
-                                        checked={(user.buttonVisibility?.['kitchen_food_supply'] === true)}
-                                        onCheckedChange={(checked) => handleButtonVisibilityChange(user.id, 'kitchen_food_supply', checked)}
-                                      />
-                                    </div>
-                                    <div className="flex items-center justify-between border p-2 rounded-md">
-                                      <Label htmlFor={`kitchen-recipe-btn-${user.id}`}>Recipe Management Button</Label>
-                                      <Switch
-                                        id={`kitchen-recipe-btn-${user.id}`}
-                                        checked={(user.buttonVisibility?.['kitchen_recipe'] === true)}
-                                        onCheckedChange={(checked) => handleButtonVisibilityChange(user.id, 'kitchen_recipe', checked)}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div>
-                              <div className="flex items-center justify-between mb-4">
-                                <h4 className="font-medium text-base">Page Access Permissions</h4>
-                                <Badge variant="outline" className="text-xs">
-                                  {Object.values(user.pageAccess || {}).filter(Boolean).length} / {availablePages.length} pages
-                                </Badge>
-                              </div>
-                              
-                              <div className="max-h-[320px] overflow-y-auto rounded-lg border p-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-4">
-                                  {availablePages.map((page, index) => (
-                                    <div key={`${user.id}-${page.path}`}>
-                                      <div className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
-                                        <Label htmlFor={`${user.id}-${page.path}`} className="flex-1 cursor-pointer">
-                                          {page.name}
-                                        </Label>
-                                        <Switch
-                                          id={`${user.id}-${page.path}`}
-                                          checked={user.pageAccess?.[page.path] === true}
-                                          onCheckedChange={(checked) =>
-                                            handlePageAccessChange(user.id, page.path, checked)
-                                          }
-                                        />
-                                      </div>
-                                      {index < availablePages.length - 1 && index % 2 === 1 && (
-                                        <Separator className="my-2 md:hidden" />
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </Card>
+                        </div>
                       ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+              </div>
             </TabsContent>
 
-            <TabsContent value="rejected">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle>Rejected Users</CardTitle>
-                  <CardDescription>
-                    Users who have been denied access to the system
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-                    </div>
-                  ) : filteredRejectedUsers.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
-                      {searchQuery ? (
-                        <>
-                          <Filter className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
-                          <p>No rejected users match your search</p>
-                          <Button variant="link" onClick={() => setSearchQuery("")}>Clear search</Button>
-                        </>
-                      ) : (
-                        <>
-                          <UserX className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
-                          <p>No rejected users found</p>
-                        </>
-                      )}
+            {/* ── Approved Tab ────────────────────────────────────────── */}
+            <TabsContent value="approved" className="mt-6">
+              {loading ? <LoadingState /> :
+                filteredApproved.length === 0 ? (
+                  <EmptyState icon={searchQuery ? Filter : CheckCircle}
+                    message={searchQuery ? "No approved users match your search" : "No approved users found"}
+                    onClear={searchQuery ? () => setSearchQuery("") : undefined} />
+                ) : (
+                  <div className="space-y-5">
+                    {filteredApproved.map(user => (
+                      <div key={user.id} className="rounded-2xl border border-border bg-card overflow-hidden">
+                        {/* User Header */}
+                        <div className="px-6 py-5 border-b border-border bg-gradient-to-r from-muted/50 to-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <UserAvatar email={user.email} />
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                <p className="font-bold">{user.email}</p>
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${getRoleBadgeClass(user)}`}>
+                                  {user.customRoleName ?? user.role}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <Button size="sm" variant="outline" className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 gap-1.5"
+                            onClick={() => handleStatusChange(user.id, "REJECTED")}>
+                            <UserX className="h-4 w-4" /> Revoke Access
+                          </Button>
+                        </div>
+
+                        {/* Permissions Grid */}
+                        <div className="p-6 space-y-5">
+                          {/* Role */}
+                          <div className="rounded-xl border border-border p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="h-5 w-5 text-violet-500" />
+                                <div>
+                                  <Label className="font-semibold text-base">Role Assignment</Label>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {user.role === "ADMIN" ? "Full system access including admin settings" :
+                                      user.role === "MANAGER" ? "All features except admin settings" :
+                                        "Limited access based on page permissions"}
+                                  </p>
+                                </div>
+                              </div>
+                              <Select defaultValue={user.customRoleName ?? user.role} onValueChange={v => handleRoleChange(user.id, v)}>
+                                <SelectTrigger className="w-44 rounded-xl"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="ADMIN">Admin</SelectItem>
+                                  <SelectItem value="MANAGER">Manager</SelectItem>
+                                  <SelectItem value="STAFF">Staff</SelectItem>
+                                  <CustomRoleOptions />
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          {/* Doc Delete */}
+                          <div className="rounded-xl border border-border p-4 flex items-center justify-between">
+                            <div>
+                              <Label className="font-semibold">Document Delete Permission</Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">Allow this user to delete documents from assets</p>
+                            </div>
+                            <Switch checked={user.canDeleteDocuments ?? false}
+                              onCheckedChange={v => handleDocumentDeletePermissionChange(user.id, v)} />
+                          </div>
+
+                          {/* Button Visibility */}
+                          <div className="rounded-xl border border-border p-4">
+                            <Label className="font-semibold text-base mb-3 block">Button Visibility</Label>
+                            <div className="space-y-3">
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Assets</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <PermissionToggle label="Dispose Asset" userId={user.id} field="dispose_asset" value={user.buttonVisibility?.["dispose_asset"] === true} />
+                                  <PermissionToggle label="Assets Button" userId={user.id} field="assets_button" value={user.buttonVisibility?.["assets_button"] === true} />
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Food Supply</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <PermissionToggle label="Edit Food Supply" userId={user.id} field="edit_food_supply" value={user.buttonVisibility?.["edit_food_supply"] === true} />
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Kitchen</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <PermissionToggle label="Consumption" userId={user.id} field="kitchen_consumption" value={user.buttonVisibility?.["kitchen_consumption"] === true} />
+                                  <PermissionToggle label="Waste Tracking" userId={user.id} field="kitchen_waste_tracking" value={user.buttonVisibility?.["kitchen_waste_tracking"] === true} />
+                                  <PermissionToggle label="Add Food Supply" userId={user.id} field="kitchen_food_supply" value={user.buttonVisibility?.["kitchen_food_supply"] === true} />
+                                  <PermissionToggle label="Recipe Management" userId={user.id} field="kitchen_recipe" value={user.buttonVisibility?.["kitchen_recipe"] === true} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Page Access */}
+                          <div className="rounded-xl border border-border p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <Label className="font-semibold text-base">Page Access</Label>
+                              <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+                                {Object.values(user.pageAccess ?? {}).filter(Boolean).length} / {availablePages.length} pages
+                              </span>
+                            </div>
+                            <div className="max-h-72 overflow-y-auto">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
+                                {availablePages.map(page => (
+                                  <div key={`${user.id}-${page.path}`} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors">
+                                    <Label className="text-sm cursor-pointer">{page.name}</Label>
+                                    <Switch
+                                      checked={user.pageAccess?.[page.path] === true}
+                                      onCheckedChange={checked => handlePageAccessChange(user.id, page.path, checked)}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </TabsContent>
+
+            {/* ── Rejected Tab ────────────────────────────────────────── */}
+            <TabsContent value="rejected" className="mt-6">
+              <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="px-6 py-5 border-b border-border">
+                  <h2 className="text-lg font-bold">Rejected Users</h2>
+                  <p className="text-sm text-muted-foreground">Users denied access — re-approve to grant entry</p>
+                </div>
+                {loading ? <LoadingState /> :
+                  filteredRejected.length === 0 ? (
+                    <div className="p-6">
+                      <EmptyState icon={searchQuery ? Filter : UserX}
+                        message={searchQuery ? "No rejected users match your search" : "No rejected users"}
+                        onClear={searchQuery ? () => setSearchQuery("") : undefined} />
                     </div>
                   ) : (
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Email</TableHead>
-                            <TableHead className="hidden md:table-cell">Registration Date</TableHead>
-                            <TableHead className="hidden sm:table-cell">Status</TableHead>
-                            <TableHead>Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredRejectedUsers.map((user) => (
-                            <TableRow key={user.id}>
-                              <TableCell className="font-medium">{user.email}</TableCell>
-                              <TableCell className="hidden md:table-cell">
-                                {new Date(user.createdAt).toLocaleDateString()}
-                              </TableCell>
-                              <TableCell className="hidden sm:table-cell">{getStatusBadge(user.status)}</TableCell>
-                              <TableCell>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="flex items-center text-green-600 dark:text-green-500 border-green-200 dark:border-green-800 hover:bg-green-50 dark:hover:bg-green-950"
-                                  onClick={() => {
-                                    handleStatusChange(user.id, "APPROVED");
-                                    toast({
-                                      title: "Default Access Granted",
-                                      description: "Basic page access has been automatically granted to this user. You can modify their access in the Approved Users tab.",
-                                    });
-                                  }}
-                                >
-                                  <CheckCircle className="mr-1.5 h-4 w-4" />
-                                  Approve Access
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                    <div className="divide-y divide-border">
+                      {filteredRejected.map(user => (
+                        <div key={user.id} className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-muted/20 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <UserAvatar email={user.email} />
+                            <div>
+                              <p className="font-semibold text-sm">{user.email}</p>
+                              <p className="text-xs text-muted-foreground">Registered {new Date(user.createdAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <Button size="sm" variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 gap-1.5"
+                            onClick={() => { handleStatusChange(user.id, "APPROVED"); toast({ title: "Access Restored", description: "Default page access granted." }); }}>
+                            <CheckCircle className="h-4 w-4" /> Approve Access
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+              </div>
             </TabsContent>
-            
-            <TabsContent value="role-permissions">
+
+            {/* ── Role Permissions Tab ────────────────────────────────── */}
+            <TabsContent value="role-permissions" className="mt-6">
               <RoleDefaultPermissionsManager />
             </TabsContent>
           </Tabs>
