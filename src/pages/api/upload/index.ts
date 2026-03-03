@@ -72,7 +72,7 @@ export default async function handler(
       ? createAdminClient(supabaseUrl, serviceRoleKey).storage
       : supabase.storage;
 
-    const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'assets';
+    const bucket = (process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'assets').trim();
 
     // ── Auto-create the bucket if it doesn't exist (requires service role) ────
     if (serviceRoleKey) {
