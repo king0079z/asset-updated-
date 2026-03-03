@@ -139,6 +139,19 @@ const TableSkeleton = () => (
   </div>
 );
 
+/** Returns true only if the URL is a well-formed http/https URL with no control characters */
+function isValidImageUrl(url: string | null | undefined): url is string {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed || /[\r\n\t]/.test(trimmed)) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export default function AssetsPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -1156,7 +1169,7 @@ export default function AssetsPage() {
                         <div className="p-4">
                           <div className="flex items-start gap-3 mb-3">
                             <div className={`h-10 w-10 rounded-xl ${typeConfig.bg} flex items-center justify-center flex-shrink-0`}>
-                              {asset.imageUrl ? (
+                              {isValidImageUrl(asset.imageUrl) ? (
                                 <Image src={asset.imageUrl} alt={asset.name} width={40} height={40} className="rounded-xl object-cover w-10 h-10" unoptimized />
                               ) : (
                                 <TypeIcon className={`h-5 w-5 ${typeConfig.color}`} />
@@ -1235,7 +1248,7 @@ export default function AssetsPage() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="relative h-9 w-9 rounded-xl overflow-hidden border bg-muted flex-shrink-0">
-                              {asset.imageUrl ? (
+                              {isValidImageUrl(asset.imageUrl) ? (
                                 <Image src={asset.imageUrl} alt={asset.name} fill className="object-cover" sizes="36px" unoptimized />
                               ) : (
                                 <div className="flex h-full w-full items-center justify-center">

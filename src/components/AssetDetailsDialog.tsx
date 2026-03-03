@@ -156,6 +156,16 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
+function isValidImageUrl(url: string | null | undefined): url is string {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed || /[\r\n\t]/.test(trimmed)) return false;
+  try {
+    const p = new URL(trimmed);
+    return p.protocol === 'http:' || p.protocol === 'https:';
+  } catch { return false; }
+}
+
 export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }: AssetDetailsDialogProps) {
   const { t } = useTranslation();
   const { isButtonVisible } = useButtonVisibility();
@@ -423,7 +433,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
           <TabsContent value="details">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                {displayAsset.imageUrl ? (
+                {isValidImageUrl(displayAsset.imageUrl) ? (
                   <div className="relative aspect-video rounded-lg overflow-hidden">
                     <img
                       src={displayAsset.imageUrl}
