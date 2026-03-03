@@ -10,6 +10,11 @@
  * @returns Promise that resolves when printing is complete or rejects on error
  */
 export const printContent = (content: string, title: string = 'Print'): Promise<void> => {
+  // Delegate to the iframe implementation — popup-free and not blocked by browsers
+  return printContentWithIframe(content, title);
+};
+
+const _printContentLegacy = (content: string, title: string = 'Print'): Promise<void> => {
   return new Promise((resolve, reject) => {
     try {
       console.log("Print content called with content length:", content?.length || 0);

@@ -4,7 +4,7 @@ import { Printer } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { printContent } from "@/util/print";
+import { printContentWithIframe } from "@/util/print";
 import { useTranslation } from "@/contexts/TranslationContext";
 
 interface Asset {
@@ -194,7 +194,7 @@ export function PrintAssetReportButton({
       setProgress(90);
       
       // Print the report
-      await printContent(reportHtml, `${t('asset_report')} - ${asset.name}`);
+      await printContentWithIframe(reportHtml, `${t('asset_report')} - ${asset.name}`);
       
       setProgress(100);
       
