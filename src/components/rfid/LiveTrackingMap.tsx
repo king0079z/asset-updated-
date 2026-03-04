@@ -24,15 +24,16 @@ interface Zone {
   floorPlanId?: string | null;
 }
 
+// Matches /api/rfid/locations response shape
 interface AssetLocation {
   tagId: string;
-  assetId?: string | null;
-  assetName?: string | null;
+  tagMac: string;
   status: string;
   batteryLevel?: number | null;
+  lastRssi?: number | null;
   lastSeenAt?: string | null;
-  lastZoneId?: string | null;
-  zoneName?: string | null;
+  zone?: { id: string; name: string; mapX?: number | null; mapY?: number | null; floorPlanId?: string | null } | null;
+  asset?: { id: string; name: string } | null;
 }
 
 interface TooltipState {
@@ -66,31 +67,36 @@ export default function LiveTrackingMap() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const fetchLocations = useCallback(async () => {
-    const res = await fetch('/api/rfid/locations');
-    if (res.ok) {
-      const data = await res.json();
-      setLocations(data.locations ?? data.tags ?? []);
-      setLastRefresh(new Date());
-    }
+    try {
+      const res = await fetch('/api/rfid/locations');
+      if (res.ok) {
+        const data = await res.json();
+        setLocations(data.locations ?? []);
+        setLastRefresh(new Date());
+      }
+    } catch { /* silent */ }
   }, []);
 
   const fetchBase = useCallback(async () => {
     setLoading(true);
-    const [plansRes, zonesRes] = await Promise.all([
-      fetch('/api/rfid/floor-plans'),
-      fetch('/api/rfid/zones'),
-    ]);
-    if (plansRes.ok) {
-      const { plans } = await plansRes.json();
-      setFloorPlans(plans ?? []);
-      if (plans?.length > 0) setSelectedPlan(plans[0]);
+    try {
+      const [plansRes, zonesRes] = await Promise.all([
+        fetch('/api/rfid/floor-plans'),
+        fetch('/api/rfid/zones'),
+      ]);
+      if (plansRes.ok) {
+        const { plans } = await plansRes.json();
+        setFloorPlans(plans ?? []);
+        if ((plans ?? []).length > 0) setSelectedPlan(plans[0]);
+      }
+      if (zonesRes.ok) {
+        const { zones: z } = await zonesRes.json();
+        setZones(z ?? []);
+      }
+      await fetchLocations();
+    } catch { /* silent */ } finally {
+      setLoading(false);
     }
-    if (zonesRes.ok) {
-      const { zones: z } = await zonesRes.json();
-      setZones(z ?? []);
-    }
-    await fetchLocations();
-    setLoading(false);
   }, [fetchLocations]);
 
   useEffect(() => {
@@ -101,8 +107,11 @@ export default function LiveTrackingMap() {
 
   const planZones = zones.filter(z => z.floorPlanId === selectedPlan?.id && z.mapX != null);
 
+  // Assets whose current zone belongs to this floor plan
+  const planZoneIds = new Set(planZones.map(z => z.id));
   const getZoneAssets = (zoneId: string) =>
-    locations.filter(l => l.lastZoneId === zoneId);
+    locations.filter(l => l.zone?.id === zoneId);
+  const assetsInPlan = locations.filter(l => l.zone?.id && planZoneIds.has(l.zone.id));
 
   const getZoneCentroid = (zone: Zone) => ({
     x: (zone.mapX ?? 0) + (zone.mapWidth ?? 0) / 2,
@@ -111,18 +120,15 @@ export default function LiveTrackingMap() {
 
   const handleDotClick = (e: React.MouseEvent, tag: AssetLocation) => {
     e.stopPropagation();
-    const rect = containerRef.current!.getBoundingClientRect();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
     setTooltip({ tag, x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
-  // Assets in zones on this floor plan
-  const planZoneIds = new Set(planZones.map(z => z.id));
-  const assetsInPlan = locations.filter(l => l.lastZoneId && planZoneIds.has(l.lastZoneId));
-
   // Stats
-  const active   = assetsInPlan.filter(l => l.status === 'ACTIVE').length;
-  const lowBat   = assetsInPlan.filter(l => l.status === 'LOW_BATTERY').length;
-  const missing  = assetsInPlan.filter(l => l.status === 'MISSING').length;
+  const active  = assetsInPlan.filter(l => l.status === 'ACTIVE').length;
+  const lowBat  = assetsInPlan.filter(l => l.status === 'LOW_BATTERY').length;
+  const missing = assetsInPlan.filter(l => l.status === 'MISSING').length;
 
   if (loading) {
     return (
@@ -142,7 +148,7 @@ export default function LiveTrackingMap() {
           </svg>
         </div>
         <h3 className="text-lg font-semibold mb-2">No Floor Plans</h3>
-        <p className="text-sm text-muted-foreground">Upload a floor plan in the Zone Editor tab to enable live tracking</p>
+        <p className="text-sm text-muted-foreground">Switch to Edit Zones mode and upload a floor plan to enable live tracking</p>
       </div>
     );
   }
@@ -169,11 +175,12 @@ export default function LiveTrackingMap() {
           </Select>
         )}
 
-        {/* Live stats */}
-        <div className="flex gap-2 ml-auto">
-          <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0">
-            {active} Active
-          </Badge>
+        <div className="flex gap-2 ml-auto flex-wrap">
+          {active > 0 && (
+            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0">
+              {active} Active
+            </Badge>
+          )}
           {lowBat > 0 && (
             <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 border-0">
               {lowBat} Low Battery
@@ -184,6 +191,9 @@ export default function LiveTrackingMap() {
               {missing} Missing
             </Badge>
           )}
+          {assetsInPlan.length === 0 && (
+            <Badge variant="outline" className="text-muted-foreground">No assets on this floor</Badge>
+          )}
           <Button variant="outline" size="sm" onClick={fetchLocations} className="h-7 text-xs">
             Refresh
           </Button>
@@ -193,7 +203,7 @@ export default function LiveTrackingMap() {
       {/* Map */}
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded-xl border shadow-sm"
+        className="relative w-full overflow-hidden rounded-xl border shadow-sm select-none"
       >
         <img
           src={selectedPlan.imageUrl}
@@ -202,13 +212,12 @@ export default function LiveTrackingMap() {
           draggable={false}
         />
 
-        {/* SVG Overlay */}
+        {/* SVG Overlay — zones */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
         >
-          {/* Zone rectangles */}
           {planZones.map(zone => (
             <g key={zone.id}>
               <rect
@@ -219,7 +228,6 @@ export default function LiveTrackingMap() {
                 strokeWidth="0.3"
                 rx="0.5"
               />
-              {/* Zone label */}
               <text
                 x={zone.mapX! + zone.mapWidth! / 2}
                 y={zone.mapY! + 3}
@@ -230,7 +238,6 @@ export default function LiveTrackingMap() {
               >
                 {zone.name}
               </text>
-              {/* Asset count badge in zone */}
               {getZoneAssets(zone.id).length > 0 && (
                 <g>
                   <circle
@@ -256,73 +263,80 @@ export default function LiveTrackingMap() {
           ))}
         </svg>
 
-        {/* Asset dots (HTML, positioned with %) */}
+        {/* Asset dots (HTML positioned with %) */}
         {planZones.map(zone => {
           const assets = getZoneAssets(zone.id);
           const centroid = getZoneCentroid(zone);
           return assets.map((tag, i) => {
             const spread = assets.length > 1 ? (i - (assets.length - 1) / 2) * 2.5 : 0;
-            const left   = `${centroid.x + spread}%`;
-            const top    = `${centroid.y}%`;
             return (
               <button
                 key={tag.tagId}
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-transform hover:scale-125 focus:outline-none z-10"
+                className="absolute transform -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg hover:scale-125 focus:outline-none z-10 transition-transform"
                 style={{
-                  left, top,
-                  width: 18, height: 18,
+                  left:       `${centroid.x + spread}%`,
+                  top:        `${centroid.y}%`,
+                  width:      18,
+                  height:     18,
                   background: STATUS_COLOR[tag.status] ?? STATUS_COLOR.UNASSIGNED,
-                  animation: tag.status === 'ACTIVE' ? 'pulse 2s infinite' : 'none',
                 }}
                 onClick={e => handleDotClick(e, tag)}
-                title={tag.assetName ?? tag.tagId}
+                title={tag.asset?.name ?? tag.tagMac}
               />
             );
           });
         })}
 
         {/* Tooltip */}
-        {tooltip && (
-          <div
-            className="absolute z-20 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border p-3 w-52 text-xs"
-            style={{ left: Math.min(tooltip.x + 10, (containerRef.current?.clientWidth ?? 400) - 220), top: Math.max(tooltip.y - 80, 8) }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: STATUS_COLOR[tooltip.tag.status] }} />
-              <p className="font-semibold truncate">{tooltip.tag.assetName ?? tooltip.tag.tagId}</p>
-            </div>
-            <div className="space-y-1 text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Status</span>
-                <span className="font-medium text-foreground">{tooltip.tag.status.replace('_', ' ')}</span>
+        {tooltip && (() => {
+          const containerWidth = containerRef.current?.clientWidth ?? 400;
+          const left = Math.min(tooltip.x + 12, containerWidth - 220);
+          const top  = Math.max(tooltip.y - 90, 8);
+          return (
+            <div
+              className="absolute z-20 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border p-3 w-52 text-xs"
+              style={{ left, top }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ background: STATUS_COLOR[tooltip.tag.status] ?? STATUS_COLOR.UNASSIGNED }}
+                />
+                <p className="font-semibold truncate">{tooltip.tag.asset?.name ?? tooltip.tag.tagMac}</p>
               </div>
-              <div className="flex justify-between">
-                <span>Zone</span>
-                <span className="font-medium text-foreground truncate">{tooltip.tag.zoneName ?? '—'}</span>
+              <div className="space-y-1 text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>Status</span>
+                  <span className="font-medium text-foreground">{tooltip.tag.status.replace('_', ' ')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Zone</span>
+                  <span className="font-medium text-foreground truncate ml-2">{tooltip.tag.zone?.name ?? '—'}</span>
+                </div>
+                {tooltip.tag.batteryLevel != null && (
+                  <div className="flex justify-between">
+                    <span>Battery</span>
+                    <span className={`font-medium ${tooltip.tag.batteryLevel <= 20 ? 'text-amber-500' : 'text-foreground'}`}>
+                      {tooltip.tag.batteryLevel}%
+                    </span>
+                  </div>
+                )}
+                {tooltip.tag.lastSeenAt && (
+                  <div className="flex justify-between">
+                    <span>Last seen</span>
+                    <span className="font-medium text-foreground">
+                      {new Date(tooltip.tag.lastSeenAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                )}
               </div>
-              {tooltip.tag.batteryLevel != null && (
-                <div className="flex justify-between">
-                  <span>Battery</span>
-                  <span className={`font-medium ${tooltip.tag.batteryLevel <= 20 ? 'text-amber-500' : 'text-foreground'}`}>
-                    {tooltip.tag.batteryLevel}%
-                  </span>
-                </div>
-              )}
-              {tooltip.tag.lastSeenAt && (
-                <div className="flex justify-between">
-                  <span>Last seen</span>
-                  <span className="font-medium text-foreground">
-                    {new Date(tooltip.tag.lastSeenAt).toLocaleTimeString()}
-                  </span>
-                </div>
-              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
-      {/* Legend */}
+      {/* Legend + refresh info */}
       <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
         {Object.entries(STATUS_COLOR).map(([status, color]) => (
           <div key={status} className="flex items-center gap-1.5">
@@ -331,18 +345,11 @@ export default function LiveTrackingMap() {
           </div>
         ))}
         <div className="flex items-center gap-1.5">
-          <div className="w-4 h-3 rounded" style={{ background: ZONE_FILL.restricted, border: '1px solid rgba(239,68,68,0.6)' }} />
-          <span>Restricted Zone</span>
+          <div className="w-4 h-3 rounded border" style={{ background: ZONE_FILL.restricted, borderColor: 'rgba(239,68,68,0.6)' }} />
+          <span>Restricted</span>
         </div>
         <span className="ml-auto">Auto-refreshes every 10s · Last: {lastRefresh.toLocaleTimeString()}</span>
       </div>
-
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
-          50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
-        }
-      `}</style>
     </div>
   );
 }

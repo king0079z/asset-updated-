@@ -197,8 +197,8 @@ export default function ZoneMapEditor({ organizationId, onZoneUpdated }: ZoneMap
         const data = await uploadRes.json();
         imageUrl = data.url;
       } else {
-        // Fallback: create object URL (local preview only)
-        imageUrl = URL.createObjectURL(file);
+        const errData = await uploadRes.json().catch(() => ({}));
+        throw new Error(errData.error ?? `Upload failed (${uploadRes.status})`);
       }
 
       const img = new Image();

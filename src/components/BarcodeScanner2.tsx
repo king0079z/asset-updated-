@@ -213,8 +213,8 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
             setAsset(fd.asset);
             setNotFound(null);
             setView('found');
-            return;
-          }
+          return;
+        }
         }
       }
 
@@ -580,7 +580,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
             ${asset.imageUrl
               ? `<img src="${asset.imageUrl}" alt="${asset.name}" />`
               : `<div class="cover-img-placeholder">📦</div>`}
-          </div>
+                  </div>
           <div class="cover-info">
             <div class="cover-label">Asset Report</div>
             <div class="cover-name">${asset.name}</div>
@@ -588,13 +588,13 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
             <div class="cover-status" style="background:${(statusColor[asset.status] || '#6b7280') + '25'};color:${statusColor[asset.status] || '#6b7280'}">
               <span class="cover-status-dot"></span>
               ${asset.status}
-            </div>
-          </div>
+                    </div>
+                      </div>
           <div class="cover-right">
             <div class="cover-date">${now}</div>
             <div class="cover-id">ID: ${asset.assetId || asset.id?.slice(-8) || '—'}</div>
             ${asset.barcode ? `<div class="cover-id">BC: ${asset.barcode}</div>` : ''}
-          </div>
+                  </div>
         </div>
 
         <div class="body">
@@ -695,7 +695,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
       {extOpen === undefined && (
         <Button onClick={() => setOpen(true)} className="flex items-center gap-2 bg-primary hover:bg-primary/90" size="lg">
           <Scan className="h-5 w-5" /> Scan Asset
-        </Button>
+                  </Button>
       )}
 
       <DialogPrimitive.Root open={isOpen} onOpenChange={o => !o && close()}>
@@ -787,12 +787,12 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                           <div key={i} className={`absolute ${p} -translate-x-0.5 -translate-y-0.5 w-2 h-2 rounded-full bg-primary`}
                             style={{ boxShadow: '0 0 10px 3px hsl(var(--primary)/0.7)' }} />
                         ))}
-                      </div>
-                    </div>
+              </div>
+            </div>
 
                     {/* bottom fade */}
                     <div className="absolute bottom-0 inset-x-0 h-2/5 bg-gradient-to-t from-[#09090f] via-[#09090f]/60 to-transparent" />
-                  </div>
+              </div>
                 )}
 
                 {/* cam loading / error */}
@@ -819,16 +819,16 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                         <div className="space-y-2">
                           <Button size="sm" onClick={startCam} className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90">
                             <RefreshCcw className="h-4 w-4 mr-2" /> Retry
-                          </Button>
+                        </Button>
                           <Button size="sm" variant="ghost" onClick={() => { stopCam(); setView('manual'); }}
                             className="w-full h-10 rounded-xl text-white/50 hover:text-white hover:bg-white/8">
                             <Keyboard className="h-4 w-4 mr-2" /> Manual Entry
-                          </Button>
-                        </div>
+                        </Button>
+                      </div>
                       </div>
                     )}
-                  </div>
-                )}
+                    </div>
+                  )}
 
                 {/* camera bottom hint */}
                 {view === 'camera' && !camLoading && !camError && (
@@ -838,8 +838,8 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                       className="flex items-center gap-2 text-white/35 hover:text-white/70 text-sm transition-colors py-1">
                       <Keyboard className="h-3.5 w-3.5" /> Enter code manually
                     </button>
-                  </div>
-                )}
+                    </div>
+                  )}
 
                 {/* manual entry */}
                 {view === 'manual' && (
@@ -866,9 +866,9 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                         className="w-full flex items-center justify-center gap-2 text-white/30 hover:text-white/60 text-sm py-2 transition-colors">
                         <Camera className="h-4 w-4" /> Back to camera
                       </button>
-                    </div>
-                  </div>
-                )}
+                          </div>
+                        </div>
+                      )}
 
                 {/* searching overlay */}
                 {searching && (
@@ -877,7 +877,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                       <div className="absolute inset-0 rounded-full border-[2px] border-primary/15 border-t-primary animate-spin" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <Scan className="h-6 w-6 text-primary/50" />
-                      </div>
+                    </div>
                     </div>
                     <p className="text-white/60 text-[15px] font-medium">Searching…</p>
                     <p className="text-white/25 text-xs mt-1">Looking up in database</p>
@@ -899,7 +899,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         <span className="text-emerald-400 text-[11px] font-bold tracking-widest">LOCATED</span>
                       </div>
-                    </div>
+                      </div>
 
                     {/* asset card */}
                     <div className="rounded-2xl overflow-hidden border border-white/8"
@@ -911,7 +911,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                           {asset.imageUrl
                             ? <Image src={asset.imageUrl} alt={asset.name} width={56} height={56} className="object-cover w-full h-full" unoptimized />
                             : <Package className="h-6 w-6 text-white/15" />}
-                        </div>
+                    </div>
                         {/* text */}
                         <div className="flex-1 min-w-0">
                           <h2 className="text-white font-bold text-[16px] leading-tight truncate">{asset.name}</h2>
@@ -921,8 +921,8 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                               <span className={`w-1.5 h-1.5 rounded-full ${getStatus(asset.status).dot}`} />
                               {asset.status}
                             </span>
-                          </div>
-                        </div>
+                  </div>
+                </div>
                       </div>
 
                       {/* location strip */}
@@ -936,9 +936,9 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                             <Icon className="h-3 w-3 text-white/20 mb-0.5" />
                             <p className="text-white/20 text-[9px] uppercase tracking-wider">{label}</p>
                             <p className={`text-white/75 text-[11px] font-semibold truncate max-w-full mt-0.5 ${mono ? 'font-mono' : ''}`}>{val}</p>
-                          </div>
+                        </div>
                         ))}
-                      </div>
+                </div>
                     </div>
                   </div>
 
@@ -1017,7 +1017,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                       sub="Retire asset"
                       glow="0 8px 32px rgba(239,68,68,0.15)"
                     />
-                  </div>
+            </div>
 
                   {/* Print Report — full-width */}
                   <button
@@ -1030,13 +1030,13 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                       {printingReport
                         ? <Loader2 className="h-5 w-5 text-white/60 animate-spin" />
                         : <Printer className="h-5 w-5 text-white/60" />}
-                    </div>
+                      </div>
                     <div className="text-left">
                       <p className="text-white/80 text-[13px] font-bold leading-tight">
                         {printingReport ? 'Generating Report…' : 'Print Asset Report'}
                       </p>
                       <p className="text-white/30 text-[11px] mt-0.5">Full history, tickets & details</p>
-                    </div>
+                      </div>
                     {!printingReport && <FileText className="h-4 w-4 text-white/20 ml-auto" />}
                   </button>
 
@@ -1044,8 +1044,8 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                     className="w-full flex items-center justify-center gap-2 text-white/25 hover:text-white/55 text-[13px] py-2.5 transition-colors">
                     <RotateCcw className="h-3.5 w-3.5" /> Scan another asset
                   </button>
-                </div>
-              </div>
+                      </div>
+                      </div>
             )}
 
             {/* ══ NOT FOUND ══ */}
@@ -1057,7 +1057,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                     <div className="absolute inset-0 rounded-full bg-red-500/8 border border-red-500/15" />
                     <div className="absolute inset-3 rounded-full bg-red-500/12 border border-red-500/20 flex items-center justify-center">
                       <AlertTriangle className="h-8 w-8 text-red-400" />
-                    </div>
+                        </div>
                   </div>
                   <h2 className="text-white font-bold text-xl mb-2">Not Found</h2>
                   <p className="text-white/35 text-sm mb-3">No asset matched this code</p>
@@ -1081,7 +1081,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                     className="w-full text-white/25 hover:text-white/55 text-sm py-2 transition-colors">
                     Try manual entry
                   </button>
-                </div>
+                    </div>
               </div>
             )}
 
@@ -1091,8 +1091,8 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                 {asset.imageUrl && (
                   <div className="relative h-40 rounded-2xl overflow-hidden bg-white/5 border border-white/8">
                     <Image src={asset.imageUrl} alt={asset.name} fill className="object-contain p-3" unoptimized />
-                  </div>
-                )}
+                      </div>
+                    )}
 
                 <DetailSection title="Asset">
                   <DetailRow label="Name"   value={asset.name} />
@@ -1117,7 +1117,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                     <p className="px-4 py-3 text-white/60 text-sm leading-relaxed">{asset.description}</p>
                   </DetailSection>
                 )}
-              </div>
+                    </div>
             )}
 
             {/* ══ PANEL: TRANSFER ══ */}
@@ -1136,16 +1136,16 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                         <p className="text-white/30 text-xs">{asset.name}</p>
                       </div>
                     </div>
-                  </div>
+              </div>
 
                   {/* divider */}
                   <div className="flex items-center gap-3 mb-5">
                     <div className="flex-1 h-px bg-white/6" />
                     <div className="w-7 h-7 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
                       <ArrowRightLeft className="h-3.5 w-3.5 text-violet-400" />
-                    </div>
+              </div>
                     <div className="flex-1 h-px bg-white/6" />
-                  </div>
+            </div>
 
                   {/* to */}
                   <p className="text-white/25 text-[10px] uppercase tracking-widest mb-3 font-bold">To</p>
@@ -1153,15 +1153,15 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                     <form onSubmit={transferForm.handleSubmit(doTransfer)} className="space-y-3">
                       {(['floorNumber', 'roomNumber'] as const).map(f => (
                         <FormField key={f} control={transferForm.control} name={f}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
                                 <Input {...field}
                                   placeholder={f === 'floorNumber' ? 'New Floor (e.g. 3)' : 'New Room (e.g. 201)'}
                                   className="h-12 bg-white/5 border-white/10 text-white placeholder:text-white/20 rounded-2xl focus-visible:ring-violet-500/30 focus-visible:border-violet-500/40 text-[15px]" />
-                              </FormControl>
+                          </FormControl>
                               <FormMessage className="text-red-400 text-xs px-1" />
-                            </FormItem>
+                        </FormItem>
                           )} />
                       ))}
                       <div className="flex gap-2.5 pt-2">
@@ -1216,8 +1216,8 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                   <div className="flex gap-2.5 mt-auto">
                     <Button variant="ghost" onClick={back}
                       className="flex-1 h-12 rounded-2xl text-white/40 hover:text-white hover:bg-white/8">
-                      Cancel
-                    </Button>
+                    Cancel
+                  </Button>
                     <Button onClick={doStatusChange} disabled={savingStatus || !pickedStatus}
                       className="flex-1 h-12 rounded-2xl font-semibold bg-primary hover:bg-primary/90">
                       {savingStatus ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Activity className="h-4 w-4 mr-2" /> Save Status</>}
@@ -1255,7 +1255,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                     Cancel, Go Back
                   </Button>
                 </div>
-              </div>
+          </div>
             )}
           </div>
           </DialogPrimitive.Content>
