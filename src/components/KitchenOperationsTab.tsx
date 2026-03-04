@@ -18,15 +18,6 @@ interface KitchenOperationsTabProps {
   allKitchens?: { id: string; name: string }[];
 }
 
-const statusColors: Record<string, string> = {
-  PLANNED: 'bg-blue-100 text-blue-700',
-  IN_PROGRESS: 'bg-yellow-100 text-yellow-700',
-  COMPLETED: 'bg-green-100 text-green-700',
-  CANCELLED: 'bg-red-100 text-red-700',
-  PENDING: 'bg-orange-100 text-orange-700',
-  APPROVED: 'bg-green-100 text-green-700',
-  REJECTED: 'bg-red-100 text-red-700',
-};
 
 export function KitchenOperationsTab({ kitchenId, kitchenName, allKitchens = [] }: KitchenOperationsTabProps) {
   const { toast } = useToast();
@@ -171,73 +162,125 @@ export function KitchenOperationsTab({ kitchenId, kitchenName, allKitchens = [] 
     }
   };
 
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      PLANNED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      IN_PROGRESS: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+      COMPLETED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+      CANCELLED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+      PENDING: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+      APPROVED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+      REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    };
+    return (
+      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${map[status] || 'bg-muted text-muted-foreground'}`}>
+        {status}
+      </span>
+    );
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">Kitchen Operations</h2>
-          <p className="text-sm text-muted-foreground">Manage production, ordering, and stock movements for {kitchenName || 'this kitchen'}</p>
+          <h2 className="text-base font-bold">Kitchen Operations</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Production batches, purchase orders &amp; stock transfers for{' '}
+            <span className="font-semibold">{kitchenName || 'this kitchen'}</span>
+          </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchAll} disabled={isLoading}>
-          <RefreshCw className={`h-4 w-4 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
+        <Button variant="outline" size="sm" onClick={fetchAll} disabled={isLoading} className="gap-1.5">
+          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
 
-      {/* Summary cards */}
+      {/* Summary stat tiles */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Planned Batches', value: batches.filter(b => b.status === 'PLANNED').length, icon: ClipboardList, color: 'text-blue-600' },
-          { label: 'Pending Orders', value: orders.filter(o => o.status === 'PENDING').length, icon: ShoppingCart, color: 'text-orange-600' },
-          { label: 'Pending Transfers', value: transfers.filter(t => t.status === 'PENDING').length, icon: ArrowLeftRight, color: 'text-purple-600' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <Icon className={`h-6 w-6 ${color}`} />
-              <div>
-                <p className="text-2xl font-bold">{value}</p>
-                <p className="text-xs text-muted-foreground">{label}</p>
-              </div>
-            </CardContent>
-          </Card>
+          {
+            label: 'Planned Batches', value: batches.filter(b => b.status === 'PLANNED').length,
+            icon: ClipboardList,
+            gradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20',
+            iconBg: 'bg-blue-100 dark:bg-blue-900/30', iconColor: 'text-blue-600 dark:text-blue-400',
+            bar: 'from-blue-500 to-indigo-500',
+          },
+          {
+            label: 'Pending Orders', value: orders.filter(o => o.status === 'PENDING').length,
+            icon: ShoppingCart,
+            gradient: 'from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20',
+            iconBg: 'bg-orange-100 dark:bg-orange-900/30', iconColor: 'text-orange-600 dark:text-orange-400',
+            bar: 'from-orange-500 to-amber-500',
+          },
+          {
+            label: 'Pending Transfers', value: transfers.filter(t => t.status === 'PENDING').length,
+            icon: ArrowLeftRight,
+            gradient: 'from-purple-50 to-violet-50 dark:from-purple-950/20 dark:to-violet-950/20',
+            iconBg: 'bg-purple-100 dark:bg-purple-900/30', iconColor: 'text-purple-600 dark:text-purple-400',
+            bar: 'from-purple-500 to-violet-500',
+          },
+        ].map(({ label, value, icon: Icon, gradient, iconBg, iconColor, bar }) => (
+          <div key={label} className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${gradient} p-4 ring-1 ring-inset ring-black/5 dark:ring-white/5`}>
+            <div className={`h-9 w-9 rounded-xl ${iconBg} flex items-center justify-center mb-3`}>
+              <Icon className={`h-4.5 w-4.5 ${iconColor}`} />
+            </div>
+            <p className="text-2xl font-bold tabular-nums">{value}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+            <div className={`absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r ${bar}`} />
+          </div>
         ))}
       </div>
 
       <Tabs value={activeOp} onValueChange={(v: any) => setActiveOp(v)}>
-        <TabsList className="grid grid-cols-3">
-          <TabsTrigger value="batches"><ClipboardList className="h-4 w-4 mr-1.5" />Production</TabsTrigger>
-          <TabsTrigger value="orders"><ShoppingCart className="h-4 w-4 mr-1.5" />Purchase Orders</TabsTrigger>
-          <TabsTrigger value="transfers"><ArrowLeftRight className="h-4 w-4 mr-1.5" />Stock Transfers</TabsTrigger>
+        <TabsList className="bg-muted/50 p-1 rounded-xl gap-1 h-auto">
+          <TabsTrigger value="batches" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm gap-1.5 text-xs">
+            <ClipboardList className="h-3.5 w-3.5" />Production
+          </TabsTrigger>
+          <TabsTrigger value="orders" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm gap-1.5 text-xs">
+            <ShoppingCart className="h-3.5 w-3.5" />Purchase Orders
+          </TabsTrigger>
+          <TabsTrigger value="transfers" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-sm gap-1.5 text-xs">
+            <ArrowLeftRight className="h-3.5 w-3.5" />Stock Transfers
+          </TabsTrigger>
         </TabsList>
 
         {/* ---- Production Batches ---- */}
-        <TabsContent value="batches">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">Production Batches</CardTitle>
-              <Button size="sm" onClick={() => setBatchDialog(true)}>
-                <Plus className="h-4 w-4 mr-1.5" />Plan Batch
+        <TabsContent value="batches" className="mt-4">
+          <Card className="border-0 ring-1 ring-border/60 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-border/50">
+              <div>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-blue-600" />
+                  Production Batches
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">{batches.length} total batches planned</p>
+              </div>
+              <Button size="sm" onClick={() => setBatchDialog(true)} className="gap-1.5 bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-3.5 w-3.5" />Plan Batch
               </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               {batches.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  <p>No production batches yet.</p>
-                  <p className="text-xs mt-1">Plan a batch to schedule recipe production in advance.</p>
+                <div className="flex flex-col items-center justify-center py-12 rounded-xl border-2 border-dashed border-border text-center">
+                  <div className="h-12 w-12 rounded-full bg-blue-50 dark:bg-blue-950/20 flex items-center justify-center mb-3">
+                    <ClipboardList className="h-6 w-6 text-blue-400" />
+                  </div>
+                  <p className="font-medium text-sm mb-1">No production batches yet</p>
+                  <p className="text-xs text-muted-foreground max-w-xs">Plan a batch to schedule recipe production in advance.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {batches.map(batch => (
-                    <div key={batch.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{batch.recipe?.name || 'Unknown Recipe'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Qty: {batch.quantity} servings · {batch.scheduledDate ? format(new Date(batch.scheduledDate), 'dd MMM yyyy') : '—'}
+                    <div key={batch.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate">{batch.recipe?.name || 'Unknown Recipe'}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {batch.quantity} servings · {batch.scheduledDate ? format(new Date(batch.scheduledDate), 'dd MMM yyyy') : '—'}
                         </p>
-                        {batch.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{batch.notes}</p>}
+                        {batch.notes && <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{batch.notes}</p>}
                       </div>
-                      <Badge className={statusColors[batch.status] || 'bg-gray-100 text-gray-700'}>{batch.status}</Badge>
+                      <div className="ml-3 flex-shrink-0">{statusBadge(batch.status)}</div>
                     </div>
                   ))}
                 </div>
@@ -247,35 +290,43 @@ export function KitchenOperationsTab({ kitchenId, kitchenName, allKitchens = [] 
         </TabsContent>
 
         {/* ---- Purchase Orders ---- */}
-        <TabsContent value="orders">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">Purchase Orders</CardTitle>
-              <Button size="sm" onClick={() => setOrderDialog(true)}>
-                <Plus className="h-4 w-4 mr-1.5" />New Order
+        <TabsContent value="orders" className="mt-4">
+          <Card className="border-0 ring-1 ring-border/60 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-border/50">
+              <div>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4 text-orange-600" />
+                  Purchase Orders
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">{orders.length} orders total</p>
+              </div>
+              <Button size="sm" onClick={() => setOrderDialog(true)} className="gap-1.5 bg-orange-600 hover:bg-orange-700">
+                <Plus className="h-3.5 w-3.5" />New Order
               </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               {orders.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <ShoppingCart className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  <p>No purchase orders yet.</p>
-                  <p className="text-xs mt-1">Create an order to restock ingredients from a vendor.</p>
+                <div className="flex flex-col items-center justify-center py-12 rounded-xl border-2 border-dashed border-border text-center">
+                  <div className="h-12 w-12 rounded-full bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center mb-3">
+                    <ShoppingCart className="h-6 w-6 text-orange-400" />
+                  </div>
+                  <p className="font-medium text-sm mb-1">No purchase orders yet</p>
+                  <p className="text-xs text-muted-foreground max-w-xs">Create an order to restock ingredients from a vendor.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {orders.map(order => (
-                    <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{order.vendor?.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {order.items?.length} item{order.items?.length !== 1 ? 's' : ''} · {order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}
+                    <div key={order.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm">{order.vendor?.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {order.items?.length ?? 0} item{(order.items?.length ?? 0) !== 1 ? 's' : ''} · {order.createdAt ? format(new Date(order.createdAt), 'dd MMM yyyy') : '—'}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          Total: QAR {order.items?.reduce((s: number, i: any) => s + (i.quantity * (i.unitPrice || i.foodSupply?.pricePerUnit || 0)), 0).toFixed(2)}
+                        <p className="text-xs font-medium text-orange-700 dark:text-orange-400 mt-0.5">
+                          QAR {(order.items ?? []).reduce((s: number, i: any) => s + (Number(i.quantity) * Number(i.unitPrice || i.foodSupply?.pricePerUnit || 0)), 0).toFixed(2)}
                         </p>
                       </div>
-                      <Badge className={statusColors[order.status] || 'bg-gray-100 text-gray-700'}>{order.status}</Badge>
+                      <div className="ml-3 flex-shrink-0">{statusBadge(order.status)}</div>
                     </div>
                   ))}
                 </div>
@@ -285,34 +336,52 @@ export function KitchenOperationsTab({ kitchenId, kitchenName, allKitchens = [] 
         </TabsContent>
 
         {/* ---- Stock Transfers ---- */}
-        <TabsContent value="transfers">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">Stock Transfers</CardTitle>
-              <Button size="sm" onClick={() => setTransferDialog(true)} disabled={allKitchens.filter(k => k.id !== kitchenId).length === 0}>
-                <Plus className="h-4 w-4 mr-1.5" />Transfer Stock
+        <TabsContent value="transfers" className="mt-4">
+          <Card className="border-0 ring-1 ring-border/60 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-border/50">
+              <div>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ArrowLeftRight className="h-4 w-4 text-purple-600" />
+                  Stock Transfers
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">{transfers.length} transfers recorded</p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setTransferDialog(true)}
+                disabled={allKitchens.filter(k => k.id !== kitchenId).length === 0}
+                className="gap-1.5 bg-purple-600 hover:bg-purple-700"
+              >
+                <Plus className="h-3.5 w-3.5" />Transfer Stock
               </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               {transfers.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <ArrowLeftRight className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  <p>No stock transfers yet.</p>
-                  <p className="text-xs mt-1">Move inventory between kitchens to balance supply.</p>
+                <div className="flex flex-col items-center justify-center py-12 rounded-xl border-2 border-dashed border-border text-center">
+                  <div className="h-12 w-12 rounded-full bg-purple-50 dark:bg-purple-950/20 flex items-center justify-center mb-3">
+                    <ArrowLeftRight className="h-6 w-6 text-purple-400" />
+                  </div>
+                  <p className="font-medium text-sm mb-1">No stock transfers yet</p>
+                  <p className="text-xs text-muted-foreground max-w-xs">
+                    {allKitchens.filter(k => k.id !== kitchenId).length === 0
+                      ? 'You need at least 2 kitchens to transfer stock between them.'
+                      : 'Move inventory between kitchens to balance supply.'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {transfers.map(t => (
-                    <div key={t.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">
-                          {t.fromLocation?.name} → {t.toLocation?.name}
+                  {transfers.map(tr => (
+                    <div key={tr.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm">
+                          {tr.fromLocation?.name || 'Source'} → {tr.toLocation?.name || 'Destination'}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {t.items?.length} item{t.items?.length !== 1 ? 's' : ''} · {t.requestedAt ? format(new Date(t.requestedAt), 'dd MMM yyyy') : '—'}
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {tr.items?.length ?? 0} item{(tr.items?.length ?? 0) !== 1 ? 's' : ''} · {tr.requestedAt ? format(new Date(tr.requestedAt), 'dd MMM yyyy') : '—'}
                         </p>
+                        {tr.notes && <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{tr.notes}</p>}
                       </div>
-                      <Badge className={statusColors[t.status] || 'bg-gray-100 text-gray-700'}>{t.status}</Badge>
+                      <div className="ml-3 flex-shrink-0">{statusBadge(tr.status)}</div>
                     </div>
                   ))}
                 </div>

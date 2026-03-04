@@ -36,6 +36,7 @@ import { KitchenFoodSupplyOverview } from './KitchenFoodSupplyOverview';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConsumptionTabContent } from './ConsumptionTabContent';
+import { RefillFoodSupplyDialog } from './RefillFoodSupplyDialog';
 import { 
   Utensils, 
   Building2, 
@@ -145,6 +146,7 @@ export function UserKitchenPageSimplified() {
     }
   }>({});
   const CACHE_EXPIRATION = 5 * 60 * 1000;
+  const [refillItem, setRefillItem] = useState<FoodSupply | null>(null);
 
   const fetchAssignments = async () => {
     try {
@@ -486,7 +488,7 @@ export function UserKitchenPageSimplified() {
                       {t('consumption')}
                     </CardTabs.Trigger>
                     <CardTabs.Trigger value="operations" icon={<ClipboardList className="h-4 w-4" />}>
-                      Operations
+                      {t('operations') || 'Operations'}
                     </CardTabs.Trigger>
                   </CardTabs.List>
 
@@ -731,8 +733,6 @@ export function UserKitchenPageSimplified() {
                               const isExpiringSoon = daysUntilExpiration <= 7;
                               const isLowStock = lowStockItems.some(item => item.id === supply.id);
                               const totalValue = (supply.pricePerUnit * supply.quantity).toFixed(0);
-                              // Stock level as % (max 100)
-                              const stockPct = Math.min(100, Math.round((supply.quantity / Math.max(supply.quantity, 1)) * 100));
 
                               return (
                                 <div
@@ -825,7 +825,12 @@ export function UserKitchenPageSimplified() {
                                         buttonLabel={t('consume')}
                                         onSuccess={fetchFoodSupplies}
                                       />
-                                      <Button variant="outline" size="sm" className="flex-1 text-xs h-8">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1 text-xs h-8"
+                                        onClick={() => setRefillItem(supply)}
+                                      >
                                         {t('update')}
                                       </Button>
                                     </div>
@@ -885,6 +890,42 @@ export function UserKitchenPageSimplified() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Refill / Update food supply dialog */}
+      {refillItem && (
+        <RefillFoodSupplyDialog
+          open={!!refillItem}
+          onOpenChange={(open) => { if (!open) setRefillItem(null); }}
+          item={{
+            id: refillItem.id,
+            name: refillItem.name,
+            quantity: refillItem.quantity,
+            unit: refillItem.unit,
+            expirationDate: new Date(refillItem.expirationDate),
+            isExpired: new Date(refillItem.expirationDate) < new Date(),
+          }}
+          onRefill={async ({ id, newQuantity, newExpirationDate, disposedQuantity }) => {
+            try {
+              const res = await fetch('/api/food-supply/refill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  foodSupplyId: id,
+                  quantity: newQuantity,
+                  expirationDate: newExpirationDate,
+                  disposedQuantity,
+                }),
+              });
+              if (!res.ok) throw new Error('Failed to update food supply');
+              setRefillItem(null);
+              await fetchFoodSupplies(true);
+              toast({ title: t('success'), description: 'Food supply updated successfully.' });
+            } catch {
+              toast({ title: t('error'), description: 'Failed to update food supply.', variant: 'destructive' });
+            }
+          }}
+        />
       )}
     </div>
   );
