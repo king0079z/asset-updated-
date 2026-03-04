@@ -1,8 +1,6 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { useButtonVisibility } from "@/hooks/useButtonVisibility";
 import {
@@ -15,9 +13,7 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Printer,
   Building2,
-  DoorOpen,
   Edit,
   Ticket,
   History,
@@ -29,7 +25,6 @@ import {
   Briefcase,
   UserCheck,
   User,
-  UserX,
   Radio,
   Signal,
   Battery,
@@ -37,12 +32,16 @@ import {
   BatteryCharging,
   Tag,
   Wifi,
-  Link as LinkIcon,
+  ChevronRight,
+  Package,
+  Zap,
+  ArrowRight,
+  MoreHorizontal,
+  Printer,
 } from "lucide-react";
 import { EditAssetDialog } from "./EditAssetDialog";
 import { AssignAssetDialog } from "./AssignAssetDialog";
 import { useRef, useState, useEffect } from "react";
-import { useReactToPrint } from "react-to-print";
 import Barcode from "react-barcode";
 import { QRCodeSVG as QRCode } from "qrcode.react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -50,6 +49,7 @@ import { CreateTicketDialog } from "./CreateTicketDialog";
 import PrintBarcodeButton from "./PrintBarcodeButton";
 import { AssetHealthDashboard } from "./AssetHealthDashboard";
 import { AssetDocumentsTab } from "./AssetDocumentsTab";
+import { PrintAssetReportButton } from "./PrintAssetReportButton";
 
 interface Asset {
   id: string;
@@ -57,21 +57,15 @@ interface Asset {
   name: string;
   description?: string;
   type: string;
-  status: 'ACTIVE' | 'IN_TRANSIT' | 'DISPOSED';
+  status: "ACTIVE" | "IN_TRANSIT" | "DISPOSED";
   imageUrl?: string;
   floorNumber?: string;
   roomNumber?: string;
   purchaseAmount?: number;
   purchaseDate?: string;
   barcode?: string;
-  vendor?: {
-    name: string;
-  };
-  location?: {
-    latitude: number;
-    longitude: number;
-    address?: string;
-  };
+  vendor?: { name: string };
+  location?: { latitude: number; longitude: number; address?: string };
   createdAt: string;
   lastMovedAt?: string;
   assignedToName?: string | null;
@@ -87,26 +81,14 @@ interface Asset {
 }
 
 interface Ticket {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  priority: string;
-  createdAt: string;
-  updatedAt: string;
-  user: {
-    email: string;
-  };
+  id: string; title: string; description: string;
+  status: string; priority: string; createdAt: string; updatedAt: string;
+  user: { email: string };
 }
 
 interface AssetHistory {
-  id: string;
-  action: string;
-  createdAt: string;
-  details?: any;
-  user: {
-    email: string;
-  };
+  id: string; action: string; createdAt: string; details?: any;
+  user: { email: string };
 }
 
 interface AssetDetailsDialogProps {
@@ -116,68 +98,57 @@ interface AssetDetailsDialogProps {
   onAssetUpdated?: () => void;
 }
 
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'ACTIVE':
-      return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-    case 'IN_TRANSIT':
-      return <AlertCircle className="h-4 w-4 text-yellow-500" />;
-    case 'DISPOSED':
-      return <XCircle className="h-4 w-4 text-red-500" />;
-    default:
-      return null;
-  }
-};
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'ACTIVE':
-      return 'bg-green-100 text-green-800';
-    case 'IN_TRANSIT':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'DISPOSED':
-      return 'bg-red-100 text-red-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-};
-
-const getTicketStatusColor = (status: string) => {
-  switch (status) {
-    case 'OPEN':
-      return 'bg-blue-100 text-blue-800';
-    case 'IN_PROGRESS':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'RESOLVED':
-      return 'bg-green-100 text-green-800';
-    case 'CLOSED':
-      return 'bg-gray-100 text-gray-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-};
-
-const getPriorityColor = (priority: string) => {
-  switch (priority) {
-    case 'LOW':
-      return 'bg-green-100 text-green-800';
-    case 'MEDIUM':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'HIGH':
-      return 'bg-red-100 text-red-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-};
-
 function isValidImageUrl(url: string | null | undefined): url is string {
-  if (!url || typeof url !== 'string') return false;
+  if (!url || typeof url !== "string") return false;
   const trimmed = url.trim();
   if (!trimmed || /[\r\n\t]/.test(trimmed) || /%0[DA]/i.test(trimmed)) return false;
   try {
     const p = new URL(trimmed);
-    return p.protocol === 'http:' || p.protocol === 'https:';
+    return p.protocol === "http:" || p.protocol === "https:";
   } catch { return false; }
+}
+
+const STATUS_MAP = {
+  ACTIVE:     { label: "Active",     dot: "bg-emerald-500", badge: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-800", icon: CheckCircle2, glow: "shadow-emerald-200 dark:shadow-emerald-900" },
+  IN_TRANSIT: { label: "In Transit", dot: "bg-amber-500",   badge: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-800",           icon: AlertCircle,  glow: "shadow-amber-200 dark:shadow-amber-900" },
+  DISPOSED:   { label: "Disposed",   dot: "bg-red-500",     badge: "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-800",                       icon: XCircle,      glow: "shadow-red-200 dark:shadow-red-900" },
+};
+
+const TICKET_STATUS_COLORS: Record<string, string> = {
+  OPEN:        "bg-blue-100 text-blue-800 border-blue-200",
+  IN_PROGRESS: "bg-amber-100 text-amber-800 border-amber-200",
+  RESOLVED:    "bg-emerald-100 text-emerald-800 border-emerald-200",
+  CLOSED:      "bg-slate-100 text-slate-700 border-slate-200",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  LOW:    "bg-slate-100 text-slate-700 border-slate-200",
+  MEDIUM: "bg-amber-100 text-amber-800 border-amber-200",
+  HIGH:   "bg-red-100 text-red-800 border-red-200",
+  URGENT: "bg-purple-100 text-purple-800 border-purple-200",
+};
+
+const HISTORY_CONFIG: Record<string, { color: string; bg: string; border: string; icon: any }> = {
+  MOVED:          { color: "text-blue-600",   bg: "bg-blue-50 dark:bg-blue-950/30",     border: "border-blue-200 dark:border-blue-800",   icon: MapPin },
+  DISPOSED:       { color: "text-red-600",    bg: "bg-red-50 dark:bg-red-950/30",       border: "border-red-200 dark:border-red-800",     icon: XCircle },
+  TICKET_CREATED: { color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950/30", border: "border-purple-200 dark:border-purple-800",icon: Ticket },
+  TASK_CREATED:   { color: "text-amber-600",  bg: "bg-amber-50 dark:bg-amber-950/30",   border: "border-amber-200 dark:border-amber-800", icon: Calendar },
+  UPDATED:        { color: "text-emerald-600",bg: "bg-emerald-50 dark:bg-emerald-950/30",border: "border-emerald-200 dark:border-emerald-800",icon: Edit },
+  REGISTERED:     { color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950/30", border: "border-indigo-200 dark:border-indigo-800",icon: Package },
+};
+
+function InfoRow({ icon: Icon, label, value, mono = false }: { icon: any; label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0">
+      <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">{label}</p>
+        <div className={`text-sm font-medium text-foreground ${mono ? "font-mono" : ""}`}>{value}</div>
+      </div>
+    </div>
+  );
 }
 
 export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }: AssetDetailsDialogProps) {
@@ -192,84 +163,42 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
   const [currentAsset, setCurrentAsset] = useState(asset);
-  const [rfidTag, setRfidTag] = useState<Asset['rfidTag'] | null>(null);
+  const [rfidTag, setRfidTag] = useState<Asset["rfidTag"] | null>(null);
   const [rfidLoading, setRfidLoading] = useState(false);
-
-  const handlePrint = useReactToPrint({
-    content: () => printRef.current,
-  });
 
   const handleAssetUpdated = async () => {
     setIsEditDialogOpen(false);
-    // Fetch the latest asset data and update the dialog in-place so the new image shows immediately
     if (asset?.id) {
       try {
-        const res = await fetch(`/api/assets?assetId=${asset.assetId}&refresh=1`, {
-          headers: { 'Cache-Control': 'no-cache' },
-        });
+        const res = await fetch(`/api/assets?assetId=${asset.assetId}&refresh=1`, { headers: { "Cache-Control": "no-cache" } });
         if (res.ok) {
           const data = await res.json();
           const updated = data?.asset ?? data;
           if (updated?.id) setCurrentAsset(updated as Asset);
         }
-      } catch {
-        // non-critical — dialog still open with old data
-      }
+      } catch { /* ignore */ }
+      onAssetUpdated?.();
     }
-    // Tell the parent page to also refresh its list (bypasses cache)
-    onAssetUpdated?.();
   };
 
   const fetchTickets = async () => {
-    if (!asset) return;
-    
+    if (!asset?.id) return;
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const response = await fetch(`/api/assets/${asset.id}/tickets`);
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching tickets: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setTickets(data);
-    } catch (error) {
-      console.error("Failed to fetch tickets:", error);
-    } finally {
-      setIsLoading(false);
-    }
+      const res = await fetch(`/api/tickets?assetId=${asset.id}`);
+      if (res.ok) setTickets(await res.json());
+    } catch { /* ignore */ } finally { setIsLoading(false); }
   };
 
   const fetchHistory = async () => {
-    if (!asset) return;
-    
+    if (!asset?.id) return;
     try {
-      setIsLoading(true);
-      console.log(`Fetching history for asset: ${asset.id}`);
-      
-      const response = await fetch(`/api/assets/${asset.id}/history`);
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching history: ${response.statusText}`);
+      const res = await fetch(`/api/assets/${asset.id}/history`);
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data.history ?? data ?? []);
       }
-      
-      const data = await response.json();
-      console.log('History data received:', data);
-      
-      // Check if data.history exists and is an array
-      if (data && data.history && Array.isArray(data.history)) {
-        setHistory(data.history);
-      } else {
-        console.error('Invalid history data format:', data);
-        throw new Error('Invalid history data format');
-      }
-    } catch (error) {
-      console.error("Failed to fetch history:", error);
-      // Set an empty array to prevent undefined errors
-      setHistory([]);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {
@@ -277,9 +206,8 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
       setCurrentAsset(asset);
       fetchTickets();
       fetchHistory();
-      // Fetch live RFID tag data for this asset
       setRfidLoading(true);
-      fetch(`/api/rfid/tags`)
+      fetch("/api/rfid/tags")
         .then(r => r.ok ? r.json() : { tags: [] })
         .then(data => {
           const tag = (data.tags ?? []).find((t: any) => t.asset?.id === asset.id) ?? null;
@@ -297,75 +225,569 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   };
 
   if (!asset) return null;
-
-  // Always use the most up-to-date asset data for display (currentAsset is refreshed after edits)
   const displayAsset = currentAsset || asset;
+  const statusMeta = STATUS_MAP[displayAsset.status] ?? STATUS_MAP.ACTIVE;
+  const StatusIcon = statusMeta.icon;
+  const hasImage = isValidImageUrl(displayAsset.imageUrl);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <DialogTitle>{t('asset_details')}</DialogTitle>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAssignDialogOpen(true)}
-                className="flex items-center gap-2 text-xs sm:text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
-              >
-                <UserCheck className="h-4 w-4" />
-                <span>{currentAsset?.assignedToName ? 'Reassign' : 'Assign To'}</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsCreateTicketDialogOpen(true)}
-                className="flex items-center gap-2 text-xs sm:text-sm"
-              >
-                <Ticket className="h-4 w-4" />
-                <span className="hidden xs:inline">{t('create_ticket')}</span>
-                <span className="xs:hidden">{t('ticket')}</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditDialogOpen(true)}
-                className="flex items-center gap-2 text-xs sm:text-sm"
-              >
-                <Edit className="h-4 w-4" />
-                <span className="hidden xs:inline">{t('edit_asset')}</span>
-                <span className="xs:hidden">{t('edit')}</span>
-              </Button>
-              {displayAsset.status !== 'DISPOSED' && isButtonVisible('dispose_asset') && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.dispatchEvent(new CustomEvent('dispose-asset', { detail: displayAsset }))}
-                  className="flex items-center gap-2 text-xs sm:text-sm text-destructive"
+      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[95vh] flex flex-col">
+
+        {/* ── HERO HEADER ─────────────────────────────────────────── */}
+        <div className="relative flex-shrink-0">
+          {/* Background: blurred image or gradient */}
+          {hasImage ? (
+            <div className="absolute inset-0 overflow-hidden">
+              <img src={displayAsset.imageUrl} alt="" className="w-full h-full object-cover scale-110 blur-sm opacity-30" />
+              <div className="absolute inset-0 bg-gradient-to-b from-slate-900/80 via-slate-900/70 to-slate-900/90" />
+            </div>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-indigo-950" />
+          )}
+
+          <div className="relative z-10 p-6 pb-5">
+            <div className="flex items-start gap-5">
+              {/* Asset image / icon */}
+              <div className={`w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 border-2 border-white/20 shadow-xl ${statusMeta.glow} shadow-lg`}>
+                {hasImage ? (
+                  <img src={displayAsset.imageUrl} alt={displayAsset.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+                    <Package className="h-9 w-9 text-white/80" />
+                  </div>
+                )}
+              </div>
+
+              {/* Title + meta */}
+              <div className="flex-1 min-w-0 pt-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${statusMeta.badge}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${statusMeta.dot} ${displayAsset.status === "ACTIVE" ? "animate-pulse" : ""}`} />
+                    {statusMeta.label}
+                  </span>
+                  <span className="text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded-full border border-white/10 font-medium">{displayAsset.type}</span>
+                  {rfidTag?.status === "ACTIVE" && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                      <Radio className="h-2.5 w-2.5 animate-pulse" /> Live RFID
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl font-bold text-white leading-tight truncate">{displayAsset.name}</h2>
+                <p className="text-xs text-white/50 mt-0.5 font-mono">{displayAsset.assetId}</p>
+              </div>
+
+              {/* Action toolbar */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => setIsAssignDialogOpen(true)}
+                  title={currentAsset?.assignedToName ? "Reassign" : "Assign To"}
+                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="hidden xs:inline">{t('dispose_asset')}</span>
-                  <span className="xs:hidden">{t('dispose')}</span>
-                </Button>
-              )}
+                  <UserCheck className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setIsCreateTicketDialogOpen(true)}
+                  title="Create Ticket"
+                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all"
+                >
+                  <Ticket className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setIsEditDialogOpen(true)}
+                  title="Edit Asset"
+                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all"
+                >
+                  <Edit className="h-4 w-4" />
+                </button>
+                {displayAsset.status !== "DISPOSED" && isButtonVisible("dispose_asset") && (
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent("dispose-asset", { detail: displayAsset }))}
+                    title="Dispose Asset"
+                    className="w-9 h-9 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 flex items-center justify-center transition-all"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Assignment strip */}
+            {currentAsset?.assignedToName ? (
+              <div className="mt-4 flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                  {currentAsset.assignedToName[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-white/90 font-semibold truncate">{currentAsset.assignedToName}</p>
+                  {currentAsset.assignedToEmail && <p className="text-[10px] text-white/50 truncate">{currentAsset.assignedToEmail}</p>}
+                </div>
+                {currentAsset.assignedAt && (
+                  <p className="text-[10px] text-white/40 flex-shrink-0">since {new Date(currentAsset.assignedAt).toLocaleDateString()}</p>
+                )}
+                <button onClick={() => setIsAssignDialogOpen(true)} className="text-[10px] text-emerald-300 hover:text-emerald-200 font-semibold ml-1">Change</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsAssignDialogOpen(true)}
+                className="mt-4 w-full flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-dashed border-white/20 rounded-xl px-3 py-2 text-white/40 hover:text-white/60 transition-all text-left"
+              >
+                <User className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="text-xs">Not assigned — click to assign</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── BARCODE / QR STRIP ──────────────────────────────────── */}
+        <div className="bg-muted/30 border-b border-border/50 px-6 py-4 flex-shrink-0">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-6 flex-wrap" ref={printRef}>
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Barcode</p>
+                <Barcode value={displayAsset.barcode || displayAsset.assetId} width={1.2} height={36} format="CODE128" displayValue={false} margin={0} />
+                <p className="text-[10px] font-mono text-muted-foreground">{displayAsset.barcode || displayAsset.assetId}</p>
+              </div>
+              <div className="w-px h-12 bg-border/60 self-center hidden sm:block" />
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">QR Code</p>
+                <QRCode value={displayAsset.barcode || displayAsset.assetId} size={48} level="H" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <PrintBarcodeButton
+                barcodeValue={displayAsset.barcode || displayAsset.assetId}
+                displayText={displayAsset.assetId}
+                title={displayAsset.name}
+                subtitle={`Asset ID: ${displayAsset.assetId}`}
+                variant="outline"
+              />
+              <PrintAssetReportButton asset={displayAsset as any} />
             </div>
           </div>
-        </DialogHeader>
+        </div>
 
-        <EditAssetDialog
-          asset={currentAsset}
-          open={isEditDialogOpen}
-          onOpenChange={setIsEditDialogOpen}
-          onAssetUpdated={handleAssetUpdated}
-        />
+        {/* ── TABS ────────────────────────────────────────────────── */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+            {/* Pill tab bar */}
+            <div className="px-6 pt-4 flex-shrink-0">
+              <TabsList className="h-10 bg-muted/50 rounded-xl p-1 flex gap-0.5 w-full">
+                {[
+                  { value: "details",   icon: Info,     label: "Details" },
+                  { value: "rfid",      icon: Radio,    label: "RFID", dot: rfidTag ? (rfidTag.status === "ACTIVE" ? "bg-emerald-500" : rfidTag.status === "LOW_BATTERY" ? "bg-amber-500" : "bg-red-500") : null },
+                  { value: "health",    icon: Activity, label: "Health" },
+                  { value: "tickets",   icon: Ticket,   label: "Tickets", count: tickets.length },
+                  { value: "history",   icon: History,  label: "History", count: history.length },
+                  { value: "documents", icon: FileText,  label: "Docs" },
+                ].map(tab => {
+                  const Icon = tab.icon;
+                  return (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className="flex-1 flex items-center justify-center gap-1.5 h-8 text-xs font-semibold rounded-lg relative data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
+                    >
+                      <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span className="hidden sm:inline">{tab.label}</span>
+                      {tab.dot && <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${tab.dot} ${tab.dot === "bg-emerald-500" ? "animate-pulse" : ""}`} />}
+                      {tab.count !== undefined && tab.count > 0 && (
+                        <span className="bg-primary text-primary-foreground text-[9px] font-bold px-1 py-0 rounded-full leading-tight min-w-[14px] text-center">{tab.count}</span>
+                      )}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+            </div>
 
+            {/* Scrollable tab content */}
+            <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4">
+
+              {/* ── DETAILS TAB ──────────────────────────────────── */}
+              <TabsContent value="details" className="mt-0">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                  {/* Left: image + description */}
+                  <div className="lg:col-span-2 space-y-4">
+                    <div className="aspect-video rounded-2xl overflow-hidden border border-border/50 shadow-sm">
+                      {hasImage ? (
+                        <img src={displayAsset.imageUrl} alt={displayAsset.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex flex-col items-center justify-center gap-2">
+                          <Package className="h-10 w-10 text-slate-300 dark:text-slate-600" />
+                          <p className="text-xs text-muted-foreground">No image</p>
+                        </div>
+                      )}
+                    </div>
+                    {displayAsset.description && (
+                      <div className="rounded-2xl border border-border/50 bg-muted/30 p-4">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Description</p>
+                        <p className="text-sm text-foreground leading-relaxed">{displayAsset.description}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: info fields */}
+                  <div className="lg:col-span-3 rounded-2xl border border-border/50 bg-card overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border/50 bg-muted/30">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Asset Information</h3>
+                    </div>
+                    <div className="px-4 divide-y divide-border/40">
+                      <InfoRow icon={Box} label="Type" value={displayAsset.type} />
+                      <InfoRow icon={Hash} label="Asset ID" value={displayAsset.assetId} mono />
+                      {displayAsset.barcode && <InfoRow icon={Hash} label="Barcode" value={displayAsset.barcode} mono />}
+                      <InfoRow
+                        icon={DollarSign}
+                        label="Purchase Details"
+                        value={
+                          <span>
+                            {displayAsset.purchaseAmount
+                              ? <span className="font-bold text-foreground">QAR {displayAsset.purchaseAmount.toLocaleString()}</span>
+                              : <span className="text-muted-foreground">—</span>}
+                            {displayAsset.purchaseDate && (() => {
+                              try {
+                                if (!displayAsset.purchaseDate || displayAsset.purchaseDate === "null") return null;
+                                const d = new Date(displayAsset.purchaseDate);
+                                if (isNaN(d.getTime())) return null;
+                                return <span className="text-muted-foreground ml-2 text-xs">· {d.toLocaleDateString()}</span>;
+                              } catch { return null; }
+                            })()}
+                          </span>
+                        }
+                      />
+                      {(displayAsset.floorNumber || displayAsset.roomNumber) && (
+                        <InfoRow
+                          icon={Building2}
+                          label="Building Location"
+                          value={
+                            <span className="flex items-center gap-2 flex-wrap">
+                              {displayAsset.floorNumber && <span className="bg-muted px-2 py-0.5 rounded-md text-xs font-semibold">Floor {displayAsset.floorNumber}</span>}
+                              {displayAsset.roomNumber  && <span className="bg-muted px-2 py-0.5 rounded-md text-xs font-semibold">Room {displayAsset.roomNumber}</span>}
+                            </span>
+                          }
+                        />
+                      )}
+                      {displayAsset.location && (
+                        <InfoRow
+                          icon={MapPin}
+                          label="GPS Location"
+                          value={
+                            <span className="flex items-center gap-2 flex-wrap">
+                              <span>{displayAsset.location.address || `${displayAsset.location.latitude.toFixed(4)}, ${displayAsset.location.longitude.toFixed(4)}`}</span>
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${displayAsset.location.latitude},${displayAsset.location.longitude}`}
+                                target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                              >
+                                <ExternalLink className="h-3 w-3" /> Map
+                              </a>
+                            </span>
+                          }
+                        />
+                      )}
+                      {displayAsset.vendor && (
+                        <InfoRow icon={Briefcase} label="Vendor" value={displayAsset.vendor.name} />
+                      )}
+                      <InfoRow
+                        icon={Calendar}
+                        label="Dates"
+                        value={
+                          <span className="flex flex-col gap-0.5">
+                            <span>Created: {new Date(displayAsset.createdAt).toLocaleDateString()}</span>
+                            {displayAsset.lastMovedAt && <span className="text-muted-foreground text-xs">Last moved: {new Date(displayAsset.lastMovedAt).toLocaleDateString()}</span>}
+                          </span>
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* ── RFID TAB ─────────────────────────────────────── */}
+              <TabsContent value="rfid" className="mt-0">
+                <div className="space-y-4">
+                  {rfidLoading ? (
+                    <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                      <Radio className="h-5 w-5 animate-pulse text-indigo-500" />
+                      <span className="text-sm">Loading RFID data…</span>
+                    </div>
+                  ) : !rfidTag ? (
+                    <div className="rounded-2xl border-2 border-dashed border-border p-10 flex flex-col items-center gap-4 text-center">
+                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950 dark:to-violet-950 border border-indigo-100 dark:border-indigo-900 flex items-center justify-center">
+                        <Radio className="h-9 w-9 text-indigo-300 dark:text-indigo-600" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-base">No RFID / BLE Tag Linked</p>
+                        <p className="text-sm text-muted-foreground mt-1 max-w-xs">Attach a BLE beacon to this asset and register it in the RFID dashboard to enable live tracking.</p>
+                      </div>
+                      <a href="/rfid" target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors shadow-lg shadow-indigo-200 dark:shadow-indigo-900">
+                        <Tag className="h-4 w-4" /> Open RFID Dashboard <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Status hero */}
+                      <div className={`rounded-2xl p-5 border flex items-center gap-4 ${
+                        rfidTag.status === "ACTIVE"      ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800" :
+                        rfidTag.status === "LOW_BATTERY" ? "bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800" :
+                        rfidTag.status === "MISSING"     ? "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800" :
+                        "bg-muted border-border"}`}>
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                          rfidTag.status === "ACTIVE" ? "bg-emerald-100 dark:bg-emerald-900" :
+                          rfidTag.status === "LOW_BATTERY" ? "bg-amber-100 dark:bg-amber-900" :
+                          rfidTag.status === "MISSING" ? "bg-red-100 dark:bg-red-900" : "bg-muted"}`}>
+                          <Radio className={`h-7 w-7 ${
+                            rfidTag.status === "ACTIVE" ? "text-emerald-600 animate-pulse" :
+                            rfidTag.status === "LOW_BATTERY" ? "text-amber-600" :
+                            rfidTag.status === "MISSING" ? "text-red-600" : "text-muted-foreground"}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                              rfidTag.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700 border-emerald-300" :
+                              rfidTag.status === "LOW_BATTERY" ? "bg-amber-100 text-amber-700 border-amber-300" :
+                              rfidTag.status === "MISSING" ? "bg-red-100 text-red-700 border-red-300" : "bg-muted text-muted-foreground border-border"}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${rfidTag.status === "ACTIVE" ? "bg-emerald-500 animate-pulse" : rfidTag.status === "LOW_BATTERY" ? "bg-amber-500" : rfidTag.status === "MISSING" ? "bg-red-500" : "bg-slate-400"}`} />
+                              {rfidTag.status.replace("_", " ")}
+                            </span>
+                            <span className="text-xs bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full font-semibold">{rfidTag.tagType}</span>
+                          </div>
+                          <p className="font-mono text-sm font-bold truncate">{rfidTag.tagId}</p>
+                          {rfidTag.lastSeenAt && <p className="text-xs text-muted-foreground mt-0.5">Last seen: {new Date(rfidTag.lastSeenAt).toLocaleString()}</p>}
+                        </div>
+                      </div>
+
+                      {/* Metrics row */}
+                      <div className="grid grid-cols-3 gap-3">
+                        {/* Battery */}
+                        <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
+                          <div className="flex justify-center">
+                            {rfidTag.batteryLevel == null ? <Battery className="h-6 w-6 text-muted-foreground/30" />
+                              : rfidTag.batteryLevel <= 20 ? <BatteryLow className="h-6 w-6 text-red-500" />
+                              : <BatteryCharging className="h-6 w-6 text-emerald-500" />}
+                          </div>
+                          <p className="text-2xl font-bold">{rfidTag.batteryLevel != null ? `${rfidTag.batteryLevel}%` : "—"}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Battery</p>
+                          {rfidTag.batteryLevel != null && (
+                            <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                              <div className={`h-full rounded-full ${rfidTag.batteryLevel > 50 ? "bg-emerald-500" : rfidTag.batteryLevel > 20 ? "bg-amber-500" : "bg-red-500"}`}
+                                style={{ width: `${rfidTag.batteryLevel}%` }} />
+                            </div>
+                          )}
+                        </div>
+                        {/* Signal */}
+                        <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
+                          <div className="flex justify-center">
+                            <Signal className={`h-6 w-6 ${rfidTag.lastRssi == null ? "text-muted-foreground/30" : rfidTag.lastRssi >= -60 ? "text-emerald-500" : rfidTag.lastRssi >= -75 ? "text-blue-500" : rfidTag.lastRssi >= -90 ? "text-amber-500" : "text-red-500"}`} />
+                          </div>
+                          <p className="text-2xl font-bold">{rfidTag.lastRssi != null ? rfidTag.lastRssi : "—"}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">RSSI (dBm)</p>
+                          {rfidTag.lastRssi != null && (
+                            <p className={`text-xs font-bold ${rfidTag.lastRssi >= -60 ? "text-emerald-600" : rfidTag.lastRssi >= -75 ? "text-blue-600" : rfidTag.lastRssi >= -90 ? "text-amber-600" : "text-red-600"}`}>
+                              {rfidTag.lastRssi >= -60 ? "Excellent" : rfidTag.lastRssi >= -75 ? "Good" : rfidTag.lastRssi >= -90 ? "Fair" : "Weak"}
+                            </p>
+                          )}
+                        </div>
+                        {/* Last seen */}
+                        <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
+                          <div className="flex justify-center"><Clock className="h-6 w-6 text-violet-500" /></div>
+                          <p className="text-sm font-bold leading-tight">
+                            {rfidTag.lastSeenAt ? (() => {
+                              const s = Math.floor((Date.now() - new Date(rfidTag.lastSeenAt).getTime()) / 1000);
+                              if (s < 60) return `${s}s ago`;
+                              if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+                              if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+                              return `${Math.floor(s / 86400)}d ago`;
+                            })() : "—"}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Seen</p>
+                          {rfidTag.lastSeenAt && <p className="text-[10px] text-muted-foreground">{new Date(rfidTag.lastSeenAt).toLocaleTimeString()}</p>}
+                        </div>
+                      </div>
+
+                      {/* Zone */}
+                      <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-blue-500" /> Current Zone</h4>
+                        {rfidTag.lastZone ? (
+                          <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900">
+                            <Wifi className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                            <div>
+                              <p className="font-bold text-sm">{rfidTag.lastZone.name}</p>
+                              <p className="text-xs text-muted-foreground">{[rfidTag.lastZone.building, rfidTag.lastZone.floorNumber && `Floor ${rfidTag.lastZone.floorNumber}`, rfidTag.lastZone.roomNumber && `Room ${rfidTag.lastZone.roomNumber}`].filter(Boolean).join(" · ") || "Zone location"}</p>
+                            </div>
+                          </div>
+                        ) : <p className="text-sm text-muted-foreground italic">Location not yet determined</p>}
+                      </div>
+
+                      {/* Tag details */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { label: "Tag ID / MAC", value: rfidTag.tagId, mono: true },
+                          { label: "Tag Type",     value: rfidTag.tagType },
+                          { label: "Manufacturer", value: rfidTag.manufacturer || "—" },
+                          { label: "Model",        value: rfidTag.model || "—" },
+                        ].map(f => (
+                          <div key={f.label} className="rounded-xl border border-border bg-muted/40 p-3">
+                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">{f.label}</p>
+                            <p className={`text-sm font-semibold truncate ${f.mono ? "font-mono" : ""}`}>{f.value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <a href="/rfid" target="_blank" rel="noreferrer"
+                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors">
+                        <Radio className="h-4 w-4" /> View Full RFID Dashboard <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* ── HEALTH TAB ───────────────────────────────────── */}
+              <TabsContent value="health" className="mt-0">
+                <AssetHealthDashboard asset={asset} />
+              </TabsContent>
+
+              {/* ── TICKETS TAB ──────────────────────────────────── */}
+              <TabsContent value="tickets" className="mt-0">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+                    <Ticket className="h-5 w-5 animate-pulse" /> Loading tickets…
+                  </div>
+                ) : tickets.length > 0 ? (
+                  <div className="space-y-3">
+                    {tickets.map(ticket => (
+                      <div key={ticket.id} className="rounded-2xl border border-border bg-card p-4 hover:bg-muted/30 transition-colors">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <h4 className="font-bold text-sm leading-tight">{ticket.title}</h4>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLORS[ticket.priority] ?? PRIORITY_COLORS.LOW}`}>{ticket.priority}</span>
+                            <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${TICKET_STATUS_COLORS[ticket.status] ?? TICKET_STATUS_COLORS.OPEN}`}>{ticket.status}</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed mb-3">{ticket.description}</p>
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground border-t border-border/50 pt-2 mt-2">
+                          <span>{ticket.user.email}</span>
+                          <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center">
+                      <Ticket className="h-7 w-7 text-muted-foreground/40" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-muted-foreground">{t("no_tickets_found")}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{t("create_ticket_to_track")}</p>
+                    </div>
+                    <Button variant="outline" onClick={() => setIsCreateTicketDialogOpen(true)}>
+                      <Ticket className="h-4 w-4 mr-2" /> {t("create_ticket")}
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ── HISTORY TAB ──────────────────────────────────── */}
+              <TabsContent value="history" className="mt-0">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+                    <History className="h-5 w-5 animate-pulse" /> Loading history…
+                  </div>
+                ) : history.length > 0 ? (
+                  <div className="relative">
+                    <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-border/60" />
+                    <div className="space-y-3">
+                      {history.map((record) => {
+                        const cfg = HISTORY_CONFIG[record.action] ?? { color: "text-slate-600", bg: "bg-slate-50 dark:bg-slate-900/30", border: "border-slate-200 dark:border-slate-800", icon: Clock };
+                        const Icon = cfg.icon;
+                        return (
+                          <div key={record.id} className="relative pl-12">
+                            {/* Timeline dot */}
+                            <div className={`absolute left-2.5 top-3 w-5 h-5 rounded-full border-2 border-background flex items-center justify-center ${cfg.bg} ${cfg.border} border`}>
+                              <Icon className={`h-2.5 w-2.5 ${cfg.color}`} />
+                            </div>
+                            <div className={`rounded-2xl border p-4 ${cfg.border} ${cfg.bg}`}>
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full bg-background/60 border ${cfg.border} ${cfg.color}`}>
+                                  {record.action.replace(/_/g, " ")}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">{new Date(record.createdAt).toLocaleString()}</span>
+                              </div>
+
+                              {record.action === "MOVED" && record.details && (
+                                <div className="text-xs space-y-0.5">
+                                  <p><span className="font-semibold">From:</span> Floor {record.details.fromFloor || "—"}, Room {record.details.fromRoom || "—"}</p>
+                                  <p><span className="font-semibold">To:</span> Floor {record.details.toFloor}, Room {record.details.toRoom}</p>
+                                  {record.details.reason && <p><span className="font-semibold">Reason:</span> {record.details.reason}</p>}
+                                </div>
+                              )}
+                              {record.action === "TICKET_CREATED" && record.details && (
+                                <div className="text-xs space-y-0.5">
+                                  <p className="font-semibold">{record.details.ticketTitle}</p>
+                                  <p className="text-muted-foreground">{record.details.ticketDescription}</p>
+                                </div>
+                              )}
+                              {record.action === "UPDATED" && record.details && (
+                                <div className="text-xs space-y-1">
+                                  {Object.entries(record.details).map(([field, values]: [string, any]) => (
+                                    <div key={field} className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-semibold capitalize">{field.replace(/([A-Z])/g, " $1").trim()}:</span>
+                                      <span className="line-through text-muted-foreground">{values.from ?? "—"}</span>
+                                      <ArrowRight className="h-2.5 w-2.5 text-muted-foreground" />
+                                      <span className="font-semibold">{values.to ?? "—"}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {record.action === "REGISTERED" && record.details && (
+                                <div className="text-xs space-y-0.5">
+                                  {record.details.type && <p><span className="font-semibold">Type:</span> {record.details.type}</p>}
+                                  {record.details.floorNumber && <p><span className="font-semibold">Floor:</span> {record.details.floorNumber}</p>}
+                                  {record.details.purchaseAmount && <p><span className="font-semibold">Amount:</span> QAR {record.details.purchaseAmount.toLocaleString()}</p>}
+                                </div>
+                              )}
+                              {record.action === "DISPOSED" && record.details && (
+                                <div className="text-xs space-y-0.5">
+                                  <p><span className="font-semibold">Reason:</span> {record.details.reason || "Not specified"}</p>
+                                  {record.details.disposalMethod && <p><span className="font-semibold">Method:</span> {record.details.disposalMethod}</p>}
+                                </div>
+                              )}
+                              <p className="text-[10px] text-muted-foreground mt-2">by {record.user.email}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center">
+                      <History className="h-7 w-7 text-muted-foreground/40" />
+                    </div>
+                    <p className="font-bold text-muted-foreground">{t("no_history_found")}</p>
+                    <p className="text-sm text-muted-foreground">{t("asset_history_will_appear_here")}</p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ── DOCUMENTS TAB ────────────────────────────────── */}
+              <TabsContent value="documents" className="mt-0">
+                <AssetDocumentsTab assetId={asset.id} />
+              </TabsContent>
+
+            </div>
+          </Tabs>
+        </div>
+
+        {/* Sub-dialogs */}
+        <EditAssetDialog asset={currentAsset} open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen} onAssetUpdated={handleAssetUpdated} />
         <AssignAssetDialog
           asset={currentAsset}
           open={isAssignDialogOpen}
           onOpenChange={setIsAssignDialogOpen}
           onAssigned={() => {
-            // Refetch the asset to get updated assignment
             fetch(`/api/assets/${asset?.id}`)
               .then(r => r.ok ? r.json() : null)
               .then(data => { if (data?.asset) setCurrentAsset(data.asset); })
@@ -373,750 +795,12 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
             fetchHistory();
           }}
         />
-
         <CreateTicketDialog
           open={isCreateTicketDialogOpen}
           onOpenChange={setIsCreateTicketDialogOpen}
           onTicketCreated={handleTicketCreated}
           assetId={asset.id}
         />
-
-        {/* Barcode and QR Code Section */}
-        <div className="mb-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Barcode */}
-                <div className="flex flex-col items-center space-y-4" ref={printRef}>
-                  <h3 className="text-sm font-medium text-muted-foreground">{t('barcode')}</h3>
-                  <Barcode 
-                    value={displayAsset.barcode || displayAsset.assetId} 
-                    width={1.5}
-                    height={50}
-                    format="CODE128"
-                    displayValue={true}
-                  />
-                  <div className="text-sm text-muted-foreground">
-                    {t('asset_id')}: {displayAsset.assetId}
-                  </div>
-                </div>
-                
-                {/* QR Code */}
-                <div className="flex flex-col items-center space-y-4">
-                  <h3 className="text-sm font-medium text-muted-foreground">{t('qr_code')}</h3>
-                  <div className="w-[150px] h-[150px]">
-                    <QRCode 
-                      value={displayAsset.barcode || displayAsset.assetId}
-                      size={150}
-                      level="H"
-                    />
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {t('asset_id')}: {displayAsset.assetId}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-6 flex justify-center">
-                <PrintBarcodeButton
-                  barcodeValue={displayAsset.barcode || displayAsset.assetId}
-                  displayText={displayAsset.assetId}
-                  title={displayAsset.name}
-                  subtitle={`${t('asset_id')}: ${displayAsset.assetId}`}
-                  variant="outline"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Separator className="my-4" />
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="details" className="flex items-center gap-1.5">
-              <Info className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('details')}</span>
-            </TabsTrigger>
-            <TabsTrigger value="rfid" className="flex items-center gap-1.5 relative">
-              <Radio className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">RFID</span>
-              {rfidTag && (
-                <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full border border-background ${
-                  rfidTag.status === 'ACTIVE' ? 'bg-emerald-500' :
-                  rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-500' :
-                  rfidTag.status === 'MISSING' ? 'bg-red-500' : 'bg-slate-400'
-                }`} />
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="health" className="flex items-center gap-1.5">
-              <Activity className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('health')}</span>
-            </TabsTrigger>
-            <TabsTrigger value="tickets" className="flex items-center gap-1.5">
-              <Ticket className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('tickets')}</span>
-            </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-1.5">
-              <History className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('history')}</span>
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('documents')}</span>
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ── RFID / BLE Tracking Tab ─────────────────────────────── */}
-          <TabsContent value="rfid">
-            <div className="space-y-4 py-2">
-              {rfidLoading ? (
-                <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
-                  <Radio className="h-5 w-5 animate-pulse" /> Loading RFID data…
-                </div>
-              ) : !rfidTag ? (
-                /* No tag linked */
-                <div className="rounded-2xl border border-dashed border-border p-8 flex flex-col items-center gap-4 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center">
-                    <Radio className="h-8 w-8 text-muted-foreground/40" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-muted-foreground">No RFID / BLE Tag Linked</p>
-                    <p className="text-sm text-muted-foreground mt-1">Attach a BLE beacon to this asset and register it in the RFID dashboard to enable live tracking.</p>
-                  </div>
-                  <a
-                    href="/rfid"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
-                  >
-                    <Tag className="h-4 w-4" /> Go to RFID Dashboard
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              ) : (
-                <>
-                  {/* Status hero */}
-                  <div className={`rounded-2xl p-5 border flex items-center gap-4 ${
-                    rfidTag.status === 'ACTIVE'      ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800' :
-                    rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-50   border-amber-200   dark:bg-amber-950/40   dark:border-amber-800'   :
-                    rfidTag.status === 'MISSING'     ? 'bg-red-50     border-red-200     dark:bg-red-950/40     dark:border-red-800'     :
-                    'bg-muted border-border'
-                  }`}>
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      rfidTag.status === 'ACTIVE'      ? 'bg-emerald-100 dark:bg-emerald-900' :
-                      rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-100   dark:bg-amber-900'   :
-                      rfidTag.status === 'MISSING'     ? 'bg-red-100     dark:bg-red-900'     :
-                      'bg-muted-foreground/10'
-                    }`}>
-                      <Radio className={`h-6 w-6 ${
-                        rfidTag.status === 'ACTIVE'      ? 'text-emerald-600 dark:text-emerald-400' :
-                        rfidTag.status === 'LOW_BATTERY' ? 'text-amber-600   dark:text-amber-400'   :
-                        rfidTag.status === 'MISSING'     ? 'text-red-600     dark:text-red-400'     :
-                        'text-muted-foreground'
-                      } ${rfidTag.status === 'ACTIVE' ? 'animate-pulse' : ''}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
-                          rfidTag.status === 'ACTIVE'      ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-700' :
-                          rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-100   text-amber-700   border-amber-300   dark:bg-amber-900   dark:text-amber-300   dark:border-amber-700'   :
-                          rfidTag.status === 'MISSING'     ? 'bg-red-100     text-red-700     border-red-300     dark:bg-red-900     dark:text-red-300     dark:border-red-700'     :
-                          'bg-muted text-muted-foreground border-border'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            rfidTag.status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse' :
-                            rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-500' :
-                            rfidTag.status === 'MISSING' ? 'bg-red-500' : 'bg-slate-400'
-                          }`} />
-                          {rfidTag.status.replace('_', ' ')}
-                        </span>
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground font-semibold">{rfidTag.tagType}</span>
-                      </div>
-                      <p className="font-mono text-sm font-bold mt-1 truncate">{rfidTag.tagId}</p>
-                      {rfidTag.lastSeenAt && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Last seen: {new Date(rfidTag.lastSeenAt).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Current location */}
-                  <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-                    <h4 className="font-bold text-sm flex items-center gap-2"><MapPin className="h-4 w-4 text-blue-500" /> Current Location</h4>
-                    {rfidTag.lastZone ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900">
-                          <Wifi className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                          <div>
-                            <p className="font-bold text-sm">{rfidTag.lastZone.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {[rfidTag.lastZone.building, rfidTag.lastZone.floorNumber && `Floor ${rfidTag.lastZone.floorNumber}`, rfidTag.lastZone.roomNumber && `Room ${rfidTag.lastZone.roomNumber}`].filter(Boolean).join(' · ') || 'Zone location'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">Location not yet determined — waiting for AP scan</p>
-                    )}
-                  </div>
-
-                  {/* Signal + battery metrics */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {/* Battery */}
-                    <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
-                      <div className="flex justify-center">
-                        {rfidTag.batteryLevel == null ? (
-                          <Battery className="h-6 w-6 text-muted-foreground/40" />
-                        ) : rfidTag.batteryLevel <= 20 ? (
-                          <BatteryLow className="h-6 w-6 text-red-500" />
-                        ) : (
-                          <BatteryCharging className="h-6 w-6 text-emerald-500" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold">{rfidTag.batteryLevel != null ? `${rfidTag.batteryLevel}%` : '—'}</p>
-                        <p className="text-xs text-muted-foreground">Battery Level</p>
-                      </div>
-                      {rfidTag.batteryLevel != null && (
-                        <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${rfidTag.batteryLevel > 50 ? 'bg-emerald-500' : rfidTag.batteryLevel > 20 ? 'bg-amber-500' : 'bg-red-500'}`}
-                            style={{ width: `${rfidTag.batteryLevel}%` }} />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Signal strength */}
-                    <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
-                      <div className="flex justify-center">
-                        <Signal className={`h-6 w-6 ${
-                          rfidTag.lastRssi == null ? 'text-muted-foreground/40' :
-                          rfidTag.lastRssi >= -60 ? 'text-emerald-500' :
-                          rfidTag.lastRssi >= -75 ? 'text-blue-500' :
-                          rfidTag.lastRssi >= -90 ? 'text-amber-500' : 'text-red-500'
-                        }`} />
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold">{rfidTag.lastRssi != null ? `${rfidTag.lastRssi}` : '—'}</p>
-                        <p className="text-xs text-muted-foreground">RSSI (dBm)</p>
-                      </div>
-                      {rfidTag.lastRssi != null && (
-                        <p className={`text-xs font-semibold ${
-                          rfidTag.lastRssi >= -60 ? 'text-emerald-600 dark:text-emerald-400' :
-                          rfidTag.lastRssi >= -75 ? 'text-blue-600 dark:text-blue-400' :
-                          rfidTag.lastRssi >= -90 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'
-                        }`}>
-                          {rfidTag.lastRssi >= -60 ? 'Excellent' : rfidTag.lastRssi >= -75 ? 'Good' : rfidTag.lastRssi >= -90 ? 'Fair' : 'Weak'}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Last seen */}
-                    <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
-                      <div className="flex justify-center"><Clock className="h-6 w-6 text-violet-500" /></div>
-                      <div>
-                        <p className="text-sm font-bold leading-tight">
-                          {rfidTag.lastSeenAt ? (() => {
-                            const s = Math.floor((Date.now() - new Date(rfidTag.lastSeenAt).getTime()) / 1000);
-                            if (s < 60)    return `${s}s ago`;
-                            if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
-                            if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-                            return `${Math.floor(s / 86400)}d ago`;
-                          })() : '—'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Last Seen</p>
-                      </div>
-                      {rfidTag.lastSeenAt && (
-                        <p className="text-[10px] text-muted-foreground">{new Date(rfidTag.lastSeenAt).toLocaleTimeString()}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Tag details */}
-                  <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-                    <h4 className="font-bold text-sm flex items-center gap-2"><Tag className="h-4 w-4 text-indigo-500" /> Tag Details</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { label: 'Tag ID / MAC', value: rfidTag.tagId, mono: true },
-                        { label: 'Tag Type',     value: rfidTag.tagType },
-                        { label: 'Manufacturer', value: rfidTag.manufacturer || '—' },
-                        { label: 'Model',        value: rfidTag.model || '—' },
-                      ].map(f => (
-                        <div key={f.label} className="bg-muted/40 rounded-xl p-3">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{f.label}</p>
-                          <p className={`text-sm font-semibold truncate ${f.mono ? 'font-mono' : ''}`}>{f.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Link to full RFID dashboard */}
-                  <a
-                    href="/rfid"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors"
-                  >
-                    <Radio className="h-4 w-4" /> View Full RFID Dashboard
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </>
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="details">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                {isValidImageUrl(displayAsset.imageUrl) ? (
-                  <div className="relative aspect-video rounded-lg overflow-hidden">
-                    <img
-                      src={displayAsset.imageUrl}
-                      alt={displayAsset.name}
-                      className="object-cover w-full h-full"
-                    />
-                  </div>
-                ) : (
-                  <div className="aspect-video rounded-lg bg-muted flex items-center justify-center">
-                    <Box className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                )}
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-2xl font-semibold">{displayAsset.name}</h3>
-                      <Badge className={getStatusColor(displayAsset.status)}>
-                        <span className="flex items-center gap-1">
-                          {getStatusIcon(displayAsset.status)}
-                          {displayAsset.status}
-                        </span>
-                      </Badge>
-                    </div>
-                    <p className="text-muted-foreground">
-                      {displayAsset.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="space-y-6">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="grid grid-cols-1 gap-4">
-                      <div className="flex items-start gap-2">
-                        <Box className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="font-medium">{t('asset_type')}</p>
-                          <p className="text-sm text-muted-foreground">{displayAsset.type}</p>
-                        </div>
-                      </div>
-                      <Separator />
-                      <div className="flex items-start gap-2">
-                        <Hash className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="font-medium">{t('asset_id')}</p>
-                          <p className="text-sm text-muted-foreground">{displayAsset.assetId}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <DollarSign className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="font-medium">{t('purchase_details')}</p>
-                          {displayAsset.purchaseAmount && (
-                            <p className="text-sm text-muted-foreground">{t('amount')}: QAR {displayAsset.purchaseAmount.toLocaleString()}</p>
-                          )}
-                          <p className="text-sm text-muted-foreground">
-                            {t('date')}: {
-                              (() => {
-                                try {
-                                  if (!displayAsset.purchaseDate || displayAsset.purchaseDate === "null" || displayAsset.purchaseDate === "") {
-                                    return t('not_specified');
-                                  }
-                                  const date = new Date(displayAsset.purchaseDate);
-                                  if (isNaN(date.getTime())) return t('not_specified');
-                                  return date.toLocaleDateString();
-                                } catch {
-                                  return t('not_specified');
-                                }
-                              })()
-                            }
-                          </p>
-                        </div>
-                      </div>
-                      {(displayAsset.floorNumber || displayAsset.roomNumber) && (
-                        <div className="flex items-start gap-2">
-                          <Building2 className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
-                          <div className="flex-1">
-                            <p className="font-medium">{t('building_details')}</p>
-                            {displayAsset.floorNumber && (
-                              <p className="text-sm text-muted-foreground">{t('floor')}: {displayAsset.floorNumber}</p>
-                            )}
-                            {displayAsset.roomNumber && (
-                              <p className="text-sm text-muted-foreground">{t('room')}: {displayAsset.roomNumber}</p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {displayAsset.location && (
-                        <div className="flex items-start gap-2">
-                          <MapPin className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
-                          <div className="flex-1">
-                            <p className="font-medium">{t('location')}</p>
-                            {displayAsset.location.address ? (
-                              <p className="text-sm text-muted-foreground break-words">{displayAsset.location.address}</p>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">
-                                {displayAsset.location.latitude.toFixed(6)}, {displayAsset.location.longitude.toFixed(6)}
-                              </p>
-                            )}
-                            <div className="mt-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                className="h-8 text-xs"
-                                onClick={() => {
-                                  if (displayAsset.location) {
-                                    window.open(`https://www.google.com/maps/search/?api=1&query=${displayAsset.location.latitude},${displayAsset.location.longitude}`, '_blank');
-                                  }
-                                }}
-                              >
-                                <ExternalLink className="h-3 w-3 mr-1" />
-                                {t('view_on_map')}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {displayAsset.vendor && (
-                        <div className="flex items-start gap-2">
-                          <Briefcase className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
-                          <div className="flex-1">
-                            <p className="font-medium">{t('vendor')}</p>
-                            <p className="text-sm text-muted-foreground">{displayAsset.vendor.name}</p>
-                          </div>
-                        </div>
-                      )}
-                      <Separator />
-                      {/* Assignment Info */}
-                      <div className="flex items-start gap-2">
-                        <UserCheck className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="font-medium">Assignment</p>
-                          {currentAsset?.assignedToName ? (
-                            <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                                    {currentAsset.assignedToName[0]?.toUpperCase()}
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-semibold text-emerald-900">{currentAsset.assignedToName}</p>
-                                    {currentAsset.assignedToEmail && (
-                                      <p className="text-xs text-emerald-700">{currentAsset.assignedToEmail}</p>
-                                    )}
-                                    {currentAsset.assignedAt && (
-                                      <p className="text-xs text-emerald-600 mt-0.5">
-                                        Since {new Date(currentAsset.assignedAt).toLocaleDateString()}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setIsAssignDialogOpen(true)}
-                                  className="h-7 text-xs text-emerald-700 hover:bg-emerald-100"
-                                >
-                                  <Edit className="h-3 w-3 mr-1" /> Change
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="mt-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-slate-400">
-                                <User className="h-4 w-4" />
-                                <span className="text-sm">Not assigned</span>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setIsAssignDialogOpen(true)}
-                                className="h-7 text-xs border-indigo-300 text-indigo-600 hover:bg-indigo-50"
-                              >
-                                <UserCheck className="h-3 w-3 mr-1" /> Assign
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Calendar className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="font-medium">{t('dates')}</p>
-                          <p className="text-sm text-muted-foreground">{t('created')}: {new Date(displayAsset.createdAt).toLocaleDateString()}</p>
-                          {displayAsset.lastMovedAt && (
-                            <p className="text-sm text-muted-foreground">{t('last_moved')}: {new Date(displayAsset.lastMovedAt).toLocaleDateString()}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="health">
-            <AssetHealthDashboard asset={asset} />
-          </TabsContent>
-
-          <TabsContent value="tickets">
-            <Card>
-              <CardContent className="pt-6">
-                {isLoading ? (
-                  <div className="min-h-[200px] flex items-center justify-center">
-                    <p>{t('loading_tickets')}</p>
-                  </div>
-                ) : tickets.length > 0 ? (
-                  <div className="space-y-4">
-                    {tickets.map((ticket) => (
-                      <div key={ticket.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <h3 className="text-lg font-semibold">{ticket.title}</h3>
-                          <div className="flex gap-2">
-                            <Badge className={getTicketStatusColor(ticket.status)}>
-                              {ticket.status}
-                            </Badge>
-                            <Badge className={getPriorityColor(ticket.priority)}>
-                              {ticket.priority}
-                            </Badge>
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-4">{ticket.description}</p>
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>{t('created_by')}: {ticket.user.email}</span>
-                          <span>{t('created')}: {new Date(ticket.createdAt).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="min-h-[200px] flex items-center justify-center">
-                    <div className="text-center text-muted-foreground">
-                      <p className="text-lg mb-2">{t('no_tickets_found')}</p>
-                      <p className="text-sm">{t('create_ticket_to_track')}</p>
-                      <Button 
-                        variant="outline" 
-                        className="mt-4"
-                        onClick={() => setIsCreateTicketDialogOpen(true)}
-                      >
-                        <Ticket className="h-4 w-4 mr-2" />
-                        {t('create_ticket')}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="history">
-            <Card>
-              <CardContent className="pt-6">
-                {isLoading ? (
-                  <div className="min-h-[200px] flex items-center justify-center">
-                    <p>{t('loading_history')}</p>
-                  </div>
-                ) : history.length > 0 ? (
-                  <div className="relative space-y-0">
-                    {/* Timeline with connecting line */}
-                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-                    
-                    {history.map((record, index) => {
-                      // Determine badge color based on action type
-                      let badgeColor = "bg-gray-100 text-gray-800";
-                      let icon = null;
-                      
-                      switch(record.action) {
-                        case 'MOVED':
-                          badgeColor = "bg-blue-100 text-blue-800";
-                          icon = <MapPin className="h-4 w-4" />;
-                          break;
-                        case 'DISPOSED':
-                          badgeColor = "bg-red-100 text-red-800";
-                          icon = <XCircle className="h-4 w-4" />;
-                          break;
-                        case 'TICKET_CREATED':
-                          badgeColor = "bg-purple-100 text-purple-800";
-                          icon = <Ticket className="h-4 w-4" />;
-                          break;
-                        case 'TASK_CREATED':
-                          badgeColor = "bg-amber-100 text-amber-800";
-                          icon = <Calendar className="h-4 w-4" />;
-                          break;
-                        case 'UPDATED':
-                          badgeColor = "bg-green-100 text-green-800";
-                          icon = <Edit className="h-4 w-4" />;
-                          break;
-                        case 'REGISTERED':
-                          badgeColor = "bg-indigo-100 text-indigo-800";
-                          icon = <Box className="h-4 w-4" />;
-                          break;
-                      }
-                      
-                      return (
-                        <div key={record.id} className="relative pl-10 pb-6">
-                          {/* Timeline dot */}
-                          <div className="absolute left-2 top-1.5 -translate-x-1/2 h-6 w-6 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center">
-                            {icon}
-                          </div>
-                          
-                          <div className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex items-center gap-2">
-                                <Badge className={badgeColor}>
-                                  {record.action.replace('_', ' ')}
-                                </Badge>
-                                <span className="text-sm font-medium">
-                                  {new Date(record.createdAt).toLocaleDateString()} {t('at')} {new Date(record.createdAt).toLocaleTimeString()}
-                                </span>
-                              </div>
-                            </div>
-                            
-                            {/* Action-specific details */}
-                            {record.action === 'MOVED' && record.details && (
-                              <div className="bg-blue-50 p-3 rounded-md my-2">
-                                <p className="text-sm">
-                                  <span className="font-medium">{t('from')}:</span> {t('floor')} {record.details.fromFloor || t('not_available')}, {t('room')} {record.details.fromRoom || t('not_available')}
-                                </p>
-                                <p className="text-sm">
-                                  <span className="font-medium">{t('to')}:</span> {t('floor')} {record.details.toFloor}, {t('room')} {record.details.toRoom}
-                                </p>
-                                {record.details.reason && (
-                                  <p className="text-sm mt-1">
-                                    <span className="font-medium">{t('reason')}:</span> {record.details.reason}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            
-                            {record.action === 'TICKET_CREATED' && record.details && (
-                              <div className="bg-purple-50 p-3 rounded-md my-2">
-                                <p className="text-sm font-medium">{record.details.ticketTitle}</p>
-                                <p className="text-sm text-gray-600 mt-1">{record.details.ticketDescription}</p>
-                                <div className="flex gap-2 mt-2">
-                                  <Badge className="bg-gray-100">{record.details.ticketStatus}</Badge>
-                                  <Badge className="bg-gray-100">{record.details.ticketPriority}</Badge>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {record.action === 'TASK_CREATED' && record.details && (
-                              <div className="bg-amber-50 p-3 rounded-md my-2">
-                                <p className="text-sm font-medium">{record.details.taskTitle}</p>
-                                <p className="text-sm text-gray-600 mt-1">{record.details.taskDescription}</p>
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                  <Badge className="bg-gray-100">{record.details.taskStatus}</Badge>
-                                  <Badge className="bg-gray-100">{record.details.taskPriority}</Badge>
-                                  {record.details.taskAssignedTo && (
-                                    <Badge className="bg-gray-100">{t('assigned_to')}: {record.details.taskAssignedTo}</Badge>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {record.action === 'DISPOSED' && record.details && (
-                              <div className="bg-red-50 p-3 rounded-md my-2">
-                                <p className="text-sm">
-                                  <span className="font-medium">{t('reason')}:</span> {record.details.reason || t('not_specified')}
-                                </p>
-                                {record.details.disposalMethod && (
-                                  <p className="text-sm mt-1">
-                                    <span className="font-medium">{t('method')}:</span> {record.details.disposalMethod}
-                                  </p>
-                                )}
-                                <p className="text-sm mt-1 text-gray-500">
-                                  <span className="font-medium">{t('date')}:</span> {new Date(record.details.disposedAt).toLocaleString()}
-                                </p>
-                              </div>
-                            )}
-                            
-                            {record.action === 'UPDATED' && record.details && (
-                              <div className="bg-green-50 p-3 rounded-md my-2">
-                                <p className="text-sm font-medium">{t('updated_fields')}:</p>
-                                <div className="mt-1 space-y-1">
-                                  {Object.entries(record.details).map(([field, values]: [string, any]) => (
-                                    <div key={field} className="text-sm">
-                                      <span className="font-medium capitalize">{field.replace(/([A-Z])/g, ' $1').trim()}:</span> {' '}
-                                      <span className="line-through text-gray-500">
-                                        {field === 'purchaseDate' 
-                                          ? (values.from ? new Date(values.from).toLocaleDateString() : t('none'))
-                                          : (values.from !== null ? values.from : t('none'))}
-                                      </span> {' → '}
-                                      <span className="font-medium">
-                                        {field === 'purchaseDate'
-                                          ? (values.to ? new Date(values.to).toLocaleDateString() : t('none'))
-                                          : (values.to !== null ? values.to : t('none'))}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {record.action === 'REGISTERED' && record.details && !record.details.action && (
-                              <div className="bg-indigo-50 p-3 rounded-md my-2">
-                                <p className="text-sm font-medium">{t('asset_registered')}</p>
-                                <div className="mt-1 space-y-1">
-                                  {record.details.type && (
-                                    <p className="text-sm">
-                                      <span className="font-medium">{t('type')}:</span> {record.details.type}
-                                    </p>
-                                  )}
-                                  {record.details.floorNumber && (
-                                    <p className="text-sm">
-                                      <span className="font-medium">{t('floor')}:</span> {record.details.floorNumber}
-                                    </p>
-                                  )}
-                                  {record.details.roomNumber && (
-                                    <p className="text-sm">
-                                      <span className="font-medium">{t('room')}:</span> {record.details.roomNumber}
-                                    </p>
-                                  )}
-                                  {record.details.purchaseAmount && (
-                                    <p className="text-sm">
-                                      <span className="font-medium">{t('purchase_amount')}:</span> QAR {record.details.purchaseAmount.toLocaleString()}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                            
-                            <div className="text-xs text-muted-foreground mt-2">
-                              <span>{t('by')}: {record.user.email}</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="min-h-[200px] flex items-center justify-center">
-                    <div className="text-center text-muted-foreground">
-                      <p className="text-lg mb-2">{t('no_history_found')}</p>
-                      <p className="text-sm">{t('asset_history_will_appear_here')}</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="documents">
-            <AssetDocumentsTab assetId={asset.id} />
-          </TabsContent>
-        </Tabs>
       </DialogContent>
     </Dialog>
   );
