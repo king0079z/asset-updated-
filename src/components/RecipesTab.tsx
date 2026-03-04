@@ -413,55 +413,101 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
     item: any;
   }>({ open: false, item: null });
 
+  const mainRecipeCount = recipes.filter(r => !r.isSubrecipe).length;
+  const subrecipeCount = recipes.filter(r => r.isSubrecipe).length;
+  const popularCount = recipes.filter(r => (r.usageCount || 0) > 5).length;
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>{t('recipe_management')}</CardTitle>
-              <CardDescription>{kitchenId ? t('manage_and_use_recipes_for_this_kitchen') : t('manage_and_use_recipes')}</CardDescription>
+    <div className="space-y-5">
+      {/* ── Hero Header ── */}
+      <div className="relative rounded-2xl overflow-hidden ring-1 ring-border/60 shadow-sm">
+        <div className="absolute inset-0 bg-gradient-to-r from-amber-600 to-orange-600" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+        <div className="absolute -bottom-8 -right-8 w-40 h-40 rounded-full bg-white/5" />
+        <div className="relative z-10 p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center ring-1 ring-white/30 shadow-inner flex-shrink-0">
+              <ChefHat className="h-6 w-6 text-white" />
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="default"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => setRecipeDialogOpen(true)}
-              >
-                <ChefHat className="h-4 w-4 mr-2" />
-                {t('add_recipe') || 'Add Recipe'}
-              </Button>
-              <Button
-                variant="outline"
-                className="border-green-600 text-green-700"
-                onClick={() => setSubrecipeDialogOpen(true)}
-              >
-                <ChefHat className="h-4 w-4 mr-2" />
-                {t('add_subrecipe') || 'Add Subrecipe'}
-              </Button>
+            <div>
+              <h2 className="text-xl font-bold text-white">{t('recipe_management') || 'Recipe Management'}</h2>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="inline-flex items-center rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold text-white ring-1 ring-white/30">
+                  {mainRecipeCount} recipes
+                </span>
+                {subrecipeCount > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-purple-400/30 px-2.5 py-0.5 text-xs font-semibold text-white ring-1 ring-purple-300/30">
+                    {subrecipeCount} subrecipes
+                  </span>
+                )}
+                {popularCount > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-emerald-400/30 px-2.5 py-0.5 text-xs font-semibold text-white ring-1 ring-emerald-300/30">
+                    {popularCount} popular
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              className="bg-white/20 hover:bg-white/30 text-white border-0 ring-1 ring-white/30 backdrop-blur-sm gap-1.5"
+              onClick={() => setRecipeDialogOpen(true)}
+            >
+              <ChefHat className="h-3.5 w-3.5" />
+              {t('add_recipe') || 'Add Recipe'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-white/10 hover:bg-white/20 text-white border-white/30 gap-1.5"
+              onClick={() => setSubrecipeDialogOpen(true)}
+            >
+              <ChefHat className="h-3.5 w-3.5" />
+              {t('add_subrecipe') || 'Add Subrecipe'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Card className="border-0 ring-1 ring-border/60 shadow-sm">
+        <CardContent className="pt-4">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="rounded-2xl border border-border/60 overflow-hidden animate-pulse">
+                  <div className="h-1 w-full bg-gradient-to-r from-amber-300 to-orange-300" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-5 bg-muted rounded w-3/4" />
+                    <div className="h-3 bg-muted rounded w-1/2" />
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      <div className="h-10 bg-muted rounded-xl" />
+                      <div className="h-10 bg-muted rounded-xl" />
+                      <div className="h-10 bg-muted rounded-xl" />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <div className="h-8 bg-muted rounded flex-1" />
+                      <div className="h-8 bg-muted rounded flex-1" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : recipes.length === 0 ? (
-            <div className="text-center py-12 border-2 border-dashed rounded-lg">
-              <div className="bg-muted/50 inline-flex rounded-full p-3 mb-4">
-                <ChefHat className="h-10 w-10 text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center py-16 rounded-2xl border-2 border-dashed border-amber-200/60 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/10 text-center">
+              <div className="h-16 w-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
+                <ChefHat className="h-8 w-8 text-amber-600 dark:text-amber-400" />
               </div>
-              <h3 className="text-lg font-medium mb-2">{t('no_recipes_found')}</h3>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                {t('create_your_first_recipe_to_get_started')}
+              <h3 className="text-base font-semibold mb-1">{t('no_recipes_found')}</h3>
+              <p className="text-sm text-muted-foreground max-w-xs mb-5">
+                {t('create_your_first_recipe_to_get_started') || 'Create your first recipe to start tracking production, costs, and ingredient usage.'}
               </p>
-              <p className="text-muted-foreground max-w-md mx-auto mt-2 mb-6">
-                {t('use_the_add_recipe_button_at_the_top')}
-              </p>
-              <Button variant="default">
-                <ChefHat className="h-4 w-4 mr-2" />
-                {t('create_first_recipe')}
+              <Button
+                className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+                onClick={() => setRecipeDialogOpen(true)}
+              >
+                <ChefHat className="h-4 w-4" />
+                {t('create_first_recipe') || 'Create First Recipe'}
               </Button>
             </div>
           ) : (
@@ -538,80 +584,100 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
                   .map((recipe) => {
                   const ingredientIssues = checkIngredientIssues(recipe, 1, new Set());
                   const hasIssues = ingredientIssues.length > 0;
+                  const isPopular = (recipe.usageCount || 0) > 5;
                   return (
                   <div key={recipe.id} className="relative">
-                    <Card
-                      className={
-                        `hover:shadow-md transition-all overflow-hidden border-t-4 ` +
-                        (recipe.isSubrecipe
-                          ? 'border-t-purple-600 bg-purple-50 dark:bg-purple-900/10'
-                          : 'border-t-amber-500') +
-                        (hasIssues ? ' ring-2 ring-red-500' : '')
-                      }
+                    <div
+                      className={`rounded-2xl border overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer ${
+                        recipe.isSubrecipe
+                          ? 'border-purple-200 dark:border-purple-800/40 bg-purple-50/40 dark:bg-purple-950/10'
+                          : hasIssues
+                          ? 'border-red-200 dark:border-red-800/40 bg-red-50/20 dark:bg-red-950/5 ring-1 ring-red-300/50 dark:ring-red-700/30'
+                          : 'border-border bg-card hover:border-amber-200 dark:hover:border-amber-800/40'
+                      }`}
+                      onClick={() => handleViewRecipe(recipe)}
                     >
-                      <CardContent className="p-0">
-                        <div 
-                          className="cursor-pointer p-4 pb-2" 
-                          onClick={() => handleViewRecipe(recipe)}
-                        >
-                          <div className="flex justify-between items-start">
-                            <h3 className="font-medium text-lg flex items-center gap-2">
-                              {recipe.name}
+                      {/* Top accent bar */}
+                      <div className={`h-1 w-full bg-gradient-to-r ${
+                        recipe.isSubrecipe
+                          ? 'from-purple-500 to-violet-500'
+                          : hasIssues
+                          ? 'from-red-500 to-rose-500'
+                          : 'from-amber-500 to-orange-500'
+                      }`} />
+
+                      <div className="p-4">
+                        {/* Card Header */}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-sm leading-tight truncate">{recipe.name}</h3>
+                            <div className="flex flex-wrap gap-1 mt-1">
                               {recipe.isSubrecipe && (
-                                <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded bg-purple-100 text-purple-700 text-xs font-semibold">
-                                  <ChefHat className="h-3 w-3 mr-1" /> Subrecipe
+                                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 gap-0.5">
+                                  <ChefHat className="h-2.5 w-2.5" /> Subrecipe
+                                </span>
+                              )}
+                              {isPopular && !recipe.isSubrecipe && (
+                                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 gap-0.5">
+                                  ★ Popular
                                 </span>
                               )}
                               {hasIssues && (
-                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs font-semibold">
-                                  <AlertCircle className="h-3 w-3 mr-1" />
-                                  {t('ingredient_issue') || 'Ingredient Issue'}
+                                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 gap-0.5">
+                                  <AlertCircle className="h-2.5 w-2.5" /> Issue
                                 </span>
                               )}
-                            </h3>
-                            <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400">
-                              QAR {recipe.costPerServing.toFixed(2)}
-                            </Badge>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{recipe.description}</p>
+                          <div className="flex-shrink-0">
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                              QAR {recipe.costPerServing.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
-                        
+
+                        {recipe.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{recipe.description}</p>
+                        )}
+
+                        {/* Stats strip */}
                         {!recipe.isSubrecipe && (
-                          <div className="grid grid-cols-3 border-y">
-                            <div className="flex flex-col items-center justify-center py-2 px-1 text-center border-r">
-                              <Users className="h-4 w-4 text-muted-foreground mb-1" />
-                              <span className="text-sm font-medium">{recipe.servings}</span>
-                              <span className="text-xs text-muted-foreground">{t('servings')}</span>
+                          <div className="grid grid-cols-3 gap-2 mb-3">
+                            <div className="flex flex-col items-center rounded-xl bg-muted/40 py-2 px-1">
+                              <Users className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                              <span className="text-sm font-bold tabular-nums">{recipe.servings}</span>
+                              <span className="text-[10px] text-muted-foreground">{t('servings')}</span>
                             </div>
-                            <div className="flex flex-col items-center justify-center py-2 px-1 text-center border-r">
-                              <Clock className="h-4 w-4 text-muted-foreground mb-1" />
-                              <span className="text-sm font-medium">{recipe.prepTime}</span>
-                              <span className="text-xs text-muted-foreground">{t('min')}</span>
+                            <div className="flex flex-col items-center rounded-xl bg-muted/40 py-2 px-1">
+                              <Clock className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                              <span className="text-sm font-bold tabular-nums">{recipe.prepTime || '—'}</span>
+                              <span className="text-[10px] text-muted-foreground">{t('min')}</span>
                             </div>
-                            <div className="flex flex-col items-center justify-center py-2 px-1 text-center">
-                              <DollarSign className="h-4 w-4 text-muted-foreground mb-1" />
-                              <span className="text-sm font-medium">{recipe.totalCost.toFixed(0)}</span>
-                              <span className="text-xs text-muted-foreground">QAR</span>
+                            <div className="flex flex-col items-center rounded-xl bg-muted/40 py-2 px-1">
+                              <DollarSign className="h-3.5 w-3.5 text-muted-foreground mb-0.5" />
+                              <span className="text-sm font-bold tabular-nums">{recipe.totalCost.toFixed(0)}</span>
+                              <span className="text-[10px] text-muted-foreground">QAR</span>
                             </div>
                           </div>
                         )}
-                        
-                        <div className="p-3">
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {recipe.ingredients
-                              .filter((ing) => ing.type === 'food')
-                              .slice(0, 3)
-                              .map((ing) => (
-                                <Badge key={ing.id} variant="secondary" className="text-xs">
-                                  {(ing as RecipeIngredientFood).name}
-                                </Badge>
-                              ))}
-                            {recipe.ingredients.filter((ing) => ing.type === 'food').length > 3 && (
-                              <Badge variant="secondary" className="text-xs">
-                                +{recipe.ingredients.filter((ing) => ing.type === 'food').length - 3} {t('more')}
-                              </Badge>
-                            )}
-                          </div>
+                        {/* Ingredient pills */}
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {recipe.ingredients
+                            .filter((ing) => ing.type === 'food')
+                            .slice(0, 3)
+                            .map((ing) => (
+                              <span key={ing.id} className="inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                {(ing as RecipeIngredientFood).name}
+                              </span>
+                            ))}
+                          {recipe.ingredients.filter((ing) => ing.type === 'food').length > 3 && (
+                            <span className="inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              +{recipe.ingredients.filter((ing) => ing.type === 'food').length - 3} {t('more')}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
                           
                           {/* Show subrecipes used by this main recipe */}
                           {!recipe.isSubrecipe && mainRecipeLinks[recipe.id] && mainRecipeLinks[recipe.id].length > 0 && (
@@ -646,75 +712,69 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
                             </div>
                           )}
 
-                          <div className="flex justify-between items-center">
-                            <div className="flex gap-1">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-muted-foreground"
-                                onClick={() => handleViewRecipe(recipe)}
-                              >
-                                {t('details')}
-                              </Button>
-                              <PrintRecipeReportButton
-                                recipe={{
-                                  ...recipe,
-                                  totalWasteAmount: calculateTotalWasteAmount(recipe),
-                                }}
-                              />
-                              {!recipe.isSubrecipe && (
-                                <>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="text-blue-600"
-                                    onClick={(e) => handleEditClick(recipe, e)}
-                                  >
-                                    {t('edit')}
-                                  </Button>
-                                  <RecipeBarcodeDialog 
-                                    recipe={recipe} 
-                                    onRecipeUpdate={(updatedRecipe) => {
-                                      // Update the recipe in the local state
-                                      setRecipes(prevRecipes => 
-                                        prevRecipes.map(r => 
-                                          r.id === recipe.id ? { ...r, id: updatedRecipe.id } : r
-                                        )
-                                      );
-                                    }}
-                                  />
-                                </>
-                              )}
-                            </div>
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-1 pt-1" onClick={e => e.stopPropagation()}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={(e) => { e.stopPropagation(); handleViewRecipe(recipe); }}
+                            >
+                              {t('details')}
+                            </Button>
+                            <PrintRecipeReportButton
+                              recipe={{
+                                ...recipe,
+                                totalWasteAmount: calculateTotalWasteAmount(recipe),
+                              }}
+                            />
+                            {!recipe.isSubrecipe && (
+                              <>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                                  onClick={(e) => handleEditClick(recipe, e)}
+                                >
+                                  {t('edit')}
+                                </Button>
+                                <RecipeBarcodeDialog 
+                                  recipe={recipe} 
+                                  onRecipeUpdate={(updatedRecipe) => {
+                                    setRecipes(prevRecipes => 
+                                      prevRecipes.map(r => 
+                                        r.id === recipe.id ? { ...r, id: updatedRecipe.id } : r
+                                      )
+                                    );
+                                  }}
+                                />
+                              </>
+                            )}
                             {!recipe.isSubrecipe && (
                               <Button 
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   if (hasIssues) {
-                                    // Show error dialog instead of serve dialog
                                     setSelectedRecipe(recipe);
                                     setServeDialogOpen(false);
                                     setTimeout(() => {
-                                      setIngredientIssueDialog({
-                                        open: true,
-                                        recipe,
-                                        issues: ingredientIssues,
-                                      });
+                                      setIngredientIssueDialog({ open: true, recipe, issues: ingredientIssues });
                                     }, 50);
                                   } else {
                                     handleServeClick(recipe);
                                   }
                                 }}
-                                className="bg-amber-500 hover:bg-amber-600 text-white"
+                                className="ml-auto bg-amber-500 hover:bg-amber-600 text-white h-7 px-3 text-xs"
                                 size="sm"
                               >
-                                <Utensils className="h-4 w-4 mr-2" />
+                                <Utensils className="h-3 w-3 mr-1" />
                                 {t('serve')}
                               </Button>
                             )}
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </div>
                 )})}
               </div>

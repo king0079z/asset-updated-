@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         include: {
           vendor: { select: { id: true, name: true } },
-          orderedBy: { select: { id: true, name: true, email: true } },
+          orderedBy: { select: { id: true, email: true } },
           items: {
             include: {
               foodSupply: { select: { id: true, name: true, unit: true, pricePerUnit: true } }
@@ -73,12 +73,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           orderedById: user.id,
           status: 'PENDING',
           notes: notes ?? null,
-          expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate) : null,
           items: {
             create: items.map((item: any) => ({
               foodSupplyId: item.foodSupplyId,
               quantity: Number(item.quantity),
-              unitPrice: Number(item.unitPrice ?? 0),
+              pricePerUnit: Number(item.unitPrice ?? item.pricePerUnit ?? 0),
               batchNumber: item.batchNumber ?? null,
               expirationDate: new Date(item.expirationDate ?? Date.now() + 1000 * 60 * 60 * 24 * 365),
             }))

@@ -29,14 +29,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         include: {
           fromLocation: { select: { id: true, name: true } },
           toLocation: { select: { id: true, name: true } },
-          requestedBy: { select: { id: true, name: true, email: true } },
+          requestedBy: { select: { id: true, email: true } },
           items: {
             include: {
               foodSupply: { select: { id: true, name: true, unit: true } }
             }
           }
         },
-        orderBy: { requestedAt: 'desc' }
+        orderBy: { createdAt: 'desc' }
       });
 
       return res.status(200).json(transfers);
@@ -99,7 +99,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             requestedById: user.id,
             status: 'PENDING',
             notes: notes ?? null,
-            requestedAt: new Date(),
             items: {
               create: items.map((item: any) => ({
                 foodSupplyId: item.foodSupplyId,

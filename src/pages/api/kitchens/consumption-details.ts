@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       prisma.foodDisposal.findMany({
         where: {
           kitchenId: targetKitchenId,
-          disposedAt: dateFilter,
+          createdAt: dateFilter,
         },
         include: {
           foodSupply: { select: { id: true, name: true, unit: true, pricePerUnit: true } },

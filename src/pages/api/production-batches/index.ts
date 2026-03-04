@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             select: { id: true, name: true, servings: true, totalCost: true, costPerServing: true }
           }
         },
-        orderBy: { scheduledDate: 'desc' }
+        orderBy: { createdAt: 'desc' }
       });
 
       return res.status(200).json(batches);
@@ -39,8 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'POST') {
       const { kitchenId, recipeId, quantity, scheduledDate, notes } = req.body;
 
-      if (!recipeId || !quantity || !scheduledDate) {
-        return res.status(400).json({ error: 'recipeId, quantity, and scheduledDate are required' });
+      if (!recipeId || !quantity) {
+        return res.status(400).json({ error: 'recipeId and quantity are required' });
       }
 
       // Resolve locationId from kitchenId
@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           locationId,
           recipeId,
           quantity: Number(quantity),
-          scheduledDate: new Date(scheduledDate),
+          startedAt: scheduledDate ? new Date(scheduledDate) : null,
           notes: notes ?? null,
           status: 'PLANNED',
           createdById: user.id,

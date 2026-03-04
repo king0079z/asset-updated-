@@ -276,7 +276,7 @@ export function KitchenOperationsTab({ kitchenId, kitchenName, allKitchens = [] 
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm truncate">{batch.recipe?.name || 'Unknown Recipe'}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {batch.quantity} servings · {batch.scheduledDate ? format(new Date(batch.scheduledDate), 'dd MMM yyyy') : '—'}
+                          {batch.quantity} servings · {batch.startedAt ? format(new Date(batch.startedAt), 'dd MMM yyyy') : batch.createdAt ? format(new Date(batch.createdAt), 'dd MMM yyyy') : '—'}
                         </p>
                         {batch.notes && <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{batch.notes}</p>}
                       </div>
@@ -377,7 +377,7 @@ export function KitchenOperationsTab({ kitchenId, kitchenName, allKitchens = [] 
                           {tr.fromLocation?.name || 'Source'} → {tr.toLocation?.name || 'Destination'}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {tr.items?.length ?? 0} item{(tr.items?.length ?? 0) !== 1 ? 's' : ''} · {tr.requestedAt ? format(new Date(tr.requestedAt), 'dd MMM yyyy') : '—'}
+                          {tr.items?.length ?? 0} item{(tr.items?.length ?? 0) !== 1 ? 's' : ''} · {tr.createdAt ? format(new Date(tr.createdAt), 'dd MMM yyyy') : '—'}
                         </p>
                         {tr.notes && <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{tr.notes}</p>}
                       </div>
