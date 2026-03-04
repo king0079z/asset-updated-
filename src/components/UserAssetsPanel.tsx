@@ -52,7 +52,8 @@ const AVATAR_COLORS = [
   "from-purple-500 to-fuchsia-600",
 ];
 
-function avatarGradient(id: string) {
+function avatarGradient(id: string | null | undefined) {
+  if (!id) return AVATAR_COLORS[0];
   let n = 0;
   for (const c of id) n += c.charCodeAt(0);
   return AVATAR_COLORS[n % AVATAR_COLORS.length];

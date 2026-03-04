@@ -217,8 +217,8 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
                   </div>
                 ) : (
                   <div className="space-y-1.5 pr-2">
-                    {filteredUsers.map(u => {
-                      const initials = u.email.slice(0, 2).toUpperCase();
+                    {filteredUsers.filter(u => u && u.id).map(u => {
+                      const initials = (u.email ?? u.id ?? "?").slice(0, 2).toUpperCase();
                       const roleLabel = u.isAdmin ? "Admin" : (u.role || "Staff");
                       const roleColor = u.isAdmin
                         ? "text-rose-400"
@@ -252,7 +252,7 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
               {selectedUser && (
                 <div className="rounded-xl bg-indigo-950/50 border border-indigo-700/40 px-4 py-3 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                    {selectedUser.email.slice(0, 2).toUpperCase()}
+                    {(selectedUser.email ?? selectedUser.id ?? "?").slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <p className="text-xs text-indigo-400 font-semibold uppercase tracking-widest">Selected</p>

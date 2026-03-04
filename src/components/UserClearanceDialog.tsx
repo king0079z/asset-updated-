@@ -280,15 +280,20 @@ export function UserClearanceDialog({ open, onOpenChange, user, assets, onCleara
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [applyAll, setApplyAll] = useState<AssetAction>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportUrl, setReportUrl] = useState<string | null>(null);
 
-  /* Reset on open */
+  /* Reset ONLY when the dialog opens fresh — NOT when assets prop changes mid-session.
+     Depending on `assets` here caused the dialog to reset back to step 1 while
+     the user was on the step-4 success screen after onClearanceComplete reloaded assets. */
   useEffect(() => {
     if (open) {
       setStep(1); setReason(null); setNotes(""); setResult(null); setAssetFilter(""); setApplyAll(null);
       setClearanceDate(new Date().toISOString().split("T")[0]);
       setDecisions(assets.map(a => ({ asset: a, action: null })));
     }
-  }, [open, assets]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]); // intentionally omit `assets` — snapshot at open time only
 
   const updateDecision = useCallback((assetId: string, update: Partial<AssetDecision>) => {
     setDecisions(prev => prev.map(d => d.asset.id === assetId ? { ...d, ...update } : d));
@@ -311,30 +316,50 @@ export function UserClearanceDialog({ open, onOpenChange, user, assets, onCleara
   const handleSubmit = async () => {
     if (!reason || !allDecided) return;
     setSubmitting(true);
+    setReportUrl(null);
     try {
+      const payload = {
+        userId: user.userId,
+        userName: user.name || user.email || user.userId,
+        userEmail: user.email || "",
+        reason,
+        notes,
+        clearanceDate,
+        actions: decisions.map(d => ({
+          assetId: d.asset.id,
+          assetName: d.asset.name,
+          assetType: d.asset.type,
+          action: d.action,
+          newUserId: d.newUserId,
+          newUserName: d.newUserName,
+          newUserEmail: d.newUserEmail,
+        })),
+      };
+
       const r = await fetch("/api/assets/clearance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user.userId,
-          userName: user.name || user.email || user.userId,
-          userEmail: user.email || "",
-          reason,
-          notes,
-          clearanceDate,
-          actions: decisions.map(d => ({
-            assetId: d.asset.id,
-            action: d.action,
-            newUserId: d.newUserId,
-            newUserName: d.newUserName,
-            newUserEmail: d.newUserEmail,
-          })),
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await r.json();
       setResult(data);
       setStep(4);
-      onClearanceComplete?.();
+
+      /* Generate and attach clearance report asynchronously */
+      if (data.success) {
+        setReportLoading(true);
+        fetch("/api/assets/clearance-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then(rr => rr.ok ? rr.json() : null)
+          .then(rd => { if (rd?.reportUrl) setReportUrl(rd.reportUrl); })
+          .catch(() => {})
+          .finally(() => setReportLoading(false));
+
+        onClearanceComplete?.();
+      }
     } catch {
       setResult({ success: false, error: "Network error. Please try again." });
       setStep(4);
@@ -586,8 +611,31 @@ export function UserClearanceDialog({ open, onOpenChange, user, assets, onCleara
                   <div className="flex items-start gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800">
                     <FileText className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                      A full audit record has been created under <strong>Compliance &amp; Audit</strong>. All individual asset history records have also been updated.
+                      A full audit record has been created under <strong>Compliance &amp; Audit</strong>. All individual asset history records have been updated with your name as the clearance officer.
                     </p>
+                  </div>
+
+                  {/* Clearance Report */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
+                      <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold">Clearance Report</p>
+                      <p className="text-xs text-muted-foreground">Attached to each asset's Documents tab for future reference.</p>
+                    </div>
+                    {reportLoading ? (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…
+                      </div>
+                    ) : reportUrl ? (
+                      <a href={reportUrl} target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex-shrink-0 transition-colors">
+                        <FileText className="h-3.5 w-3.5" /> Download
+                      </a>
+                    ) : (
+                      <span className="text-xs text-muted-foreground flex-shrink-0">Not available</span>
+                    )}
                   </div>
                 </>
               ) : (

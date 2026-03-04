@@ -744,18 +744,61 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                   <p className="text-muted-foreground">{record.details.ticketDescription}</p>
                                 </div>
                               )}
-                              {record.action === "UPDATED" && record.details && (
-                                <div className="text-xs space-y-1">
-                                  {Object.entries(record.details).map(([field, values]: [string, any]) => (
-                                    <div key={field} className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="font-semibold capitalize">{field.replace(/([A-Z])/g, " $1").trim()}:</span>
-                                      <span className="line-through text-muted-foreground">{values.from ?? "—"}</span>
-                                      <ArrowRight className="h-2.5 w-2.5 text-muted-foreground" />
-                                      <span className="font-semibold">{values.to ?? "—"}</span>
+                              {record.action === "UPDATED" && record.details && (() => {
+                                /* Clearance-type UPDATED records have a `type` field starting with CLEARANCE_ */
+                                const d = record.details as any;
+                                if (d.type && String(d.type).startsWith("CLEARANCE_")) {
+                                  const typeLabel = d.type === "CLEARANCE_RETURN" ? "Returned to Stock"
+                                    : d.type === "CLEARANCE_REASSIGN" ? "Reassigned"
+                                    : d.type === "CLEARANCE_DISPOSE" ? "Disposed"
+                                    : d.type;
+                                  const reasonLabels: Record<string, string> = {
+                                    TERMINATED: "Terminated", RESIGNED: "Resigned",
+                                    TRANSFERRED: "Transferred", SUSPENDED: "Suspended", OTHER: "Other",
+                                  };
+                                  return (
+                                    <div className="text-xs space-y-1.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-semibold text-rose-700 dark:text-rose-400">Clearance Action:</span>
+                                        <span className="font-bold">{typeLabel}</span>
+                                      </div>
+                                      {d.clearanceReason && (
+                                        <p><span className="font-semibold">Reason:</span> {reasonLabels[d.clearanceReason] ?? d.clearanceReason}</p>
+                                      )}
+                                      {d.previousAssignedTo && (
+                                        <p><span className="font-semibold">Previous Holder:</span> {d.previousAssignedTo}</p>
+                                      )}
+                                      {d.newAssignedTo && (
+                                        <p><span className="font-semibold">Reassigned To:</span> {d.newAssignedTo}</p>
+                                      )}
+                                      {d.clearanceNotes && (
+                                        <p><span className="font-semibold">Notes:</span> {d.clearanceNotes}</p>
+                                      )}
+                                      {d.processedBy && (
+                                        <p className="flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400">
+                                          Clearance Officer: {d.processedBy}
+                                        </p>
+                                      )}
                                     </div>
-                                  ))}
-                                </div>
-                              )}
+                                  );
+                                }
+                                /* Regular UPDATED records — guard against null values */
+                                return (
+                                  <div className="text-xs space-y-1">
+                                    {Object.entries(d).map(([field, values]: [string, any]) => {
+                                      if (values === null || values === undefined || typeof values !== "object") return null;
+                                      return (
+                                        <div key={field} className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="font-semibold capitalize">{field.replace(/([A-Z])/g, " $1").trim()}:</span>
+                                          <span className="line-through text-muted-foreground">{values?.from ?? "—"}</span>
+                                          <ArrowRight className="h-2.5 w-2.5 text-muted-foreground" />
+                                          <span className="font-semibold">{values?.to ?? "—"}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
                               {record.action === "REGISTERED" && record.details && (
                                 <div className="text-xs space-y-0.5">
                                   {record.details.type && <p><span className="font-semibold">Type:</span> {record.details.type}</p>}
@@ -763,13 +806,34 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                   {record.details.purchaseAmount && <p><span className="font-semibold">Amount:</span> QAR {record.details.purchaseAmount.toLocaleString()}</p>}
                                 </div>
                               )}
-                              {record.action === "DISPOSED" && record.details && (
-                                <div className="text-xs space-y-0.5">
-                                  <p><span className="font-semibold">Reason:</span> {record.details.reason || "Not specified"}</p>
-                                  {record.details.disposalMethod && <p><span className="font-semibold">Method:</span> {record.details.disposalMethod}</p>}
-                                </div>
-                              )}
-                              <p className="text-[10px] text-muted-foreground mt-2">by {record.user?.email ?? "system"}</p>
+                              {record.action === "DISPOSED" && record.details && (() => {
+                                const d = record.details as any;
+                                const isClearanceDispose = d.type === "CLEARANCE_DISPOSE";
+                                const reasonLabels: Record<string, string> = {
+                                  TERMINATED: "Terminated", RESIGNED: "Resigned",
+                                  TRANSFERRED: "Transferred", SUSPENDED: "Suspended", OTHER: "Other",
+                                };
+                                return (
+                                  <div className="text-xs space-y-0.5">
+                                    {isClearanceDispose ? (
+                                      <>
+                                        <p className="text-rose-700 dark:text-rose-400 font-semibold">Disposed via User Clearance</p>
+                                        {d.clearanceReason && <p><span className="font-semibold">Reason:</span> {reasonLabels[d.clearanceReason] ?? d.clearanceReason}</p>}
+                                        {d.previousAssignedTo && <p><span className="font-semibold">Previous Holder:</span> {d.previousAssignedTo}</p>}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <p><span className="font-semibold">Reason:</span> {d.reason || "Not specified"}</p>
+                                        {d.disposalMethod && <p><span className="font-semibold">Method:</span> {d.disposalMethod}</p>}
+                                      </>
+                                    )}
+                                    {d.processedBy && (
+                                      <p className="text-indigo-600 dark:text-indigo-400 font-semibold">Officer: {d.processedBy}</p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                              <p className="text-[10px] text-muted-foreground mt-2">by {record.user?.email ?? (record.details as any)?.processedBy ?? "system"}</p>
                             </div>
                           </div>
                         );
