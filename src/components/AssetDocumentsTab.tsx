@@ -145,11 +145,14 @@ export function AssetDocumentsTab({ assetId }: AssetDocumentsTabProps) {
     }
   };
 
+  const isClearanceReport = (doc: AssetDocument) =>
+    doc.fileType?.includes('pdf') && doc.fileName?.toLowerCase().includes('clearance');
+
   const isHtmlDocument = (doc: AssetDocument) =>
     doc.fileType?.includes('html') || doc.fileName?.toLowerCase().endsWith('.html');
 
   const handleViewDocument = (document: AssetDocument) => {
-    if (isHtmlDocument(document)) {
+    if (isClearanceReport(document) || isHtmlDocument(document)) {
       window.open(document.fileUrl, '_blank', 'noopener,noreferrer');
     } else {
       setSelectedDocument(document);
@@ -421,7 +424,7 @@ export function AssetDocumentsTab({ assetId }: AssetDocumentsTabProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-medium text-sm truncate">{document.fileName}</h4>
-                      {isHtmlDocument(document) && (
+                      {(isClearanceReport(document) || isHtmlDocument(document)) && (
                         <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-400 flex-shrink-0">
                           Clearance Certificate
                         </span>
@@ -434,33 +437,22 @@ export function AssetDocumentsTab({ assetId }: AssetDocumentsTabProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        className={`h-8 ${isHtmlDocument(document) ? 'border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/20' : ''}`}
+                        className={`h-8 ${(isClearanceReport(document) || isHtmlDocument(document)) ? 'border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/20' : ''}`}
                         onClick={() => handleViewDocument(document)}
                       >
                         <FileSearch className="h-4 w-4 mr-1" />
-                        {isHtmlDocument(document) ? 'Open Report' : 'View'}
+                        {(isClearanceReport(document) || isHtmlDocument(document)) ? 'Open PDF' : 'View'}
                       </Button>
-                      {isHtmlDocument(document) ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          onClick={() => window.open(document.fileUrl, '_blank', 'noopener,noreferrer')}
-                        >
-                          <Download className="h-4 w-4 mr-1" /> Print / PDF
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          asChild
-                        >
-                          <a href={document.fileUrl} download={document.fileName}>
-                            <Download className="h-4 w-4 mr-1" /> Download
-                          </a>
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        asChild
+                      >
+                        <a href={document.fileUrl} download={document.fileName} target="_blank" rel="noopener noreferrer">
+                          <Download className="h-4 w-4 mr-1" /> Download
+                        </a>
+                      </Button>
                       {userPermissions.canDeleteDocuments && (
                         <Button
                           variant="outline"
