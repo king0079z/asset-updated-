@@ -40,6 +40,8 @@ interface UserAssetsPanelProps {
   onOpenChange: (v: boolean) => void;
   /** Called when user clicks "View Details" on an asset */
   onViewAsset?: (asset: Asset) => void;
+  /** Called after a clearance is completed so the parent page can refresh its asset list */
+  onClearanceComplete?: () => void;
 }
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -165,7 +167,7 @@ function AssetCard({ asset, onView }: { asset: Asset; onView: () => void }) {
 }
 
 /* ─── Main component ─────────────────────────────────────────────────────── */
-export function UserAssetsPanel({ open, onOpenChange, onViewAsset }: UserAssetsPanelProps) {
+export function UserAssetsPanel({ open, onOpenChange, onViewAsset, onClearanceComplete }: UserAssetsPanelProps) {
   const [userSearch, setUserSearch]     = useState("");
   const [users, setUsers]               = useState<UserSummary[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -474,6 +476,7 @@ export function UserAssetsPanel({ open, onOpenChange, onViewAsset }: UserAssetsP
         onClearanceComplete={() => {
           loadAssets(selectedUser.userId);
           loadUsers(userSearch);
+          onClearanceComplete?.();
         }}
       />
     )}

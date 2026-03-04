@@ -204,9 +204,20 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
 
   useEffect(() => {
     if (open && asset) {
+      // Immediately show prop data, then fetch fresh data (including latest assignment state)
       setCurrentAsset(asset);
       fetchTickets();
       fetchHistory();
+
+      // Always re-fetch the full asset on open so assignment/clearance changes are reflected
+      fetch(`/api/assets/${asset.id}`, { headers: { 'Cache-Control': 'no-cache' } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          const updated = data?.asset ?? data;
+          if (updated?.id) setCurrentAsset(updated);
+        })
+        .catch(() => {});
+
       setRfidLoading(true);
       fetch("/api/rfid/tags")
         .then(r => r.ok ? r.json() : { tags: [] })

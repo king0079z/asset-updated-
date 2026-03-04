@@ -1400,6 +1400,23 @@ export default function AssetsPage() {
           setShowUserAssetsPanel(false);
           setShowBarcodeDialog(true);
         }}
+        onClearanceComplete={async () => {
+          // Refresh the global asset list so cleared assets show as unassigned
+          loadAssets(true);
+          // If the asset details dialog is open for a now-cleared asset, re-fetch it
+          if (selectedAsset?.id) {
+            try {
+              const res = await fetch(`/api/assets/${selectedAsset.id}`, {
+                headers: { 'Cache-Control': 'no-cache' },
+              });
+              if (res.ok) {
+                const data = await res.json();
+                const updated = data?.asset ?? data;
+                if (updated?.id) setSelectedAsset(updated as Asset);
+              }
+            } catch { /* ignore */ }
+          }
+        }}
       />
     </DashboardLayout>
   );
