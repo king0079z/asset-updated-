@@ -3,6 +3,7 @@ import React from 'react';
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { EditAssetDialog } from "@/components/EditAssetDialog";
 import BarcodeScanner from "@/components/BarcodeScanner2";
+import { UserAssetsPanel } from "@/components/UserAssetsPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -56,6 +57,7 @@ import {
   Trash2, 
   Truck,
   User,
+  Users,
   TrendingUp,
   CheckCircle2,
   AlertTriangle,
@@ -340,6 +342,7 @@ export default function AssetsPage() {
   };
 
   const [showDisposalDialog, setShowDisposalDialog] = useState(false);
+  const [showUserAssetsPanel, setShowUserAssetsPanel] = useState(false);
 
   const handleAssetDisposed = () => {
     loadAssets();
@@ -705,6 +708,15 @@ export default function AssetsPage() {
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-2.5">
+              <Button
+                onClick={() => setShowUserAssetsPanel(true)}
+                className="bg-white/15 hover:bg-white/25 text-white border border-white/25 shadow gap-2 font-semibold backdrop-blur-sm"
+                variant="outline"
+              >
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">User Assignments</span>
+                <span className="sm:hidden">By User</span>
+              </Button>
               <BarcodeScanner
                 onScan={(result) => {
                   if ('id' in result && result.id) {
@@ -1364,6 +1376,16 @@ export default function AssetsPage() {
         open={showDisposalDialog}
         onOpenChange={setShowDisposalDialog}
         onAssetDisposed={handleAssetDisposed}
+      />
+
+      <UserAssetsPanel
+        open={showUserAssetsPanel}
+        onOpenChange={setShowUserAssetsPanel}
+        onViewAsset={(asset) => {
+          setSelectedAsset(asset as any);
+          setShowUserAssetsPanel(false);
+          setShowBarcodeDialog(true);
+        }}
       />
     </DashboardLayout>
   );
