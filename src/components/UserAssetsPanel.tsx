@@ -223,6 +223,7 @@ export function UserAssetsPanel({ open, onOpenChange, onViewAsset }: UserAssetsP
   const totalAssigned = users.reduce((s, u) => s + u.total, 0);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[90dvh] flex flex-col">
         <VisuallyHidden>
@@ -462,7 +463,7 @@ export function UserAssetsPanel({ open, onOpenChange, onViewAsset }: UserAssetsP
       </DialogContent>
     </Dialog>
 
-    {/* Clearance wizard */}
+    {/* Clearance wizard — rendered outside the main Dialog to avoid nesting conflicts */}
     {selectedUser && (
       <UserClearanceDialog
         open={clearanceOpen}
@@ -475,5 +476,6 @@ export function UserAssetsPanel({ open, onOpenChange, onViewAsset }: UserAssetsP
         }}
       />
     )}
+    </>
   );
 }
