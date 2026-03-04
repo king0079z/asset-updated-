@@ -233,7 +233,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-t-2xl sm:rounded-2xl border-0 shadow-2xl max-h-[92dvh] sm:max-h-[95vh] flex flex-col fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto sm:left-auto sm:right-auto translate-y-0">
+      <DialogContent className="w-[95vw] max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[90dvh] flex flex-col">
         <VisuallyHidden.Root>
           <DialogTitle>{displayAsset.name} — Asset Details</DialogTitle>
           <DialogDescription>View and manage details, RFID tracking, tickets, history and documents for this asset.</DialogDescription>
@@ -252,11 +252,6 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
           )}
 
           <div className="relative z-10 p-4 pb-3 sm:p-6 sm:pb-5">
-            {/* Mobile drag handle */}
-            <div className="flex justify-center mb-3 sm:hidden">
-              <div className="w-10 h-1 rounded-full bg-white/20" />
-            </div>
-
             <div className="flex items-start gap-3 sm:gap-5">
               {/* Asset image / icon */}
               <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden flex-shrink-0 border-2 border-white/20 shadow-lg ${statusMeta.glow}`}>
