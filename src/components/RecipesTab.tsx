@@ -1,5 +1,8 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+
+// Module-level cache so previously fetched recipe details are reused across renders
+const recipeDetailsCache = new Map<string, any>();
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -90,17 +93,21 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
   // Store food supplies for waste calculations
   const [foodSupplies, setFoodSupplies] = useState<any[]>([]);
 
+  // O(1) lookup map built once whenever foodSupplies changes
+  const foodSuppliesMap = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const fs of foodSupplies) m.set(fs.id, fs);
+    return m;
+  }, [foodSupplies]);
+
   // Utility function to calculate total waste amount for a recipe
   const calculateTotalWasteAmount = (recipe: Recipe) => {
     return recipe.ingredients
       .filter((ing): ing is RecipeIngredientFood => ing.type === 'food' && typeof ing.wastePercentage === 'number' && ing.wastePercentage > 0)
       .reduce((sum, ing) => {
-        // Find the food supply to get the price per unit
-        const foodSupply = foodSupplies.find(fs => fs.id === ing.foodSupplyId);
+        const foodSupply = foodSuppliesMap.get(ing.foodSupplyId);
         const pricePerUnit = foodSupply ? foodSupply.pricePerUnit : 0;
-        // Calculate waste amount: quantity * waste percentage * price per unit
-        const wasteAmount = ing.quantity * ((ing.wastePercentage || 0) / 100) * pricePerUnit;
-        return sum + wasteAmount;
+        return sum + ing.quantity * ((ing.wastePercentage || 0) / 100) * pricePerUnit;
       }, 0);
   };
 
@@ -109,30 +116,23 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
     let issues: { name: string; reason: string; required?: number; available?: number; expired?: boolean }[] = [];
     for (const ing of recipe.ingredients) {
       if (ing.type === 'food') {
-        const food = foodSupplies.find(fs => fs.id === (ing as RecipeIngredientFood).foodSupplyId);
+        const food = foodSuppliesMap.get((ing as RecipeIngredientFood).foodSupplyId);
         const requiredQty = (ing.quantity || 0) * servings;
         if (!food) {
           issues.push({ name: ing.name, reason: 'not_found' });
         } else {
-          // Check expiry
           const expired = food.expirationDate && new Date(food.expirationDate) < new Date();
-          if (expired) {
-            issues.push({ name: ing.name, reason: 'expired', expired: true });
-          }
-          // Check quantity
+          if (expired) issues.push({ name: ing.name, reason: 'expired', expired: true });
           if (food.quantity < requiredQty) {
             issues.push({ name: ing.name, reason: 'insufficient', required: requiredQty, available: food.quantity });
           }
         }
       } else if (ing.type === 'subrecipe') {
-        // Prevent infinite recursion
         if (!checkedSubrecipes.has((ing as RecipeIngredientSubrecipe).subRecipeId)) {
           checkedSubrecipes.add((ing as RecipeIngredientSubrecipe).subRecipeId);
           const sub = subrecipeMap[(ing as RecipeIngredientSubrecipe).subRecipeId];
           if (sub) {
-            // Multiply by quantity used in main recipe
-            const subIssues = checkIngredientIssues(sub, (ing.quantity || 1) * servings, checkedSubrecipes);
-            issues = issues.concat(subIssues);
+            issues = issues.concat(checkIngredientIssues(sub, (ing.quantity || 1) * servings, checkedSubrecipes));
           }
         }
       }
@@ -144,58 +144,51 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Fetch recipes - if kitchenId is provided, fetch recipes for that kitchen
         const recipesUrl = kitchenId ? `/api/recipes?kitchenId=${kitchenId}` : '/api/recipes';
-        const recipesResponse = await fetch(recipesUrl);
+
+        // Fire all 3 fetches in parallel instead of sequentially
+        const [recipesResponse, kitchensResponse, foodSuppliesResponse] = await Promise.all([
+          fetch(recipesUrl),
+          fetch('/api/kitchens'),
+          fetch('/api/food-supply'),
+        ]);
+
+        // Process recipes
         if (recipesResponse.ok) {
           const recipesData: Recipe[] = await recipesResponse.json();
           setRecipes(recipesData);
 
-          // Build subrecipe map and main recipe links
           const subMap: { [id: string]: Recipe } = {};
           const mainLinks: { [id: string]: RecipeIngredientSubrecipe[] } = {};
           for (const recipe of recipesData) {
-            if (recipe.isSubrecipe) {
-              subMap[recipe.id] = recipe;
-            }
+            if (recipe.isSubrecipe) subMap[recipe.id] = recipe;
           }
           for (const recipe of recipesData) {
             if (!recipe.isSubrecipe) {
-              // Find subrecipe ingredients
-              const subLinks = recipe.ingredients.filter(
+              mainLinks[recipe.id] = recipe.ingredients.filter(
                 (ing): ing is RecipeIngredientSubrecipe => ing.type === 'subrecipe'
               );
-              mainLinks[recipe.id] = subLinks;
             }
           }
           setSubrecipeMap(subMap);
           setMainRecipeLinks(mainLinks);
-        } else {
-          console.error('Failed to fetch recipes');
         }
 
-        // Fetch kitchens
-        const kitchensResponse = await fetch('/api/kitchens');
+        // Process kitchens
         if (kitchensResponse.ok) {
           const kitchensData = await kitchensResponse.json();
           setKitchens(kitchensData);
-          // If kitchenId is provided, use it as the selected kitchen
           if (kitchenId) {
             setSelectedKitchen(kitchenId);
           } else if (kitchensData.length > 0) {
             setSelectedKitchen(kitchensData[0].id);
           }
-        } else {
-          console.error('Failed to fetch kitchens');
         }
 
-        // Fetch food supplies for waste calculations
-        const foodSuppliesResponse = await fetch('/api/food-supply');
+        // Process food supplies
         if (foodSuppliesResponse.ok) {
           const foodSuppliesData = await foodSuppliesResponse.json();
           setFoodSupplies(foodSuppliesData);
-        } else {
-          console.error('Failed to fetch food supplies');
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -212,17 +205,24 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
     fetchData();
   }, [t, toast, kitchenId]);
 
-  // Fetch full recipe details before opening dialog
+  // Fetch full recipe details before opening dialog — uses module-level cache
   const handleViewRecipe = async (recipe: Recipe) => {
-    setRecipeDetailsLoading(true);
     setRecipeDetailsOpen(true);
+
+    // Return immediately from cache if already fetched
+    if (recipeDetailsCache.has(recipe.id)) {
+      setSelectedRecipe(recipeDetailsCache.get(recipe.id));
+      setRecipeDetailsLoading(false);
+      return;
+    }
+
+    setRecipeDetailsLoading(true);
     try {
       const res = await fetch(`/api/recipes/${recipe.id}`);
       if (res.ok) {
         const data = await res.json();
-        setSelectedRecipe({
+        const enriched = {
           ...data,
-          // fallback for missing fields
           id: data.id,
           name: data.name,
           description: data.description,
@@ -238,22 +238,16 @@ export function RecipesTab({ kitchenId }: RecipesTabProps) {
           isSubrecipe: data.isSubrecipe,
           totalWasteAmount: data.totalWasteAmount,
           kitchenBreakdown: data.kitchenBreakdown,
-        });
+        };
+        recipeDetailsCache.set(recipe.id, enriched);
+        setSelectedRecipe(enriched);
       } else {
-        toast({
-          title: t('error'),
-          description: t('failed_to_load_recipe_details'),
-          variant: "destructive",
-        });
-        setSelectedRecipe(recipe); // fallback to summary
+        toast({ title: t('error'), description: t('failed_to_load_recipe_details'), variant: "destructive" });
+        setSelectedRecipe(recipe);
       }
-    } catch (error) {
-      toast({
-        title: t('error'),
-        description: t('failed_to_load_recipe_details'),
-        variant: "destructive",
-      });
-      setSelectedRecipe(recipe); // fallback to summary
+    } catch {
+      toast({ title: t('error'), description: t('failed_to_load_recipe_details'), variant: "destructive" });
+      setSelectedRecipe(recipe);
     } finally {
       setRecipeDetailsLoading(false);
     }

@@ -147,6 +147,13 @@ export function UserKitchenPageSimplified() {
   }>({});
   const CACHE_EXPIRATION = 5 * 60 * 1000;
   const [refillItem, setRefillItem] = useState<FoodSupply | null>(null);
+  // Track which tabs have been visited (for lazy loading)
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['overview']));
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setVisitedTabs(prev => new Set([...prev, tab]));
+  };
 
   const fetchAssignments = async () => {
     try {
@@ -236,6 +243,9 @@ export function UserKitchenPageSimplified() {
 
   const handleKitchenSelect = (kitchen: Kitchen) => {
     setIsLoading(true);
+    // Reset visited tabs so heavy sub-tabs lazy-mount fresh data for the new kitchen
+    setVisitedTabs(new Set(['overview']));
+    setActiveTab('overview');
     const cachedData = dataCache[kitchen.id];
     const now = new Date().getTime();
     if (cachedData && (now - cachedData.timestamp < CACHE_EXPIRATION)) {
@@ -473,7 +483,7 @@ export function UserKitchenPageSimplified() {
                 <FoodSupplyNotifications kitchenId={selectedKitchen.id} />
 
                 {/* ── Tabs ── */}
-                <CardTabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <CardTabs defaultValue="overview" value={activeTab} onValueChange={handleTabChange} className="w-full">
                   <CardTabs.List className="w-full flex gap-1 mb-2 bg-muted/50 p-1 rounded-xl">
                     <CardTabs.Trigger value="overview" icon={<Package className="h-4 w-4" />}>
                       {t('overview')}
@@ -844,34 +854,40 @@ export function UserKitchenPageSimplified() {
                     </Card>
                   </CardTabs.Content>
 
-                  {/* ── Recipes Tab ── */}
+                  {/* ── Recipes Tab ── lazy-mounted on first visit */}
                   <CardTabs.Content value="recipes" className="mt-5">
-                    <RecipesTab kitchenId={selectedKitchen.id} />
+                    {visitedTabs.has('recipes') && (
+                      <RecipesTab kitchenId={selectedKitchen.id} />
+                    )}
                   </CardTabs.Content>
 
-                  {/* ── Operations Tab ── */}
+                  {/* ── Operations Tab ── lazy-mounted on first visit */}
                   <CardTabs.Content value="operations" className="mt-5">
-                    <KitchenOperationsTab
-                      kitchenId={selectedKitchen.id}
-                      kitchenName={selectedKitchen.name}
-                      allKitchens={assignments.map(a => ({ id: a.kitchen.id, name: a.kitchen.name }))}
-                    />
+                    {visitedTabs.has('operations') && (
+                      <KitchenOperationsTab
+                        kitchenId={selectedKitchen.id}
+                        kitchenName={selectedKitchen.name}
+                        allKitchens={assignments.map(a => ({ id: a.kitchen.id, name: a.kitchen.name }))}
+                      />
+                    )}
                   </CardTabs.Content>
 
-                  {/* ── Consumption Tab ── */}
+                  {/* ── Consumption Tab ── lazy-mounted on first visit */}
                   <CardTabs.Content value="consumption" className="mt-5">
-                    <Card className="border-0 ring-1 ring-border/60 shadow-sm">
-                      <CardHeader className="border-b border-border/50">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <BarChart3 className="h-4.5 w-4.5 text-emerald-600" />
-                          {t('kitchen_consumption')}
-                        </CardTitle>
-                        <CardDescription>{t('track_and_analyze_consumption_in_this_kitchen')}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-4">
-                        <ConsumptionTabContent kitchenId={selectedKitchen.id} kitchenName={selectedKitchen.name} />
-                      </CardContent>
-                    </Card>
+                    {visitedTabs.has('consumption') && (
+                      <Card className="border-0 ring-1 ring-border/60 shadow-sm">
+                        <CardHeader className="border-b border-border/50">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <BarChart3 className="h-4.5 w-4.5 text-emerald-600" />
+                            {t('kitchen_consumption')}
+                          </CardTitle>
+                          <CardDescription>{t('track_and_analyze_consumption_in_this_kitchen')}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-4">
+                          <ConsumptionTabContent kitchenId={selectedKitchen.id} kitchenName={selectedKitchen.name} />
+                        </CardContent>
+                      </Card>
+                    )}
                   </CardTabs.Content>
 
                 </CardTabs>

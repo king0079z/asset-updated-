@@ -46,10 +46,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Calculate usage statistics for each recipe
         const recipesWithStats = recipes.map(recipe => {
           const usageCount = recipe.usages.length;
-          const lastUsed = recipe.usages.length > 0 
-            ? recipe.usages.sort((a, b) => 
-                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-              )[0].createdAt 
+          const lastUsed = recipe.usages.length > 0
+            ? recipe.usages.reduce((latest, u) =>
+                new Date(u.createdAt) > new Date(latest.createdAt) ? u : latest
+              ).createdAt
             : null;
             
           // Format ingredients for the response
@@ -87,18 +87,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       // If kitchenId provided, further filter to recipes used in that kitchen
       if (kitchenId && typeof kitchenId === 'string') {
-        const usedRecipeIds = await prisma.recipeUsage.findMany({
-          where: { kitchenId },
-          select: { recipeId: true },
-          distinct: ['recipeId'],
-        });
-        // Show recipes used in this kitchen + any recipe with no usages yet (so new recipes are visible everywhere)
-        const usedIds = usedRecipeIds.map(u => u.recipeId);
-        const noUsageRecipes = await prisma.recipe.findMany({
-          where: { ...orgFilter, usages: { none: {} } },
-          select: { id: true }
-        });
+        // Run both pre-queries in parallel
+        const [usedRecipeIds, noUsageRecipes] = await Promise.all([
+          prisma.recipeUsage.findMany({
+            where: { kitchenId },
+            select: { recipeId: true },
+            distinct: ['recipeId'],
+          }),
+          prisma.recipe.findMany({
+            where: { ...orgFilter, usages: { none: {} } },
+            select: { id: true },
+          }),
+        ]);
         const noUsageIds = noUsageRecipes.map(r => r.id);
+        const usedIds = usedRecipeIds.map(u => u.recipeId);
         whereClause.id = { in: [...new Set([...usedIds, ...noUsageIds])] };
       }
 
@@ -161,10 +163,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Add usage statistics and format for response
       const formattedRecipes = recipes.map(recipe => {
         const usageCount = recipe.usages.length;
-        const lastUsed = recipe.usages.length > 0 
-          ? recipe.usages.sort((a, b) => 
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            )[0].createdAt 
+        // Use reduce instead of sort to avoid mutating the shared array
+        const lastUsed = recipe.usages.length > 0
+          ? recipe.usages.reduce((latest, u) =>
+              new Date(u.createdAt) > new Date(latest.createdAt) ? u : latest
+            ).createdAt
           : null;
 
         // Format ingredients for the response
@@ -282,29 +285,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Calculate total cost and cost per serving
       let totalCost = 0;
 
+      // Batch-fetch all referenced food supplies and subrecipes in parallel (avoids N+1)
+      const foodIngredients = ingredients.filter(i => i.type === 'food');
+      const subrecipeIngredients = ingredients.filter(i => i.type === 'subrecipe');
+      const foodSupplyIds = [...new Set(foodIngredients.map(i => i.foodSupplyId).filter(Boolean))];
+      const subrecipeIds = [...new Set(subrecipeIngredients.map(i => i.subRecipeId).filter(Boolean))];
+
+      const [foodSupplyRows, subRecipeRows] = await Promise.all([
+        foodSupplyIds.length > 0
+          ? prisma.foodSupply.findMany({ where: { id: { in: foodSupplyIds } } })
+          : Promise.resolve([]),
+        subrecipeIds.length > 0
+          ? prisma.recipe.findMany({ where: { id: { in: subrecipeIds } } })
+          : Promise.resolve([]),
+      ]);
+      const foodSupplyMap = new Map(foodSupplyRows.map(fs => [fs.id, fs]));
+      const subRecipeMap = new Map(subRecipeRows.map(sr => [sr.id, sr]));
+
       // Prepare ingredient creation data
       const ingredientCreates: any[] = [];
-      const ingredientWasteCreates: { recipeIngredientIndex: number; wastePercentage: number; }[] = [];
 
-      for (const [idx, ingredient] of ingredients.entries()) {
+      for (const ingredient of ingredients) {
         if (ingredient.type === 'food') {
-          // Validate food supply
-          const foodSupply = await prisma.foodSupply.findUnique({
-            where: { id: ingredient.foodSupplyId }
-          });
+          const foodSupply = foodSupplyMap.get(ingredient.foodSupplyId);
           if (!foodSupply) {
             return res.status(404).json({ 
               error: `Food supply not found for ingredient: ${ingredient.foodSupplyId}` 
             });
           }
-          // Robustly handle wastePercentage: must be a number between 0 and 100 (percentage, not fraction)
           let waste = 0;
           if (ingredient.wastePercentage !== undefined && ingredient.wastePercentage !== null && ingredient.wastePercentage !== '') {
             waste = Number(ingredient.wastePercentage);
             if (isNaN(waste) || waste < 0) waste = 0;
             if (waste > 100) waste = 100;
           }
-          // Calculate cost: base cost + waste cost
           const baseCost = ingredient.quantity * foodSupply.pricePerUnit;
           const wasteCost = ingredient.quantity * (waste / 100) * foodSupply.pricePerUnit;
           const totalIngredientCost = baseCost + wasteCost;
@@ -315,38 +329,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             quantity: ingredient.quantity,
             cost: totalIngredientCost,
             wastes: waste > 0 ? {
-              create: [{
-                wasteType: 'General',
-                // Store as percentage (e.g., 10 for 10%), not fraction
-                wastePercentage: waste
-              }]
+              create: [{ wasteType: 'General', wastePercentage: waste }]
             } : undefined
           });
         } else if (ingredient.type === 'subrecipe') {
-          // Validate subrecipe
-          const subRecipe = await prisma.recipe.findUnique({
-            where: { id: ingredient.subRecipeId }
-          });
+          const subRecipe = subRecipeMap.get(ingredient.subRecipeId);
           if (!subRecipe) {
             return res.status(404).json({ 
               error: `Subrecipe not found for ingredient: ${ingredient.subRecipeId}` 
             });
           }
-          // Only allow subrecipes that are marked as subrecipes
           if (!subRecipe.isSubrecipe) {
             return res.status(400).json({ 
               error: `Selected recipe is not a subrecipe: ${ingredient.subRecipeId}` 
             });
           }
-          // Cost is subrecipe cost per serving * quantity
           const cost = subRecipe.costPerServing * ingredient.quantity;
           totalCost += cost;
-
-          ingredientCreates.push({
-            subRecipeId: ingredient.subRecipeId,
-            quantity: ingredient.quantity,
-            cost
-          });
+          ingredientCreates.push({ subRecipeId: ingredient.subRecipeId, quantity: ingredient.quantity, cost });
         }
       }
 

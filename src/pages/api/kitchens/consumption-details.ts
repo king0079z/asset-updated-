@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     startDate.setHours(0, 0, 0, 0);
     const dateFilter = { gte: startDate, lte: endDate };
 
-    // Get kitchen details
+    // Validate kitchen first, then fire all 3 data queries in parallel
     const kitchen = await prisma.kitchen.findUnique({
       where: { id: targetKitchenId }
     });
@@ -51,32 +51,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Kitchen not found' });
     }
 
-    // Get consumption data for the kitchen within date range
-    const consumptions = await prisma.foodConsumption.findMany({
-      where: {
-        kitchenId: targetKitchenId,
-        date: dateFilter,
-      },
-      orderBy: {
-        date: 'desc'
-      },
-      include: {
-        foodSupply: {
-          select: {
-            id: true,
-            name: true,
-            unit: true,
-            category: true,
-            pricePerUnit: true
-          },
+    // All 3 independent queries run in parallel (was sequential before)
+    const [consumptions, wasteData, recipeUsages] = await Promise.all([
+      prisma.foodConsumption.findMany({
+        where: { kitchenId: targetKitchenId, date: dateFilter },
+        orderBy: { date: 'desc' },
+        include: {
+          foodSupply: { select: { id: true, name: true, unit: true, category: true, pricePerUnit: true } },
+          user: { select: { email: true } },
         },
-        user: {
-          select: {
-            email: true
-          }
-        }
-      },
-    });
+      }),
+      // Date filter now applied to waste as well (was missing before — caused mismatched time windows)
+      prisma.foodDisposal.findMany({
+        where: {
+          kitchenId: targetKitchenId,
+          disposedAt: dateFilter,
+        },
+        include: {
+          foodSupply: { select: { id: true, name: true, unit: true, pricePerUnit: true } },
+        },
+      }),
+      // Date filter applied to recipe usages (was missing before)
+      prisma.recipeUsage.findMany({
+        where: {
+          kitchenId: targetKitchenId,
+          createdAt: dateFilter,
+        },
+        select: {
+          recipeId: true,
+          servingsUsed: true,
+          cost: true,
+          sellingPrice: true,
+          profit: true,
+          waste: true,
+          createdAt: true,
+          recipe: { select: { id: true, name: true } },
+        },
+      }),
+    ]);
 
     // Group consumptions by food supply
     const groupedConsumptions = consumptions.reduce((acc, curr) => {
@@ -152,22 +164,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }, 0);
     });
 
-    // Get waste data for this kitchen's food supplies
-    const wasteData = await prisma.foodDisposal.findMany({
-      where: {
-        kitchenId: targetKitchenId, // Direct filter by kitchenId
-      },
-      include: {
-        foodSupply: {
-          select: {
-            id: true,
-            name: true,
-            unit: true,
-            pricePerUnit: true
-          }
-        }
-      }
-    });
+    // wasteData was fetched above in the parallel Promise.all block
 
     // Group waste by food supply and calculate cost
     const groupedWaste = wasteData.reduce((acc, curr) => {
@@ -244,25 +241,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    // Fetch all recipe usages for this kitchen, including recipe details
-    const recipeUsages = await prisma.recipeUsage.findMany({
-      where: { kitchenId: targetKitchenId },
-      select: {
-        recipeId: true,
-        servingsUsed: true,
-        cost: true,
-        sellingPrice: true,
-        profit: true,
-        waste: true,
-        createdAt: true,
-        recipe: {
-          select: {
-            id: true,
-            name: true,
-          }
-        }
-      },
-    });
+    // recipeUsages was fetched above in the parallel Promise.all block
 
     // Sum up cost, sellingPrice, and profit from all recipe usages
     const totalRecipeCost = recipeUsages.reduce((sum, ru) => sum + (ru.cost || 0), 0);
@@ -415,6 +394,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
     return res.status(200).json(response);
   } catch (error) {
     console.error('Kitchen Consumption Details API Error:', error);

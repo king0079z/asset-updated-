@@ -111,55 +111,41 @@ export function FoodSupplyNotifications({ className, kitchenId }: FoodSupplyNoti
     }
     
     try {
-      // Use Promise.all to run these requests in parallel
-      const [allSupplies, expiringData, lowStockData, recipesData] = await Promise.all([
-        // Get all food supplies using the service function with caching
+      // Only 2 parallel requests instead of 4: fetch all supplies + popular recipes
+      // Expiring/low-stock filtering is done client-side from allSupplies (eliminates 2 redundant API calls)
+      const [allSupplies, recipesData] = await Promise.all([
         getFoodSupplies(kitchenId || '', forceRefresh),
-        
-        // Get expiring items directly from API with caching
-        fetchWithCache<{items: FoodSupply[]}>(`/api/food-supply?expiringSoon=true${kitchenId ? `&kitchenId=${kitchenId}` : ''}`, {}, forceRefresh),
-        
-        // Get low stock items directly from API with caching
-        fetchWithCache<{items: FoodSupply[]}>(`/api/food-supply?lowStock=true${kitchenId ? `&kitchenId=${kitchenId}` : ''}`, {}, forceRefresh),
-        
-        // Get popular recipes directly from API with caching
-        fetchWithCache<{items: Recipe[]}>(`/api/recipes?popular=true${kitchenId ? `&kitchenId=${kitchenId}` : ''}`, {}, forceRefresh)
+        fetchWithCache<{items: Recipe[]}>(`/api/recipes?popular=true${kitchenId ? `&kitchenId=${kitchenId}` : ''}`, {}, forceRefresh),
       ]);
-      
-      // Process the data
+
       if (allSupplies && allSupplies.length > 0) {
         const today = new Date();
-        
-        // Filter for expired items
-        const expiredItems = allSupplies.filter((item: FoodSupply) => {
-          const expirationDate = new Date(item.expirationDate);
-          return expirationDate < today;
+        const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+        // Compute expiring/expired using the already-fetched list (no extra API call needed)
+        const expiring = allSupplies.filter((item: FoodSupply) => {
+          const exp = new Date(item.expirationDate);
+          return exp <= in7Days; // includes already-expired
         });
-        
-        // Get expiring soon items
-        const expiringSoonItems = expiringData?.items || [];
-        
-        // Combine expired and expiring soon items
-        setExpiringItems([...expiredItems, ...expiringSoonItems]);
-      } else if (expiringData) {
-        // If we can't get all supplies, at least use the expiring soon items
-        setExpiringItems(expiringData.items || []);
+        setExpiringItems(expiring);
+
+        // Compute low-stock using a simple threshold (< 10 units) — no extra API call needed
+        const LOW_STOCK_THRESHOLD = 10;
+        const lowStock = allSupplies.filter((item: FoodSupply) => item.quantity <= LOW_STOCK_THRESHOLD);
+        setLowStockItems(lowStock);
+      } else {
+        setExpiringItems([]);
+        setLowStockItems([]);
       }
-      
-      if (lowStockData) {
-        setLowStockItems(lowStockData.items || []);
-      }
-      
+
       if (recipesData) {
         setPopularRecipes(recipesData.items || []);
       }
-      
-      // If all API calls fail, use mock data
-      if (!allSupplies && !expiringData && !lowStockData && !recipesData) {
+
+      if (!allSupplies && !recipesData) {
         setMockData();
       }
-      
-      // Update last fetch time
+
       setLastFetchTime(now);
     } catch (error) {
       console.error('Error fetching notification data:', error);

@@ -52,32 +52,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Kitchen not found' });
     }
 
-    // Get all food supplies for this kitchen
-    const foodSupplies = await prisma.foodSupply.findMany({
-      where: {
-        kitchenId: kitchenId,
-      },
-      select: {
-        id: true,
-        quantity: true,
-        pricePerUnit: true,
-        totalWasted: true,
-      }
-    });
+    // Run all 6 independent queries in parallel (was 8 sequential DB round-trips before)
+    const today = new Date();
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    // Get consumption data for this kitchen
-    const consumptionData = await prisma.foodConsumption.findMany({
-      where: {
-        kitchenId: kitchenId,
-      },
-      include: {
-        foodSupply: {
-          select: {
-            pricePerUnit: true,
-          }
-        }
-      }
-    });
+    const [foodSupplies, consumptionData, wasteData, recipeUsages, monthlyConsumption, monthlyWaste, monthlyRecipeUsages] = await Promise.all([
+      prisma.foodSupply.findMany({
+        where: { kitchenId },
+        select: { id: true, quantity: true, pricePerUnit: true, totalWasted: true },
+      }),
+      prisma.foodConsumption.findMany({
+        where: { kitchenId },
+        include: { foodSupply: { select: { pricePerUnit: true } } },
+      }),
+      prisma.foodDisposal.findMany({
+        where: { foodSupply: { kitchenId } },
+        include: { foodSupply: { select: { pricePerUnit: true } } },
+      }),
+      prisma.recipeUsage.findMany({
+        where: { kitchenId },
+        include: { recipe: { select: { sellingPrice: true, totalCost: true } } },
+      }),
+      prisma.foodConsumption.findMany({
+        where: { kitchenId, date: { gte: startOfMonth } },
+        include: { foodSupply: { select: { pricePerUnit: true } } },
+      }),
+      prisma.foodDisposal.findMany({
+        where: { foodSupply: { kitchenId }, createdAt: { gte: startOfMonth } },
+        include: { foodSupply: { select: { pricePerUnit: true } } },
+      }),
+      prisma.recipeUsage.findMany({
+        where: { kitchenId, createdAt: { gte: startOfMonth } },
+        include: { recipe: { select: { sellingPrice: true, totalCost: true } } },
+      }),
+    ]);
 
     // Calculate total consumed value with additional safety checks
     const totalConsumed = consumptionData.reduce((sum, record) => {
@@ -109,21 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     logApiEvent(`Calculated costs: Inventory: ${inventoryCost}, Consumed: ${totalConsumed}, Total: ${totalCost}`);
 
-    // Get waste data for this kitchen
-    const wasteData = await prisma.foodDisposal.findMany({
-      where: {
-        foodSupply: {
-          kitchenId: kitchenId,
-        }
-      },
-      include: {
-        foodSupply: {
-          select: {
-            pricePerUnit: true,
-          }
-        }
-      }
-    });
+    // wasteData was fetched above in the parallel block
 
     // Calculate total waste value with additional safety checks
     const totalWaste = wasteData.reduce((sum, record) => {
@@ -138,21 +132,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }, 0);
 
     // Profit is calculated below from actual recipe selling prices, not a hardcoded markup
-
-    // Get recipe usage data for this kitchen
-    const recipeUsages = await prisma.recipeUsage.findMany({
-      where: {
-        kitchenId: kitchenId,
-      },
-      include: {
-        recipe: {
-          select: {
-            sellingPrice: true,
-            totalCost: true,
-          }
-        }
-      }
-    });
+    // recipeUsages was fetched above in the parallel block
 
     // Calculate total recipe selling price with additional safety checks
     const totalRecipeSellingPrice = recipeUsages.reduce((sum, usage) => {
@@ -179,24 +159,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Add detailed logging for kitchen ID
     logApiEvent(`Kitchen ID: ${kitchenId}, Total Profit: ${totalProfit}, Recipe Selling Price: ${safeRecipeSellingPrice}, Waste: ${safeWaste}, Cost: ${safeCost}`);
 
-    // Get monthly data
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    
-    // Monthly consumption
-    const monthlyConsumption = await prisma.foodConsumption.findMany({
-      where: {
-        kitchenId: kitchenId,
-        date: { gte: startOfMonth }
-      },
-      include: {
-        foodSupply: {
-          select: {
-            pricePerUnit: true
-          }
-        }
-      }
-    });
+    // Monthly data was fetched above in the parallel block
+    // monthlyConsumption, monthlyWaste, monthlyRecipeUsages are already available
 
     const monthlyConsumedValue = monthlyConsumption.reduce((sum, record) => {
       try {
@@ -209,22 +173,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }, 0);
 
-    // Monthly waste
-    const monthlyWaste = await prisma.foodDisposal.findMany({
-      where: {
-        foodSupply: {
-          kitchenId: kitchenId,
-        },
-        createdAt: { gte: startOfMonth }
-      },
-      include: {
-        foodSupply: {
-          select: {
-            pricePerUnit: true,
-          }
-        }
-      }
-    });
 
     const monthlyWasteValue = monthlyWaste.reduce((sum, record) => {
       try {
@@ -237,21 +185,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }, 0);
 
-    // Monthly recipe usage
-    const monthlyRecipeUsages = await prisma.recipeUsage.findMany({
-      where: {
-        kitchenId: kitchenId,
-        createdAt: { gte: startOfMonth }
-      },
-      include: {
-        recipe: {
-          select: {
-            sellingPrice: true,
-            totalCost: true,
-          }
-        }
-      }
-    });
 
     // Calculate monthly recipe selling price with additional safety checks
     const monthlyRecipeSellingPrice = monthlyRecipeUsages.reduce((sum, usage) => {
