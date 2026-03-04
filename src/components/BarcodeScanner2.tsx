@@ -15,8 +15,9 @@ import {
   Scan, Camera, QrCode, X, RotateCcw, AlertTriangle, ChevronLeft,
   CheckCircle2, MapPin, Building2, Tag, Package, Loader2, RefreshCcw,
   Trash2, ArrowRightLeft, Eye, PlusCircle, Keyboard, Zap,
-  ShieldAlert, Navigation, Activity, FileText, Printer,
+  ShieldAlert, Navigation, Activity, FileText, Printer, UserCheck, UserX,
 } from 'lucide-react';
+import { AssignAssetDialog } from '@/components/AssignAssetDialog';
 
 /* ──────────────────────────────── Scan cache ── */
 // Module-level memory cache — survives re-renders, cleared on page unload
@@ -36,6 +37,8 @@ interface Asset {
   vendor?: { name: string } | null;
   barcode?: string | null;
   assetId?: string | null;
+  assignedToName?: string | null;
+  assignedToEmail?: string | null;
 }
 
 type View =
@@ -83,6 +86,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
   const [savingStatus, setSaving]   = useState(false);
   const [pickedStatus, setPickedStatus] = useState('');
   const [statusComment, setStatusComment] = useState('');
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
 
   const [camLoading, setCamLoading]     = useState(false);
   const [camError, setCamError]         = useState<string | null>(null);
@@ -938,6 +942,27 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                     </div>
                   </div>
 
+                  {/* ── Assignment status strip ── */}
+                  {asset.assignedToName || asset.assignedToEmail ? (
+                    <div className="mb-4 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                      <UserCheck className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-emerald-300 text-[11px] font-bold uppercase tracking-wider">Assigned</p>
+                        <p className="text-white/80 text-[12px] font-medium truncate">
+                          {asset.assignedToName || asset.assignedToEmail}
+                        </p>
+                        {asset.assignedToName && asset.assignedToEmail && (
+                          <p className="text-white/35 text-[10px] truncate">{asset.assignedToEmail}</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-4 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-white/4 border border-white/8">
+                      <UserX className="h-4 w-4 text-white/25 flex-shrink-0" />
+                      <p className="text-white/30 text-[12px]">Not assigned to anyone</p>
+                    </div>
+                  )}
+
                   {/* ── Actions ── */}
                   <p className="text-white/20 text-[10px] uppercase tracking-[0.15em] font-bold mb-2.5 px-0.5">Quick Actions</p>
 
@@ -951,6 +976,16 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                       label="View Details"
                       sub="Full information"
                       glow="0 8px 32px rgba(14,165,233,0.15)"
+                    />
+                    <ActionCard
+                      onClick={() => setShowAssignDialog(true)}
+                      gradient="from-teal-600/20 to-teal-500/10"
+                      border="border-teal-500/20"
+                      iconBg="bg-teal-500/20"
+                      icon={<UserCheck className="h-5 w-5 text-teal-300" />}
+                      label="Assign To"
+                      sub={asset.assignedToName ? `Assigned: ${asset.assignedToName.split(' ')[0]}` : "Assign to user"}
+                      glow="0 8px 32px rgba(20,184,166,0.15)"
                     />
                     <ActionCard
                       onClick={() => { transferForm.reset({ floorNumber: asset.floorNumber || '', roomNumber: asset.roomNumber || '' }); setView('p-transfer'); }}
@@ -1234,6 +1269,26 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
           100% { top: 4px;   opacity: 0.3; }
         }
       `}</style>
+
+      {/* Assign-to-user dialog — rendered outside the scanner portal so it stacks correctly */}
+      {asset && (
+        <AssignAssetDialog
+          asset={{
+            id: asset.id,
+            name: asset.name,
+            assignedToName: asset.assignedToName,
+            assignedToEmail: asset.assignedToEmail,
+          }}
+          open={showAssignDialog}
+          onOpenChange={setShowAssignDialog}
+          onAssigned={() => {
+            setShowAssignDialog(false);
+            // Re-fetch asset so the assignment strip refreshes immediately
+            const code = asset.barcode || asset.assetId || asset.id;
+            if (code) findAsset(code);
+          }}
+        />
+      )}
     </>
   );
 }

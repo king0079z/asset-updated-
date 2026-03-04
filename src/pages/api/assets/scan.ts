@@ -26,6 +26,8 @@ const SCAN_SELECT = {
   roomNumber: true,
   description: true,
   organizationId: true,
+  assignedToName: true,
+  assignedToEmail: true,
   vendor: { select: { id: true, name: true } },
 } as const;
 
