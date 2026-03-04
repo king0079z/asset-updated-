@@ -5,297 +5,262 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import prisma from "@/lib/prisma";
 import React from "react";
 import {
-  Document, Page, Text, View, StyleSheet, pdf, Font,
+  Document, Page, Text, View, StyleSheet, pdf,
 } from "@react-pdf/renderer";
 
-Font.register({
-  family: "Helvetica",
-  fonts: [],
-});
-
-const c = {
-  red:     "#b91c1c",
-  redDark: "#7f1d1d",
-  redLight:"#fef2f2",
-  redBorder:"#fca5a5",
-  green:   "#15803d",
-  greenBg: "#f0fdf4",
-  greenBorder:"#86efac",
-  blue:    "#1d4ed8",
-  blueBg:  "#eff6ff",
-  blueBorder:"#93c5fd",
-  slate50: "#f8fafc",
-  slate100:"#f1f5f9",
-  slate200:"#e2e8f0",
-  slate400:"#94a3b8",
-  slate500:"#64748b",
-  slate700:"#334155",
-  slate900:"#0f172a",
-  white:   "#ffffff",
-  amber50: "#fffbeb",
-  amber200:"#fde68a",
-  amber800:"#92400e",
-  purple:  "#7c3aed",
-  indigo:  "#4f46e5",
+/* ── Colour palette ───────────────────────────────────────────────────── */
+const C = {
+  red:         "#b91c1c",
+  redDark:     "#7f1d1d",
+  redLight:    "#fef2f2",
+  redBorder:   "#fca5a5",
+  green:       "#15803d",
+  greenBg:     "#f0fdf4",
+  greenBorder: "#86efac",
+  blue:        "#1d4ed8",
+  blueBg:      "#eff6ff",
+  blueBorder:  "#bfdbfe",
+  slate50:     "#f8fafc",
+  slate100:    "#f1f5f9",
+  slate200:    "#e2e8f0",
+  slate400:    "#94a3b8",
+  slate500:    "#64748b",
+  slate700:    "#334155",
+  slate900:    "#0f172a",
+  white:       "#ffffff",
+  amber50:     "#fffbeb",
+  amber200:    "#fde68a",
+  amber800:    "#92400e",
+  indigo:      "#4338ca",
 };
 
-const styles = StyleSheet.create({
-  page: { backgroundColor: c.slate50, paddingBottom: 40 },
+/* ── Styles ───────────────────────────────────────────────────────────── */
+const S = StyleSheet.create({
+  page: { backgroundColor: C.white, fontFamily: "Helvetica" },
 
-  // Header
-  header: { backgroundColor: c.red, padding: "28 36 24 36" },
+  /* header */
+  header: { backgroundColor: C.red, padding: "28 36 24 36" },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  headerLeft: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  iconBox: { width: 44, height: 44, backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 10, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
-  iconText: { fontSize: 22, color: c.white },
-  headerTitle: { fontSize: 20, fontWeight: "bold", color: c.white, marginBottom: 3 },
-  headerSub: { fontSize: 9, color: "rgba(255,255,255,0.65)", textTransform: "uppercase", letterSpacing: 1 },
-  badge: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" },
-  badgeText: { color: c.white, fontSize: 10, fontWeight: "bold" },
-  refText: { fontSize: 8, color: "rgba(255,255,255,0.45)", marginTop: 4, textAlign: "right" },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: C.white, marginBottom: 3 },
+  headerSub: { fontSize: 9, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: 1.2 },
+  badge: { backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", alignSelf: "flex-start" },
+  badgeText: { color: C.white, fontSize: 10, fontWeight: "bold" },
+  refText: { fontSize: 8, color: "rgba(255,255,255,0.45)", marginTop: 5, textAlign: "right" },
 
-  // Meta row
-  metaRow: { flexDirection: "row", backgroundColor: c.slate100, borderBottomWidth: 1, borderBottomColor: c.slate200, paddingHorizontal: 36, paddingVertical: 16, gap: 16 },
+  /* sub-header accent bar */
+  accentBar: { height: 4, backgroundColor: C.redDark },
+
+  /* meta row */
+  metaRow: { flexDirection: "row", backgroundColor: C.slate100, borderBottomWidth: 1, borderBottomColor: C.slate200, paddingHorizontal: 36, paddingVertical: 16, gap: 16 },
   metaItem: { flex: 1 },
-  metaLabel: { fontSize: 8, color: c.slate400, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3, fontWeight: "bold" },
-  metaValue: { fontSize: 13, fontWeight: "bold", color: c.slate900 },
-  metaSub: { fontSize: 10, color: c.slate500, marginTop: 2 },
+  metaLabel: { fontSize: 8, color: C.slate400, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3, fontWeight: "bold" },
+  metaValue: { fontSize: 13, fontWeight: "bold", color: C.slate900 },
+  metaSub: { fontSize: 10, color: C.slate500, marginTop: 2 },
 
-  // Stats
-  statsRow: { flexDirection: "row", paddingHorizontal: 36, paddingVertical: 16, gap: 12, borderBottomWidth: 1, borderBottomColor: c.slate200, backgroundColor: c.white },
-  statBox: { flex: 1, borderRadius: 12, padding: 14, borderWidth: 2, alignItems: "center" },
-  statNum: { fontSize: 30, fontWeight: "bold", lineHeight: 1 },
-  statLbl: { fontSize: 8, fontWeight: "bold", textTransform: "uppercase", letterSpacing: 1, marginTop: 5 },
+  /* stats */
+  statsRow: { flexDirection: "row", paddingHorizontal: 36, paddingVertical: 16, gap: 12, borderBottomWidth: 1, borderBottomColor: C.slate200, backgroundColor: C.white },
+  statBox: { flex: 1, borderRadius: 10, padding: 14, borderWidth: 2, alignItems: "center" },
+  statNum: { fontSize: 28, fontWeight: "bold" },
+  statLbl: { fontSize: 8, fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.8, marginTop: 5, opacity: 0.8 },
 
-  // Section
+  /* section */
   section: { paddingHorizontal: 36, paddingTop: 18, paddingBottom: 8 },
-  sectionTitle: { fontSize: 9, fontWeight: "bold", textTransform: "uppercase", letterSpacing: 1, color: c.slate400, marginBottom: 10 },
-  divider: { height: 1, backgroundColor: c.slate200, marginBottom: 10 },
+  sectionTitle: { fontSize: 9, fontWeight: "bold", textTransform: "uppercase", letterSpacing: 1, color: C.slate400, marginBottom: 8 },
+  divider: { height: 1, backgroundColor: C.slate200, marginBottom: 10 },
 
-  // Table
-  tableHeader: { flexDirection: "row", backgroundColor: c.slate50, paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: c.slate200 },
-  tableHeaderCell: { fontSize: 8, fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.8, color: c.slate400 },
-  tableRow: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" },
-  tableRowAlt: { backgroundColor: c.slate50 },
-  rowNum: { width: 28, fontSize: 10, color: "#cbd5e1", fontWeight: "bold" },
-  colAsset: { flex: 2.5 },
-  colAction: { flex: 1.5 },
+  /* table */
+  tableHeader: { flexDirection: "row", backgroundColor: C.slate50, paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.slate200 },
+  thCell: { fontSize: 8, fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.8, color: C.slate400 },
+  tableRow: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.slate50 },
+  tableRowAlt: { backgroundColor: C.slate50 },
+  rowNum: { width: 24, fontSize: 10, color: "#cbd5e1", fontWeight: "bold" },
+  colAsset:    { flex: 2.5 },
+  colAction:   { flex: 1.8 },
   colReassign: { flex: 2 },
-  assetName: { fontSize: 11, fontWeight: "bold", color: c.slate900 },
-  assetType: { fontSize: 9, color: c.slate400, marginTop: 2 },
-  pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1.5, alignSelf: "flex-start" },
+  assetName: { fontSize: 11, fontWeight: "bold", color: C.slate900 },
+  assetType: { fontSize: 9, color: C.slate400, marginTop: 2 },
+  pill: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1.5, alignSelf: "flex-start" },
   pillText: { fontSize: 9, fontWeight: "bold" },
-  reassignName: { fontSize: 11, fontWeight: "bold", color: c.slate900 },
-  reassignEmail: { fontSize: 9, color: c.slate500, marginTop: 2 },
+  reassignName: { fontSize: 11, fontWeight: "bold", color: C.slate900 },
+  reassignEmail: { fontSize: 9, color: C.slate500, marginTop: 2 },
   dash: { fontSize: 11, color: "#cbd5e1" },
 
-  // Notes
-  notesBox: { backgroundColor: c.amber50, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: c.amber200, marginTop: 2 },
-  notesText: { fontSize: 11, color: c.amber800, lineHeight: 1.6 },
+  /* notes */
+  notesBox: { backgroundColor: C.amber50, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: C.amber200 },
+  notesText: { fontSize: 11, color: C.amber800, lineHeight: 1.6 },
 
-  // Footer
-  footer: { flexDirection: "row", paddingHorizontal: 36, paddingTop: 16, paddingBottom: 14, borderTopWidth: 2, borderTopColor: c.slate200, backgroundColor: c.slate50, gap: 24, alignItems: "flex-end" },
-  officerBox: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  avatar: { width: 38, height: 38, backgroundColor: c.indigo, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: c.white, fontSize: 12, fontWeight: "bold" },
-  officerLabel: { fontSize: 9, color: c.slate400, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 },
-  officerName: { fontSize: 12, fontWeight: "bold", color: c.slate900 },
+  /* footer */
+  footer: { flexDirection: "row", paddingHorizontal: 36, paddingTop: 16, paddingBottom: 16, borderTopWidth: 2, borderTopColor: C.slate200, backgroundColor: C.slate50, gap: 20, alignItems: "flex-end" },
+  officerBlock: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  avatarBox: { width: 38, height: 38, backgroundColor: C.indigo, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: C.white, fontSize: 13, fontWeight: "bold" },
+  officerLbl: { fontSize: 9, color: C.slate400, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 },
+  officerName: { fontSize: 12, fontWeight: "bold", color: C.slate900 },
   sigBlock: { flex: 1, alignItems: "center" },
   sigLine: { width: "100%", borderTopWidth: 1.5, borderTopColor: "#cbd5e1", paddingTop: 6, marginTop: 44 },
-  sigText: { fontSize: 8, color: c.slate400, textTransform: "uppercase", letterSpacing: 0.8, textAlign: "center" },
+  sigText: { fontSize: 8, color: C.slate400, textTransform: "uppercase", letterSpacing: 0.8, textAlign: "center" },
 
-  // Watermark
+  /* watermark */
   watermark: { paddingVertical: 10, alignItems: "center" },
-  watermarkText: { fontSize: 8, color: "#cbd5e1", letterSpacing: 1, textTransform: "uppercase" },
+  watermarkTxt: { fontSize: 8, color: "#d1d5db", letterSpacing: 0.8, textTransform: "uppercase" },
 });
 
-const actionColors: Record<string, { color: string; bg: string; border: string }> = {
-  RETURN_TO_STOCK: { color: c.green,   bg: c.greenBg,  border: c.greenBorder },
-  REASSIGN:        { color: c.blue,    bg: c.blueBg,   border: c.blueBorder  },
-  DISPOSE:         { color: c.red,     bg: c.redLight,  border: c.redBorder   },
-};
-const actionLabels: Record<string, string> = {
+/* ── Label maps ───────────────────────────────────────────────────────── */
+const ACTION_LABELS: Record<string, string> = {
   RETURN_TO_STOCK: "Returned to Stock",
   REASSIGN: "Reassigned",
   DISPOSE: "Disposed",
 };
-const reasonLabels: Record<string, string> = {
+const ACTION_COLORS: Record<string, { color: string; bg: string; border: string }> = {
+  RETURN_TO_STOCK: { color: C.green,  bg: C.greenBg,  border: C.greenBorder },
+  REASSIGN:        { color: C.blue,   bg: C.blueBg,   border: C.blueBorder  },
+  DISPOSE:         { color: C.red,    bg: C.redLight,  border: C.redBorder   },
+};
+const REASON_LABELS: Record<string, string> = {
   TERMINATED: "Terminated", RESIGNED: "Resigned",
   TRANSFERRED: "Transferred", SUSPENDED: "Suspended", OTHER: "Other",
 };
 
-function ClearancePDF({ userName, userEmail, reason, notes, clearanceDate, actions, processedBy, generatedAt, refCode }: any) {
+/* ── PDF Document component ───────────────────────────────────────────── */
+function ClearancePDF({ userName, userEmail, reason, notes, clearanceDateLabel, actions, processedBy, generatedAt, refCode }: any) {
   const returned   = actions.filter((a: any) => a.action === "RETURN_TO_STOCK").length;
   const reassigned = actions.filter((a: any) => a.action === "REASSIGN").length;
   const disposed   = actions.filter((a: any) => a.action === "DISPOSE").length;
 
-  return React.createElement(
-    Document,
-    { title: `Clearance Certificate — ${userName}`, author: processedBy },
-    React.createElement(
-      Page,
-      { size: "A4", style: styles.page },
+  const el = React.createElement;
 
-      // ── Header ──
-      React.createElement(
-        View, { style: styles.header },
-        React.createElement(
-          View, { style: styles.headerRow },
-          React.createElement(
-            View, { style: styles.headerLeft },
-            React.createElement(View, { style: styles.iconBox },
-              React.createElement(Text, { style: styles.iconText }, "📋")
-            ),
-            React.createElement(
-              View, null,
-              React.createElement(Text, { style: styles.headerTitle }, "Asset Clearance Certificate"),
-              React.createElement(Text, { style: styles.headerSub }, "Official Record — Asset Management System"),
-            )
+  return el(Document, { title: `Clearance Certificate - ${userName}`, author: processedBy },
+    el(Page, { size: "A4", style: S.page },
+
+      /* ── Header ── */
+      el(View, { style: S.header },
+        el(View, { style: S.headerRow },
+          el(View, null,
+            el(Text, { style: S.headerTitle }, "Asset Clearance Certificate"),
+            el(Text, { style: S.headerSub }, "Official Record - Asset Management System"),
           ),
-          React.createElement(
-            View, { style: { alignItems: "flex-end" } },
-            React.createElement(View, { style: styles.badge },
-              React.createElement(Text, { style: styles.badgeText }, reasonLabels[reason] ?? reason)
-            ),
-            React.createElement(Text, { style: styles.refText }, `REF: ${refCode}`)
+          el(View, { style: { alignItems: "flex-end" } },
+            el(View, { style: S.badge }, el(Text, { style: S.badgeText }, REASON_LABELS[reason] ?? reason)),
+            el(Text, { style: S.refText }, `REF: ${refCode}`),
           )
         )
       ),
+      el(View, { style: S.accentBar }),
 
-      // ── Meta ──
-      React.createElement(
-        View, { style: styles.metaRow },
-        React.createElement(
-          View, { style: styles.metaItem },
-          React.createElement(Text, { style: styles.metaLabel }, "Cleared Employee"),
-          React.createElement(Text, { style: styles.metaValue }, userName),
-          React.createElement(Text, { style: styles.metaSub }, userEmail),
+      /* ── Meta ── */
+      el(View, { style: S.metaRow },
+        el(View, { style: S.metaItem },
+          el(Text, { style: S.metaLabel }, "Cleared Employee"),
+          el(Text, { style: S.metaValue }, userName),
+          el(Text, { style: S.metaSub }, userEmail),
         ),
-        React.createElement(
-          View, { style: styles.metaItem },
-          React.createElement(Text, { style: styles.metaLabel }, "Clearance Date"),
-          React.createElement(Text, { style: styles.metaValue }, clearanceDate),
-          React.createElement(Text, { style: styles.metaSub }, "Effective immediately"),
+        el(View, { style: S.metaItem },
+          el(Text, { style: S.metaLabel }, "Clearance Date"),
+          el(Text, { style: S.metaValue }, clearanceDateLabel),
+          el(Text, { style: S.metaSub }, "Effective immediately"),
         ),
-        React.createElement(
-          View, { style: styles.metaItem },
-          React.createElement(Text, { style: styles.metaLabel }, "Processed By"),
-          React.createElement(Text, { style: styles.metaValue }, processedBy),
-          React.createElement(Text, { style: styles.metaSub }, `Generated ${generatedAt}`),
+        el(View, { style: S.metaItem },
+          el(Text, { style: S.metaLabel }, "Processed By"),
+          el(Text, { style: S.metaValue }, processedBy),
+          el(Text, { style: S.metaSub }, `Generated ${generatedAt}`),
         ),
       ),
 
-      // ── Stats ──
-      React.createElement(
-        View, { style: styles.statsRow },
+      /* ── Stats ── */
+      el(View, { style: S.statsRow },
         ...[
-          { num: actions.length, lbl: "Total Assets",  cls: "total",  color: c.slate700, bg: c.slate50,   border: c.slate200  },
-          { num: returned,       lbl: "Returned",       cls: "ret",    color: c.green,    bg: c.greenBg,   border: c.greenBorder},
-          { num: reassigned,     lbl: "Reassigned",     cls: "reass",  color: c.blue,     bg: c.blueBg,    border: c.blueBorder },
-          { num: disposed,       lbl: "Disposed",       cls: "disp",   color: c.red,      bg: c.redLight,   border: c.redBorder  },
-        ].map(s =>
-          React.createElement(
-            View, { key: s.lbl, style: [styles.statBox, { backgroundColor: s.bg, borderColor: s.border }] },
-            React.createElement(Text, { style: [styles.statNum, { color: s.color }] }, String(s.num)),
-            React.createElement(Text, { style: [styles.statLbl, { color: s.color, opacity: 0.8 }] }, s.lbl),
-          )
-        )
+          { num: actions.length, lbl: "Total Assets",  color: C.slate700, bg: C.slate50,  border: C.slate200   },
+          { num: returned,       lbl: "Returned",       color: C.green,   bg: C.greenBg,  border: C.greenBorder },
+          { num: reassigned,     lbl: "Reassigned",     color: C.blue,    bg: C.blueBg,   border: C.blueBorder  },
+          { num: disposed,       lbl: "Disposed",       color: C.red,     bg: C.redLight,  border: C.redBorder   },
+        ].map(s => el(View, { key: s.lbl, style: [S.statBox, { backgroundColor: s.bg, borderColor: s.border }] },
+          el(Text, { style: [S.statNum, { color: s.color }] }, String(s.num)),
+          el(Text, { style: [S.statLbl, { color: s.color }] }, s.lbl),
+        ))
       ),
 
-      // ── Asset table ──
-      React.createElement(
-        View, { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, "Asset Disposition Summary"),
-        React.createElement(View, { style: styles.divider }),
+      /* ── Asset table ── */
+      el(View, { style: S.section },
+        el(Text, { style: S.sectionTitle }, "Asset Disposition Summary"),
+        el(View, { style: S.divider }),
 
-        React.createElement(
-          View, { style: styles.tableHeader },
-          React.createElement(Text, { style: [styles.tableHeaderCell, { width: 28 }] }, "#"),
-          React.createElement(Text, { style: [styles.tableHeaderCell, { flex: 2.5 }] }, "Asset"),
-          React.createElement(Text, { style: [styles.tableHeaderCell, { flex: 1.5 }] }, "Action"),
-          React.createElement(Text, { style: [styles.tableHeaderCell, { flex: 2 }] }, "Reassigned To"),
+        el(View, { style: S.tableHeader },
+          el(Text, { style: [S.thCell, { width: 24 }] }, "#"),
+          el(Text, { style: [S.thCell, S.colAsset] }, "Asset"),
+          el(Text, { style: [S.thCell, S.colAction] }, "Action Taken"),
+          el(Text, { style: [S.thCell, S.colReassign] }, "Reassigned To"),
         ),
 
         ...actions.map((a: any, i: number) => {
-          const ac = actionColors[a.action] ?? { color: c.slate500, bg: c.slate50, border: c.slate200 };
-          return React.createElement(
-            View, { key: a.assetId, style: [styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}] },
-            React.createElement(Text, { style: styles.rowNum }, String(i + 1)),
-            React.createElement(
-              View, { style: styles.colAsset },
-              React.createElement(Text, { style: styles.assetName }, a.assetName ?? a.assetId),
-              a.assetType ? React.createElement(Text, { style: styles.assetType }, a.assetType) : null,
+          const ac = ACTION_COLORS[a.action] ?? { color: C.slate500, bg: C.slate50, border: C.slate200 };
+          return el(View, { key: `${a.assetId}-${i}`, style: [S.tableRow, i % 2 === 1 ? S.tableRowAlt : {}] },
+            el(Text, { style: S.rowNum }, String(i + 1)),
+            el(View, { style: S.colAsset },
+              el(Text, { style: S.assetName }, a.assetName ?? a.assetId),
+              a.assetType ? el(Text, { style: S.assetType }, a.assetType) : null,
             ),
-            React.createElement(
-              View, { style: styles.colAction },
-              React.createElement(
-                View, { style: [styles.pill, { backgroundColor: ac.bg, borderColor: ac.border }] },
-                React.createElement(Text, { style: [styles.pillText, { color: ac.color }] }, actionLabels[a.action] ?? a.action),
+            el(View, { style: S.colAction },
+              el(View, { style: [S.pill, { backgroundColor: ac.bg, borderColor: ac.border }] },
+                el(Text, { style: [S.pillText, { color: ac.color }] }, ACTION_LABELS[a.action] ?? a.action),
               )
             ),
-            React.createElement(
-              View, { style: styles.colReassign },
+            el(View, { style: S.colReassign },
               a.newUserName
-                ? React.createElement(
-                    View, null,
-                    React.createElement(Text, { style: styles.reassignName }, a.newUserName),
-                    a.newUserEmail ? React.createElement(Text, { style: styles.reassignEmail }, a.newUserEmail) : null,
+                ? el(View, null,
+                    el(Text, { style: S.reassignName }, a.newUserName),
+                    a.newUserEmail ? el(Text, { style: S.reassignEmail }, a.newUserEmail) : null,
                   )
-                : React.createElement(Text, { style: styles.dash }, "—"),
+                : el(Text, { style: S.dash }, "-"),
             ),
           );
         }),
       ),
 
-      // ── Notes ──
-      notes ? React.createElement(
-        View, { style: [styles.section, { paddingTop: 4 }] },
-        React.createElement(Text, { style: styles.sectionTitle }, "Clearance Notes"),
-        React.createElement(View, { style: styles.divider }),
-        React.createElement(View, { style: styles.notesBox },
-          React.createElement(Text, { style: styles.notesText }, notes)
-        ),
-      ) : null,
+      /* ── Notes ── */
+      notes
+        ? el(View, { style: [S.section, { paddingTop: 4 }] },
+            el(Text, { style: S.sectionTitle }, "Clearance Notes"),
+            el(View, { style: S.divider }),
+            el(View, { style: S.notesBox },
+              el(Text, { style: S.notesText }, notes)
+            ),
+          )
+        : null,
 
-      // ── Footer ──
-      React.createElement(
-        View, { style: styles.footer },
-        React.createElement(
-          View, { style: styles.officerBox },
-          React.createElement(View, { style: styles.avatar },
-            React.createElement(Text, { style: styles.avatarText }, processedBy.slice(0, 2).toUpperCase())
+      /* ── Footer ── */
+      el(View, { style: S.footer },
+        el(View, { style: S.officerBlock },
+          el(View, { style: S.avatarBox },
+            el(Text, { style: S.avatarText }, (processedBy || "?").slice(0, 2).toUpperCase()),
           ),
-          React.createElement(
-            View, null,
-            React.createElement(Text, { style: styles.officerLabel }, "Clearance Officer"),
-            React.createElement(Text, { style: styles.officerName }, processedBy),
+          el(View, null,
+            el(Text, { style: S.officerLbl }, "Clearance Officer"),
+            el(Text, { style: S.officerName }, processedBy),
           )
         ),
-        React.createElement(
-          View, { style: styles.sigBlock },
-          React.createElement(View, { style: styles.sigLine },
-            React.createElement(Text, { style: styles.sigText }, "Department Manager Signature")
+        el(View, { style: S.sigBlock },
+          el(View, { style: S.sigLine },
+            el(Text, { style: S.sigText }, "Department Manager Signature")
           )
         ),
-        React.createElement(
-          View, { style: styles.sigBlock },
-          React.createElement(View, { style: styles.sigLine },
-            React.createElement(Text, { style: styles.sigText }, "HR Director Signature")
+        el(View, { style: S.sigBlock },
+          el(View, { style: S.sigLine },
+            el(Text, { style: S.sigText }, "HR Director Signature")
           )
         ),
       ),
 
-      // ── Watermark ──
-      React.createElement(
-        View, { style: styles.watermark },
-        React.createElement(Text, { style: styles.watermarkText },
-          `Asset Management System  •  Clearance Certificate  •  ${generatedAt}`
+      /* ── Watermark ── */
+      el(View, { style: S.watermark },
+        el(Text, { style: S.watermarkTxt },
+          `Asset Management System  |  Clearance Certificate  |  ${generatedAt}`
         )
       ),
     )
   );
 }
 
+/* ── API Handler ──────────────────────────────────────────────────────── */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -305,38 +270,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sessionUser = session?.user ?? null;
     if (authError || !sessionUser) return res.status(401).json({ error: "Unauthorized" });
 
-    const {
-      userId, userName, userEmail, reason, notes, clearanceDate, actions,
-    } = req.body as {
-      userId: string; userName: string; userEmail: string;
-      reason: string; notes?: string; clearanceDate: string;
-      actions: { assetId: string; assetName: string; assetType: string; action: string; newUserName?: string; newUserEmail?: string }[];
-    };
+    const { userId, userName, userEmail, reason, notes, clearanceDate, actions } = req.body;
 
     if (!userId || !reason || !clearanceDate || !Array.isArray(actions)) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     const processedBy = sessionUser.email ?? "System";
-    const dateLabel = new Date(clearanceDate).toLocaleDateString("en-US", {
+    const clearanceDateLabel = new Date(clearanceDate).toLocaleDateString("en-US", {
       year: "numeric", month: "long", day: "numeric",
     });
     const generatedAt = new Date().toLocaleString("en-US", {
-      year: "numeric", month: "long", day: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",
     });
     const refCode = `CLR-${Date.now().toString(36).toUpperCase()}`;
 
-    /* ── Generate PDF ───────────────────────────────────────────────────── */
-    const pdfDoc = React.createElement(ClearancePDF, {
-      userName, userEmail, reason, notes: notes ?? null,
-      clearanceDate: dateLabel, actions, processedBy, generatedAt, refCode,
-    });
+    /* ── Generate PDF ── */
+    let pdfBuffer: Buffer;
+    try {
+      const docElement = React.createElement(ClearancePDF, {
+        userName: String(userName ?? ""),
+        userEmail: String(userEmail ?? ""),
+        reason: String(reason ?? ""),
+        notes: notes ? String(notes) : null,
+        clearanceDateLabel,
+        actions,
+        processedBy,
+        generatedAt,
+        refCode,
+      });
+      const pdfBlob = await pdf(docElement).toBuffer();
+      pdfBuffer = Buffer.from(pdfBlob);
+    } catch (pdfErr) {
+      console.error("PDF generation error:", pdfErr);
+      return res.status(500).json({
+        error: "PDF generation failed",
+        detail: pdfErr instanceof Error ? pdfErr.message : String(pdfErr),
+      });
+    }
 
-    const pdfInstance = pdf(pdfDoc);
-    const pdfBuffer = Buffer.from(await pdfInstance.toBuffer());
-
-    /* ── Upload to Supabase Storage ─────────────────────────────────────── */
+    /* ── Upload to Supabase ── */
     const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
     const serviceKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim() || undefined;
     const docsBucket  = "asset-documents";
@@ -356,21 +329,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const timestamp = Date.now();
-    const fileName = `clearance_${userId.slice(0, 8)}_${timestamp}.pdf`;
-    const storagePath = `clearance-reports/${fileName}`;
+    const storagePath = `clearance-reports/clearance_${String(userId).slice(0, 8)}_${timestamp}.pdf`;
 
     const { data: uploadData, error: uploadError } = await storage
       .from(docsBucket)
       .upload(storagePath, pdfBuffer, { contentType: "application/pdf", upsert: true });
 
     if (uploadError) {
-      console.error("Clearance report upload error:", uploadError.message);
+      console.error("Upload error:", uploadError.message);
       return res.status(500).json({ error: "Failed to upload report", detail: uploadError.message });
     }
 
     const { data: { publicUrl } } = storage.from(docsBucket).getPublicUrl(uploadData.path);
 
-    /* ── Create AssetDocument records for each affected asset ───────────── */
+    /* ── Create AssetDocument records ── */
     const displayFileName = `Clearance_Certificate_${new Date(clearanceDate).toISOString().split("T")[0]}.pdf`;
     const docRecords = actions.map((a: any) => ({
       assetId: a.assetId,
@@ -386,8 +358,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     return res.status(200).json({ reportUrl: publicUrl, fileName: displayFileName });
+
   } catch (err) {
     console.error("clearance-report handler error:", err);
-    return res.status(500).json({ error: "Internal server error", detail: err instanceof Error ? err.message : String(err) });
+    return res.status(500).json({
+      error: "Internal server error",
+      detail: err instanceof Error ? err.message : String(err),
+    });
   }
 }
