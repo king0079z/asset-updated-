@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 
@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           
           const newBarcodes = await Promise.all(
             foodSupplies.map(async (foodSupply) => {
-              const barcode = `KIT${kitchenId.substring(0, 4)}SUP${foodSupply.id.substring(0, 4)}${Date.now()}`;
+              const barcode = `KIT${kitchenId.substring(0, 4)}SUP${foodSupply.id.substring(0, 4)}${Date.now()}`.toUpperCase();
               return prisma.kitchenBarcode.create({
                 data: {
                   barcode,

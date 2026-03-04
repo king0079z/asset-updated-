@@ -102,11 +102,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // Remove related records before deletion
+      // Remove related records before deletion (order matters for FK constraints)
       await prisma.$transaction([
+        // Nullify kitchenId on FoodDisposal records (kitchenId is optional)
+        prisma.foodDisposal.updateMany({ where: { kitchenId: id }, data: { kitchenId: null } }),
+        // Delete consumption & recipe usage records that reference this kitchen
+        prisma.foodConsumption.deleteMany({ where: { kitchenId: id } }),
+        prisma.recipeUsage.deleteMany({ where: { kitchenId: id } }),
+        // Delete junction/barcode/assignment records
         prisma.kitchenAssignment.deleteMany({ where: { kitchenId: id } }),
         prisma.kitchenBarcode.deleteMany({ where: { kitchenId: id } }),
         prisma.kitchenFoodSupply.deleteMany({ where: { kitchenId: id } }),
+        // Finally delete the kitchen itself
         prisma.kitchen.delete({ where: { id } }),
       ]);
 

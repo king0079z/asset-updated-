@@ -80,12 +80,13 @@ type DashboardStats = {
 export default function FoodSupplyPage() {
   const [open, setOpen] = useState(false);
   const [showConsumptionScanner, setShowConsumptionScanner] = useState(false);
+  const [scannerKitchenId, setScannerKitchenId] = useState<string>("");
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [foodSupplies, setFoodSupplies] = useState<any[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refillDialogState, setRefillDialogState] = useState<{ open: boolean; item: any }>({ open: false, item: null });
-  const router = typeof window !== "undefined" ? require("next/router").useRouter() : { query: {} };
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [kitchens, setKitchens] = useState<{ id: string; name: string }[]>([]);
@@ -154,7 +155,7 @@ export default function FoodSupplyPage() {
     try {
       const response = await fetch("/api/food-supply");
       const data = await response.json();
-      setFoodSupplies(data);
+      setFoodSupplies(Array.isArray(data) ? data : []);
 
       // If highlight param is present, open refill dialog for that item
       if (router && router.query && router.query.highlight) {
@@ -235,6 +236,7 @@ export default function FoodSupplyPage() {
         const response = await fetch("/api/kitchens");
         const data = await response.json();
         setKitchens(data);
+        if (data.length > 0) setScannerKitchenId(data[0].id);
       } catch (error) {
         console.error("Error loading kitchens:", error);
         toast({
@@ -253,7 +255,7 @@ export default function FoodSupplyPage() {
   }, []);
 
   const filteredSupplies = foodSupplies.filter((supply) => {
-    const matchesSearch = supply.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (supply.name ?? "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === "all" || supply.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -397,16 +399,31 @@ export default function FoodSupplyPage() {
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-2.5 lg:flex-col">
-              {/* Record Food Consumption — primary CTA (always visible) */}
-              <Button
-                onClick={() => setShowConsumptionScanner(true)}
-                className="bg-white text-emerald-700 hover:bg-emerald-50 border-0 shadow-lg font-semibold gap-2"
-              >
-                <ScanLine className="h-4 w-4" />
-                Record Food Consumption
-              </Button>
+              {/* Record Food Consumption — primary CTA with kitchen selector */}
+              <div className="flex items-center gap-2">
+                {kitchens.length > 1 && (
+                  <select
+                    value={scannerKitchenId}
+                    onChange={e => setScannerKitchenId(e.target.value)}
+                    className="h-9 rounded-lg border border-white/30 bg-white/20 text-white text-xs font-semibold px-2 backdrop-blur-sm focus:outline-none focus:ring-1 focus:ring-white/50"
+                    title="Select kitchen for consumption"
+                  >
+                    {kitchens.map(k => (
+                      <option key={k.id} value={k.id} className="text-foreground bg-background">{k.name}</option>
+                    ))}
+                  </select>
+                )}
+                <Button
+                  onClick={() => { if (scannerKitchenId || kitchens[0]?.id) setShowConsumptionScanner(true); }}
+                  disabled={kitchens.length === 0}
+                  className="bg-white text-emerald-700 hover:bg-emerald-50 border-0 shadow-lg font-semibold gap-2"
+                >
+                  <ScanLine className="h-4 w-4" />
+                  Record Food Consumption
+                </Button>
+              </div>
               <EnhancedBarcodeScanner
-                kitchenId={kitchens[0]?.id ?? ''}
+                kitchenId={scannerKitchenId || kitchens[0]?.id || ''}
                 open={showConsumptionScanner}
                 onOpenChange={setShowConsumptionScanner}
                 onScanComplete={loadFoodSupplies}
@@ -748,7 +765,7 @@ export default function FoodSupplyPage() {
               </CardHeader>
               <CardContent className="pt-5">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  {stats?.categoryStats.map((stat, index) => {
+                  {(stats?.categoryStats ?? []).map((stat, index) => {
                     const category = categories.find(c => c.value === stat.category);
                     const gradients = [
                       'from-blue-500 to-cyan-500', 'from-red-500 to-pink-500',

@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { logDataModification, logUserActivity } from "@/lib/audit";
@@ -68,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           throw new Error('Food supply not found');
         }
 
-        if (foodSupply.quantity < quantity) {
+        if (foodSupply.quantity < parsedQuantity) {
           throw new Error('Insufficient quantity available');
         }
 
@@ -77,13 +77,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           where: { id: supplyId },
           data: {
             quantity: {
-              decrement: quantity,
+              decrement: parsedQuantity,
             },
           },
         });
       } else {
         // If kitchen-specific entry exists, check and update its quantity
-        if (kitchenFoodSupply.quantity < quantity) {
+        if (kitchenFoodSupply.quantity < parsedQuantity) {
           throw new Error('Insufficient quantity available in this kitchen');
         }
 
@@ -94,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
           data: {
             quantity: {
-              decrement: quantity,
+              decrement: parsedQuantity,
             },
           },
         });
@@ -117,7 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Record consumption with user information and expiration date
       const consumption = await prisma.foodConsumption.create({
         data: {
-          quantity,
+          quantity: parsedQuantity,
           notes,
           foodSupplyId: supplyId,
           kitchenId,
@@ -154,16 +154,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       {
         foodSupplyId: supplyId,
         foodSupplyName: result.foodSupply.name,
-        quantity,
+        quantity: parsedQuantity,
         kitchenId,
         kitchenName: result.kitchen.name,
-        previousQuantity: result.foodSupply.quantity + quantity,
+        previousQuantity: result.foodSupply.quantity + parsedQuantity,
         newQuantity: result.foodSupply.quantity,
       },
       {
         action: 'Food Consumption',
         foodSupplyName: result.foodSupply.name,
-        quantity: `${quantity} ${result.foodSupply.unit}`,
+        quantity: `${parsedQuantity} ${result.foodSupply.unit}`,
         kitchen: result.kitchen.name,
         userId: user.id,
         userEmail: user.email
@@ -183,10 +183,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           details: {
             foodSupplyId: supplyId,
             foodSupplyName: result.foodSupply.name,
-            quantity: `${quantity} ${result.foodSupply.unit}`,
+            quantity: `${parsedQuantity} ${result.foodSupply.unit}`,
             kitchenId,
             kitchenName: result.kitchen.name,
-            previousQuantity: result.foodSupply.quantity + quantity,
+            previousQuantity: result.foodSupply.quantity + parsedQuantity,
             newQuantity: result.foodSupply.quantity,
             action: 'Food consumption'
           },
