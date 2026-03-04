@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -234,10 +234,10 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[90dvh] flex flex-col">
-        <VisuallyHidden.Root>
+        <VisuallyHidden>
           <DialogTitle>{displayAsset.name} — Asset Details</DialogTitle>
           <DialogDescription>View and manage details, RFID tracking, tickets, history and documents for this asset.</DialogDescription>
-        </VisuallyHidden.Root>
+        </VisuallyHidden>
 
         {/* ── HERO HEADER ─────────────────────────────────────────── */}
         <div className="relative flex-shrink-0">

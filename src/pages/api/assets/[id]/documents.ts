@@ -35,13 +35,18 @@ export default async function handler(
     currentUser.role === 'ADMIN' ||
     currentUser.role === 'MANAGER' ||
     currentUser.isAdmin === true;
-  const assetScope = isPrivilegedUser && currentUser.organizationId
-    ? { organizationId: currentUser.organizationId }
+
+  // Build scope: privileged users see all assets in their org OR assets with no org;
+  // regular users see only their own assets.
+  const scopeWhere = isPrivilegedUser
+    ? currentUser.organizationId
+      ? { OR: [{ organizationId: currentUser.organizationId }, { organizationId: null }] }
+      : {}   // super-admin with no org: see everything
     : { userId: user.id };
 
   // Verify the asset exists and is in user's scope
   const asset = await prisma.asset.findFirst({
-    where: { id, ...assetScope },
+    where: { id, ...scopeWhere },
   });
 
   if (!asset) {
