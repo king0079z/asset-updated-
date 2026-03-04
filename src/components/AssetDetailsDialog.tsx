@@ -1,4 +1,5 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -233,6 +234,10 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[95vh] flex flex-col">
+        <VisuallyHidden.Root>
+          <DialogTitle>{displayAsset.name} — Asset Details</DialogTitle>
+          <DialogDescription>View and manage details, RFID tracking, tickets, history and documents for this asset.</DialogDescription>
+        </VisuallyHidden.Root>
 
         {/* ── HERO HEADER ─────────────────────────────────────────── */}
         <div className="relative flex-shrink-0">
@@ -667,7 +672,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                         </div>
                         <p className="text-xs text-muted-foreground leading-relaxed mb-3">{ticket.description}</p>
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground border-t border-border/50 pt-2 mt-2">
-                          <span>{ticket.user.email}</span>
+                          <span>{ticket.user?.email ?? "—"}</span>
                           <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
                         </div>
                       </div>
@@ -754,7 +759,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                   {record.details.disposalMethod && <p><span className="font-semibold">Method:</span> {record.details.disposalMethod}</p>}
                                 </div>
                               )}
-                              <p className="text-[10px] text-muted-foreground mt-2">by {record.user.email}</p>
+                              <p className="text-[10px] text-muted-foreground mt-2">by {record.user?.email ?? "system"}</p>
                             </div>
                           </div>
                         );
