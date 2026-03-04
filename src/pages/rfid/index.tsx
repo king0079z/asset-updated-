@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
@@ -11,8 +12,13 @@ import {
   Wifi, Plus, RefreshCw, Trash2, Tag, MapPin, Building2, Radio,
   Battery, BatteryLow, BatteryCharging, AlertTriangle, CheckCircle2,
   Settings, Copy, X, Search, Zap, Activity, Eye, ChevronDown, ChevronUp,
-  Signal, Clock, Package, Link, Unlink, Info, ExternalLink,
+  Signal, Clock, Package, Link, Unlink, Info, ExternalLink, Layers, Bell,
 } from 'lucide-react';
+
+const ZoneMapEditor   = dynamic(() => import('@/components/rfid/ZoneMapEditor'),   { ssr: false });
+const LiveTrackingMap = dynamic(() => import('@/components/rfid/LiveTrackingMap'), { ssr: false });
+const AlertRulesPanel = dynamic(() => import('@/components/rfid/AlertRulesPanel'), { ssr: false });
+const AlertsLog       = dynamic(() => import('@/components/rfid/AlertsLog'),       { ssr: false });
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface RFIDTag {
@@ -69,7 +75,9 @@ export default function RFIDPage() {
   const [zones,       setZones]       = useState<RFIDZone[]>([]);
   const [stats,       setStats]       = useState<Stats | null>(null);
   const [loading,     setLoading]     = useState(true);
-  const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'setup'>('overview');
+  const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'zone-map' | 'alerts' | 'setup'>('overview');
+  const [unresolvedAlerts, setUnresolvedAlerts] = useState(0);
+  const [zoneMapMode, setZoneMapMode] = useState<'edit' | 'live'>('live');
   const [search,      setSearch]      = useState('');
   const [refreshing,  setRefreshing]  = useState(false);
 
@@ -279,21 +287,28 @@ export default function RFIDPage() {
           </div>
 
           {/* ── Tabs ──────────────────────────────────────────────────────── */}
-          <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-xl w-full sm:w-auto">
+          <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-xl flex-wrap">
             {([
-              { id: 'overview', label: 'Live Overview', icon: Activity },
-              { id: 'tags',     label: 'Tags',          icon: Tag },
-              { id: 'zones',    label: 'Zones / APs',   icon: Building2 },
-              { id: 'setup',    label: 'Integration',   icon: Settings },
+              { id: 'overview',  label: 'Live Overview', icon: Activity },
+              { id: 'tags',      label: 'Tags',          icon: Tag },
+              { id: 'zones',     label: 'Zones / APs',   icon: Building2 },
+              { id: 'zone-map',  label: 'Zone Map',      icon: Layers },
+              { id: 'alerts',    label: 'Alerts',        icon: Bell },
+              { id: 'setup',     label: 'Integration',   icon: Settings },
             ] as const).map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                   activeTab === tab.id
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <tab.icon className="h-4 w-4" /> {tab.label}
+                {tab.id === 'alerts' && unresolvedAlerts > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {unresolvedAlerts > 9 ? '9+' : unresolvedAlerts}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -711,6 +726,50 @@ export default function RFIDPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ══ ZONE MAP TAB ═══════════════════════════════════════════════ */}
+          {activeTab === 'zone-map' && (
+            <div className="space-y-4">
+              {/* Mode toggle */}
+              <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-xl w-fit">
+                <button
+                  onClick={() => setZoneMapMode('live')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    zoneMapMode === 'live'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Activity className="h-4 w-4 text-green-500" /> Live View
+                </button>
+                <button
+                  onClick={() => setZoneMapMode('edit')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    zoneMapMode === 'edit'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Layers className="h-4 w-4 text-blue-500" /> Edit Zones
+                </button>
+              </div>
+
+              <div className="min-h-[600px]">
+                {zoneMapMode === 'live'
+                  ? <LiveTrackingMap />
+                  : <ZoneMapEditor onZoneUpdated={() => loadAll()} />
+                }
+              </div>
+            </div>
+          )}
+
+          {/* ══ ALERTS TAB ════════════════════════════════════════════════ */}
+          {activeTab === 'alerts' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[600px]">
+              <AlertRulesPanel />
+              <AlertsLog onUnresolvedCountChange={setUnresolvedAlerts} />
             </div>
           )}
 

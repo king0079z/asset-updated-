@@ -1023,16 +1023,36 @@ enum RFIDTagStatus {
   UNASSIGNED
 }
 
+model FloorPlan {
+  id             String      @id @default(cuid())
+  name           String
+  building       String?
+  floorNumber    Int?
+  imageUrl       String
+  imageWidth     Int         @default(1000)
+  imageHeight    Int         @default(700)
+  organizationId String?
+  createdAt      DateTime    @default(now())
+  zones          RFIDZone[]
+}
+
 model RFIDZone {
   id             String      @id @default(cuid())
   name           String
   description    String?
-  apMacAddress   String?                      // Huawei AP MAC address
-  apIpAddress    String?                      // Huawei AP management IP
+  apMacAddress   String?
+  apIpAddress    String?
   apSerialNumber String?
   floorNumber    String?
   roomNumber     String?
   building       String?
+  isRestricted   Boolean     @default(false)
+  floorPlanId    String?
+  floorPlan      FloorPlan?  @relation(fields: [floorPlanId], references: [id])
+  mapX           Float?
+  mapY           Float?
+  mapWidth       Float?
+  mapHeight      Float?
   organizationId String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -1042,23 +1062,24 @@ model RFIDZone {
 
 model RFIDTag {
   id             String        @id @default(cuid())
-  tagId          String        @unique          // BLE MAC or RFID EPC code
-  tagType        String        @default("BLE") // BLE | RFID | UHF
+  tagId          String        @unique
+  tagType        String        @default("BLE")
   assetId        String?       @unique
   asset          Asset?        @relation(fields: [assetId], references: [id])
   status         RFIDTagStatus @default(UNASSIGNED)
-  batteryLevel   Int?          // 0-100 percent
-  lastRssi       Int?          // Last signal strength (dBm)
+  batteryLevel   Int?
+  lastRssi       Int?
   lastSeenAt     DateTime?
   lastZoneId     String?
   lastZone       RFIDZone?     @relation("CurrentZone", fields: [lastZoneId], references: [id])
-  manufacturer   String?       // e.g. "Zebra", "Impinj", "BlueUp"
+  manufacturer   String?
   model          String?
   notes          String?
   organizationId String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   scans          RFIDScan[]
+  alerts         RFIDAlert[]
 }
 
 model RFIDScan {
@@ -1067,13 +1088,44 @@ model RFIDScan {
   tag        RFIDTag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
   zoneId     String?
   zone       RFIDZone? @relation(fields: [zoneId], references: [id])
-  apMac      String?   // AP that reported the scan
-  rssi       Int?      // Signal strength dBm
-  batteryRaw Int?      // Raw battery value from scan payload
-  rawPayload String?   // Full BLE advertisement payload (hex)
-  rawData    Json?     // Full JSON from Huawei AP webhook
+  apMac      String?
+  rssi       Int?
+  batteryRaw Int?
+  rawPayload String?
+  rawData    Json?
   createdAt  DateTime  @default(now())
 
   @@index([tagId, createdAt])
   @@index([zoneId, createdAt])
+}
+
+model RFIDAlertRule {
+  id             String      @id @default(cuid())
+  type           String      // ZONE_BREACH | RESTRICTED_ZONE | MISSING | LOW_BATTERY
+  name           String
+  enabled        Boolean     @default(true)
+  config         Json        // { thresholdMinutes, batteryThreshold, zoneId, ... }
+  organizationId String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  alerts         RFIDAlert[]
+}
+
+model RFIDAlert {
+  id             String         @id @default(cuid())
+  ruleId         String
+  rule           RFIDAlertRule  @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  tagId          String?
+  tag            RFIDTag?       @relation(fields: [tagId], references: [id], onDelete: SetNull)
+  assetId        String?
+  assetName      String?
+  zoneName       String?
+  message        String
+  severity       String         // INFO | WARNING | CRITICAL
+  resolvedAt     DateTime?
+  organizationId String?
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, resolvedAt])
 }

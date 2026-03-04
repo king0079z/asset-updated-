@@ -211,24 +211,24 @@ export default function VehicleAssignmentsPage() {
 
             <div className="relative p-8">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-8">
-                <div>
+            <div>
                   <div className="inline-flex items-center gap-2 bg-white/15 border border-white/25 rounded-full px-3 py-1 mb-3">
                     <ArrowLeftRight className="h-3.5 w-3.5 text-indigo-200" />
                     <span className="text-indigo-200 text-xs font-semibold tracking-wide uppercase">Fleet Operations</span>
                   </div>
                   <h1 className="text-4xl font-extrabold text-white tracking-tight">Vehicle Assignments</h1>
                   <p className="text-indigo-200/80 mt-1.5">Assign and manage vehicles across your staff members</p>
-                </div>
-                <Button
-                  onClick={fetchData}
+            </div>
+            <Button 
+              onClick={fetchData} 
                   disabled={loading}
-                  variant="outline"
+              variant="outline"
                   size="sm"
                   className="border-white/25 bg-white/15 text-white hover:bg-white/25 gap-2 shrink-0"
-                >
+            >
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                   Refresh
-                </Button>
+            </Button>
               </div>
 
               {/* metric tiles */}
@@ -305,7 +305,7 @@ export default function VehicleAssignmentsPage() {
                 )}
               </TabsTrigger>
             </TabsList>
-
+            
             {/* ── VEHICLES TAB ── */}
             <TabsContent value="vehicles" className="mt-5">
               {/* toolbar */}
@@ -391,13 +391,13 @@ export default function VehicleAssignmentsPage() {
                 </div>
                 <div className="relative w-full sm:w-60">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
+                      <Input
                     placeholder="Search vehicles…"
                     className="pl-10 h-10"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
+                      />
+                    </div>
               </div>
 
               {loading ? (
@@ -515,15 +515,15 @@ export default function VehicleAssignmentsPage() {
                     value={assignSearch}
                     onChange={(e) => setAssignSearch(e.target.value)}
                   />
-                </div>
-              </div>
+                          </div>
+                        </div>
 
               {loading ? (
                 <div className="space-y-4">
                   {[...Array(4)].map((_, i) => (
                     <Skeleton key={i} className="h-24 rounded-2xl" />
-                  ))}
-                </div>
+                      ))}
+                    </div>
               ) : filteredAssignments.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 text-center">
                   <div className="p-6 rounded-3xl bg-muted mb-5">
@@ -532,9 +532,9 @@ export default function VehicleAssignmentsPage() {
                   <h3 className="text-xl font-bold mb-2">No assignments found</h3>
                   <p className="text-sm text-muted-foreground">
                     {assignSearch ? "Try adjusting your search" : "No vehicles are currently assigned to staff"}
-                  </p>
-                </div>
-              ) : (
+                      </p>
+                    </div>
+                  ) : (
                 <div className="space-y-4">
                   <AnimatePresence>
                     {filteredAssignments.map((a, i) => {
@@ -579,14 +579,14 @@ export default function VehicleAssignmentsPage() {
                                       {a.status.toLowerCase()}
                                     </span>
                                   )}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
 
                             {/* Arrow */}
                             <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-muted border">
                               <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
-                            </div>
+                                </div>
 
                             {/* Vehicle */}
                             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -630,14 +630,14 @@ export default function VehicleAssignmentsPage() {
                                   </Button>
                                 </Link>
                               )}
-                            </div>
+                    </div>
                           </div>
                         </motion.div>
                       );
                     })}
                   </AnimatePresence>
-                </div>
-              )}
+                    </div>
+                  )}
             </TabsContent>
           </Tabs>
         </div>

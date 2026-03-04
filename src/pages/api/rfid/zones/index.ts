@@ -17,6 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: orgId ? { organizationId: orgId } : {},
       include: {
         _count: { select: { tags: true, scans: true } },
+        floorPlan: { select: { id: true, name: true, imageUrl: true } },
         tags: {
           include: { asset: { select: { id: true, name: true, status: true } } },
           take: 10,
@@ -28,19 +29,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'POST') {
-    const { name, description, apMacAddress, apIpAddress, apSerialNumber, floorNumber, roomNumber, building } = req.body;
+    const {
+      name, description, apMacAddress, apIpAddress, apSerialNumber,
+      floorNumber, roomNumber, building,
+      isRestricted, floorPlanId, mapX, mapY, mapWidth, mapHeight,
+    } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
 
     const zone = await prisma.rFIDZone.create({
       data: {
-        name:          name.trim(),
-        description:   description || null,
-        apMacAddress:  apMacAddress?.trim().toUpperCase() || null,
-        apIpAddress:   apIpAddress?.trim() || null,
+        name:           name.trim(),
+        description:    description || null,
+        apMacAddress:   apMacAddress?.trim().toUpperCase() || null,
+        apIpAddress:    apIpAddress?.trim() || null,
         apSerialNumber: apSerialNumber?.trim() || null,
-        floorNumber:   floorNumber || null,
-        roomNumber:    roomNumber  || null,
-        building:      building   || null,
+        floorNumber:    floorNumber || null,
+        roomNumber:     roomNumber  || null,
+        building:       building   || null,
+        isRestricted:   isRestricted === true || isRestricted === 'true' || false,
+        floorPlanId:    floorPlanId || null,
+        mapX:           mapX    != null ? Number(mapX)    : null,
+        mapY:           mapY    != null ? Number(mapY)    : null,
+        mapWidth:       mapWidth  != null ? Number(mapWidth)  : null,
+        mapHeight:      mapHeight != null ? Number(mapHeight) : null,
         organizationId: orgId,
       },
     });
