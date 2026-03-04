@@ -19,6 +19,7 @@ import {
   Calendar,
   Navigation,
   Building2,
+  Radio,
 } from "lucide-react";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { MobileNavBar } from "./MobileNavBar";
@@ -199,6 +200,11 @@ function Sidebar({ className }: SidebarProps) {
         title: t("asset_location"),
         icon: MapPin,
         href: "/asset-location",
+      },
+      {
+        title: "RFID & BLE Tracking",
+        icon: Radio,
+        href: "/rfid",
       },
       {
         title: t("vehicle_tracking_system"),

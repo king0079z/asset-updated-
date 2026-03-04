@@ -30,6 +30,14 @@ import {
   UserCheck,
   User,
   UserX,
+  Radio,
+  Signal,
+  Battery,
+  BatteryLow,
+  BatteryCharging,
+  Tag,
+  Wifi,
+  Link as LinkIcon,
 } from "lucide-react";
 import { EditAssetDialog } from "./EditAssetDialog";
 import { AssignAssetDialog } from "./AssignAssetDialog";
@@ -70,6 +78,12 @@ interface Asset {
   assignedToEmail?: string | null;
   assignedToId?: string | null;
   assignedAt?: string | null;
+  rfidTag?: {
+    id: string; tagId: string; tagType: string; status: string;
+    batteryLevel?: number | null; lastRssi?: number | null;
+    lastSeenAt?: string | null; manufacturer?: string | null; model?: string | null;
+    lastZone?: { id: string; name: string; floorNumber?: string | null; roomNumber?: string | null; building?: string | null } | null;
+  } | null;
 }
 
 interface Ticket {
@@ -178,6 +192,8 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
   const [currentAsset, setCurrentAsset] = useState(asset);
+  const [rfidTag, setRfidTag] = useState<Asset['rfidTag'] | null>(null);
+  const [rfidLoading, setRfidLoading] = useState(false);
 
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
@@ -261,6 +277,16 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
       setCurrentAsset(asset);
       fetchTickets();
       fetchHistory();
+      // Fetch live RFID tag data for this asset
+      setRfidLoading(true);
+      fetch(`/api/rfid/tags`)
+        .then(r => r.ok ? r.json() : { tags: [] })
+        .then(data => {
+          const tag = (data.tags ?? []).find((t: any) => t.asset?.id === asset.id) ?? null;
+          setRfidTag(tag);
+        })
+        .catch(() => setRfidTag(null))
+        .finally(() => setRfidLoading(false));
     }
   }, [open, asset]);
 
@@ -407,28 +433,238 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
         <Separator className="my-4" />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="details" className="flex items-center gap-2">
-              <Info className="h-4 w-4" />
-              {t('details')}
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="details" className="flex items-center gap-1.5">
+              <Info className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t('details')}</span>
             </TabsTrigger>
-            <TabsTrigger value="health" className="flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              {t('health')}
+            <TabsTrigger value="rfid" className="flex items-center gap-1.5 relative">
+              <Radio className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">RFID</span>
+              {rfidTag && (
+                <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full border border-background ${
+                  rfidTag.status === 'ACTIVE' ? 'bg-emerald-500' :
+                  rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-500' :
+                  rfidTag.status === 'MISSING' ? 'bg-red-500' : 'bg-slate-400'
+                }`} />
+              )}
             </TabsTrigger>
-            <TabsTrigger value="tickets" className="flex items-center gap-2">
-              <Ticket className="h-4 w-4" />
-              {t('tickets')}
+            <TabsTrigger value="health" className="flex items-center gap-1.5">
+              <Activity className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t('health')}</span>
             </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              {t('history')}
+            <TabsTrigger value="tickets" className="flex items-center gap-1.5">
+              <Ticket className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t('tickets')}</span>
             </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              {t('documents')}
+            <TabsTrigger value="history" className="flex items-center gap-1.5">
+              <History className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t('history')}</span>
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t('documents')}</span>
             </TabsTrigger>
           </TabsList>
+
+          {/* ── RFID / BLE Tracking Tab ─────────────────────────────── */}
+          <TabsContent value="rfid">
+            <div className="space-y-4 py-2">
+              {rfidLoading ? (
+                <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
+                  <Radio className="h-5 w-5 animate-pulse" /> Loading RFID data…
+                </div>
+              ) : !rfidTag ? (
+                /* No tag linked */
+                <div className="rounded-2xl border border-dashed border-border p-8 flex flex-col items-center gap-4 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center">
+                    <Radio className="h-8 w-8 text-muted-foreground/40" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-muted-foreground">No RFID / BLE Tag Linked</p>
+                    <p className="text-sm text-muted-foreground mt-1">Attach a BLE beacon to this asset and register it in the RFID dashboard to enable live tracking.</p>
+                  </div>
+                  <a
+                    href="/rfid"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
+                  >
+                    <Tag className="h-4 w-4" /> Go to RFID Dashboard
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              ) : (
+                <>
+                  {/* Status hero */}
+                  <div className={`rounded-2xl p-5 border flex items-center gap-4 ${
+                    rfidTag.status === 'ACTIVE'      ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800' :
+                    rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-50   border-amber-200   dark:bg-amber-950/40   dark:border-amber-800'   :
+                    rfidTag.status === 'MISSING'     ? 'bg-red-50     border-red-200     dark:bg-red-950/40     dark:border-red-800'     :
+                    'bg-muted border-border'
+                  }`}>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      rfidTag.status === 'ACTIVE'      ? 'bg-emerald-100 dark:bg-emerald-900' :
+                      rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-100   dark:bg-amber-900'   :
+                      rfidTag.status === 'MISSING'     ? 'bg-red-100     dark:bg-red-900'     :
+                      'bg-muted-foreground/10'
+                    }`}>
+                      <Radio className={`h-6 w-6 ${
+                        rfidTag.status === 'ACTIVE'      ? 'text-emerald-600 dark:text-emerald-400' :
+                        rfidTag.status === 'LOW_BATTERY' ? 'text-amber-600   dark:text-amber-400'   :
+                        rfidTag.status === 'MISSING'     ? 'text-red-600     dark:text-red-400'     :
+                        'text-muted-foreground'
+                      } ${rfidTag.status === 'ACTIVE' ? 'animate-pulse' : ''}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                          rfidTag.status === 'ACTIVE'      ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900 dark:text-emerald-300 dark:border-emerald-700' :
+                          rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-100   text-amber-700   border-amber-300   dark:bg-amber-900   dark:text-amber-300   dark:border-amber-700'   :
+                          rfidTag.status === 'MISSING'     ? 'bg-red-100     text-red-700     border-red-300     dark:bg-red-900     dark:text-red-300     dark:border-red-700'     :
+                          'bg-muted text-muted-foreground border-border'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            rfidTag.status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse' :
+                            rfidTag.status === 'LOW_BATTERY' ? 'bg-amber-500' :
+                            rfidTag.status === 'MISSING' ? 'bg-red-500' : 'bg-slate-400'
+                          }`} />
+                          {rfidTag.status.replace('_', ' ')}
+                        </span>
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground font-semibold">{rfidTag.tagType}</span>
+                      </div>
+                      <p className="font-mono text-sm font-bold mt-1 truncate">{rfidTag.tagId}</p>
+                      {rfidTag.lastSeenAt && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Last seen: {new Date(rfidTag.lastSeenAt).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Current location */}
+                  <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+                    <h4 className="font-bold text-sm flex items-center gap-2"><MapPin className="h-4 w-4 text-blue-500" /> Current Location</h4>
+                    {rfidTag.lastZone ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900">
+                          <Wifi className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <p className="font-bold text-sm">{rfidTag.lastZone.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {[rfidTag.lastZone.building, rfidTag.lastZone.floorNumber && `Floor ${rfidTag.lastZone.floorNumber}`, rfidTag.lastZone.roomNumber && `Room ${rfidTag.lastZone.roomNumber}`].filter(Boolean).join(' · ') || 'Zone location'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">Location not yet determined — waiting for AP scan</p>
+                    )}
+                  </div>
+
+                  {/* Signal + battery metrics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {/* Battery */}
+                    <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
+                      <div className="flex justify-center">
+                        {rfidTag.batteryLevel == null ? (
+                          <Battery className="h-6 w-6 text-muted-foreground/40" />
+                        ) : rfidTag.batteryLevel <= 20 ? (
+                          <BatteryLow className="h-6 w-6 text-red-500" />
+                        ) : (
+                          <BatteryCharging className="h-6 w-6 text-emerald-500" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold">{rfidTag.batteryLevel != null ? `${rfidTag.batteryLevel}%` : '—'}</p>
+                        <p className="text-xs text-muted-foreground">Battery Level</p>
+                      </div>
+                      {rfidTag.batteryLevel != null && (
+                        <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${rfidTag.batteryLevel > 50 ? 'bg-emerald-500' : rfidTag.batteryLevel > 20 ? 'bg-amber-500' : 'bg-red-500'}`}
+                            style={{ width: `${rfidTag.batteryLevel}%` }} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Signal strength */}
+                    <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
+                      <div className="flex justify-center">
+                        <Signal className={`h-6 w-6 ${
+                          rfidTag.lastRssi == null ? 'text-muted-foreground/40' :
+                          rfidTag.lastRssi >= -60 ? 'text-emerald-500' :
+                          rfidTag.lastRssi >= -75 ? 'text-blue-500' :
+                          rfidTag.lastRssi >= -90 ? 'text-amber-500' : 'text-red-500'
+                        }`} />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold">{rfidTag.lastRssi != null ? `${rfidTag.lastRssi}` : '—'}</p>
+                        <p className="text-xs text-muted-foreground">RSSI (dBm)</p>
+                      </div>
+                      {rfidTag.lastRssi != null && (
+                        <p className={`text-xs font-semibold ${
+                          rfidTag.lastRssi >= -60 ? 'text-emerald-600 dark:text-emerald-400' :
+                          rfidTag.lastRssi >= -75 ? 'text-blue-600 dark:text-blue-400' :
+                          rfidTag.lastRssi >= -90 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {rfidTag.lastRssi >= -60 ? 'Excellent' : rfidTag.lastRssi >= -75 ? 'Good' : rfidTag.lastRssi >= -90 ? 'Fair' : 'Weak'}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Last seen */}
+                    <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
+                      <div className="flex justify-center"><Clock className="h-6 w-6 text-violet-500" /></div>
+                      <div>
+                        <p className="text-sm font-bold leading-tight">
+                          {rfidTag.lastSeenAt ? (() => {
+                            const s = Math.floor((Date.now() - new Date(rfidTag.lastSeenAt).getTime()) / 1000);
+                            if (s < 60)    return `${s}s ago`;
+                            if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
+                            if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+                            return `${Math.floor(s / 86400)}d ago`;
+                          })() : '—'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Last Seen</p>
+                      </div>
+                      {rfidTag.lastSeenAt && (
+                        <p className="text-[10px] text-muted-foreground">{new Date(rfidTag.lastSeenAt).toLocaleTimeString()}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tag details */}
+                  <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+                    <h4 className="font-bold text-sm flex items-center gap-2"><Tag className="h-4 w-4 text-indigo-500" /> Tag Details</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: 'Tag ID / MAC', value: rfidTag.tagId, mono: true },
+                        { label: 'Tag Type',     value: rfidTag.tagType },
+                        { label: 'Manufacturer', value: rfidTag.manufacturer || '—' },
+                        { label: 'Model',        value: rfidTag.model || '—' },
+                      ].map(f => (
+                        <div key={f.label} className="bg-muted/40 rounded-xl p-3">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{f.label}</p>
+                          <p className={`text-sm font-semibold truncate ${f.mono ? 'font-mono' : ''}`}>{f.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Link to full RFID dashboard */}
+                  <a
+                    href="/rfid"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors"
+                  >
+                    <Radio className="h-4 w-4" /> View Full RFID Dashboard
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </>
+              )}
+            </div>
+          </TabsContent>
 
           <TabsContent value="details">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
