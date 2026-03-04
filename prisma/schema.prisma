@@ -215,6 +215,7 @@ model Asset {
   movements      AssetMovement[]
   plannerTasks   PlannerTask[]
   tickets        Ticket[]
+  rfidTag        RFIDTag?
 }
 
 model AssetMovement {
@@ -1007,4 +1008,69 @@ enum ErrorStatus {
   INVESTIGATING
   RESOLVED
   IGNORED
+}
+
+// ── RFID / BLE Asset Tracking ──────────────────────────────────────────────
+
+enum RFIDTagStatus {
+  ACTIVE
+  INACTIVE
+  LOW_BATTERY
+  MISSING
+  UNASSIGNED
+}
+
+model RFIDZone {
+  id             String      @id @default(cuid())
+  name           String
+  description    String?
+  apMacAddress   String?                      // Huawei AP MAC address
+  apIpAddress    String?                      // Huawei AP management IP
+  apSerialNumber String?
+  floorNumber    String?
+  roomNumber     String?
+  building       String?
+  organizationId String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  tags           RFIDTag[]   @relation("CurrentZone")
+  scans          RFIDScan[]
+}
+
+model RFIDTag {
+  id             String        @id @default(cuid())
+  tagId          String        @unique          // BLE MAC or RFID EPC code
+  tagType        String        @default("BLE") // BLE | RFID | UHF
+  assetId        String?       @unique
+  asset          Asset?        @relation(fields: [assetId], references: [id])
+  status         RFIDTagStatus @default(UNASSIGNED)
+  batteryLevel   Int?          // 0-100 percent
+  lastRssi       Int?          // Last signal strength (dBm)
+  lastSeenAt     DateTime?
+  lastZoneId     String?
+  lastZone       RFIDZone?     @relation("CurrentZone", fields: [lastZoneId], references: [id])
+  manufacturer   String?       // e.g. "Zebra", "Impinj", "BlueUp"
+  model          String?
+  notes          String?
+  organizationId String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  scans          RFIDScan[]
+}
+
+model RFIDScan {
+  id         String    @id @default(cuid())
+  tagId      String
+  tag        RFIDTag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  zoneId     String?
+  zone       RFIDZone? @relation(fields: [zoneId], references: [id])
+  apMac      String?   // AP that reported the scan
+  rssi       Int?      // Signal strength dBm
+  batteryRaw Int?      // Raw battery value from scan payload
+  rawPayload String?   // Full BLE advertisement payload (hex)
+  rawData    Json?     // Full JSON from Huawei AP webhook
+  createdAt  DateTime  @default(now())
+
+  @@index([tagId, createdAt])
+  @@index([zoneId, createdAt])
 }
