@@ -10,7 +10,9 @@ import {
   Search, X, Users, Package, ChevronRight, UserCheck,
   CheckCircle2, AlertCircle, XCircle, Building2, DollarSign,
   Calendar, ArrowLeft, Loader2, User, Tag, MapPin, Clock,
+  ShieldAlert,
 } from "lucide-react";
+import { UserClearanceDialog } from "./UserClearanceDialog";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 interface UserSummary {
@@ -170,6 +172,7 @@ export function UserAssetsPanel({ open, onOpenChange, onViewAsset }: UserAssetsP
   const [assets, setAssets]             = useState<Asset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [assetSearch, setAssetSearch]   = useState("");
+  const [clearanceOpen, setClearanceOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* Fetch user list */
@@ -273,19 +276,29 @@ export function UserAssetsPanel({ open, onOpenChange, onViewAsset }: UserAssetsP
               </div>
             </div>
 
-            {/* Summary chips */}
-            {selectedUser && (
-              <div className="flex gap-2 flex-shrink-0">
-                <div className="rounded-xl bg-white/15 border border-white/20 px-3 py-1.5 text-center">
-                  <p className="text-white font-bold text-lg leading-none">{selectedUser.total}</p>
-                  <p className="text-white/60 text-[10px] mt-0.5">Total</p>
+              {/* Summary chips + Clearance button */}
+              {selectedUser && (
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                  <div className="rounded-xl bg-white/15 border border-white/20 px-3 py-1.5 text-center">
+                    <p className="text-white font-bold text-lg leading-none">{selectedUser.total}</p>
+                    <p className="text-white/60 text-[10px] mt-0.5">Total</p>
+                  </div>
+                  <div className="rounded-xl bg-emerald-400/20 border border-emerald-300/30 px-3 py-1.5 text-center">
+                    <p className="text-white font-bold text-lg leading-none">{selectedUser.active}</p>
+                    <p className="text-white/60 text-[10px] mt-0.5">Active</p>
+                  </div>
+                  {assets.length > 0 && (
+                    <button
+                      onClick={() => setClearanceOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/30 hover:bg-red-500/50 border border-red-400/40 text-white text-xs font-bold transition-all"
+                    >
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Start Clearance</span>
+                      <span className="sm:hidden">Clearance</span>
+                    </button>
+                  )}
                 </div>
-                <div className="rounded-xl bg-emerald-400/20 border border-emerald-300/30 px-3 py-1.5 text-center">
-                  <p className="text-white font-bold text-lg leading-none">{selectedUser.active}</p>
-                  <p className="text-white/60 text-[10px] mt-0.5">Active</p>
-                </div>
-              </div>
-            )}
+              )}
           </div>
 
           {/* Search bar */}
@@ -448,5 +461,19 @@ export function UserAssetsPanel({ open, onOpenChange, onViewAsset }: UserAssetsP
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Clearance wizard */}
+    {selectedUser && (
+      <UserClearanceDialog
+        open={clearanceOpen}
+        onOpenChange={setClearanceOpen}
+        user={selectedUser}
+        assets={assets}
+        onClearanceComplete={() => {
+          loadAssets(selectedUser.userId);
+          loadUsers(userSearch);
+        }}
+      />
+    )}
   );
 }
