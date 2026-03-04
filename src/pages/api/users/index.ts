@@ -16,17 +16,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const users = await prisma.user.findMany({
     where: {
-      status: 'ACTIVE',
+      status: 'APPROVED',
       ...(organizationId ? { organizationId } : {}),
     },
     select: {
       id: true,
       email: true,
       role: true,
+      isAdmin: true,
       organizationId: true,
     },
     orderBy: { email: 'asc' },
-    take: 100,
+    take: 200,
   });
 
   res.setHeader('Cache-Control', 'private, max-age=60');

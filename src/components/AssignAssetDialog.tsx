@@ -15,6 +15,7 @@ interface SystemUser {
   email: string;
   name?: string | null;
   role?: string;
+  isAdmin?: boolean;
 }
 
 interface AssignAssetDialogProps {
@@ -64,7 +65,7 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
 
   const filteredUsers = systemUsers.filter(u => {
     const q = searchQuery.toLowerCase();
-    return !q || (u.name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+    return !q || (u.email || "").toLowerCase().includes(q) || (u.role || "").toLowerCase().includes(q);
   });
 
   const handleAssign = async () => {
@@ -216,40 +217,49 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
                   </div>
                 ) : (
                   <div className="space-y-1.5 pr-2">
-                    {filteredUsers.map(u => (
-                      <button
-                        key={u.id}
-                        onClick={() => setSelectedUser(selectedUser?.id === u.id ? null : u)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${selectedUser?.id === u.id ? "border-indigo-500 bg-indigo-500/15" : "border-slate-700 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-800"}`}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-indigo-600/40 flex items-center justify-center text-indigo-300 font-bold text-sm shrink-0">
-                          {(u.name || u.email)[0]?.toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-200 text-sm truncate">{u.name || "—"}</p>
-                          <p className="text-xs text-slate-400 truncate">{u.email}</p>
-                          {u.role && <span className="text-[10px] text-indigo-400 uppercase font-semibold">{u.role}</span>}
-                        </div>
-                        {selectedUser?.id === u.id && (
-                          <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0">
-                            <Check className="h-3 w-3 text-white" />
+                    {filteredUsers.map(u => {
+                      const initials = u.email.slice(0, 2).toUpperCase();
+                      const roleLabel = u.isAdmin ? "Admin" : (u.role || "Staff");
+                      const roleColor = u.isAdmin
+                        ? "text-rose-400"
+                        : u.role === "MANAGER" ? "text-amber-400"
+                        : "text-indigo-400";
+                      return (
+                        <button
+                          key={u.id}
+                          onClick={() => setSelectedUser(selectedUser?.id === u.id ? null : u)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${selectedUser?.id === u.id ? "border-indigo-500 bg-indigo-500/15" : "border-slate-700 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-800"}`}
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-indigo-600/40 flex items-center justify-center text-indigo-300 font-bold text-sm shrink-0">
+                            {initials}
                           </div>
-                        )}
-                      </button>
-                    ))}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-slate-200 text-sm truncate">{u.email}</p>
+                            <span className={`text-[10px] uppercase font-bold tracking-wide ${roleColor}`}>{roleLabel}</span>
+                          </div>
+                          {selectedUser?.id === u.id && (
+                            <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0">
+                              <Check className="h-3 w-3 text-white" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </ScrollArea>
 
               {selectedUser && (
                 <div className="rounded-xl bg-indigo-950/50 border border-indigo-700/40 px-4 py-3 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                    {(selectedUser.name || selectedUser.email)[0]?.toUpperCase()}
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                    {selectedUser.email.slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <p className="text-xs text-indigo-400 font-semibold uppercase tracking-widest">Selected</p>
-                    <p className="text-sm font-bold text-white">{selectedUser.name || selectedUser.email}</p>
-                    <p className="text-xs text-indigo-400/70">{selectedUser.email}</p>
+                    <p className="text-sm font-bold text-white truncate">{selectedUser.email}</p>
+                    <p className={`text-xs font-semibold ${selectedUser.isAdmin ? "text-rose-400" : selectedUser.role === "MANAGER" ? "text-amber-400" : "text-indigo-400"}`}>
+                      {selectedUser.isAdmin ? "Admin" : (selectedUser.role || "Staff")}
+                    </p>
                   </div>
                 </div>
               )}
