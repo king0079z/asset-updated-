@@ -233,7 +233,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[95vh] flex flex-col">
+      <DialogContent className="w-full sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-t-2xl sm:rounded-2xl border-0 shadow-2xl max-h-[92dvh] sm:max-h-[95vh] flex flex-col fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto sm:left-auto sm:right-auto translate-y-0">
         <VisuallyHidden.Root>
           <DialogTitle>{displayAsset.name} — Asset Details</DialogTitle>
           <DialogDescription>View and manage details, RFID tracking, tickets, history and documents for this asset.</DialogDescription>
@@ -251,65 +251,70 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
             <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-indigo-950" />
           )}
 
-          <div className="relative z-10 p-6 pb-5">
-            <div className="flex items-start gap-5">
+          <div className="relative z-10 p-4 pb-3 sm:p-6 sm:pb-5">
+            {/* Mobile drag handle */}
+            <div className="flex justify-center mb-3 sm:hidden">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+
+            <div className="flex items-start gap-3 sm:gap-5">
               {/* Asset image / icon */}
-              <div className={`w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 border-2 border-white/20 shadow-xl ${statusMeta.glow} shadow-lg`}>
+              <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden flex-shrink-0 border-2 border-white/20 shadow-lg ${statusMeta.glow}`}>
                 {hasImage ? (
                   <img src={displayAsset.imageUrl} alt={displayAsset.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-                    <Package className="h-9 w-9 text-white/80" />
+                    <Package className="h-6 w-6 sm:h-9 sm:w-9 text-white/80" />
                   </div>
                 )}
               </div>
 
               {/* Title + meta */}
-              <div className="flex-1 min-w-0 pt-1">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${statusMeta.badge}`}>
+              <div className="flex-1 min-w-0 pt-0.5">
+                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border ${statusMeta.badge}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${statusMeta.dot} ${displayAsset.status === "ACTIVE" ? "animate-pulse" : ""}`} />
                     {statusMeta.label}
                   </span>
-                  <span className="text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded-full border border-white/10 font-medium">{displayAsset.type}</span>
+                  <span className="text-[10px] sm:text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded-full border border-white/10 font-medium truncate max-w-[80px] sm:max-w-none">{displayAsset.type}</span>
                   {rfidTag?.status === "ACTIVE" && (
-                    <span className="inline-flex items-center gap-1 text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                    <span className="hidden sm:inline-flex items-center gap-1 text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
                       <Radio className="h-2.5 w-2.5 animate-pulse" /> Live RFID
                     </span>
                   )}
                 </div>
-                <h2 className="text-xl font-bold text-white leading-tight truncate">{displayAsset.name}</h2>
-                <p className="text-xs text-white/50 mt-0.5 font-mono">{displayAsset.assetId}</p>
+                <h2 className="text-base sm:text-xl font-bold text-white leading-tight line-clamp-2 sm:truncate">{displayAsset.name}</h2>
+                <p className="text-[10px] text-white/50 mt-0.5 font-mono truncate">{displayAsset.assetId}</p>
               </div>
 
               {/* Action toolbar */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                 <button
                   onClick={() => setIsAssignDialogOpen(true)}
                   title={currentAsset?.assignedToName ? "Reassign" : "Assign To"}
-                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all"
                 >
-                  <UserCheck className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setIsCreateTicketDialogOpen(true)}
-                  title="Create Ticket"
-                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all"
-                >
-                  <Ticket className="h-4 w-4" />
+                  <UserCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </button>
                 <button
                   onClick={() => setIsEditDialogOpen(true)}
                   title="Edit Asset"
-                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-all"
                 >
-                  <Edit className="h-4 w-4" />
+                  <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </button>
+                <button
+                  onClick={() => setIsCreateTicketDialogOpen(true)}
+                  title="Create Ticket"
+                  className="hidden sm:flex w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white items-center justify-center transition-all"
+                >
+                  <Ticket className="h-4 w-4" />
                 </button>
                 {displayAsset.status !== "DISPOSED" && isButtonVisible("dispose_asset") && (
                   <button
                     onClick={() => window.dispatchEvent(new CustomEvent("dispose-asset", { detail: displayAsset }))}
                     title="Dispose Asset"
-                    className="w-9 h-9 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 flex items-center justify-center transition-all"
+                    className="hidden sm:flex w-9 h-9 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 items-center justify-center transition-all"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -345,21 +350,21 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
         </div>
 
         {/* ── BARCODE / QR STRIP ──────────────────────────────────── */}
-        <div className="bg-muted/30 border-b border-border/50 px-6 py-4 flex-shrink-0">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-6 flex-wrap" ref={printRef}>
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Barcode</p>
-                <Barcode value={displayAsset.barcode || displayAsset.assetId} width={1.2} height={36} format="CODE128" displayValue={false} margin={0} />
-                <p className="text-[10px] font-mono text-muted-foreground">{displayAsset.barcode || displayAsset.assetId}</p>
+        <div className="bg-muted/30 border-b border-border/50 px-4 sm:px-6 py-3 flex-shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto scrollbar-hide" ref={printRef}>
+              <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+                <p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Barcode</p>
+                <Barcode value={displayAsset.barcode || displayAsset.assetId} width={1} height={28} format="CODE128" displayValue={false} margin={0} />
+                <p className="text-[9px] font-mono text-muted-foreground truncate max-w-[120px]">{displayAsset.barcode || displayAsset.assetId}</p>
               </div>
-              <div className="w-px h-12 bg-border/60 self-center hidden sm:block" />
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">QR Code</p>
-                <QRCode value={displayAsset.barcode || displayAsset.assetId} size={48} level="H" />
+              <div className="w-px h-10 bg-border/60 flex-shrink-0" />
+              <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+                <p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">QR Code</p>
+                <QRCode value={displayAsset.barcode || displayAsset.assetId} size={40} level="H" />
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <PrintBarcodeButton
                 barcodeValue={displayAsset.barcode || displayAsset.assetId}
                 displayText={displayAsset.assetId}
@@ -367,7 +372,9 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                 subtitle={`Asset ID: ${displayAsset.assetId}`}
                 variant="outline"
               />
-              <PrintAssetReportButton asset={displayAsset as any} />
+              <div className="hidden sm:block">
+                <PrintAssetReportButton asset={displayAsset as any} />
+              </div>
             </div>
           </div>
         </div>
@@ -376,8 +383,8 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
         <div className="flex-1 overflow-hidden flex flex-col">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
             {/* Pill tab bar */}
-            <div className="px-6 pt-4 flex-shrink-0">
-              <TabsList className="h-10 bg-muted/50 rounded-xl p-1 flex gap-0.5 w-full">
+            <div className="px-3 sm:px-6 pt-3 sm:pt-4 flex-shrink-0">
+              <TabsList className="h-10 bg-muted/50 rounded-xl p-1 flex gap-0.5 w-full overflow-x-auto scrollbar-hide">
                 {[
                   { value: "details",   icon: Info,     label: "Details" },
                   { value: "rfid",      icon: Radio,    label: "RFID", dot: rfidTag ? (rfidTag.status === "ACTIVE" ? "bg-emerald-500" : rfidTag.status === "LOW_BATTERY" ? "bg-amber-500" : "bg-red-500") : null },
@@ -406,13 +413,13 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
             </div>
 
             {/* Scrollable tab content */}
-            <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4">
+            <div className="flex-1 overflow-y-auto px-3 sm:px-6 pb-6 pt-3 sm:pt-4">
 
               {/* ── DETAILS TAB ──────────────────────────────────── */}
               <TabsContent value="details" className="mt-0">
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                  {/* Left: image + description */}
-                  <div className="lg:col-span-2 space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
+                  {/* Left: image + description — hidden on mobile to save space */}
+                  <div className="hidden sm:block lg:col-span-2 space-y-4">
                     <div className="aspect-video rounded-2xl overflow-hidden border border-border/50 shadow-sm">
                       {hasImage ? (
                         <img src={displayAsset.imageUrl} alt={displayAsset.name} className="w-full h-full object-cover" />
@@ -430,6 +437,14 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                       </div>
                     )}
                   </div>
+
+                  {/* Description card — mobile only */}
+                  {displayAsset.description && (
+                    <div className="sm:hidden rounded-xl border border-border/50 bg-muted/30 p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Description</p>
+                      <p className="text-sm text-foreground leading-relaxed">{displayAsset.description}</p>
+                    </div>
+                  )}
 
                   {/* Right: info fields */}
                   <div className="lg:col-span-3 rounded-2xl border border-border/50 bg-card overflow-hidden">
@@ -563,7 +578,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                       </div>
 
                       {/* Metrics row */}
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-3">
                         {/* Battery */}
                         <div className="rounded-2xl border border-border bg-card p-4 text-center space-y-2">
                           <div className="flex justify-center">
@@ -662,8 +677,8 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                 ) : tickets.length > 0 ? (
                   <div className="space-y-3">
                     {tickets.map(ticket => (
-                      <div key={ticket.id} className="rounded-2xl border border-border bg-card p-4 hover:bg-muted/30 transition-colors">
-                        <div className="flex items-start justify-between gap-3 mb-2">
+                      <div key={ticket.id} className="rounded-2xl border border-border bg-card p-3 sm:p-4 hover:bg-muted/30 transition-colors">
+                        <div className="flex flex-col gap-1.5 mb-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                           <h4 className="font-bold text-sm leading-tight">{ticket.title}</h4>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORITY_COLORS[ticket.priority] ?? PRIORITY_COLORS.LOW}`}>{ticket.priority}</span>
