@@ -84,12 +84,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           organizationId: p?.organizationId ?? null,
         };
       })
+      .filter(u => u.status !== 'REJECTED') // exclude rejected users from all app lists
       .sort((a, b) => a.email.localeCompare(b.email));
 
     // ── 4. Fallback: if Admin API not available, use Prisma only ────────────
     if (authUsers.length === 0) {
       const fallback = await prisma.user.findMany({
-        where: {},
+        where: { status: { not: 'REJECTED' } },
         select: { id: true, email: true, role: true, isAdmin: true, status: true, organizationId: true },
         orderBy: { email: 'asc' },
         take: 500,
