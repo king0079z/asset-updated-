@@ -866,12 +866,19 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
           asset={currentAsset}
           open={isAssignDialogOpen}
           onOpenChange={setIsAssignDialogOpen}
-          onAssigned={() => {
-            fetch(`/api/assets/${asset?.id}`)
-              .then(r => r.ok ? r.json() : null)
-              .then(data => { if (data?.asset) setCurrentAsset(data.asset); })
-              .catch(() => {});
+          onAssigned={async () => {
+            try {
+              const res = await fetch(`/api/assets/${asset?.id}`, { headers: { 'Cache-Control': 'no-cache' } });
+              if (res.ok) {
+                const data = await res.json();
+                const updated = data?.asset ?? data;
+                if (updated?.id) {
+                  setCurrentAsset(updated);
+                }
+              }
+            } catch { /* ignore */ }
             fetchHistory();
+            onAssetUpdated?.();
           }}
         />
         <CreateTicketDialog

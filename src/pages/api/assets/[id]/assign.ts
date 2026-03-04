@@ -18,10 +18,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const isAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER' || roleData?.isAdmin === true;
   const organizationId = roleData?.organizationId;
 
-  // Build access scope
+  // Build access scope — mirror the same OR-null pattern used by the GET handler
+  // so that older assets (organizationId = null) can also be assigned
   const assetWhere: any = { id: String(id) };
   if (isAdminOrManager && organizationId) {
-    assetWhere.organizationId = organizationId;
+    assetWhere.OR = [
+      { organizationId: organizationId },
+      { organizationId: null },
+    ];
   } else {
     assetWhere.userId = user.id;
   }

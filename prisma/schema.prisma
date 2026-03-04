@@ -950,6 +950,9 @@ enum AssetHistoryAction {
   UPDATED
   LOCATION_SHARED
   STATUS_CHANGED
+  ASSIGNED
+  UNASSIGNED
+  CLEARANCE
 }
 
 enum TicketStatus {

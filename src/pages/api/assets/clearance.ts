@@ -84,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             await tx.assetHistory.create({
               data: {
                 assetId,
-                action: "UPDATED",
+                action: "CLEARANCE",
                 userId: sessionUser.id,
                 details: {
                   type: "CLEARANCE_RETURN",
@@ -113,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             await tx.assetHistory.create({
               data: {
                 assetId,
-                action: "UPDATED",
+                action: "CLEARANCE",
                 userId: sessionUser.id,
                 details: {
                   type: "CLEARANCE_REASSIGN",
