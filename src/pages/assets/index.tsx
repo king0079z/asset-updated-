@@ -1352,11 +1352,25 @@ export default function AssetsPage() {
         </Card>
       </div>
 
-      <AssetDetailsDialog 
-        asset={selectedAsset} 
-        open={showBarcodeDialog} 
+      <AssetDetailsDialog
+        asset={selectedAsset}
+        open={showBarcodeDialog}
         onOpenChange={setShowBarcodeDialog}
-        onAssetUpdated={() => loadAssets(true)}
+        onAssetUpdated={async () => {
+          loadAssets(true);
+          if (selectedAsset?.id) {
+            try {
+              const res = await fetch(`/api/assets/${selectedAsset.id}`, {
+                headers: { 'Cache-Control': 'no-cache' },
+              });
+              if (res.ok) {
+                const data = await res.json();
+                const updated = data?.asset ?? data;
+                if (updated?.id) setSelectedAsset(updated as Asset);
+              }
+            } catch { /* ignore */ }
+          }
+        }}
       />
 
       <EditAssetDialog

@@ -21,15 +21,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "GET") {
-      const { search, barcode, assetId } = req.query;
-      const searchTerm = search || barcode || assetId;
-
+        const { search, barcode, assetId } = req.query;
+        const searchTerm = search || barcode || assetId;
+        
       // Single cached DB call for user data (role + orgId + isAdmin)
       let roleData: Awaited<ReturnType<typeof getUserRoleData>> = null;
-      let isAdminOrManagerUser = false;
+        let isAdminOrManagerUser = false;
       let organizationId: string | null = null;
-
-      if (user) {
+        
+        if (user) {
         roleData = await getUserRoleData(user.id);
         if (roleData) {
           isAdminOrManagerUser = roleData.role === 'ADMIN' || roleData.role === 'MANAGER' || roleData.isAdmin === true;
@@ -40,26 +40,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // --- Search path ---
       if (searchTerm) {
         let searchConditions: any[];
-        if (barcode) {
-          searchConditions = [{ barcode: String(barcode) }];
-        } else if (assetId) {
-          searchConditions = [{ assetId: String(assetId) }];
-        } else {
-          searchConditions = [
-            { barcode: String(searchTerm) },
-            { assetId: String(searchTerm) },
-            { barcode: { contains: String(searchTerm), mode: 'insensitive' } },
-            { assetId: { contains: String(searchTerm), mode: 'insensitive' } },
-            { name: { contains: String(searchTerm), mode: 'insensitive' } }
-          ];
-        }
-
+          if (barcode) {
+            searchConditions = [{ barcode: String(barcode) }];
+          } else if (assetId) {
+            searchConditions = [{ assetId: String(assetId) }];
+          } else {
+            searchConditions = [
+              { barcode: String(searchTerm) },
+              { assetId: String(searchTerm) },
+              { barcode: { contains: String(searchTerm), mode: 'insensitive' } },
+              { assetId: { contains: String(searchTerm), mode: 'insensitive' } },
+              { name: { contains: String(searchTerm), mode: 'insensitive' } }
+            ];
+          }
+          
         let asset = await prisma.asset.findFirst({
-          where: {
-            OR: searchConditions,
-            ...(organizationId ? { organizationId } : {}),
-            ...(isAdminOrManagerUser || !user ? {} : { userId: user.id })
-          },
+            where: {
+              OR: searchConditions,
+              ...(organizationId ? { organizationId } : {}),
+              ...(isAdminOrManagerUser || !user ? {} : { userId: user.id })
+            },
           include: { vendor: { select: { id: true, name: true } } },
         });
 
@@ -98,6 +98,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         userId: true, vendorId: true,
         vendor: { select: { id: true, name: true } },
         createdAt: true,
+        assignedToName: true,
+        assignedToEmail: true,
+        assignedToId: true,
+        assignedAt: true,
+        organizationId: true,
       } as const;
 
       let assets: any[] = [];
