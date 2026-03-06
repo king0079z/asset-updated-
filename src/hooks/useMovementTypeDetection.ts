@@ -38,11 +38,15 @@ interface MovementTypeState {
   confidence: number;
   lastUpdated: Date | null;
   isSupported: boolean | null;
+  permissionGranted: boolean | null;
+  requestPermission: () => Promise<void>;
   details?: {
     vehicleConfidence: number;
     walkingConfidence: number;
     stationaryConfidence: number;
     dominantFrequencies?: number[];
+    avgMagnitude?: number;
+    frequency?: number;
   };
 }
 
@@ -74,11 +78,14 @@ export function useMovementTypeDetection(options: MovementTypeDetectionOptions =
     errorThreshold = 3           // Number of errors before disabling detection
   } = options;
 
+  const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [movementState, setMovementState] = useState<MovementTypeState>({
     type: MovementType.UNKNOWN,
     confidence: 0,
     lastUpdated: null,
-    isSupported: null
+    isSupported: null,
+    permissionGranted: null,
+    requestPermission: async () => {},
   });
 
   // Store acceleration samples and timestamps
@@ -104,16 +111,44 @@ export function useMovementTypeDetection(options: MovementTypeDetectionOptions =
   const errorCount = useRef<number>(0);
   const lastErrorTime = useRef<number>(0);
 
+  // iOS 13+ permission request
+  const requestPermission = async () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const DME = DeviceMotionEvent as any;
+      if (typeof DME.requestPermission === 'function') {
+        const result = await DME.requestPermission();
+        const granted = result === 'granted';
+        setPermissionGranted(granted);
+        setMovementState(prev => ({ ...prev, permissionGranted: granted }));
+      } else {
+        setPermissionGranted(true);
+        setMovementState(prev => ({ ...prev, permissionGranted: true }));
+      }
+    } catch (e) {
+      console.error('Error requesting motion permission:', e);
+      setPermissionGranted(false);
+      setMovementState(prev => ({ ...prev, permissionGranted: false }));
+    }
+  };
+
   // Check if device motion is supported
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
     const supported = 'DeviceMotionEvent' in window;
-    setMovementState(prev => ({ ...prev, isSupported: supported }));
+    setMovementState(prev => ({ ...prev, isSupported: supported, requestPermission, permissionGranted }));
     
     if (!supported) {
       console.warn('Device motion sensors not supported on this device');
       return;
+    }
+
+    // For non-iOS or already-granted, set permission immediately
+    const DME = DeviceMotionEvent as any;
+    if (typeof DME.requestPermission !== 'function') {
+      setPermissionGranted(true);
+      setMovementState(prev => ({ ...prev, permissionGranted: true, requestPermission }));
     }
 
     let lastTimestamp = 0;
@@ -852,6 +887,8 @@ export function useMovementTypeDetection(options: MovementTypeDetectionOptions =
         vehicleConfidence,
         walkingConfidence,
         stationaryConfidence,
+        avgMagnitude,
+        frequency,
         frequencySignature: {
           dominantFrequencies: [frequency],
           peakFrequency: frequency,
@@ -922,5 +959,5 @@ export function useMovementTypeDetection(options: MovementTypeDetectionOptions =
     };
   };
   
-  return movementState;
+  return { ...movementState, requestPermission, permissionGranted };
 }
