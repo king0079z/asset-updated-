@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
@@ -58,17 +58,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Find vehicles assigned to this user
-    const userVehicles = await prisma.vehicle.findMany({
+    // Find vehicles currently rented by this user via active VehicleRental records
+    const activeRentals = await prisma.vehicleRental.findMany({
       where: {
-        assignedToUserId: user.id,
-        status: 'rented', // Only update location for vehicles that are currently rented
+        userId: user.id,
+        status: 'ACTIVE',
       },
       select: {
-        id: true,
-        name: true,
+        vehicleId: true,
+        vehicle: { select: { id: true, name: true } },
       },
     });
+
+    const userVehicles = activeRentals.map(r => r.vehicle);
 
     if (userVehicles.length === 0) {
       // No vehicles assigned to this user, but we don't want to return an error
