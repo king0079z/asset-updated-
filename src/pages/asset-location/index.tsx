@@ -2,7 +2,7 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import Map, { Marker, NavigationControl, Popup, ScaleControl } from "react-map-gl";
+import MapGL, { Marker, NavigationControl, Popup, ScaleControl } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -177,7 +177,7 @@ function SetLocationDialog({ asset, open, onOpenChange, onSaved, mapboxToken }: 
           </div>
           {mapboxToken && (
             <div className="relative rounded-xl overflow-hidden border border-slate-700" style={{ height: "220px" }}>
-              <Map {...previewState} onMove={evt => setPreviewState(evt.viewState)}
+              <MapGL {...previewState} onMove={evt => setPreviewState(evt.viewState)}
                 mapboxAccessToken={mapboxToken} style={{ width: "100%", height: "100%" }}
                 mapStyle="mapbox://styles/mapbox/dark-v11" cursor={mapClickMode ? "crosshair" : "grab"}
                 onClick={handleMapClick} dragRotate={false}>
@@ -189,7 +189,7 @@ function SetLocationDialog({ asset, open, onOpenChange, onSaved, mapboxToken }: 
                     </div>
                   </Marker>
                 )}
-              </Map>
+              </MapGL>
               {mapClickMode && (
                 <div className="absolute inset-x-0 bottom-0 bg-amber-500/90 text-white text-xs text-center py-1.5 font-semibold">
                   Click anywhere on the map to place the pin
@@ -841,7 +841,7 @@ export default function AssetLocationPage() {
                   {/* Map */}
                   <div className="lg:col-span-3 order-1 lg:order-2 rounded-2xl overflow-hidden border border-slate-700" style={{ height: isMobile ? "380px" : "100%" }}>
                     {mapboxToken ? (
-                      <Map {...viewState} onMove={evt => setViewState(evt.viewState)}
+                      <MapGL {...viewState} onMove={evt => setViewState(evt.viewState)}
                         mapboxAccessToken={mapboxToken} style={{ width: "100%", height: "100%" }}
                         mapStyle="mapbox://styles/mapbox/dark-v11" touchZoomRotate dragRotate={false}>
                         <NavigationControl position="top-right" />
@@ -975,7 +975,7 @@ export default function AssetLocationPage() {
                             </div>
                           </Popup>
                         )}
-                      </Map>
+                      </MapGL>
                     ) : (
                       <div className="h-full bg-slate-900 flex flex-col items-center justify-center p-8 text-center">
                         <MapIcon className="h-12 w-12 text-amber-400 mb-4" />
