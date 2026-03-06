@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { isWithinDutyHours, isEndOfDutyHours } from '@/util/duty-hours';
+import { isEndOfDutyHours } from '@/util/duty-hours';
 import { connectivityManager } from '@/util/connectivity';
 import { getLocationFromIp, getLocationFromIpAlternative, getLocationFromIpFallback } from '@/util/ipGeolocation';
 
@@ -72,30 +72,41 @@ export const useBackgroundGeolocation = (options: GeolocationOptions = {}): Back
         console.log('Location source:', enhancedLocation.source);
         console.log('Estimated accuracy:', enhancedLocation.accuracy, 'meters');
         console.log('Confidence score:', enhancedLocation.confidence);
-        
-        // Update state with enhanced location
-        setLatitude(enhancedLocation.latitude);
-        setLongitude(enhancedLocation.longitude);
-        setAccuracy(enhancedLocation.accuracy);
-        setIsUsingFallbackLocation(true);
-        setError(null);
-        setIsLoading(false);
-        setLastUpdated(new Date());
+
         setGpsStatus('unavailable');
-        
-        // Send to server with fallback flag and additional metadata
-        if (user) {
-          sendLocationToServer(
-            enhancedLocation.latitude, 
-            enhancedLocation.longitude, 
-            true, 
-            {
-              source: enhancedLocation.source,
-              accuracy: enhancedLocation.accuracy,
-              confidence: enhancedLocation.confidence,
-              metadata: enhancedLocation.metadata
-            }
-          );
+        setIsLoading(false);
+
+        // Only use network/IP location on the map if accuracy is reasonable (< 500m).
+        // City-level IP lookups (>1 km) are not useful for vehicle tracking and would
+        // show the driver's dot kilometers away from their real position.
+        if (enhancedLocation.accuracy < 500) {
+          setLatitude(enhancedLocation.latitude);
+          setLongitude(enhancedLocation.longitude);
+          setAccuracy(enhancedLocation.accuracy);
+          setIsUsingFallbackLocation(true);
+          setError(null);
+          setLastUpdated(new Date());
+
+          if (user) {
+            sendLocationToServer(
+              enhancedLocation.latitude,
+              enhancedLocation.longitude,
+              true,
+              {
+                source: enhancedLocation.source,
+                accuracy: enhancedLocation.accuracy,
+                confidence: enhancedLocation.confidence,
+                metadata: enhancedLocation.metadata
+              }
+            );
+          }
+        } else {
+          // Accuracy too low — clear position so the map shows "GPS unavailable"
+          setLatitude(null);
+          setLongitude(null);
+          setAccuracy(enhancedLocation.accuracy);
+          setIsUsingFallbackLocation(true);
+          setError(`GPS unavailable — network estimate is ~${Math.round(enhancedLocation.accuracy / 1000)} km off. Please enable GPS on your device.`);
         }
         
         return true;
@@ -123,29 +134,35 @@ export const useBackgroundGeolocation = (options: GeolocationOptions = {}): Back
         console.log('Successfully obtained location from IP:', ipLocation);
         console.log('IP location provider:', ipLocation.provider);
         console.log('Estimated accuracy:', ipLocation.accuracy, 'meters');
-        
-        // Update state with IP-based location
-        setLatitude(ipLocation.latitude);
-        setLongitude(ipLocation.longitude);
-        setAccuracy(ipLocation.accuracy);
-        setIsUsingFallbackLocation(true);
-        setError(null);
+
         setIsLoading(false);
-        setLastUpdated(new Date());
-        
-        // Send to server with fallback flag and additional metadata
-        if (user) {
-          sendLocationToServer(
-            ipLocation.latitude, 
-            ipLocation.longitude, 
-            true, 
-            {
-              provider: ipLocation.provider,
-              accuracy: ipLocation.accuracy,
-              city: ipLocation.city,
-              country: ipLocation.country
-            }
-          );
+        setIsUsingFallbackLocation(true);
+
+        if (ipLocation.accuracy < 500) {
+          setLatitude(ipLocation.latitude);
+          setLongitude(ipLocation.longitude);
+          setAccuracy(ipLocation.accuracy);
+          setError(null);
+          setLastUpdated(new Date());
+
+          if (user) {
+            sendLocationToServer(
+              ipLocation.latitude,
+              ipLocation.longitude,
+              true,
+              {
+                provider: ipLocation.provider,
+                accuracy: ipLocation.accuracy,
+                city: ipLocation.city,
+                country: ipLocation.country
+              }
+            );
+          }
+        } else {
+          setLatitude(null);
+          setLongitude(null);
+          setAccuracy(ipLocation.accuracy);
+          setError(`GPS unavailable — network estimate is ~${Math.round(ipLocation.accuracy / 1000)} km off. Please enable GPS on your device.`);
         }
         
         return true;
@@ -360,12 +377,14 @@ export const useBackgroundGeolocation = (options: GeolocationOptions = {}): Back
   // Function to send location data to server
   const sendLocationToServer = async (lat: number, lng: number, isFallback: boolean = false, metadata?: any) => {
     try {
-      // Only send location updates during duty hours
-      if (!isWithinDutyHours()) {
-        console.log('Outside duty hours, skipping location update');
+      // Don't send low-accuracy fallback (IP/network) locations to the server —
+      // they are city-level (~km off) and would corrupt the map position.
+      // Only store them locally for display purposes.
+      if (isFallback && metadata?.source === 'fusion') {
+        console.log('Skipping server update for low-accuracy fusion/IP location');
         return;
       }
-      
+
       // Check if we're online
       const isOnline = connectivityManager.isNetworkOnline();
       

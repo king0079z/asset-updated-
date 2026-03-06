@@ -11,7 +11,7 @@ import {
   MapPin, Car, AlertTriangle, Gauge, Clock, RotateCw, Wifi, WifiOff,
   Route, Navigation, History, CheckCircle, User, Download,
   ChevronDown, ChevronUp, ExternalLink, Activity, Calendar,
-  TrendingUp, Shield, Zap,
+  TrendingUp, Shield, Zap, SatelliteDish, Info,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import dynamic from "next/dynamic";
@@ -905,16 +905,73 @@ export default function MyVehiclePage() {
               {/* ━━━━━━━━━━━━━━ CONNECTIVITY + MAP ━━━━━━━━━━━━━━ */}
               <ConnectivityMonitor className="mb-0" />
 
+              {/* GPS Status Banner */}
+              {isUsingFallbackLocation && !latitude && (
+                <div className="rounded-2xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/40 shrink-0">
+                    <SatelliteDish className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-sm text-amber-800 dark:text-amber-300">GPS Signal Unavailable</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                      Your device could not get a precise GPS fix.
+                      {accuracy ? ` Network estimate accuracy is only ~${Math.round(accuracy / 1000)} km — too low to show on map.` : ""}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 text-[11px] bg-amber-100 dark:bg-amber-900/50 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-lg">
+                        <Info className="h-3 w-3" />
+                        Open your browser settings and allow precise location access
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[11px] bg-amber-100 dark:bg-amber-900/50 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-lg">
+                        <Info className="h-3 w-3" />
+                        Move outdoors for a better GPS signal
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-amber-300 text-amber-800 hover:bg-amber-100 dark:text-amber-300 dark:border-amber-700 dark:hover:bg-amber-900/40 gap-1.5 text-xs shrink-0"
+                    onClick={() => startTracking()}
+                  >
+                    <RotateCw className="h-3.5 w-3.5" />
+                    Retry GPS
+                  </Button>
+                </div>
+              )}
+
+              {isTracking && latitude && accuracy && accuracy < 50 && (
+                <div className="rounded-2xl border border-emerald-200 dark:border-emerald-700/50 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                    High-accuracy GPS active · ±{Math.round(accuracy)} m precision
+                  </p>
+                </div>
+              )}
+
+              {isTracking && latitude && accuracy && accuracy >= 50 && accuracy < 500 && (
+                <div className="rounded-2xl border border-blue-200 dark:border-blue-700/50 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />
+                  <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">
+                    GPS active · ±{Math.round(accuracy)} m accuracy
+                  </p>
+                </div>
+              )}
+
               <div className="rounded-3xl border bg-card shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b bg-muted/30 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
-                      <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <div className={`p-2 rounded-xl ${latitude ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-muted"}`}>
+                      <MapPin className={`h-4 w-4 ${latitude ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`} />
                     </div>
                     <div>
                       <p className="font-bold text-base">{t("live_location")}</p>
                       <p className="text-xs text-muted-foreground">
-                        {isTracking ? `Tracking active${accuracy ? ` · ±${Math.round(accuracy)}m` : ""}` : "Location inactive"}
+                        {latitude
+                          ? `Tracking active${accuracy ? ` · ±${Math.round(accuracy)}m` : ""}`
+                          : isUsingFallbackLocation
+                          ? "GPS unavailable — enable location on your device"
+                          : "Location inactive"}
                       </p>
                     </div>
                   </div>
@@ -928,23 +985,42 @@ export default function MyVehiclePage() {
                     Sync Data
                   </Button>
                 </div>
-                <div className="h-[420px] w-full">
-                  <VehicleMap
-                    vehicles={[{
-                      id: vehicle.id,
-                      name: vehicle.name,
-                      licensePlate: vehicle.licensePlate || vehicle.plateNumber,
-                      status: vehicle.status === "AVAILABLE" ? "available" : vehicle.status === "MAINTENANCE" ? "maintenance" : "rented",
-                      location: latitude && longitude
-                        ? { lat: latitude, lng: longitude, lastUpdated: lastUpdated?.toISOString() || new Date().toISOString() }
-                        : undefined,
-                    }]}
-                    userLocation={userLocation}
-                    isLoading={locationLoading}
-                    isUsingNetworkLocation={isUsingFallbackLocation || false}
-                  />
+                <div className={`w-full ${latitude ? "h-[420px]" : "h-[220px] flex flex-col items-center justify-center bg-muted/30"}`}>
+                  {latitude ? (
+                    <VehicleMap
+                      vehicles={[{
+                        id: vehicle.id,
+                        name: vehicle.name,
+                        licensePlate: vehicle.licensePlate || vehicle.plateNumber,
+                        status: vehicle.status === "AVAILABLE" ? "available" : vehicle.status === "MAINTENANCE" ? "maintenance" : "rented",
+                        location: latitude && longitude
+                          ? { lat: latitude, lng: longitude, lastUpdated: lastUpdated?.toISOString() || new Date().toISOString() }
+                          : undefined,
+                      }]}
+                      userLocation={userLocation}
+                      isLoading={locationLoading}
+                      isUsingNetworkLocation={isUsingFallbackLocation || false}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-3 text-center px-6">
+                      <div className="p-4 rounded-2xl bg-muted">
+                        <SatelliteDish className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">Waiting for GPS signal…</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          The map will appear once your device gets a precise location fix.
+                          {locationLoading ? " Searching for GPS…" : ""}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm" className="gap-2 mt-1" onClick={() => startTracking()}>
+                        <RotateCw className="h-3.5 w-3.5" />
+                        Try Again
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                {locationError && (
+                {locationError && latitude && (
                   <div className="px-5 py-3 border-t flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                     {locationError}
