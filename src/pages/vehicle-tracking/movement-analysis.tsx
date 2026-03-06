@@ -116,10 +116,27 @@ export default function MovementAnalysisPage() {
     timestamp: Date; type: MovementType; confidence: number;
   }>>([]);
 
+  /* GPS speed for movement classification */
+  const [gpsSpeedKmh, setGpsSpeedKmh] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
+    const watcher = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (pos.coords.speed !== null && pos.coords.speed >= 0) {
+          setGpsSpeedKmh(pos.coords.speed * 3.6); // m/s → km/h
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
+    return () => navigator.geolocation.clearWatch(watcher);
+  }, []);
+
   const movementState = useMovementTypeDetection({
-    sampleSize: 30,
+    sampleSize: 50,
     updateInterval: 1000,
-    safeMode: true,
+    temporalSmoothing: true,
+    gpsSpeedKmh,
   });
 
   /* live raw acceleration from DeviceMotion */
@@ -439,8 +456,45 @@ export default function MovementAnalysisPage() {
                     )}
                     {movementState.details?.avgMagnitude != null && (
                       <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border">
-                        <span className="text-xs text-muted-foreground">Avg acceleration</span>
+                        <span className="text-xs text-muted-foreground">Dynamic magnitude</span>
                         <span className="text-sm font-bold">{movementState.details.avgMagnitude.toFixed(3)} m/s²</span>
+                      </div>
+                    )}
+
+                    {/* GPS speed */}
+                    {gpsSpeedKmh !== undefined && (
+                      <div className={`flex items-center justify-between p-3 rounded-xl border ${
+                        gpsSpeedKmh >= 15 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-muted/40'
+                      }`}>
+                        <span className="text-xs text-muted-foreground">GPS speed</span>
+                        <span className={`text-sm font-bold ${gpsSpeedKmh >= 15 ? 'text-emerald-400' : ''}`}>
+                          {gpsSpeedKmh.toFixed(1)} km/h
+                          {gpsSpeedKmh >= 15 && <span className="ml-1 text-[10px] font-semibold opacity-70">→ Vehicle</span>}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Algorithm diagnostics */}
+                    {movementState.details?.diagnostics && (
+                      <div className="mt-1 space-y-1">
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground px-0.5">Algorithm signals</p>
+                        {[
+                          { label: "Step autocorrelation", value: movementState.details.diagnostics.autocorrelation, hint: ">0.35 = walking" },
+                          { label: "Step regularity", value: movementState.details.diagnostics.stepRegularity, hint: ">0.5 = walking" },
+                          { label: "Jerk (impulsiveness)", value: movementState.details.diagnostics.jerkScore, hint: ">0.4 = walking" },
+                          { label: "Horizontal dominance", value: movementState.details.diagnostics.horizontalDominance, hint: ">0.6 = vehicle" },
+                        ].map(({ label, value, hint }) => (
+                          <div key={label} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 border">
+                            <div className="flex-1">
+                              <p className="text-[10px] text-muted-foreground">{label}</p>
+                              <p className="text-[9px] text-muted-foreground/50">{hint}</p>
+                            </div>
+                            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-400 rounded-full" style={{ width: `${Math.min(100, value * 100)}%` }} />
+                            </div>
+                            <span className="text-xs font-mono font-bold w-8 text-right">{(value * 100).toFixed(0)}%</span>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
