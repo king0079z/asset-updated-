@@ -1,442 +1,336 @@
 // @ts-nocheck
-import { useFormik } from 'formik';
-import React, { useContext, useState, useEffect } from 'react';
-import * as Yup from 'yup';
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthContext } from '@/contexts/AuthContext';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
-import { LuLock, LuMail, LuShieldCheck } from 'react-icons/lu';
-import GoogleButton from '@/components/GoogleButton';
-import Logo from '@/components/Logo';
 import { useToast } from "@/components/ui/use-toast";
 import { createClient } from '@/util/supabase/component';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { useIsIFrame } from '@/hooks/useIsIFrame';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Checkbox } from "@/components/ui/checkbox";
-import AnimatedBackground from '@/components/AnimatedBackground';
-import ParticleEffect from '@/components/ParticleEffect';
 import { isSupabaseConfigured } from '@/util/supabase/env';
+import GoogleButton from '@/components/GoogleButton';
+import Logo from '@/components/Logo';
+import {
+  Mail, Lock, Eye, EyeOff, Shield, ArrowRight, Zap, BarChart3,
+  MapPin, Cpu, CheckCircle2, Loader2, ChevronRight,
+} from 'lucide-react';
 
-const LoginPage = () => {
+/* ──────────────────────────────────────────────────────────────────────────────
+ * Tiny validation — replaces Formik + Yup (saves ~80 KB)
+ */
+function validate(email: string, password: string) {
+  const errs: { email?: string; password?: string } = {};
+  if (!email) errs.email = 'Email is required';
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Enter a valid email';
+  if (!password) errs.password = 'Password is required';
+  else if (password.length < 4) errs.password = 'Minimum 4 characters';
+  return errs;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * Feature list for the left panel
+ */
+const FEATURES = [
+  { icon: BarChart3, label: 'Real-time asset tracking & analytics' },
+  { icon: MapPin,    label: 'Live GPS & RFID location intelligence' },
+  { icon: Zap,       label: 'Instant alerts and automated workflows' },
+  { icon: Cpu,       label: 'AI-powered insights and reporting' },
+];
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * Input component — lightweight, no framer-motion
+ */
+function FormInput({
+  id, label, type, placeholder, value, onChange, error, icon: Icon,
+  rightSlot,
+}: {
+  id: string; label: string; type: string; placeholder: string;
+  value: string; onChange: (v: string) => void; error?: string;
+  icon: React.ElementType; rightSlot?: React.ReactNode;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="block text-sm font-semibold text-slate-700">
+        {label}
+      </label>
+      <div className={`relative flex items-center rounded-xl border-2 transition-all duration-200 bg-white ${
+        error ? 'border-red-400 ring-2 ring-red-100'
+          : focused ? 'border-indigo-500 ring-2 ring-indigo-100'
+          : 'border-slate-200 hover:border-slate-300'
+      }`}>
+        <Icon className={`absolute left-3.5 h-4 w-4 transition-colors ${focused ? 'text-indigo-500' : 'text-slate-400'}`} />
+        <input
+          id={id}
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          className="w-full pl-10 pr-10 py-3 text-sm bg-transparent outline-none text-slate-900 placeholder:text-slate-400"
+        />
+        {rightSlot && <div className="absolute right-3">{rightSlot}</div>}
+      </div>
+      {error && (
+        <p className="text-xs text-red-500 flex items-center gap-1">
+          <span className="h-1 w-1 rounded-full bg-red-500 inline-block" />
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+ * Main page
+ */
+export default function LoginPage() {
   const router = useRouter();
   const { initializing, signIn } = useContext(AuthContext);
-  const [showPw, setShowPw] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const { isIframe } = useIsIFrame();
   const { toast } = useToast();
-  const [isMounted, setIsMounted] = useState(false);
   const supabaseConfigured = isSupabaseConfigured();
 
-  // Check for saved email in localStorage
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw]     = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isLoading, setIsLoading]   = useState(false);
+  const [touched, setTouched]       = useState({ email: false, password: false });
+  const [errors, setErrors]         = useState<{ email?: string; password?: string }>({});
+
+  // Load saved email
   useEffect(() => {
-    setIsMounted(true);
-    const savedEmail = localStorage.getItem('rememberedEmail');
-    if (savedEmail) {
-      formik.setFieldValue('email', savedEmail);
-      setRememberMe(true);
-    }
+    const saved = localStorage.getItem('rememberedEmail');
+    if (saved) { setEmail(saved); setRememberMe(true); }
   }, []);
 
-  const handleLogin = async (e: any) => {
-    e.preventDefault();
+  // Validate on change
+  useEffect(() => {
+    if (touched.email || touched.password) setErrors(validate(email, password));
+  }, [email, password, touched]);
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setTouched({ email: true, password: true });
+    const errs = validate(email, password);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
 
     if (!supabaseConfigured) {
-      toast({
-        variant: "destructive",
-        title: "Missing configuration",
-        description: "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env to enable login.",
-      });
+      toast({ variant: 'destructive', title: 'Missing configuration', description: 'Supabase is not configured.' });
       return;
     }
 
     setIsLoading(true);
     try {
-      const { email, password } = formik.values;
-      
-      // Save email to localStorage if remember me is checked
-      if (rememberMe) {
-        localStorage.setItem('rememberedEmail', email);
-      } else {
-        localStorage.removeItem('rememberedEmail');
-      }
-      
+      if (rememberMe) localStorage.setItem('rememberedEmail', email);
+      else localStorage.removeItem('rememberedEmail');
+
       await signIn(email, password);
-      
-      // Check user status after login
+
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from('User')
-        .select('status')
-        .eq('email', email)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching user status:', error);
-        router.push('/dashboard');
-        return;
-      }
-      
-      // Redirect based on user status
-      if (data.status === 'PENDING') {
-        router.push('/pending-approval');
-      } else {
-        router.push('/dashboard');
-      }
-    } catch (error) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title: "Login failed",
-        description: "Please check your credentials and try again.",
-      });
+      const { data } = await supabase.from('User').select('status').eq('email', email).single();
+      router.push(data?.status === 'PENDING' ? '/pending-approval' : '/dashboard');
+    } catch {
+      toast({ variant: 'destructive', title: 'Login failed', description: 'Please check your credentials and try again.' });
     } finally {
       setIsLoading(false);
     }
-  }
-
-  const validationSchema = Yup.object().shape({
-    email: Yup.string().required("Email is required").email("Email is invalid"),
-    password: Yup.string()
-      .required("Password is required")
-      .min(4, "Must be at least 4 characters")
-      .max(40, "Must not exceed 40 characters"),
-  });
-
-  const formik = useFormik({
-    initialValues: {
-      email: '',
-      password: '',
-    },
-    validationSchema,
-    onSubmit: handleLogin,
-  });
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleLogin(e);
-    }
   };
 
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { 
-        staggerChildren: 0.1,
-        delayChildren: 0.2
-      }
-    }
-  };
-  
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1,
-      transition: { type: 'spring', stiffness: 300, damping: 24 }
-    }
-  };
-
-  const cardVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1,
-      transition: { 
-        type: 'spring', 
-        stiffness: 300, 
-        damping: 24 
-      }
-    },
-    hover: {
-      y: -5,
-      boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-      transition: { type: 'spring', stiffness: 300, damping: 24 }
-    }
-  };
-
-  const inputVariants = {
-    focus: { scale: 1.02, transition: { duration: 0.2 } },
-    blur: { scale: 1, transition: { duration: 0.2 } }
-  };
+  const isValid = !Object.keys(validate(email, password)).length;
 
   return (
-    <AnimatedBackground>
-      <ParticleEffect />
-      <div className="min-h-screen flex flex-col justify-center items-center p-4">
-        <motion.div 
-          className="flex flex-col gap-6 w-full max-w-md"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <motion.div 
-            className="w-full flex justify-center cursor-pointer" 
-            onClick={() => router.push("/")}
-            variants={itemVariants}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <Logo />
-          </motion.div>
+    <>
+      {/* Lightweight CSS-only animated background — no JS, no canvas, no blur filters */}
+      <style>{`
+        @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(60px,-40px) scale(1.08)} }
+        @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-50px,60px) scale(1.06)} }
+        @keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1.05)} 50%{transform:translate(40px,30px) scale(1)} }
+        @keyframes slideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
+        .login-panel-animate { animation: slideUp .55s cubic-bezier(.16,1,.3,1) both; }
+        .login-fade { animation: fadeIn .4s ease both; }
+      `}</style>
 
-          <motion.div 
-            variants={cardVariants}
-            whileHover="hover"
-            initial="hidden"
-            animate="visible"
-          >
-            <Card className="w-full border-primary/10 shadow-lg backdrop-blur-sm bg-background/80 transition-all duration-300">
-              <CardHeader className="space-y-1">
-                <CardTitle className="text-2xl font-bold text-center bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
-                  Welcome back
-                </CardTitle>
-                <CardDescription className="text-center">
-                  Sign in to access your account
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6" onKeyDown={handleKeyPress}>
-                <motion.div 
-                  className="flex flex-col gap-4"
-                  variants={containerVariants}
-                >
-                  <motion.div 
-                    variants={itemVariants}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <GoogleButton />
-                  </motion.div>
-                  <motion.div 
-                    variants={itemVariants}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <Button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        router.push('/magic-link-login');
-                      }}
-                      variant="outline"
-                      className="w-full relative overflow-hidden group"
-                    >
-                      <span className="relative z-10 flex items-center justify-center w-full">
-                        <LuMail className="mr-2" />
-                        Continue with Magic Link
-                      </span>
-                      <span className="absolute inset-0 bg-primary/5 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300"></span>
-                    </Button>
-                  </motion.div>
-                </motion.div>
-                
-                <div className="flex items-center w-full">
-                  <Separator className="flex-1" />
-                  <span className="mx-4 text-muted-foreground text-sm font-medium">or</span>
-                  <Separator className="flex-1" />
-                </div>
+      <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
 
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <motion.div 
-                    className="space-y-4"
-                    variants={containerVariants}
-                  >
-                    <motion.div 
-                      className="space-y-2" 
-                      variants={itemVariants}
-                    >
-                      <Label htmlFor="email" className="text-sm font-medium flex items-center">
-                        <LuMail className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                        Email
-                      </Label>
-                      <motion.div 
-                        className="relative"
-                        variants={inputVariants}
-                        whileFocus="focus"
-                        whileTap="focus"
-                      >
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                          <LuMail className="h-4 w-4" />
-                        </div>
-                        <Input
-                          id="email"
-                          name="email"
-                          type="email"
-                          placeholder="name@example.com"
-                          value={formik.values.email}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
-                          className="pl-10 bg-background/50 backdrop-blur-sm border-primary/20 focus:border-primary/50 transition-all duration-300 focus:ring-2 focus:ring-primary/20"
-                        />
-                      </motion.div>
-                      <AnimatePresence>
-                        {formik.touched.email && formik.errors.email && (
-                          <motion.p 
-                            className="text-destructive text-xs"
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                          >
-                            {formik.errors.email}
-                          </motion.p>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
+        {/* ── Left brand panel (desktop only) ─────────────────────────────── */}
+        <div className="hidden lg:flex lg:w-[46%] xl:w-[42%] relative overflow-hidden flex-col justify-between p-10"
+          style={{ background: 'linear-gradient(145deg,#0f172a 0%,#1e1b4b 45%,#0f2756 100%)' }}>
 
-                    <motion.div 
-                      className="space-y-2" 
-                      variants={itemVariants}
-                    >
-                      <Label htmlFor="password" className="text-sm font-medium flex items-center">
-                        <LuLock className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                        Password
-                      </Label>
-                      <motion.div 
-                        className="relative"
-                        variants={inputVariants}
-                        whileFocus="focus"
-                        whileTap="focus"
-                      >
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                          <LuLock className="h-4 w-4" />
-                        </div>
-                        <Input
-                          id="password"
-                          name="password"
-                          type={showPw ? 'text' : 'password'}
-                          placeholder="••••••••"
-                          value={formik.values.password}
-                          onChange={formik.handleChange}
-                          onBlur={formik.handleBlur}
-                          className="pl-10 bg-background/50 backdrop-blur-sm border-primary/20 focus:border-primary/50 transition-all duration-300 focus:ring-2 focus:ring-primary/20"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
-                          onClick={() => setShowPw(!showPw)}
-                        >
-                          <motion.div
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                          >
-                            {showPw
-                              ? <FaEye className="h-4 w-4" />
-                              : <FaEyeSlash className="h-4 w-4" />
-                            }
-                          </motion.div>
-                        </Button>
-                      </motion.div>
-                      <AnimatePresence>
-                        {formik.touched.password && formik.errors.password && (
-                          <motion.p 
-                            className="text-destructive text-xs"
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                          >
-                            {formik.errors.password}
-                          </motion.p>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
+          {/* CSS orbs — NO JS, NO blur filter, just opacity */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+            <div className="absolute top-[-10%] left-[-10%] w-[55%] h-[55%] rounded-full opacity-[0.18]"
+              style={{ background: 'radial-gradient(circle,#6366f1,transparent)', animation: 'drift1 18s ease-in-out infinite' }} />
+            <div className="absolute bottom-[-5%] right-[-10%] w-[50%] h-[50%] rounded-full opacity-[0.15]"
+              style={{ background: 'radial-gradient(circle,#0ea5e9,transparent)', animation: 'drift2 22s ease-in-out infinite' }} />
+            <div className="absolute top-[40%] left-[30%] w-[40%] h-[40%] rounded-full opacity-[0.12]"
+              style={{ background: 'radial-gradient(circle,#8b5cf6,transparent)', animation: 'drift3 26s ease-in-out infinite' }} />
+          </div>
 
-                    <motion.div 
-                      className="flex items-center space-x-2" 
-                      variants={itemVariants}
-                      whileHover={{ scale: 1.01 }}
-                    >
-                      <Checkbox 
-                        id="remember" 
-                        checked={rememberMe}
-                        onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                        className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                      />
-                      <label
-                        htmlFor="remember"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      >
-                        Remember me
-                      </label>
-                    </motion.div>
-                  </motion.div>
+          {/* Grid overlay */}
+          <div className="absolute inset-0 opacity-[0.04]"
+            style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px)', backgroundSize: '40px 40px' }} />
 
-                  <motion.div 
-                    variants={itemVariants}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <Button
-                      type="submit"
-                      className="w-full relative overflow-hidden group bg-primary/90 hover:bg-primary"
-                      disabled={isLoading || initializing || !formik.values.email || !formik.values.password || !formik.isValid}
-                      onClick={handleLogin}
-                    >
-                      {isLoading ? (
-                        <div className="flex items-center">
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Signing in...
-                        </div>
-                      ) : (
-                        <span className="flex items-center justify-center">
-                          <LuShieldCheck className="mr-2 h-4 w-4" />
-                          Sign in
-                        </span>
-                      )}
-                      <span className="absolute inset-0 bg-gradient-to-r from-primary/10 to-primary/30 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 rounded-md"></span>
-                    </Button>
-                  </motion.div>
-                </form>
-              </CardContent>
-              <CardFooter className="flex flex-col space-y-4 pt-0">
-                <div className="flex justify-between w-full text-sm">
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <span>Need an account?</span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="p-0 text-primary hover:text-primary/80"
-                      onClick={() => router.push('/signup')}
-                    >
-                      Sign up
-                    </Button>
+          {/* Top: Logo */}
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-12">
+              <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                <Logo />
+              </div>
+              <span className="text-white font-bold text-lg tracking-tight">AssetXAI</span>
+            </div>
+
+            {/* Headline */}
+            <div className="mb-10 login-fade" style={{ animationDelay: '.15s' }}>
+              <h1 className="text-4xl font-black text-white leading-tight mb-4">
+                Enterprise Asset<br />
+                <span style={{ background: 'linear-gradient(90deg,#818cf8,#38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  Intelligence Platform
+                </span>
+              </h1>
+              <p className="text-slate-400 text-base leading-relaxed max-w-xs">
+                Real-time tracking, AI-powered insights, and seamless operations — all in one place.
+              </p>
+            </div>
+
+            {/* Feature list */}
+            <div className="space-y-3 login-fade" style={{ animationDelay: '.3s' }}>
+              {FEATURES.map(({ icon: Icon, label }) => (
+                <div key={label} className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
+                    <Icon className="h-4 w-4 text-indigo-300" />
                   </div>
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="p-0 text-primary hover:text-primary/80"
-                    onClick={() => router.push('/forgot-password')}
-                  >
-                    Forgot password?
-                  </Button>
+                  <span className="text-slate-300 text-sm">{label}</span>
                 </div>
-                
-                <motion.div 
-                  className="text-xs text-center text-muted-foreground pt-2"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 1 }}
-                >
-                  By signing in, you agree to our Terms of Service and Privacy Policy
-                </motion.div>
-              </CardFooter>
-            </Card>
-          </motion.div>
-        </motion.div>
-      </div>
-    </AnimatedBackground>
-  );
-};
+              ))}
+            </div>
+          </div>
 
-export default LoginPage;
+          {/* Bottom: trust badge */}
+          <div className="relative z-10 login-fade" style={{ animationDelay: '.45s' }}>
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/5 border border-white/10">
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                <Shield className="h-5 w-5 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-white text-sm font-semibold">Enterprise-grade security</p>
+                <p className="text-slate-400 text-xs">SOC 2 ready · End-to-end encrypted · Role-based access</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right: login form ───────────────────────────────────────────── */}
+        <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
+          <div className="w-full max-w-md login-panel-animate">
+
+            {/* Mobile logo */}
+            <div className="flex lg:hidden justify-center mb-8">
+              <Logo />
+            </div>
+
+            {/* Header */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-black text-slate-900">Welcome back</h2>
+              <p className="text-slate-500 text-sm mt-1">Sign in to continue to AssetXAI</p>
+            </div>
+
+            {/* Google + Magic link */}
+            <div className="space-y-3 mb-6">
+              <GoogleButton />
+              <button
+                onClick={() => router.push('/magic-link-login')}
+                className="w-full flex items-center justify-center gap-2.5 h-11 rounded-xl border-2 border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition-all duration-150 text-sm font-semibold text-slate-700"
+              >
+                <Mail className="h-4 w-4 text-slate-500" />
+                Continue with Magic Link
+              </button>
+            </div>
+
+            {/* Separator */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">or sign in with email</span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <FormInput
+                id="email" label="Email address" type="email"
+                placeholder="name@company.com"
+                value={email} onChange={setEmail}
+                error={touched.email ? errors.email : undefined}
+                icon={Mail}
+              />
+              <FormInput
+                id="password" label="Password" type={showPw ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password} onChange={setPassword}
+                error={touched.password ? errors.password : undefined}
+                icon={Lock}
+                rightSlot={
+                  <button type="button" onClick={() => setShowPw(p => !p)}
+                    className="text-slate-400 hover:text-slate-600 transition-colors p-1">
+                    {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
+              />
+
+              {/* Remember + Forgot */}
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-slate-600">Remember me</span>
+                </label>
+                <button type="button" onClick={() => router.push('/forgot-password')}
+                  className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
+                  Forgot password?
+                </button>
+              </div>
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={isLoading || initializing}
+                className="w-full flex items-center justify-center gap-2.5 h-12 rounded-xl text-white font-bold text-sm transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+                style={{
+                  background: isLoading ? 'linear-gradient(135deg,#6366f1,#4f46e5)' : 'linear-gradient(135deg,#6366f1,#4f46e5)',
+                  boxShadow: '0 4px 14px rgba(99,102,241,0.4)',
+                }}
+                onMouseEnter={e => { if (!isLoading) e.currentTarget.style.boxShadow = '0 6px 20px rgba(99,102,241,0.55)'; }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(99,102,241,0.4)'; }}
+              >
+                {isLoading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />Signing in…</>
+                ) : (
+                  <><Shield className="h-4 w-4" />Sign in<ArrowRight className="h-4 w-4 ml-auto" /></>
+                )}
+              </button>
+            </form>
+
+            {/* Sign up link */}
+            <p className="mt-6 text-center text-sm text-slate-500">
+              Don't have an account?{' '}
+              <button onClick={() => router.push('/signup')}
+                className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors">
+                Create account
+              </button>
+            </p>
+
+            {/* Legal */}
+            <p className="mt-4 text-center text-xs text-slate-400">
+              By signing in you agree to our{' '}
+              <span className="underline cursor-pointer hover:text-slate-600">Terms of Service</span>
+              {' '}and{' '}
+              <span className="underline cursor-pointer hover:text-slate-600">Privacy Policy</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
