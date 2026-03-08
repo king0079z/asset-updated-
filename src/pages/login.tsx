@@ -193,6 +193,8 @@ export default function LoginPage() {
           border: 1px solid rgba(255,255,255,0.15);
           border-radius: 999px;
         }
+        .mobile-logo { display: flex; }
+        @media (min-width: 1024px) { .mobile-logo { display: none !important; } }
       `}</style>
 
       <div style={{ minHeight: '100vh', display: 'flex', background: '#f1f5fd' }}>
@@ -374,7 +376,7 @@ export default function LoginPage() {
           <div className="su" style={{ width: '100%', maxWidth: 400, position: 'relative', zIndex: 10 }}>
 
             {/* Mobile-only logo */}
-            <div className="lg:hidden su su1" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 32 }}>
+            <div className="mobile-logo su su1" style={{ alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 32 }}>
               <div style={{ height: 40, width: 40, borderRadius: 12, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(124,58,237,0.4)' }}>
                 <Logo />
               </div>
