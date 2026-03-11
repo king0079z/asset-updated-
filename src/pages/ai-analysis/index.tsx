@@ -1,6 +1,9 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from 'react';
-import { fetchWithCache } from '@/lib/api-cache';
+import { fetchWithCache, getFromCache } from '@/lib/api-cache';
+
+const AI_KEY = '/api/ai-analysis';
+const AI_TTL = 5 * 60_000; // 5 min — matches server cache
 import { useTranslation } from '@/contexts/TranslationContext';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -310,29 +313,35 @@ export default function AIAnalysisPage() {
 
 function AIAnalysisContent() {
   const { t } = useTranslation();
-  const [data, setData] = useState<AnalysisData | null>(null);
+  // Initialize from module-level cache — instant display when navigating back
+  const [data, setData] = useState<AnalysisData | null>(() => getFromCache<AnalysisData>(AI_KEY, AI_TTL));
   const [mlData, setMlData] = useState<MLAnalysisData | null>(null);
   const [activeTab, setActiveTab] = useState('food');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getFromCache(AI_KEY, AI_TTL));
   const [mlLoading, setMlLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mlError, setMlError] = useState<string | null>(null);
   const hasRequestedMLRef = useRef(false);
 
   useEffect(() => {
-    async function fetchAnalysisData() {
+    async function fetchAnalysisData(background = false) {
+      if (!background) setLoading(true);
       try {
-        setLoading(true);
-        const analysisData = await fetchWithCache('/api/ai-analysis', { maxAge: 3 * 60 * 1000 });
+        const analysisData = await fetchWithCache(AI_KEY, { maxAge: AI_TTL });
         setData(analysisData);
       } catch (err) {
-        console.error('Error fetching AI analysis data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load analysis data. Please try again later.');
+        if (!background) setError(err instanceof Error ? err.message : 'Failed to load analysis data. Please try again later.');
       } finally {
-        setLoading(false);
+        if (!background) setLoading(false);
       }
     }
-    fetchAnalysisData();
+    const cached = getFromCache(AI_KEY, AI_TTL);
+    if (cached) {
+      // Already shown from cache — revalidate silently in background
+      setTimeout(() => fetchAnalysisData(true), 500);
+    } else {
+      fetchAnalysisData(false);
+    }
   }, []);
 
   useEffect(() => {
