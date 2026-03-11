@@ -254,6 +254,9 @@ export default function RFIDPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
+                <Button onClick={() => window.location.href = '/rfid/floor-map'} className="bg-indigo-600/80 hover:bg-indigo-600 text-white border border-indigo-500/40 gap-2 rounded-xl backdrop-blur">
+                  <Layers className="h-4 w-4" /> 3D Floor Map
+                </Button>
                 <Button onClick={handleRefresh} disabled={refreshing} className="bg-white/10 hover:bg-white/20 text-white border border-white/15 gap-2 rounded-xl backdrop-blur">
                   <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
                 </Button>
