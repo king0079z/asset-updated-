@@ -13,6 +13,25 @@ import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { getUserRoleData } from '@/util/roleCheck';
 
+// ── ID generation (matches create.ts format) ──────────────────────────────────
+// Produces IDs like EL672401001, EQ672401002, ME672401003 — identical to how
+// the main asset creation API generates IDs so demo assets look native.
+let _seedCounter = 0;
+
+function generateAssetId(type: string): string {
+  _seedCounter++;
+  const prefix    = type.substring(0, 2).toUpperCase();
+  const ts        = Date.now().toString().slice(-6);            // 6-digit ms tail
+  const counter   = _seedCounter.toString().padStart(3, '0');  // 3-digit sequence
+  return `${prefix}${ts}${counter}`;
+}
+
+function generateBarcode(assetId: string): string {
+  // Match generateBarcode in create.ts — strip special chars, min length 8
+  const clean = assetId.replace(/[^A-Z0-9]/g, '');
+  return clean.length < 8 ? clean + '0'.repeat(8 - clean.length) : clean;
+}
+
 // ── Demo data definitions ─────────────────────────────────────────────────────
 
 const FLOOR_PLANS = [
@@ -134,6 +153,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const userId   = session.user.id;
 
   try {
+    // Reset the asset ID counter for this seed run
+    _seedCounter = 0;
+
     // ── Optional clear ──────────────────────────────────────────────────────
     if (req.query.clear === 'true') {
       await prisma.rFIDAlert.deleteMany({ where: { organizationId: orgId ?? undefined } });
@@ -190,9 +212,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const scanBatch: any[] = [];
 
     for (const a of ASSETS_DEF) {
+      // Generate IDs that match the application's standard format
+      const assetId = generateAssetId(a.type);
+      const barcode = generateBarcode(assetId);
+
       // Create asset
       const asset = await prisma.asset.create({
         data: {
+          assetId,
+          barcode,
           name:          a.name,
           description:   a.desc,
           type:          a.type as any,
