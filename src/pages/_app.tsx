@@ -1,5 +1,5 @@
 import type { AppProps } from 'next/app'
-import { AuthProvider } from '@/contexts/AuthContext'
+import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { TranslationProvider } from '@/contexts/TranslationContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { PerformanceProvider } from '@/contexts/PerformanceContext'
@@ -9,11 +9,14 @@ import '../styles/print.css';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from "@/components/ui/toaster"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { useEffect, useState, Suspense, lazy, useCallback } from 'react';
+import { useEffect, useState, Suspense, lazy, useCallback, useRef } from 'react';
 import { SubscriptionExpirationBar } from '@/components/SubscriptionExpirationBar';
 import Head from 'next/head';
 import { runWhenIdle, throttle } from '@/lib/performance';
 import { setupGlobalErrorHandler } from '@/lib/globalErrorHandler';
+import { useRouter } from 'next/router';
+import { DashboardLayout } from '@/components/DashboardLayout';
+import { prefetchAllData, resetPrefetch } from '@/lib/prefetch';
 
 // Lazy load non-critical components
 const QuickActionsMenu = lazy(() => 
@@ -21,6 +24,45 @@ const QuickActionsMenu = lazy(() =>
     default: mod.QuickActionsMenu 
   }))
 );
+
+// Routes that skip the persistent dashboard shell (no sidebar)
+const PUBLIC_ROUTES = [
+  '/', '/login', '/signup', '/forgot-password',
+  '/magic-link-login', '/reset-password',
+];
+
+/**
+ * Renders the persistent sidebar shell when authenticated.
+ * Lives above <Component> in the tree so the sidebar NEVER remounts on navigation.
+ * Also fires a background prefetch of all page data right after login.
+ */
+function AppShellWrapper({ children }: { children: React.ReactNode }) {
+  const { user, initializing } = useAuth();
+  const router = useRouter();
+  const isPublic = PUBLIC_ROUTES.includes(router.pathname);
+  const prefetchedRef = useRef(false);
+
+  // Pre-warm every page's cache once the user is confirmed logged in
+  useEffect(() => {
+    if (user && !prefetchedRef.current) {
+      prefetchedRef.current = true;
+      // Small delay so the initial page render is not blocked
+      setTimeout(() => prefetchAllData(), 300);
+    }
+    if (!user) {
+      prefetchedRef.current = false;
+      resetPrefetch();
+    }
+  }, [user]);
+
+  // Public pages or during auth init: no shell needed
+  if (isPublic || !user || initializing) {
+    return <>{children}</>;
+  }
+
+  // Authenticated pages: wrap once with the persistent shell
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
 
 // Create a performance monitor component
 const PerformanceMonitor = () => {
@@ -188,13 +230,15 @@ export default function App({ Component, pageProps }: AppProps) {
             <AuthProvider>
               <OrganizationProvider>
                 <TooltipProvider>
-                  <ProtectedRoute>
-                    <SubscriptionExpirationBar />
-                    <Component {...pageProps} />
-                    <Suspense fallback={null}>
-                      <QuickActionsMenu />
-                    </Suspense>
-                  </ProtectedRoute>
+                  <AppShellWrapper>
+                    <ProtectedRoute>
+                      <SubscriptionExpirationBar />
+                      <Component {...pageProps} />
+                      <Suspense fallback={null}>
+                        <QuickActionsMenu />
+                      </Suspense>
+                    </ProtectedRoute>
+                  </AppShellWrapper>
                   <Toaster />
                 </TooltipProvider>
               </OrganizationProvider>

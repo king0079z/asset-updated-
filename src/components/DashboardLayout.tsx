@@ -30,7 +30,7 @@ import { Separator } from "./ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
 import { motion } from "framer-motion";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { useRTLOptimization } from "@/hooks/useRTLOptimization";
 import { ThemeToggle } from "./ThemeToggle";
 import { usePageAccess } from "@/hooks/usePageAccess";
@@ -38,7 +38,28 @@ import { createClient } from "@/util/supabase/component";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
 
+/**
+ * Set to `true` by the top-level persistent shell rendered in _app.tsx.
+ * Any nested DashboardLayout sees this and becomes a transparent passthrough —
+ * the sidebar only lives once at the app level and never remounts on navigation.
+ */
+export const PersistentShellContext = createContext(false);
+
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const inPersistentShell = useContext(PersistentShellContext);
+
+  // Page-level wrappers become transparent once the app shell is active
+  if (inPersistentShell) return <>{children}</>;
+
+  // Top-level usage (from _app.tsx) renders the real shell and marks context
+  return (
+    <PersistentShellContext.Provider value={true}>
+      <FullDashboardLayout>{children}</FullDashboardLayout>
+    </PersistentShellContext.Provider>
+  );
+}
+
+function FullDashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { isDark } = useTheme();
   const { t, dir } = useTranslation();
@@ -50,8 +71,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     setSidebarOpen(!sidebarOpen);
   };
   
-  // Reference for the main container
+  // Reference for the main content scroll area
   const mainContainerRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const router = useRouter();
   
   // Set the ref for RTL optimization
   useEffect(() => {
@@ -59,6 +82,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       setRef(mainContainerRef.current);
     }
   }, [setRef]);
+
+  // Scroll content area back to top on every page navigation
+  useEffect(() => {
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTop = 0;
+    }
+  }, [router.pathname]);
   
   return (
     <div 
@@ -86,7 +116,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       />
       
       {/* Main content area with responsive padding and margin */}
-      <main className={`flex-1 ${isRtl ? 'lg:mr-[280px]' : 'lg:ml-[280px]'} w-full h-screen overflow-y-auto`}>
+      <main ref={mainScrollRef as React.RefObject<HTMLElement>} className={`flex-1 ${isRtl ? 'lg:mr-[280px]' : 'lg:ml-[280px]'} w-full h-screen overflow-y-auto`}>
         <div className="p-4 md:p-6 lg:p-8 pt-6 pb-28 lg:pb-8">
           {/* Mobile header without menu button - improved for RTL */}
           <div className="lg:hidden flex flex-col mb-6 bg-card p-3 rounded-lg shadow-sm">
@@ -818,8 +848,9 @@ function UserRoleDisplay() {
     
     fetchCustomRoleName();
     
-    // Set up a refresh interval to periodically check for role changes
-    const refreshInterval = setInterval(fetchCustomRoleName, 30000); // Check every 30 seconds
+    // Check for role changes infrequently — sidebar is now persistent so this
+    // runs continuously; 5 minutes is plenty for a role name refresh.
+    const refreshInterval = setInterval(fetchCustomRoleName, 5 * 60_000);
     
     return () => clearInterval(refreshInterval);
   }, [user, customRoleName]);

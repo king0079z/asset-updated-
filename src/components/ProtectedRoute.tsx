@@ -82,7 +82,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (!initializing) {
       checkUserStatus();
     }
-  }, [user, initializing, supabase, router.pathname]);
+    // router.pathname intentionally excluded: re-querying Supabase on every
+    // navigation is expensive. We only need to re-check when the user object changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, initializing, supabase]);
 
   useEffect(() => {
     if (!initializing && !user && !publicRoutes.includes(router.pathname)) {
