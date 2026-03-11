@@ -55,7 +55,7 @@ interface Asset {
   name: string;
   description: string | null;
   status: string;
-  location: Location;
+  location?: Location | null;
   floorNumber: string | null;
   roomNumber: string | null;
   purchaseAmount: number | null;
@@ -97,7 +97,10 @@ export function AssetLocationDetailsDialog({
   };
 
   const handleShareLocation = () => {
-    // Copy location coordinates to clipboard
+    if (!asset.location) {
+      toast({ title: "No GPS location set for this asset.", variant: "destructive" });
+      return;
+    }
     const locationText = `${asset.name} Location: ${asset.location.latitude}, ${asset.location.longitude}${asset.location.address ? ` (${asset.location.address})` : ''}`;
     
     navigator.clipboard.writeText(locationText)
@@ -187,7 +190,7 @@ export function AssetLocationDetailsDialog({
               <Card>
                 <CardContent className="pt-6">
                   <div className="space-y-4">
-                    {asset.location.address && (
+                    {asset.location?.address && (
                       <div className="flex items-start gap-2">
                         <MapPin className="h-5 w-5 mt-0.5 text-muted-foreground flex-shrink-0" />
                         <div>
@@ -292,7 +295,7 @@ export function AssetLocationDetailsDialog({
                   </div>
                   
                   <div className="space-y-4">
-                    {asset.location.address && (
+                    {asset.location?.address && (
                       <div className="flex items-start gap-2">
                         <MapPin className="h-5 w-5 mt-0.5 text-muted-foreground" />
                         <div>
