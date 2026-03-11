@@ -1,33 +1,41 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
+import { getUserRoleData } from '@/util/roleCheck';
+
+// 5-minute server-side cache (roles rarely change)
+const rolesCache = new Map<string, { data: any; ts: number }>();
+const ROLES_TTL  = 5 * 60_000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Check if user is authenticated and is admin
   const supabase = createClient(req, res);
   const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
+  const user = session?.user ?? null;
 
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // Check if user is admin
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { isAdmin: true }
-  });
-
-  if (!dbUser?.isAdmin) {
+  // Use cached role data instead of raw prisma.user.findUnique
+  const roleData = await getUserRoleData(user.id);
+  if (!roleData?.isAdmin) {
     return res.status(403).json({ error: 'Forbidden: Admin access required' });
   }
 
   // Handle GET request - Get all custom roles
   if (req.method === 'GET') {
     try {
+      const cached = rolesCache.get('all');
+      if (cached && Date.now() - cached.ts < ROLES_TTL) {
+        res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
+        return res.status(200).json(cached.data);
+      }
+
       const customRoles = await prisma.customRole.findMany({
         orderBy: { name: 'asc' }
       });
+      rolesCache.set('all', { data: customRoles, ts: Date.now() });
+      res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
       return res.status(200).json(customRoles);
     } catch (error) {
       console.error('Error fetching custom roles:', error);

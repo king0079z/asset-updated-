@@ -161,11 +161,23 @@ function installErrorListeners() {
     });
   });
 
-  // Patch console.error
+  // Patch console.error — suppress known-handled Supabase auth noise
+  const IGNORED_PATTERNS = [
+    'refresh_token_not_found',
+    'AuthApiError',
+    'Refresh Token Not Found',
+    'Invalid Refresh Token',
+    'supabase.co',           // raw Supabase network errors (handled by AuthContext)
+    '__isAuthError',
+  ];
   const origError = console.error.bind(console);
   console.error = (...args: any[]) => {
     origError(...args);
-    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    const msg = args.map(a => {
+      try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch { return String(a); }
+    }).join(' ');
+    // Skip errors that are already handled elsewhere
+    if (IGNORED_PATTERNS.some(p => msg.includes(p))) return;
     addError({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       type: 'console',

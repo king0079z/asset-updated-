@@ -3,9 +3,9 @@ import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 import { getUserRoleData } from "@/util/roleCheck";
 
-// Server-side cache: per-user, 3-minute TTL
+// 5-minute server-side cache per user+category
 const statsCache = new Map<string, { data: any; ts: number }>();
-const STATS_CACHE_TTL = 3 * 60 * 1000;
+const STATS_CACHE_TTL = 5 * 60 * 1000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -24,332 +24,204 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { category } = req.query;
     const cacheKey = `${user.id}:${category || ''}`;
 
-    // Return cached result if fresh
+    // ── Cache hit ────────────────────────────────────────────────────────────
     const cached = statsCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < STATS_CACHE_TTL) {
-      res.setHeader('Cache-Control', 'private, max-age=180');
+      res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
       return res.status(200).json(cached.data);
     }
 
-    // Single query for role + pageAccess
+    // ── Auth / role check ─────────────────────────────────────────────────────
     const roleData = await getUserRoleData(user.id);
-    const userIsAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
-    const hasFoodSupplyAccess = roleData?.pageAccess?.['/food-supply'] === true;
-    
-    const showAllSupplies = userIsAdminOrManager || hasFoodSupplyAccess;
+    const showAllSupplies =
+      roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER' ||
+      roleData?.pageAccess?.['/food-supply'] === true;
 
-    const today = new Date();
+    const today           = new Date();
     const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo   = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const baseWhere: any  = showAllSupplies ? {} : { userId: user.id };
+    const catFilter       = category && typeof category === "string"
+      ? { category: { equals: category as string, mode: "insensitive" as const } }
+      : {};
 
-    // Add category filter if provided
-    let whereClause: any = showAllSupplies ? {} : { userId: user.id };
-    if (category && typeof category === "string") {
-      whereClause = { 
-        ...whereClause, 
-        category: { equals: category, mode: "insensitive" }
-      };
-    }
-    const expiringWhereClause = {
-      ...whereClause,
-      expirationDate: {
-        gte: today,
-        lte: thirtyDaysFromNow
-      }
-    };
-
-    // Calculate date ranges for waste data
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    // Add category filter for waste and consumption if provided
-    let wasteWhereClause: any = {
-      createdAt: { gte: thirtyDaysAgo },
-      ...(showAllSupplies ? {} : { userId: user.id })
-    };
-    let consumptionWhereClause: any = {
-      date: { gte: thirtyDaysAgo },
-      ...(showAllSupplies ? {} : { userId: user.id })
-    };
-    if (category && typeof category === "string") {
-      wasteWhereClause = { 
-        ...wasteWhereClause, 
-        foodSupply: { category: { equals: category, mode: "insensitive" } }
-      };
-      consumptionWhereClause = { 
-        ...consumptionWhereClause, 
-        foodSupply: { category: { equals: category, mode: "insensitive" } }
-      };
+    const supplyWhere         = { ...baseWhere, ...catFilter };
+    const expiringWhere       = { ...supplyWhere, expirationDate: { gte: today, lte: thirtyDaysFromNow } };
+    const wasteWhere: any     = { createdAt: { gte: thirtyDaysAgo }, ...baseWhere };
+    const consumptionWhere: any = { date: { gte: thirtyDaysAgo }, ...baseWhere };
+    if (catFilter.category) {
+      wasteWhere.foodSupply    = { category: catFilter.category };
+      consumptionWhere.foodSupply = { category: catFilter.category };
     }
 
-    // --- Enhanced logic for per-category consumption and waste (direct + recipe usage, including subrecipes) ---
-
-    // 1. Get all food supplies in this category
-    const foodSuppliesInCategory = await prisma.foodSupply.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        pricePerUnit: true,
-        category: true
-      }
-    });
-    const foodSupplyIds = foodSuppliesInCategory.map(fs => fs.id);
-
-    // 2. Get all recipes and all their ingredients (including subrecipes)
-    const allRecipes = await prisma.recipe.findMany({
-      select: {
-        id: true,
-        ingredients: {
-          select: {
-            id: true,
-            foodSupplyId: true,
-            quantity: true,
-            foodSupply: {
-              select: {
-                pricePerUnit: true
-              }
-            },
-            wastes: {
-              select: {
-                wastePercentage: true
-              }
-            },
-            subRecipeId: true,
-            subRecipe: {
-              select: {
-                id: true,
-                ingredients: {
-                  select: {
-                    id: true,
-                    foodSupplyId: true,
-                    quantity: true,
-                    foodSupply: {
-                      select: {
-                        pricePerUnit: true
-                      }
-                    },
-                    wastes: {
-                      select: {
-                        wastePercentage: true
-                      }
-                    },
-                    subRecipeId: true
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    });
-
-    // 3. Get all recipe usages in the last 30 days
-    const recipeUsages = await prisma.recipeUsage.findMany({
-      where: {
-        createdAt: { gte: thirtyDaysAgo }
-      },
-      select: {
-        recipeId: true,
-        servingsUsed: true
-      }
-    });
-
-    // Build a map of recipeId -> totalServingsUsed in the period
-    const recipeUsageMap: Record<string, number> = {};
-    recipeUsages.forEach(usage => {
-      recipeUsageMap[usage.recipeId] = (recipeUsageMap[usage.recipeId] || 0) + (usage.servingsUsed || 0);
-    });
-
-    // Helper: recursively sum ingredient usage for a recipe
-    function sumCategoryIngredientUsage(ingredients: any[], servings: number, foodSupplyIds: string[]) {
-      let consumed = 0;
-      let waste = 0;
-      for (const ingredient of ingredients) {
-        if (ingredient.foodSupplyId && foodSupplyIds.includes(ingredient.foodSupplyId)) {
-          const totalQtyUsed = (ingredient.quantity || 0) * servings;
-          const pricePerUnit = ingredient.foodSupply?.pricePerUnit || 0;
-          consumed += totalQtyUsed * pricePerUnit;
-          const totalWastePercent = ingredient.wastes.reduce((sum: number, w: any) => sum + (w.wastePercentage || 0), 0);
-          waste += totalQtyUsed * pricePerUnit * (totalWastePercent / 100);
-        }
-        // If this is a subrecipe, recurse
-        if (ingredient.subRecipe && ingredient.subRecipe.ingredients && ingredient.subRecipeId) {
-          const subServings = servings * (ingredient.quantity || 1); // multiply by quantity of subrecipe used
-          const { consumed: subConsumed, waste: subWaste } = sumCategoryIngredientUsage(
-            ingredient.subRecipe.ingredients,
-            subServings,
-            foodSupplyIds
-          );
-          consumed += subConsumed;
-          waste += subWaste;
-        }
-      }
-      return { consumed, waste };
-    }
-
-    // 4. Calculate total recipe-based consumption and waste for this category (including subrecipes)
-    let recipeBasedConsumed = 0;
-    let recipeBasedWaste = 0;
-    for (const recipe of allRecipes) {
-      const totalServings = recipeUsageMap[recipe.id] || 0;
-      if (totalServings > 0) {
-        const { consumed, waste } = sumCategoryIngredientUsage(recipe.ingredients, totalServings, foodSupplyIds);
-        recipeBasedConsumed += consumed;
-        recipeBasedWaste += waste;
-      }
-    }
-
-    // 5. Get direct consumption and waste as before
+    // ── ONE parallel block — all 9 queries fire at once ─────────────────────
     const [
+      foodSuppliesInCategory,   // ids + prices + names
+      allRecipes,
+      recipeUsages,
       totalSupplies,
       expiringSupplies,
       categoryStats,
       recentSupplies,
       wasteRecords,
-      totalConsumed
+      totalConsumedRaw,
     ] = await Promise.all([
-      // Total number of supplies
-      prisma.foodSupply.count({
-        where: whereClause
-      }),
-      // Supplies expiring in the next 30 days
-      prisma.foodSupply.count({
-        where: expiringWhereClause
-      }),
-      // Supplies by category
-      prisma.foodSupply.groupBy({
-        by: ['category'],
-        where: whereClause,
-        _count: true,
-      }),
-      // Recent supplies (last 5)
       prisma.foodSupply.findMany({
-        where: whereClause,
+        where: supplyWhere,
+        select: { id: true, name: true, pricePerUnit: true, category: true },
+        take: 500,
+      }),
+      // Include only what's needed for waste/consumption calculation
+      prisma.recipe.findMany({
+        select: {
+          id: true,
+          ingredients: {
+            select: {
+              id: true, foodSupplyId: true, quantity: true, subRecipeId: true,
+              foodSupply: { select: { pricePerUnit: true } },
+              wastes:    { select: { wastePercentage: true } },
+              subRecipe: {
+                select: {
+                  id: true,
+                  ingredients: {
+                    select: {
+                      id: true, foodSupplyId: true, quantity: true, subRecipeId: true,
+                      foodSupply: { select: { pricePerUnit: true } },
+                      wastes:    { select: { wastePercentage: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        take: 200,
+      }),
+      prisma.recipeUsage.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        select: { recipeId: true, servingsUsed: true },
+        take: 1000,
+      }),
+      prisma.foodSupply.count({ where: supplyWhere }),
+      prisma.foodSupply.count({ where: expiringWhere }),
+      prisma.foodSupply.groupBy({
+        by: ['category'], where: supplyWhere, _count: true,
+      }),
+      prisma.foodSupply.findMany({
+        where: supplyWhere,
         orderBy: { createdAt: 'desc' },
         take: 5,
-        include: { vendor: true }
+        include: { vendor: true },
       }),
-      // Waste records for the last 30 days (filtered by category if provided)
       prisma.foodDisposal.findMany({
-        where: wasteWhereClause,
-        include: {
-          foodSupply: {
-            select: {
-              pricePerUnit: true,
-              category: true
-            }
-          }
-        }
+        where: wasteWhere,
+        select: {
+          quantity: true, foodSupplyId: true, createdAt: true,
+          foodSupply: { select: { pricePerUnit: true, category: true } },
+        },
+        take: 500,
       }),
-      // Total consumed value (filtered by category if provided)
       prisma.foodConsumption.findMany({
-        where: consumptionWhereClause,
-        include: {
-          foodSupply: {
-            select: {
-              pricePerUnit: true,
-              category: true
-            }
-          }
-        }
-      })
+        where: consumptionWhere,
+        select: {
+          quantity: true,
+          foodSupply: { select: { pricePerUnit: true, category: true } },
+        },
+        take: 1000,
+      }),
     ]);
 
-    // Calculate total consumed value (direct)
-    const totalConsumedValueDirect = totalConsumed.reduce((sum, record) => {
-      const pricePerUnit = record.foodSupply?.pricePerUnit || 0;
-      return sum + (record.quantity * pricePerUnit);
-    }, 0);
+    // ── In-memory computation ────────────────────────────────────────────────
+    const foodSupplyIds    = new Set(foodSuppliesInCategory.map(fs => fs.id));
+    const foodSupplyIdToName: Record<string, string> = {};
+    const foodSupplyPrice:  Record<string, number>   = {};
+    for (const fs of foodSuppliesInCategory) {
+      foodSupplyIdToName[fs.id] = fs.name;
+      foodSupplyPrice[fs.id]    = fs.pricePerUnit;
+    }
 
-    // Calculate expiration waste cost (direct disposal)
-    const expirationWasteCost = wasteRecords.reduce((sum, record) => {
-      const quantity = record.quantity || 0;
-      const pricePerUnit = record.foodSupply?.pricePerUnit || 0;
-      return sum + (quantity * pricePerUnit);
-    }, 0);
+    // Build recipeId → totalServings map
+    const recipeUsageMap: Record<string, number> = {};
+    for (const u of recipeUsages) {
+      recipeUsageMap[u.recipeId] = (recipeUsageMap[u.recipeId] || 0) + (u.servingsUsed || 0);
+    }
 
-    // ingredient waste cost (from recipes)
-    const ingredientWasteCost = recipeBasedWaste;
-
-    // --- Ingredient Waste Breakdown ---
-    // For each recipe, for each ingredient in the category, calculate waste per ingredient
-    let ingredientWasteBreakdown: any[] = [];
-    for (const recipe of allRecipes) {
-      const totalServings = recipeUsageMap[recipe.id] || 0;
-      if (totalServings > 0) {
-        function collectIngredientWaste(ingredients: any[], servings: number, recipeName: string) {
-          for (const ingredient of ingredients) {
-            if (ingredient.foodSupplyId && foodSupplyIds.includes(ingredient.foodSupplyId)) {
-              const totalQtyUsed = (ingredient.quantity || 0) * servings;
-              const pricePerUnit = ingredient.foodSupply?.pricePerUnit || 0;
-              const totalWastePercent = ingredient.wastes.reduce((sum: number, w: any) => sum + (w.wastePercentage || 0), 0);
-              const wasteCost = totalQtyUsed * pricePerUnit * (totalWastePercent / 100);
-              if (wasteCost > 0) {
-                ingredientWasteBreakdown.push({
-                  ingredientName: ingredient.foodSupplyId,
-                  wasteCost,
-                  wastePercentage: totalWastePercent,
-                  recipeName
-                });
-              }
-            }
-            // If this is a subrecipe, recurse
-            if (ingredient.subRecipe && ingredient.subRecipe.ingredients && ingredient.subRecipeId) {
-              const subServings = servings * (ingredient.quantity || 1);
-              collectIngredientWaste(ingredient.subRecipe.ingredients, subServings, recipeName);
-            }
-          }
+    // Recursive ingredient cost/waste aggregation
+    function sumIngredients(
+      ingredients: any[], servings: number, ids: Set<string>
+    ): { consumed: number; waste: number; breakdown: any[] } {
+      let consumed = 0, waste = 0;
+      const breakdown: any[] = [];
+      for (const ing of ingredients) {
+        if (ing.foodSupplyId && ids.has(ing.foodSupplyId)) {
+          const qty    = (ing.quantity || 0) * servings;
+          const price  = ing.foodSupply?.pricePerUnit || 0;
+          const pct    = ing.wastes.reduce((s: number, w: any) => s + (w.wastePercentage || 0), 0);
+          const wCost  = qty * price * (pct / 100);
+          consumed    += qty * price;
+          waste       += wCost;
+          if (wCost > 0) breakdown.push({
+            ingredientName: foodSupplyIdToName[ing.foodSupplyId] || ing.foodSupplyId,
+            wasteCost: wCost, wastePercentage: pct,
+          });
         }
-        collectIngredientWaste(recipe.ingredients, totalServings, recipe.id);
+        if (ing.subRecipe?.ingredients && ing.subRecipeId) {
+          const sub = sumIngredients(ing.subRecipe.ingredients, servings * (ing.quantity || 1), ids);
+          consumed += sub.consumed;
+          waste    += sub.waste;
+          breakdown.push(...sub.breakdown);
+        }
+      }
+      return { consumed, waste, breakdown };
+    }
+
+    let recipeBasedConsumed = 0, recipeBasedWaste = 0;
+    const ingredientWasteBreakdown: any[] = [];
+    for (const recipe of allRecipes) {
+      const servings = recipeUsageMap[recipe.id] || 0;
+      if (servings > 0) {
+        const { consumed, waste, breakdown } = sumIngredients(recipe.ingredients, servings, foodSupplyIds);
+        recipeBasedConsumed += consumed;
+        recipeBasedWaste    += waste;
+        ingredientWasteBreakdown.push(...breakdown);
       }
     }
-    // Map ingredientName from id to actual name
-    const foodSupplyIdToName: Record<string, string> = {};
-    for (const fs of foodSuppliesInCategory) {
-      foodSupplyIdToName[fs.id] = fs.id; // fallback to id
-    }
-    // Try to get names from DB (if not already present)
-    const foodSupplyNames = await prisma.foodSupply.findMany({
-      where: { id: { in: Object.keys(foodSupplyIdToName) } },
-      select: { id: true, name: true }
-    });
-    for (const fs of foodSupplyNames) {
-      foodSupplyIdToName[fs.id] = fs.name;
-    }
-    ingredientWasteBreakdown = ingredientWasteBreakdown.map(item => ({
-      ...item,
-      ingredientName: foodSupplyIdToName[item.ingredientName] || item.ingredientName
-    }));
 
-    // --- Expiration Waste Breakdown ---
-    const expirationWasteBreakdown = wasteRecords.map(record => ({
-      supplyName: record.foodSupplyId ? (foodSupplyIdToName[record.foodSupplyId] || record.foodSupplyId) : "Unknown",
-      quantity: record.quantity,
-      pricePerUnit: record.foodSupply?.pricePerUnit || 0,
-      totalCost: (record.quantity || 0) * (record.foodSupply?.pricePerUnit || 0),
-      disposalDate: record.createdAt
-    }));
+    const directConsumedValue = totalConsumedRaw.reduce(
+      (s, r) => s + r.quantity * (r.foodSupply?.pricePerUnit || 0), 0
+    );
+    const expirationWasteCost = wasteRecords.reduce(
+      (s, r) => s + (r.quantity || 0) * (r.foodSupply?.pricePerUnit || 0), 0
+    );
 
-    // Final totals: direct + recipe-based
-    const totalConsumedValue = totalConsumedValueDirect + recipeBasedConsumed;
-    const totalWasteCost = expirationWasteCost + ingredientWasteCost;
+    const totalConsumedValue = directConsumedValue + recipeBasedConsumed;
+    const totalWasteCost     = expirationWasteCost + recipeBasedWaste;
+
+    const expirationWasteBreakdown = wasteRecords.map(r => ({
+      supplyName:   foodSupplyIdToName[r.foodSupplyId || ''] || r.foodSupplyId || 'Unknown',
+      quantity:     r.quantity,
+      pricePerUnit: r.foodSupply?.pricePerUnit || 0,
+      totalCost:    (r.quantity || 0) * (r.foodSupply?.pricePerUnit || 0),
+      disposalDate: r.createdAt,
+    }));
 
     const responseData = {
       totalSupplies,
       expiringSupplies,
       categoryStats,
       recentSupplies,
-      totalConsumed: totalConsumedValue,
-      ingredientWasteCost,
+      totalConsumed:          totalConsumedValue,
+      ingredientWasteCost:    recipeBasedWaste,
       expirationWasteCost,
       totalWasteCost,
-      wastePercentage: totalConsumedValue > 0 ? (totalWasteCost / totalConsumedValue) * 100 : 0,
+      wastePercentage:        totalConsumedValue > 0
+        ? (totalWasteCost / totalConsumedValue) * 100 : 0,
       ingredientWasteBreakdown,
-      expirationWasteBreakdown
+      expirationWasteBreakdown,
     };
 
-    // Store in server-side cache
     statsCache.set(cacheKey, { data: responseData, ts: Date.now() });
-    res.setHeader('Cache-Control', 'private, max-age=180, stale-while-revalidate=60');
+    res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
     return res.status(200).json(responseData);
   } catch (error) {
     console.error("Error fetching food supply stats:", error);

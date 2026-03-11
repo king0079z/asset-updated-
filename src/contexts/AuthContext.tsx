@@ -74,16 +74,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
+    const isTokenError = (msg: string = '') =>
+      msg.toLowerCase().includes('refresh token') ||
+      msg.toLowerCase().includes('invalid token') ||
+      msg.toLowerCase().includes('refresh_token_not_found') ||
+      msg.toLowerCase().includes('token expired');
+
     const fetchSession = async () => {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
         if (error) {
-          // Refresh token invalid / not found — session is unrecoverable
-          if (
-            error.message?.toLowerCase().includes('refresh token') ||
-            error.message?.toLowerCase().includes('invalid token') ||
-            (error as any).status === 401
-          ) {
+          if (isTokenError(error.message) || (error as any).status === 401 || (error as any).status === 400) {
+            // Silently handle — no console.error, just redirect
             await forceSignOut('Invalid refresh token detected on session load');
             return;
           }
@@ -91,8 +93,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(user);
         setInitializing(false);
       } catch (err: any) {
-        // Unexpected auth error — treat as expired session
-        console.error('[Auth] Unexpected error fetching session:', err?.message);
+        // Only log truly unexpected errors, not token refresh failures
+        if (!isTokenError(err?.message)) {
+          console.error('[Auth] Unexpected error fetching session:', err?.message);
+        }
         await forceSignOut('Unexpected session error');
       }
     };
@@ -100,12 +104,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     fetchSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'TOKEN_REFRESH_FAILED' || event === 'SIGNED_OUT') {
-        if (event === 'TOKEN_REFRESH_FAILED') {
-          // Supabase could not refresh the access token — force re-login
-          await forceSignOut('Token refresh failed');
-          return;
-        }
+      if (event === 'TOKEN_REFRESH_FAILED') {
+        // Silently redirect — the Supabase client already logs internally
+        await forceSignOut('Token refresh failed');
+        return;
+      }
+      if (event === 'SIGNED_OUT') {
         clearCache();
       }
       setUser(session?.user ?? null);
