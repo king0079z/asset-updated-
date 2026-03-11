@@ -11,8 +11,9 @@ type CacheEntry = {
   includeMonthly: boolean;
 };
 
-const CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache lifetime
-let totalSpentCache: CacheEntry | null = null;
+const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+// Per-user Map — the previous `let` evicted every other user's entry
+const totalSpentCache = new Map<string, CacheEntry>();
 
 // Enhanced logging function
 const logApiEvent = (message: string, data?: any) => {
@@ -47,12 +48,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Check if we have valid cached data for this user and query parameters
     const now = Date.now();
-    if (totalSpentCache && 
-        totalSpentCache.userId === user.id && 
-        totalSpentCache.includeMonthly === includeMonthly &&
-        now - totalSpentCache.timestamp < CACHE_TTL) {
+    const cacheKey = `${user.id}:${includeMonthly}`;
+    const cachedEntry = totalSpentCache.get(cacheKey);
+    if (cachedEntry && now - cachedEntry.timestamp < CACHE_TTL) {
       logApiEvent(`Returning cached total-spent data for user: ${user.id}`);
-      return res.status(200).json(totalSpentCache.data);
+      res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
+      return res.status(200).json(cachedEntry.data);
     }
 
     logApiEvent(`Processing total-spent data for user: ${user.id}`);
@@ -294,15 +295,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       response.monthlyData = monthlyData;
     }
 
-    // Update the cache
-    totalSpentCache = {
+    // Update per-user cache
+    totalSpentCache.set(`${user.id}:${includeMonthly}`, {
       data: response,
       timestamp: Date.now(),
       userId: user.id,
-      includeMonthly
-    };
+      includeMonthly,
+    });
 
     logApiEvent(`Successfully processed total-spent data for user: ${user.id}`);
+    res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
     return res.status(200).json(response);
   } catch (error) {
     logApiEvent('Error calculating total amount spent', error);

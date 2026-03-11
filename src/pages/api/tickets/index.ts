@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
@@ -6,6 +6,10 @@ import { TicketPriority, TicketStatus, AuditLogType } from '@prisma/client';
 import { isAdminOrManager } from '@/util/roleCheck';
 import { withAuditLog } from '../middleware/audit-middleware';
 import { logUserActivity } from '@/lib/audit';
+
+// Server-side per-user cache — eliminates redundant DB hits from 30s polling
+const ticketsCache = new Map<string, { data: any[]; ts: number }>();
+const TICKETS_CACHE_TTL = 60_000; // 60 seconds
 
 // Enhanced logging function with error handling and performance tracking
 const logApiEvent = (message: string, data?: any) => {
@@ -96,6 +100,16 @@ async function ticketsHandler(
         const fetchTimer = startTimer();
         logApiEvent(`Attempting to fetch tickets for user ${user.id}`);
         
+        // Serve from cache if fresh (skip cache when client sends no-cache)
+        const cacheKey = user.id;
+        const bypassCache = req.headers['cache-control'] === 'no-cache';
+        const cached = ticketsCache.get(cacheKey);
+        if (!bypassCache && cached && Date.now() - cached.ts < TICKETS_CACHE_TTL) {
+          res.setHeader('X-Cache', 'HIT');
+          res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+          return res.status(200).json(cached.data);
+        }
+
         // Check if user is admin or manager
         const userIsAdminOrManager = await isAdminOrManager(user.id);
         logApiEvent(`User role check: isAdminOrManager=${userIsAdminOrManager}`);
@@ -118,6 +132,7 @@ async function ticketsHandler(
             orderBy: {
               createdAt: 'desc',
             },
+            take: 500, // Safety limit — prevents unbounded queries
           }),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Database query timeout')), 10000)
@@ -137,10 +152,11 @@ async function ticketsHandler(
         
         endTimer(processingTimer, 'Ticket data processing');
         
-        // Return tickets as JSON array
+        // Store in server cache and return
+        ticketsCache.set(cacheKey, { data: formattedTickets, ts: Date.now() });
         logApiEvent(`Returning ${formattedTickets.length} formatted tickets`);
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
-
+        res.setHeader('X-Cache', 'MISS');
+        res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
         return res.status(200).json(formattedTickets);
       } catch (error) {
         console.error('Error fetching tickets:', error);
@@ -509,20 +525,18 @@ async function ticketsHandler(
   }
 }
 
-// Export the handler wrapped with audit middleware
+// Export the handler — audit only on writes (GET is too frequent to log)
 export default withAuditLog(ticketsHandler, {
   resourceType: 'TICKET',
   type: AuditLogType.USER_ACTIVITY,
   customActionName: (req) => {
-    // Create descriptive action names based on HTTP method
     switch (req.method) {
       case 'POST': return 'CREATE_TICKET';
       case 'GET': return 'VIEW_TICKETS';
       default: return `${req.method}_TICKET`;
     }
   },
-  // Always log user activity for non-GET methods
-  alwaysLogUserActivity: true,
-  // Log request body for POST requests (ticket creation)
+  skipMethods: ['GET'],        // ← no DB write on every ticket list load
+  alwaysLogUserActivity: false,// ← was causing a DB write every 30s per user
   logRequestBody: true
 });

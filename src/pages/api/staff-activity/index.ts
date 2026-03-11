@@ -83,40 +83,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Get total count for pagination
-      const totalCount = await prisma.auditLog.count({ where });
-
-      // Log the query for debugging
       console.log('[staff-activity] Fetching staff activities with filters:', JSON.stringify(where));
-      
-      // Only force refresh when explicitly requested
-      if (forceRefresh === 'true') {
-        await prisma.$disconnect();
-        await prisma.$connect();
-      }
-      
-      // Always order by timestamp descending for consistency
+
       const orderBy = { timestamp: 'desc' };
-      
-      // For exports, increase the limit
       const exportLimit = isExport === 'true' ? 1000 : limitNum;
-      
-      const activities = await prisma.auditLog.findMany({
+
+      // Run count and data fetch in parallel (was sequential before — wasted ~50ms)
+      const [totalCount, activities] = await Promise.all([
+        prisma.auditLog.count({ where }),
+        prisma.auditLog.findMany({
         where,
         orderBy,
         skip: isExport === 'true' ? 0 : skip, // No skip for exports
-        take: exportLimit,
-        select: {
-          id: true,
-          timestamp: true,
-          userId: true,
-          userEmail: true,
-          action: true,
-          resourceType: true,
-          resourceId: true,
-          details: true
-        }
-      });
+          take: exportLimit,
+          select: {
+            id: true,
+            timestamp: true,
+            userId: true,
+            userEmail: true,
+            action: true,
+            resourceType: true,
+            resourceId: true,
+            details: true,
+          },
+        }),
+      ]); // end Promise.all
       
       console.log(`[staff-activity] Found ${activities.length} staff activities`);
   res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');

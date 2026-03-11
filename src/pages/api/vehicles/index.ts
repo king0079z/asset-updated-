@@ -1,8 +1,12 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { logDataModification, logUserActivity } from '@/lib/audit';
 import { isAdminOrManager } from '@/util/roleCheck';
+
+// Server-side cache — 60s TTL per user
+const vehiclesCache = new Map<string, { data: any[]; ts: number }>();
+const VEHICLES_CACHE_TTL = 60_000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log(`[${req.method}] /api/vehicles - Request received`);
@@ -28,42 +32,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'GET':
         console.log('Fetching vehicles from database');
         try {
-          // Check if user is admin or manager
           const userIsAdminOrManager = await isAdminOrManager(user.id);
-          console.log(`User role check: isAdminOrManager=${userIsAdminOrManager}`);
-          
-          // For regular users, we'll filter vehicles based on their assignments
-          // Admin and manager users can see all vehicles
-          let vehicles;
-          
-          if (userIsAdminOrManager) {
-            // Admin/manager can see all vehicles
-            vehicles = await prisma.vehicle.findMany({
-              orderBy: {
-                createdAt: 'desc',
-              },
-            });
-            console.log(`Admin/Manager user: Retrieved all ${vehicles.length} vehicles`);
-          } else {
-            // Regular users can only see vehicles assigned to them
-            vehicles = await prisma.vehicle.findMany({
-              where: {
-                rentals: {
-                  some: {
-                    userId: user.id,
-                    status: 'ACTIVE'
-                  }
-                }
-              },
-              orderBy: {
-                createdAt: 'desc',
-              },
-            });
-            console.log(`Regular user: Retrieved ${vehicles.length} vehicles assigned to user`);
-          }
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
 
-          
+          // Serve from cache if fresh
+          const cacheKey = `${user.id}:${userIsAdminOrManager}`;
+          const cached = vehiclesCache.get(cacheKey);
+          if (cached && Date.now() - cached.ts < VEHICLES_CACHE_TTL) {
+            res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+            return res.status(200).json({ vehicles: cached.data });
+          }
+
+          let vehicles;
+          if (userIsAdminOrManager) {
+            vehicles = await prisma.vehicle.findMany({ orderBy: { createdAt: 'desc' } });
+          } else {
+            vehicles = await prisma.vehicle.findMany({
+              where: { rentals: { some: { userId: user.id, status: 'ACTIVE' } } },
+              orderBy: { createdAt: 'desc' },
+            });
+          }
+
+          vehiclesCache.set(cacheKey, { data: vehicles, ts: Date.now() });
+          res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
           return res.status(200).json({ vehicles });
         } catch (dbError) {
           console.error('Database error when fetching vehicles:', dbError);

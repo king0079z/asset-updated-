@@ -84,13 +84,7 @@ function TicketsContent() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
-      const response = await fetch("/api/tickets", {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        },
-        signal: controller.signal
-      });
+      const response = await fetch("/api/tickets", { signal: controller.signal });
       
       clearTimeout(timeoutId);
       console.log("Tickets API response status:", response.status);
@@ -185,22 +179,19 @@ function TicketsContent() {
     }
   }, [user]);
 
-  // Fetch tickets on component mount, when user changes, and when tab changes
+  // Fetch on mount and user change only — tab switching filters client-side
   useEffect(() => {
     if (user) {
       fetchTickets();
     }
-  }, [user, fetchTickets, activeTab]);
+  }, [user, fetchTickets]);
   
   // Set up a refresh interval to periodically check for ticket updates
   useEffect(() => {
     if (!user) return;
     
-    // Refresh tickets every 30 seconds to catch status changes made by other users
-    const intervalId = setInterval(() => {
-      console.log("Auto-refreshing tickets...");
-      fetchTickets();
-    }, 30000);
+    // Refresh every 2 minutes — tickets don't change that rapidly
+    const intervalId = setInterval(() => fetchTickets(), 120_000);
     
     return () => clearInterval(intervalId);
   }, [user, fetchTickets]);

@@ -25,9 +25,9 @@ type CacheEntry = {
   userId: string;
 };
 
-// Reduced cache lifetime to ensure fresher data
-const CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache lifetime
-let statsCache: CacheEntry | null = null;
+const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+// Per-user Map — previously a single `let` that evicted every other user's data
+const statsCache = new Map<string, CacheEntry>();
 
 // Helper function to safely convert to number
 const safeNumber = (value: any, defaultValue = 0): number => {
@@ -54,13 +54,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Check if we have valid cached data for this user
+    // Check per-user cache
     const now = Date.now();
-    if (statsCache && 
-        statsCache.userId === user.id && 
-        now - statsCache.timestamp < CACHE_TTL) {
+    const cachedEntry = statsCache.get(user.id);
+    if (cachedEntry && now - cachedEntry.timestamp < CACHE_TTL) {
       logApiEvent(`Returning cached dashboard stats for user: ${user.id}`);
-      return res.status(200).json(statsCache.data);
+      res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
+      return res.status(200).json(cachedEntry.data);
     }
 
     logApiEvent(`Processing dashboard stats for user: ${user.id}`);
@@ -368,12 +368,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       });
 
-      // Update the cache
-      statsCache = {
+      // Update per-user cache
+      statsCache.set(user.id, {
         data: response,
         timestamp: Date.now(),
-        userId: user.id
-      };
+        userId: user.id,
+      });
       
       logApiEvent(`Successfully processed dashboard stats for user: ${user.id}`);
       res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
