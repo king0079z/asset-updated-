@@ -186,7 +186,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
     if (!asset?.id) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/tickets?assetId=${asset.id}`);
+      const res = await fetch(`/api/assets/${asset.id}/tickets`);
       if (res.ok) setTickets(await res.json());
     } catch { /* ignore */ } finally { setIsLoading(false); }
   };
