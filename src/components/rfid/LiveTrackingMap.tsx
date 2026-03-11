@@ -259,9 +259,12 @@ export default function LiveTrackingMap() {
           preserveAspectRatio="none"
         >
           <defs>
-            <filter id="zone-glow">
-              <feGaussianBlur stdDeviation="0.5" result="blur"/>
+            <filter id="zone-glow" x="-10%" y="-10%" width="120%" height="120%">
+              <feGaussianBlur stdDeviation="0.4" result="blur"/>
               <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="label-shadow" x="-5%" y="-5%" width="110%" height="140%">
+              <feDropShadow dx="0" dy="0.3" stdDeviation="0.4" floodColor="#000" floodOpacity="0.8"/>
             </filter>
           </defs>
 
@@ -269,10 +272,28 @@ export default function LiveTrackingMap() {
             const x = zone.mapX!; const y = zone.mapY!;
             const w = zone.mapWidth!; const h = zone.mapHeight!;
             const cx = x + w / 2;
-            const isHovered    = hoveredZone === zone.id;
-            const hasAssets    = (zoneAssets[zone.id] ?? []).length > 0;
-            const assetCount   = (zoneAssets[zone.id] ?? []).length;
-            const hasMissing   = (zoneAssets[zone.id] ?? []).some(a => a.status === 'MISSING');
+            const cy = y + h / 2;
+            const isHovered  = hoveredZone === zone.id;
+            const assetCount = (zoneAssets[zone.id] ?? []).length;
+            const hasMissing = (zoneAssets[zone.id] ?? []).some(a => a.status === 'MISSING');
+            const hasLowBat  = (zoneAssets[zone.id] ?? []).some(a => a.status === 'LOW_BATTERY');
+
+            // Vivid fills that pop on the dark background
+            const fillNormal     = isHovered ? 'rgba(99,102,241,0.28)' : 'rgba(99,102,241,0.14)';
+            const fillRestricted = hasMissing
+              ? (isHovered ? 'rgba(239,68,68,0.38)' : 'rgba(239,68,68,0.22)')
+              : (isHovered ? 'rgba(239,68,68,0.28)' : 'rgba(239,68,68,0.16)');
+            const zFill   = zone.isRestricted ? fillRestricted : fillNormal;
+            const zStroke = zone.isRestricted
+              ? (hasMissing ? '#ef4444' : 'rgba(239,68,68,0.7)')
+              : (isHovered  ? 'rgba(129,140,248,0.9)' : 'rgba(99,102,241,0.5)');
+            const zSW     = isHovered ? '0.6' : '0.4';
+
+            // Label pill dimensions
+            const labelText  = zone.name.length > 20 ? zone.name.slice(0,19) + '…' : zone.name;
+            const pillW      = Math.min(labelText.length * 1.18 + 2, 32);
+            const pillX      = cx - pillW / 2;
+            const pillY      = y + 1.2;
 
             return (
               <g key={zone.id} className="pointer-events-auto" style={{ cursor: 'default' }}
@@ -280,81 +301,66 @@ export default function LiveTrackingMap() {
                 onMouseLeave={() => setHoveredZone(null)}
               >
                 {/* Zone fill */}
-                <rect
-                  x={x} y={y} width={w} height={h} rx="0.8"
-                  fill={
-                    zone.isRestricted
-                      ? isHovered ? 'rgba(239,68,68,0.25)' : 'rgba(239,68,68,0.12)'
-                      : isHovered ? 'rgba(99,102,241,0.22)' : 'rgba(99,102,241,0.08)'
-                  }
-                  style={{ transition: 'fill 0.2s' }}
+                <rect x={x} y={y} width={w} height={h} rx="0.6"
+                  fill={zFill} style={{ transition: 'fill 0.18s' }}
                 />
 
-                {/* Zone border — static for normal, animated dashes for restricted */}
+                {/* Zone border */}
                 {zone.isRestricted ? (
-                  <rect x={x} y={y} width={w} height={h} rx="0.8" fill="none"
-                    stroke={hasMissing ? '#ef4444' : 'rgba(239,68,68,0.7)'}
-                    strokeWidth="0.5"
-                    strokeDasharray="3 2"
-                    className="dash-restricted"
+                  <rect x={x} y={y} width={w} height={h} rx="0.6" fill="none"
+                    stroke={zStroke} strokeWidth={zSW}
+                    strokeDasharray="3 2" className="dash-restricted"
                   />
                 ) : (
-                  <rect x={x} y={y} width={w} height={h} rx="0.8" fill="none"
-                    stroke={isHovered ? 'rgba(99,102,241,0.8)' : 'rgba(99,102,241,0.35)'}
-                    strokeWidth={isHovered ? '0.5' : '0.3'}
-                    style={{ transition: 'stroke 0.2s, stroke-width 0.2s' }}
+                  <rect x={x} y={y} width={w} height={h} rx="0.6" fill="none"
+                    stroke={zStroke} strokeWidth={zSW}
+                    style={{ transition: 'stroke 0.18s, stroke-width 0.18s' }}
                   />
                 )}
 
-                {/* Zone name label */}
-                <rect
-                  x={cx - Math.min(zone.name.length * 1.1, 30) / 2}
-                  y={y + 2.5}
-                  width={Math.min(zone.name.length * 1.1, 30)}
-                  height={3.8}
-                  rx="0.8"
-                  fill={zone.isRestricted ? 'rgba(127,29,29,0.85)' : 'rgba(30,27,75,0.85)'}
+                {/* Accent top bar */}
+                <rect x={x} y={y} width={w} height="0.5"
+                  fill={zone.isRestricted ? '#ef4444' : '#818cf8'} opacity="0.7"/>
+
+                {/* Zone name label pill */}
+                <rect x={pillX} y={pillY} width={pillW} height="3.6" rx="0.7"
+                  fill={zone.isRestricted ? 'rgba(80,7,7,0.92)' : 'rgba(15,12,60,0.92)'}
                 />
-                <text
-                  x={cx} y={y + 5.2}
-                  textAnchor="middle"
-                  fontSize="2.4"
-                  fontFamily="system-ui, -apple-system, sans-serif"
-                  fontWeight="700"
-                  fill={zone.isRestricted ? '#fca5a5' : '#a5b4fc'}
-                  filter="url(#zone-glow)"
-                >
-                  {zone.name}
+                <text x={cx} y={pillY + 2.65} textAnchor="middle"
+                  fontSize="2.2" fontFamily="system-ui,-apple-system,sans-serif" fontWeight="800"
+                  fill={zone.isRestricted ? '#fca5a5' : '#c7d2fe'}>
+                  {labelText}
                 </text>
 
-                {/* Restricted badge */}
+                {/* Restricted warning badge */}
                 {zone.isRestricted && (
-                  <text x={cx} y={y + 9.5} textAnchor="middle" fontSize="1.8" fontWeight="700" fill="#ef4444" opacity="0.9">
-                    ⚠ RESTRICTED
-                  </text>
-                )}
-
-                {/* AP indicator dot */}
-                {zone.apMacAddress && (
                   <g>
-                    <circle cx={x + w - 2.5} cy={y + 2.5} r="2" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.5)" strokeWidth="0.3"/>
-                    <circle cx={x + w - 2.5} cy={y + 2.5} r="0.8" fill="#818cf8"/>
+                    <rect x={cx - 8.5} y={y + 5.5} width="17" height="3.2" rx="0.6"
+                      fill="rgba(80,7,7,0.85)"/>
+                    <text x={cx} y={y + 8} textAnchor="middle"
+                      fontSize="1.9" fontWeight="800" fill="#f87171" fontFamily="system-ui,sans-serif">
+                      ⚠ RESTRICTED
+                    </text>
                   </g>
                 )}
 
-                {/* Asset count badge (top-right) */}
+                {/* Alert pulsing overlay for MISSING assets */}
+                {hasMissing && (
+                  <rect x={x+0.3} y={y+0.3} width={w-0.6} height={h-0.6} rx="0.5"
+                    fill="none" stroke="#ef4444" strokeWidth="0.8"
+                    className="dash-restricted" opacity="0.9"
+                  />
+                )}
+
+                {/* Asset count badge — bottom right */}
                 {assetCount > 0 && (
                   <g>
-                    <rect
-                      x={x + w - 2.5 - 5.5} y={y + h - 5.5}
-                      width="5.5" height="3.8" rx="0.8"
-                      fill={hasMissing ? 'rgba(127,29,29,0.9)' : 'rgba(30,27,75,0.9)'}
-                    />
-                    <text
-                      x={x + w - 2.5 - 2.75} y={y + h - 2.8}
-                      textAnchor="middle" fontSize="2.2" fontWeight="800"
-                      fill={hasMissing ? '#fca5a5' : '#a5b4fc'}
-                    >
+                    <rect x={x+w-7} y={y+h-4.8} width="6.5" height="4" rx="0.7"
+                      fill={hasMissing ? 'rgba(80,7,7,0.92)' : hasLowBat ? 'rgba(60,32,3,0.92)' : 'rgba(15,12,60,0.92)'}/>
+                    <text x={x+w-3.75} y={y+h-1.8} textAnchor="middle"
+                      fontSize="2.2" fontWeight="900"
+                      fill={hasMissing ? '#fca5a5' : hasLowBat ? '#fcd34d' : '#c7d2fe'}
+                      fontFamily="system-ui,sans-serif">
                       {assetCount}
                     </text>
                   </g>
@@ -382,11 +388,11 @@ export default function LiveTrackingMap() {
                   left:   `${cx + offset}%`,
                   top:    `${cy}%`,
                   transform: 'translate(-50%, -50%)',
-                  width:  22, height: 22,
+                  width:  24, height: 24,
                   borderRadius: '50%',
-                  background: s.color,
-                  border: '2.5px solid white',
-                  boxShadow: `0 0 0 3px ${s.ring}, 0 2px 8px rgba(0,0,0,0.4)`,
+                  background: `radial-gradient(circle at 35% 35%, ${s.color}ee, ${s.color})`,
+                  border: '2px solid rgba(255,255,255,0.85)',
+                  boxShadow: `0 0 0 4px ${s.ring}, 0 0 12px ${s.color}66, 0 2px 8px rgba(0,0,0,0.6)`,
                 }}
                 onClick={e => handleDotClick(e, tag)}
                 title={tag.asset?.name ?? tag.tagMac}

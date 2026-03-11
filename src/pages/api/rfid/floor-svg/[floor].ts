@@ -1,223 +1,239 @@
 // @ts-nocheck
+/**
+ * GET /api/rfid/floor-svg/[floor]
+ *
+ * Generates a clean dark architectural floor plan SVG.
+ * This is a BACKGROUND blueprint — it shows room structure only.
+ * All data visualization (zone fills, asset dots, labels) is handled
+ * by the LiveTrackingMap overlay component on top of this image.
+ *
+ * Coordinates: 0–100 percentage scale on 1000×700 SVG canvas.
+ * These MUST match the mapX/mapY/mapW/mapH values in seed-demo.ts
+ * so the overlay aligns perfectly.
+ */
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-// ── Zone layout constants ─────────────────────────────────────────────────────
-// These MUST match the mapX/mapY/mapW/mapH values used in seed-demo.ts
-// coordinates are % of 1000×700 image
+// ── Zone definitions (must match seed-demo.ts) ────────────────────────────────
+interface Zone {
+  name: string; code: string; ap: string; restricted: boolean;
+  x: number; y: number; w: number; h: number;
+}
 
-const FLOORS: Record<string, { title: string; subtitle: string; accentColor: string; zones: Zone[] }> = {
+const FLOORS: Record<string, {
+  label: string; sub: string; floorCode: string;
+  accent: string; accentDark: string;
+  zones: Zone[];
+}> = {
   '1': {
-    title: 'Floor 1 — Emergency & Diagnostic Center',
-    subtitle: 'Apex Medical Center · AMC Main Building · Huawei AirEngine BLE 5.0',
-    accentColor: '#3b82f6',
+    label: 'Floor 1 — Emergency & Diagnostic Center',
+    sub: 'Apex Medical Center · AMC Main Building · Huawei AirEngine BLE 5.0',
+    floorCode: 'FL-01',
+    accent: '#3b82f6', accentDark: '#1d4ed8',
     zones: [
-      { name: 'Pharmacy Store',         ap: 'AC:CE:8D:F1:01:AA', restricted: true,  x: 1,  y: 8,  w: 15, h: 40, icon: 'pharmacy',   assets: 2  },
-      { name: 'Emergency Reception',    ap: 'AC:CE:8D:F1:02:AA', restricted: false, x: 17, y: 8,  w: 43, h: 40, icon: 'reception',  assets: 6  },
-      { name: 'Trauma Bay A',           ap: 'AC:CE:8D:F1:03:AA', restricted: true,  x: 62, y: 8,  w: 36, h: 40, icon: 'trauma',     assets: 3  },
-      { name: 'Radiology Suite',        ap: 'AC:CE:8D:F1:04:AA', restricted: false, x: 1,  y: 52, w: 59, h: 43, icon: 'radiology',  assets: 3  },
-      { name: 'Trauma Bay B',           ap: 'AC:CE:8D:F1:05:AA', restricted: true,  x: 62, y: 52, w: 36, h: 43, icon: 'trauma',     assets: 3  },
+      { name: 'Pharmacy Store',      code: 'PH-01', ap: 'AC:CE:8D:F1:01', restricted: true,  x: 1,  y: 8,  w: 15, h: 40 },
+      { name: 'Emergency Reception', code: 'ER-01', ap: 'AC:CE:8D:F1:02', restricted: false, x: 17, y: 8,  w: 43, h: 40 },
+      { name: 'Trauma Bay A',        code: 'TR-01', ap: 'AC:CE:8D:F1:03', restricted: true,  x: 62, y: 8,  w: 36, h: 40 },
+      { name: 'Radiology Suite',     code: 'RD-01', ap: 'AC:CE:8D:F1:04', restricted: false, x: 1,  y: 52, w: 59, h: 43 },
+      { name: 'Trauma Bay B',        code: 'TR-02', ap: 'AC:CE:8D:F1:05', restricted: true,  x: 62, y: 52, w: 36, h: 43 },
     ],
   },
   '2': {
-    title: 'Floor 2 — ICU & Critical Care',
-    subtitle: 'Apex Medical Center · AMC Main Building · Huawei AirEngine BLE 5.0',
-    accentColor: '#8b5cf6',
+    label: 'Floor 2 — ICU & Critical Care',
+    sub: 'Apex Medical Center · AMC Main Building · Huawei AirEngine BLE 5.0',
+    floorCode: 'FL-02',
+    accent: '#8b5cf6', accentDark: '#6d28d9',
     zones: [
-      { name: 'ICU Unit A',       ap: 'AC:CE:8D:F2:01:AA', restricted: false, x: 1,  y: 8,  w: 31, h: 40, icon: 'icu',        assets: 4  },
-      { name: 'ICU Unit B',       ap: 'AC:CE:8D:F2:02:AA', restricted: false, x: 34, y: 8,  w: 31, h: 40, icon: 'icu',        assets: 3  },
-      { name: 'Recovery Suite',   ap: 'AC:CE:8D:F2:03:AA', restricted: false, x: 67, y: 8,  w: 31, h: 40, icon: 'recovery',   assets: 2  },
-      { name: 'Operating Room 1', ap: 'AC:CE:8D:F2:04:AA', restricted: true,  x: 1,  y: 52, w: 47, h: 43, icon: 'or',         assets: 2  },
-      { name: 'Operating Room 2', ap: 'AC:CE:8D:F2:05:AA', restricted: true,  x: 50, y: 52, w: 48, h: 43, icon: 'or',         assets: 2  },
+      { name: 'ICU Unit A',       code: 'IC-01', ap: 'AC:CE:8D:F2:01', restricted: false, x: 1,  y: 8,  w: 31, h: 40 },
+      { name: 'ICU Unit B',       code: 'IC-02', ap: 'AC:CE:8D:F2:02', restricted: false, x: 34, y: 8,  w: 31, h: 40 },
+      { name: 'Recovery Suite',   code: 'RC-01', ap: 'AC:CE:8D:F2:03', restricted: false, x: 67, y: 8,  w: 31, h: 40 },
+      { name: 'Operating Room 1', code: 'OR-01', ap: 'AC:CE:8D:F2:04', restricted: true,  x: 1,  y: 52, w: 47, h: 43 },
+      { name: 'Operating Room 2', code: 'OR-02', ap: 'AC:CE:8D:F2:05', restricted: true,  x: 50, y: 52, w: 48, h: 43 },
     ],
   },
   '3': {
-    title: 'Floor 3 — Patient Wards & Administration',
-    subtitle: 'Apex Medical Center · AMC Main Building · Huawei AirEngine BLE 5.0',
-    accentColor: '#14b8a6',
+    label: 'Floor 3 — Patient Wards & Administration',
+    sub: 'Apex Medical Center · AMC Main Building · Huawei AirEngine BLE 5.0',
+    floorCode: 'FL-03',
+    accent: '#14b8a6', accentDark: '#0f766e',
     zones: [
-      { name: 'Ward A — General',         ap: 'AC:CE:8D:F3:01:AA', restricted: false, x: 1,  y: 8,  w: 31, h: 40, icon: 'ward',    assets: 4  },
-      { name: 'Ward B — Private',          ap: 'AC:CE:8D:F3:02:AA', restricted: false, x: 34, y: 8,  w: 31, h: 40, icon: 'ward',    assets: 4  },
-      { name: 'Nursing Station',           ap: 'AC:CE:8D:F3:03:AA', restricted: false, x: 67, y: 8,  w: 31, h: 40, icon: 'nurse',   assets: 2  },
-      { name: 'Medical Supplies Store',    ap: 'AC:CE:8D:F3:04:AA', restricted: true,  x: 1,  y: 52, w: 50, h: 43, icon: 'supply',  assets: 2  },
-      { name: 'Administration Office',     ap: 'AC:CE:8D:F3:05:AA', restricted: false, x: 53, y: 52, w: 45, h: 43, icon: 'admin',   assets: 2  },
+      { name: 'Ward A — General',    code: 'WD-01', ap: 'AC:CE:8D:F3:01', restricted: false, x: 1,  y: 8,  w: 31, h: 40 },
+      { name: 'Ward B — Private',    code: 'WD-02', ap: 'AC:CE:8D:F3:02', restricted: false, x: 34, y: 8,  w: 31, h: 40 },
+      { name: 'Nursing Station',     code: 'NS-01', ap: 'AC:CE:8D:F3:03', restricted: false, x: 67, y: 8,  w: 31, h: 40 },
+      { name: 'Medical Supplies',    code: 'MS-01', ap: 'AC:CE:8D:F3:04', restricted: true,  x: 1,  y: 52, w: 50, h: 43 },
+      { name: 'Administration',      code: 'AD-01', ap: 'AC:CE:8D:F3:05', restricted: false, x: 53, y: 52, w: 45, h: 43 },
     ],
   },
 };
 
-interface Zone {
-  name: string; ap: string; restricted: boolean;
-  x: number; y: number; w: number; h: number;
-  icon: string; assets: number;
+function p(v: number, base: number) { return (v / 100) * base; }
+function esc(s: string) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Build one wall divider between adjacent rooms
+function wallRect(x1: number, y1: number, x2: number, y2: number): string {
+  const px = p(Math.min(x1,x2), 1000);
+  const py = p(Math.min(y1,y2), 700);
+  const pw = p(Math.abs(x2-x1), 1000);
+  const ph = p(Math.abs(y2-y1), 700);
+  return `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph.toFixed(1)}" fill="#050b18"/>`;
 }
 
-// ── SVG generator ─────────────────────────────────────────────────────────────
-function pct(val: number, base: number) { return (val / 100) * base; }
+function generateSVG(floorKey: string): string {
+  const f = FLOORS[floorKey];
 
-function zoneSvg(z: Zone, accent: string): string {
-  const px = pct(z.x, 1000);
-  const py = pct(z.y, 700);
-  const pw = pct(z.w, 1000);
-  const ph = pct(z.h, 700);
-  const cx = px + pw / 2;
-  const cy = py + ph / 2;
+  // ── Coordinate helpers ──────────────────────────────────────────────────────
+  // Each zone: px/py/pw/ph in SVG units
+  const z2svg = (z: Zone) => ({
+    px: p(z.x, 1000), py: p(z.y, 700),
+    pw: p(z.w, 1000), ph: p(z.h, 700),
+    cx: p(z.x + z.w/2, 1000), cy: p(z.y + z.h/2, 700),
+  });
 
-  const fill      = z.restricted ? '#fff1f2' : '#eff6ff';
-  const stroke    = z.restricted ? '#fca5a5' : '#bfdbfe';
-  const header    = z.restricted ? '#dc2626' : accent;
-  const labelClr  = z.restricted ? '#ef4444' : '#1d4ed8';
+  // Room fill & border colors
+  function roomFill(r: boolean)   { return r ? '#12080f' : '#0b1626'; }
+  function roomStroke(r: boolean) { return r ? '#2d0d0d' : '#152a4a'; }
 
-  const iconSvg   = getIcon(z.icon, cx, cy - 28, z.restricted);
-  const nameLines = z.name.split(' — ').join('\n').split(' ');
-  // wrap at ~18 chars
-  const lines: string[] = [];
-  let cur = '';
-  for (const word of nameLines) {
-    if ((cur + ' ' + word).trim().length > 17 && cur) { lines.push(cur.trim()); cur = word; }
-    else cur = cur ? cur + ' ' + word : word;
-  }
-  if (cur) lines.push(cur.trim());
+  // ── Zone rooms ──────────────────────────────────────────────────────────────
+  const rooms = f.zones.map(z => {
+    const { px, py, pw, ph, cx, cy } = z2svg(z);
+    const fill   = roomFill(z.restricted);
+    const stroke = roomStroke(z.restricted);
+    const labelColor = z.restricted ? '#3d1212' : '#1a3a6a';
+    const codeColor  = z.restricted ? '#2d0d0d' : '#112238';
+    const apColor    = z.restricted ? '#3d1515' : '#1a2f52';
 
-  const textY = cy + (z.restricted ? 8 : 4);
+    // Hatch pattern is defined in <defs>, just reference it here
+    const patternId = `hatch-${z.code.replace('-','_')}`;
+    const hatchFill = z.restricted ? `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph.toFixed(1)}" fill="url(#${patternId})" opacity="0.4"/>` : '';
 
-  return `
-  <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" rx="2"/>
-  <rect x="${px}" y="${py}" width="${pw}" height="5" fill="${header}" rx="2"/>
-  ${iconSvg}
-  ${lines.map((l, i) => `<text x="${cx}" y="${textY + i * 14}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="${labelClr}">${escXml(l)}</text>`).join('\n  ')}
-  ${z.restricted ? `<text x="${cx}" y="${textY + lines.length * 14 + 2}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="700" fill="#dc2626">⚠ RESTRICTED ACCESS</text>` : ''}
-  <text x="${cx}" y="${py + ph - 18}" text-anchor="middle" font-family="monospace,sans-serif" font-size="8" fill="#94a3b8">AP: ${z.ap}</text>
-  <text x="${px + pw - 8}" y="${py + 16}" text-anchor="end" font-family="system-ui,sans-serif" font-size="9" fill="${z.restricted ? '#dc2626' : '#3b82f6'}">${z.assets} assets</text>`;
-}
+    // Corner accent bar (top of room)
+    const accentBar = `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pw.toFixed(1)}" height="3" fill="${z.restricted ? '#3b0f0f' : f.accentDark}" opacity="0.7"/>`;
 
-function getIcon(icon: string, cx: number, cy: number, restricted: boolean): string {
-  const c = restricted ? '#fca5a5' : '#bfdbfe';
-  const f = restricted ? '#fee2e2' : '#dbeafe';
-  switch (icon) {
-    case 'pharmacy':
-      return `<rect x="${cx-12}" y="${cy-8}" width="24" height="16" rx="3" fill="${f}" stroke="${c}"/>
-              <rect x="${cx-2}" y="${cy-13}" width="4" height="26" rx="2" fill="${c}"/>
-              <rect x="${cx-9}" y="${cy-2}" width="18" height="4" rx="2" fill="${c}"/>`;
-    case 'reception':
-      return `<rect x="${cx-20}" y="${cy-6}" width="40" height="12" rx="3" fill="${f}" stroke="${c}"/>
-              <circle cx="${cx-10}" cy="${cy}" r="5" fill="${c}"/>
-              <circle cx="${cx+10}" cy="${cy}" r="5" fill="${c}"/>`;
-    case 'trauma':
-      return `<circle cx="${cx}" cy="${cy}" r="14" fill="${f}" stroke="${c}"/>
-              <rect x="${cx-2}" y="${cy-10}" width="4" height="20" rx="2" fill="${c}"/>
-              <rect x="${cx-10}" y="${cy-2}" width="20" height="4" rx="2" fill="${c}"/>`;
-    case 'radiology':
-      return `<circle cx="${cx}" cy="${cy}" r="14" fill="${f}" stroke="${c}"/>
-              <circle cx="${cx}" cy="${cy}" r="7" fill="${c}" opacity="0.5"/>`;
-    case 'icu':
-      return `<rect x="${cx-18}" y="${cy-8}" width="36" height="16" rx="3" fill="${f}" stroke="${c}"/>
-              <rect x="${cx-6}" y="${cy-14}" width="12" height="6" rx="1" fill="${c}"/>`;
-    case 'recovery':
-      return `<path d="${`M${cx-14},${cy} Q${cx},${cy-14} ${cx+14},${cy} Q${cx},${cy+6} ${cx-14},${cy}`}" fill="${f}" stroke="${c}"/>`;
-    case 'or':
-      return `<rect x="${cx-16}" y="${cy-16}" width="32" height="32" rx="16" fill="${f}" stroke="${c}"/>
-              <rect x="${cx-2}" y="${cy-12}" width="4" height="24" rx="2" fill="${c}"/>
-              <rect x="${cx-12}" y="${cy-2}" width="24" height="4" rx="2" fill="${c}"/>`;
-    case 'ward':
-      return `<rect x="${cx-18}" y="${cy-10}" width="36" height="20" rx="3" fill="${f}" stroke="${c}"/>
-              <rect x="${cx-14}" y="${cy-10}" width="10" height="7" rx="1" fill="${c}" opacity="0.5"/>
-              <rect x="${cx+4}" y="${cy-10}" width="10" height="7" rx="1" fill="${c}" opacity="0.5"/>`;
-    case 'nurse':
-      return `<circle cx="${cx}" cy="${cy-8}" r="8" fill="${f}" stroke="${c}"/>
-              <rect x="${cx-10}" y="${cy+2}" width="20" height="8" rx="2" fill="${f}" stroke="${c}"/>`;
-    case 'supply':
-      return `<rect x="${cx-16}" y="${cy-12}" width="32" height="24" rx="3" fill="${f}" stroke="${c}"/>
-              <rect x="${cx-10}" y="${cy-8}" width="6" height="16" rx="1" fill="${c}" opacity="0.7"/>
-              <rect x="${cx+4}" y="${cy-8}" width="6" height="16" rx="1" fill="${c}" opacity="0.7"/>`;
-    case 'admin':
-      return `<rect x="${cx-18}" y="${cy-12}" width="36" height="24" rx="3" fill="${f}" stroke="${c}"/>
-              <rect x="${cx-14}" y="${cy-8}" width="12" height="8" rx="1" fill="${c}" opacity="0.5"/>
-              <rect x="${cx+2}" y="${cy-8}" width="12" height="8" rx="1" fill="${c}" opacity="0.5"/>`;
-    default:
-      return `<rect x="${cx-12}" y="${cy-8}" width="24" height="16" rx="3" fill="${f}" stroke="${c}"/>`;
-  }
-}
+    // Room code — bottom-right corner, small, architectural
+    const codeText = `<text x="${(px+pw-6).toFixed(1)}" y="${(py+ph-5).toFixed(1)}" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" fill="${codeColor}" opacity="0.8" letter-spacing="0.5">${esc(z.code)}</text>`;
 
-function escXml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    // AP indicator — tiny wifi dot top-right inside corner
+    const apX = px + pw - 14;
+    const apY = py + 10;
+    const apDot = `
+      <circle cx="${apX.toFixed(1)}" cy="${apY.toFixed(1)}" r="2" fill="${apColor}" opacity="0.9"/>
+      <circle cx="${apX.toFixed(1)}" cy="${apY.toFixed(1)}" r="5" fill="none" stroke="${apColor}" stroke-width="0.8" opacity="0.5"/>
+      <circle cx="${apX.toFixed(1)}" cy="${apY.toFixed(1)}" r="8.5" fill="none" stroke="${apColor}" stroke-width="0.6" opacity="0.3"/>`;
 
-function generateSVG(floor: string): string {
-  const f = FLOORS[floor];
-  if (!f) return '';
+    // Restricted "RESTRICTED" watermark (very subtle, center of room)
+    const restrictedMark = z.restricted ? `
+      <text x="${cx.toFixed(1)}" y="${(cy+28).toFixed(1)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="900" fill="#3d0d0d" opacity="0.6" letter-spacing="4">RESTRICTED</text>` : '';
 
-  const corridor = `<rect x="10" y="${pct(48.5, 700)}" width="980" height="${pct(3, 700)}" fill="#e2e8f0" rx="1"/>
-  <text x="500" y="${pct(50.5, 700)}" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" fill="#94a3b8">MAIN CORRIDOR</text>`;
+    return `
+    <rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph.toFixed(1)}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>
+    ${hatchFill}
+    ${accentBar}
+    ${codeText}
+    ${apDot}
+    ${restrictedMark}`;
+  }).join('\n');
 
-  const legend = `
-  <rect x="0" y="670" width="1000" height="30" fill="#f8fafc"/>
-  <line x1="0" y1="670" x2="1000" y2="670" stroke="#e2e8f0" stroke-width="1"/>
-  <circle cx="12" cy="685" r="5" fill="${f.accentColor}"/>
-  <text x="22" y="689" font-family="system-ui,sans-serif" font-size="9" fill="#64748b">Normal Zone</text>
-  <circle cx="110" cy="685" r="5" fill="#dc2626"/>
-  <text x="120" y="689" font-family="system-ui,sans-serif" font-size="9" fill="#64748b">Restricted Zone</text>
-  <circle cx="218" cy="685" r="5" fill="#10b981"/>
-  <text x="228" y="689" font-family="system-ui,sans-serif" font-size="9" fill="#64748b">Asset Active</text>
-  <circle cx="316" cy="685" r="5" fill="#f59e0b"/>
-  <text x="326" y="689" font-family="system-ui,sans-serif" font-size="9" fill="#64748b">Low Battery</text>
-  <circle cx="406" cy="685" r="5" fill="#ef4444"/>
-  <text x="416" y="689" font-family="system-ui,sans-serif" font-size="9" fill="#64748b">Missing / Alert</text>
-  <text x="988" y="689" text-anchor="end" font-family="monospace,sans-serif" font-size="8" fill="#94a3b8">Apex Medical Center · Floor ${floor} · RFID Asset Tracking</text>`;
+  // ── Corridor ────────────────────────────────────────────────────────────────
+  const cY  = p(48, 700);
+  const cH  = p(4,  700);
+  const corridor = `
+  <rect x="5" y="${cY.toFixed(1)}" width="990" height="${cH.toFixed(1)}" fill="#040a16" stroke="#0d1e36" stroke-width="0.5"/>
+  <text x="500" y="${(cY + cH/2 + 3.5).toFixed(1)}" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#0f2a4a" letter-spacing="6">MAIN CORRIDOR</text>`;
 
-  // Grid lines (subtle)
-  const gridH = Array.from({ length: 9 }, (_, i) =>
-    `<line x1="${(i + 1) * 100}" y1="0" x2="${(i + 1) * 100}" y2="700" stroke="#f1f5f9" stroke-width="0.5"/>`
-  ).join('');
-  const gridV = Array.from({ length: 6 }, (_, i) =>
-    `<line x1="0" y1="${(i + 1) * 100}" x2="1000" y2="${(i + 1) * 100}" stroke="#f1f5f9" stroke-width="0.5"/>`
-  ).join('');
+  // ── Subtle measurement grid ─────────────────────────────────────────────────
+  const gridLines = [
+    ...Array.from({length:9},(_,i)=>`<line x1="${(i+1)*100}" y1="52" x2="${(i+1)*100}" y2="695" stroke="#0a1629" stroke-width="0.5"/>`),
+    ...Array.from({length:5},(_,i)=>`<line x1="5" y1="${100*(i+1)}" x2="995" y2="${100*(i+1)}" stroke="#0a1629" stroke-width="0.5"/>`),
+  ].join('\n  ');
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  const header = `
+  <rect x="0" y="0" width="1000" height="52" fill="#040c1a"/>
+  <line x1="0" y1="52" x2="1000" y2="52" stroke="#0f2040" stroke-width="1"/>
+  <rect x="0" y="0" width="4" height="52" fill="${f.accent}"/>
+  <text x="18" y="22" font-family="system-ui,-apple-system,sans-serif" font-size="13" font-weight="800" fill="#c8d8ed" letter-spacing="0.3">${esc(f.label)}</text>
+  <text x="18" y="40" font-family="'Courier New',Courier,monospace" font-size="9" fill="#213a5e" letter-spacing="0.5">${esc(f.sub)}</text>
+  <rect x="938" y="9" width="52" height="28" rx="5" fill="${f.accent}" opacity="0.12" stroke="${f.accent}" stroke-width="0.8" stroke-opacity="0.3"/>
+  <text x="964" y="28" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="800" fill="${f.accent}">${esc(f.floorCode)}</text>`;
+
+  // ── Compass / north indicator ────────────────────────────────────────────────
+  const compass = `
+  <g transform="translate(22, 650)">
+    <circle cx="0" cy="0" r="14" fill="#04101f" stroke="#0f2040" stroke-width="1"/>
+    <polygon points="0,-10 3,-2 0,0 -3,-2" fill="${f.accent}" opacity="0.8"/>
+    <polygon points="0,10 3,2 0,0 -3,2" fill="#0f2040"/>
+    <text x="0" y="-14" text-anchor="middle" font-family="system-ui,sans-serif" font-size="7" font-weight="800" fill="${f.accent}" opacity="0.7">N</text>
+  </g>`;
+
+  // ── Scale bar ────────────────────────────────────────────────────────────────
+  const scaleBar = `
+  <g transform="translate(50, 685)">
+    <line x1="0" y1="0" x2="60" y2="0" stroke="#0f2040" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="0" y1="-3" x2="0" y2="3" stroke="#0f2040" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="60" y1="-3" x2="60" y2="3" stroke="#0f2040" stroke-width="1.5" stroke-linecap="round"/>
+    <text x="30" y="-5" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="7.5" fill="#152a4a">10 m</text>
+  </g>`;
+
+  // ── Building info (bottom-right) ─────────────────────────────────────────────
+  const buildingInfo = `
+  <text x="992" y="680" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="7.5" fill="#0f2040">AMC · RFID ASSET TRACKING · ${new Date().getFullYear()}</text>
+  <text x="992" y="692" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="7.5" fill="#0a1628">${esc(f.floorCode)} · Huawei AirEngine BLE 5.0</text>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700">
-  <!-- Background -->
-  <rect width="1000" height="700" fill="#f8fafc"/>
-  ${gridH}${gridV}
+  <defs>
+    <pattern id="bg-grid" patternUnits="userSpaceOnUse" width="50" height="50">
+      <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#090f1e" stroke-width="0.5"/>
+    </pattern>
+    ${f.zones.filter(z=>z.restricted).map(z=>{
+      const patternId = `hatch-${z.code.replace('-','_')}`;
+      return `<pattern id="${patternId}" patternUnits="userSpaceOnUse" width="14" height="14" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="14" stroke="#2a0909" stroke-width="1"/>
+      </pattern>`;
+    }).join('\n    ')}
+  </defs>
 
-  <!-- Outer wall -->
-  <rect x="3" y="50" width="994" height="620" fill="none" stroke="#334155" stroke-width="2" rx="2"/>
+  <!-- Deep navy background -->
+  <rect width="1000" height="700" fill="#070d1c"/>
+  <rect width="1000" height="700" fill="url(#bg-grid)"/>
 
-  <!-- Header -->
-  <rect x="0" y="0" width="1000" height="50" fill="#0f172a"/>
-  <rect x="0" y="0" width="6" height="50" fill="${f.accentColor}"/>
-  <text x="18" y="28" font-family="system-ui,sans-serif" font-size="15" font-weight="700" fill="white">${escXml(f.title)}</text>
-  <text x="18" y="44" font-family="system-ui,sans-serif" font-size="10" fill="#64748b">${escXml(f.subtitle)}</text>
-  <rect x="940" y="10" width="50" height="30" rx="4" fill="${f.accentColor}" opacity="0.2"/>
-  <text x="965" y="30" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" font-weight="700" fill="${f.accentColor}">FL ${floor}</text>
+  <!-- Grid lines -->
+  ${gridLines}
+
+  <!-- Building outer shell -->
+  <rect x="3" y="52" width="994" height="643" fill="#080e1e" stroke="#0f2040" stroke-width="1.5" rx="2"/>
+
+  <!-- Corner cross marks (architectural) -->
+  ${[[5,54],[993,54],[5,693],[993,693]].map(([cx,cy])=>`
+  <line x1="${cx-6}" y1="${cy}" x2="${cx+6}" y2="${cy}" stroke="#0f2040" stroke-width="1"/>
+  <line x1="${cx}" y1="${cy-6}" x2="${cx}" y2="${cy+6}" stroke="#0f2040" stroke-width="1"/>`).join('')}
+
+  <!-- Interior room layout -->
+  ${rooms}
 
   <!-- Corridor -->
   ${corridor}
 
-  <!-- Zones -->
-  ${f.zones.map(z => zoneSvg(z, f.accentColor)).join('\n')}
+  <!-- Header bar -->
+  ${header}
 
-  <!-- AP WiFi indicators -->
-  ${f.zones.map(z => {
-    const px = pct(z.x + z.w, 1000) - 18;
-    const py = pct(z.y, 700) + 10;
-    return `<g opacity="0.5">
-      <circle cx="${px+6}" cy="${py+6}" r="10" fill="none" stroke="${z.restricted ? '#ef4444' : '#3b82f6'}" stroke-width="1.2" opacity="0.4"/>
-      <circle cx="${px+6}" cy="${py+6}" r="6" fill="none" stroke="${z.restricted ? '#ef4444' : '#3b82f6'}" stroke-width="1.2" opacity="0.6"/>
-      <circle cx="${px+6}" cy="${py+6}" r="2.5" fill="${z.restricted ? '#ef4444' : '#3b82f6'}"/>
-    </g>`;
-  }).join('\n  ')}
+  <!-- Compass -->
+  ${compass}
 
-  <!-- Legend -->
-  ${legend}
+  <!-- Scale bar -->
+  ${scaleBar}
+
+  <!-- Building info -->
+  ${buildingInfo}
 </svg>`;
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const { floor } = req.query;
-  const floorStr = Array.isArray(floor) ? floor[0] : floor ?? '1';
+  const floorKey = Array.isArray(floor) ? floor[0] : floor ?? '1';
 
-  if (!FLOORS[floorStr]) {
-    return res.status(404).json({ error: 'Floor not found' });
-  }
+  if (!FLOORS[floorKey]) return res.status(404).json({ error: 'Floor not found' });
 
-  const svg = generateSVG(floorStr);
-
+  const svg = generateSVG(floorKey);
   res.setHeader('Content-Type', 'image/svg+xml');
-  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
   return res.status(200).send(svg);
 }
