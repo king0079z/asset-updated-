@@ -48,9 +48,14 @@ export default async function handler(
     const startOfPrevYear = new Date(today.getFullYear() - 1, 0, 1);
     const endOfPrevYear = new Date(today.getFullYear() - 1, 11, 31);
 
-    // ── Single parallel block: all 11 queries fire at once ──────────────────
-    // Previously: 3 sequential await rounds (6 queries, then 1, then 1, then 1).
-    // Now everything runs concurrently — saves 2 full network round-trips to the DB.
+    // ── Lookup user's organizationId for org-scoped queries ─────────────────
+    const userRecord = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { organizationId: true },
+    });
+    const organizationId = userRecord?.organizationId ?? null;
+
+    // ── Single parallel block: all queries fire at once ──────────────────────
     const [
       foodConsumptionCurrentMonth,
       foodConsumptionPrevMonth,
@@ -58,29 +63,35 @@ export default async function handler(
       foodConsumptionPrevYear,
       kitchenConsumption,
       foodCategories,
-      allKitchens,       // ← was a sequential await after block 1
-      vehicles,          // ← was a sequential await after block 1
-      totalAssets,       // ← was in its own parallel block after block 1
+      allKitchens,
+      vehicles,
+      totalAssets,
       assetsByType,
       assetValueByType,
       disposedAssets,
-      foodSupplies,      // ← was a sequential await last
+      foodSupplies,
     ] = await Promise.all([
+      // Narrow kitchen select to avoid circular relation expansion
       prisma.foodConsumption.findMany({
         where: { userId: user.id, date: { gte: startOfMonth, lte: endOfMonth } },
-        include: { foodSupply: { select: { pricePerUnit: true } }, kitchen: true },
+        select: {
+          quantity: true,
+          kitchenId: true,
+          foodSupply: { select: { pricePerUnit: true } },
+          kitchen: { select: { id: true, name: true } },
+        },
       }),
       prisma.foodConsumption.findMany({
         where: { userId: user.id, date: { gte: startOfPrevMonth, lte: endOfPrevMonth } },
-        include: { foodSupply: { select: { pricePerUnit: true } } },
+        select: { quantity: true, foodSupply: { select: { pricePerUnit: true } } },
       }),
       prisma.foodConsumption.findMany({
         where: { userId: user.id, date: { gte: startOfYear, lte: endOfYear } },
-        include: { foodSupply: { select: { pricePerUnit: true } } },
+        select: { quantity: true, foodSupply: { select: { pricePerUnit: true } } },
       }),
       prisma.foodConsumption.findMany({
         where: { userId: user.id, date: { gte: startOfPrevYear, lte: endOfPrevYear } },
-        include: { foodSupply: { select: { pricePerUnit: true } } },
+        select: { quantity: true, foodSupply: { select: { pricePerUnit: true } } },
       }),
       prisma.foodConsumption.groupBy({
         by: ['kitchenId'],
@@ -93,27 +104,33 @@ export default async function handler(
         _count: true,
         _sum: { pricePerUnit: true },
       }),
-      // All kitchens — no waterfall wait for kitchenIds
-      prisma.kitchen.findMany({ select: { id: true, name: true } }),
-      prisma.vehicle.findMany({
-        select: { id: true, rentalAmount: true, status: true, type: true },
+      // Scope kitchens to organization if available
+      prisma.kitchen.findMany({
+        where: organizationId ? { organizationId } : {},
+        select: { id: true, name: true },
+        take: 100,
       }),
-      prisma.asset.count({ where: { userId: user.id, status: 'ACTIVE' } }),
+      // Scope vehicles to organization
+      prisma.vehicle.findMany({
+        where: organizationId ? { organizationId } : {},
+        select: { id: true, rentalAmount: true, status: true, type: true },
+        take: 500,
+      }),
+      prisma.asset.count({ where: { userId: user.id } }),
       prisma.asset.groupBy({
         by: ['type'],
-        where: { userId: user.id, status: 'ACTIVE' },
+        where: { userId: user.id },
         _count: true,
       }),
       prisma.asset.groupBy({
         by: ['type'],
-        where: { userId: user.id, status: 'ACTIVE' },
+        where: { userId: user.id },
         _sum: { purchaseAmount: true },
       }),
       prisma.asset.findMany({
         where: { userId: user.id, status: 'DISPOSED', disposedAt: { gte: startOfYear, lte: endOfYear } },
         select: { id: true, name: true, purchaseAmount: true, disposedAt: true },
       }),
-      // Food supplies with year consumption — narrow select to avoid huge payload
       prisma.foodSupply.findMany({
         where: { userId: user.id },
         select: {
@@ -123,6 +140,7 @@ export default async function handler(
             select: { quantity: true, date: true },
           },
         },
+        take: 200,
       }),
     ]);
     // ─────────────────────────────────────────────────────────────────────────
@@ -366,12 +384,15 @@ export default async function handler(
           status: rentalTrendPercentage > 5 ? 'negative' : rentalTrendPercentage < -5 ? 'positive' : 'neutral'
         },
         assetUtilization: {
-          value: disposedAssets.length > 0 ? 
-            Number((1 - (disposedAssets.length / totalAssets)).toFixed(2)) * 100 : 100,
-          status: disposedAssets.length > totalAssets * 0.1 ? 'negative' : 'positive'
+          value: (disposedAssets.length > 0 && totalAssets > 0)
+            ? Math.max(0, Math.round((1 - (disposedAssets.length / totalAssets)) * 100))
+            : 100,
+          status: totalAssets > 0 && disposedAssets.length > totalAssets * 0.1 ? 'negative' : 'positive'
         },
         budgetEfficiency: {
-          value: Number(((totalYearlyForecast / (currentYearFoodCost + currentYearRentalCost)) * 100).toFixed(2)),
+          value: (currentYearFoodCost + currentYearRentalCost) > 0
+            ? Number(((totalYearlyForecast / (currentYearFoodCost + currentYearRentalCost)) * 100).toFixed(2))
+            : 100,
           status: 'neutral'
         }
       }

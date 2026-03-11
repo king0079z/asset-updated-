@@ -1,15 +1,19 @@
-﻿import type { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
+
+// 60 s server-side cache per user — report history doesn't change often
+type CacheEntry = { data: any[]; ts: number };
+const historyCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 60_000;
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  // Get the user from Supabase auth
   const supabase = createClient(req, res);
   const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
+  const user = session?.user ?? null;
 
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -17,18 +21,20 @@ export default async function handler(
 
   try {
     if (req.method === 'GET') {
-      // Get report history
+      // Serve from cache when fresh
+      const cached = historyCache.get(user.id);
+      if (cached && Date.now() - cached.ts < CACHE_TTL) {
+        res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+        return res.status(200).json(cached.data);
+      }
+
       const reports = await prisma.reportHistory.findMany({
-        where: {
-          userId: user.id,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
       });
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
-
-
+      historyCache.set(user.id, { data: reports, ts: Date.now() });
+      res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
       return res.status(200).json(reports);
     } 
     else if (req.method === 'POST') {
@@ -51,7 +57,8 @@ export default async function handler(
           endDate: endDate ? new Date(endDate) : null,
         },
       });
-
+      // Invalidate cache so next GET sees the new entry
+      historyCache.delete(user.id);
       return res.status(201).json(report);
     }
     

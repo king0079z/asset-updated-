@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import { fetchWithCache, getFromCache } from '@/lib/api-cache';
+
+const RFID_DASH_KEY = '/api/rfid/dashboard';
+const RFID_DASH_TTL = 15_000; // 15 s — matches server cache TTL
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
@@ -72,10 +76,11 @@ const timeAgo = (ts?: string | null) => {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function RFIDPage() {
-  const [tags,        setTags]        = useState<RFIDTag[]>([]);
-  const [zones,       setZones]       = useState<RFIDZone[]>([]);
-  const [stats,       setStats]       = useState<Stats | null>(null);
-  const [loading,     setLoading]     = useState(true);
+  const cachedRfid = getFromCache<any>(RFID_DASH_KEY, RFID_DASH_TTL);
+  const [tags,        setTags]        = useState<RFIDTag[]>(cachedRfid?.tags   ?? []);
+  const [zones,       setZones]       = useState<RFIDZone[]>(cachedRfid?.zones ?? []);
+  const [stats,       setStats]       = useState<Stats | null>(cachedRfid?.stats ?? null);
+  const [loading,     setLoading]     = useState(!cachedRfid);
   const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'zone-map' | 'alerts' | 'setup'>('overview');
   const [unresolvedAlerts, setUnresolvedAlerts] = useState(0);
   const [zoneMapMode, setZoneMapMode] = useState<'edit' | 'live' | '3d'>('3d');
@@ -100,10 +105,11 @@ export default function RFIDPage() {
   // ── Data loading — single endpoint replaces 3 separate API calls ────────────
   const loadAll = useCallback(async (force = false) => {
     try {
-      const url = `/api/rfid/dashboard${force ? '?refresh=true' : ''}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const d = await res.json();
+      const url = force ? `/api/rfid/dashboard?refresh=true` : RFID_DASH_KEY;
+      const d = force
+        ? await fetch(url).then(r => r.ok ? r.json() : null)
+        : await fetchWithCache<any>(url, { maxAge: RFID_DASH_TTL });
+      if (d) {
         setTags(d.tags   ?? []);
         setZones(d.zones ?? []);
         setStats(d.stats ?? null);
@@ -117,7 +123,15 @@ export default function RFIDPage() {
     }
   }, []);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => {
+    // If we had cached data, revalidate in background
+    if (cachedRfid) {
+      setUnresolvedAlerts(cachedRfid.stats?.unresolvedAlerts ?? 0);
+      setTimeout(() => loadAll(), 200);
+    } else {
+      loadAll();
+    }
+  }, []);
 
   // Auto-refresh every 15 seconds when on overview tab
   useEffect(() => {

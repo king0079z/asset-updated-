@@ -3,7 +3,10 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fetchWithErrorHandling } from '@/util/apiErrorHandler';
-import { fetchWithCache } from '@/lib/api-cache';
+import { fetchWithCache, getFromCache } from '@/lib/api-cache';
+
+const DASH_STATS_KEY  = '/api/dashboard/stats';
+const DASH_STATS_TTL  = 2 * 60_000;
 import { 
   Package, 
   Utensils, 
@@ -116,36 +119,37 @@ export default function Dashboard() {
   const [consumptionAnalysisOpen, setConsumptionAnalysisOpen] = useState(false);
   const [kitchenConsumptionOpen, setKitchenConsumptionOpen] = useState(false);
   const [driverTripSummaryOpen, setDriverTripSummaryOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const hasFetchedRef = useRef(false);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalAssets: 0,
-    totalFoodItems: 0,
-    activeVehicleRentals: 0,
-    lowStockItems: 0,
-    totalFoodCost: 0,
-    totalVehicleCost: 0,
-    totalFoodConsumption: 0,
-    totalFoodSupplyValue: 0,
-    totalAmountSpent: 0,
-    amountSpentBreakdown: {
-      foodConsumption: 0,
-      assetsPurchased: 0,
-      vehicleRentalCosts: 0
-    },
-    recentRentals: [],
-    vehicleStats: [],
-    assetStats: {
-      byStatus: [],
-      totalValue: 0,
-      disposedValue: 0
-    }
+
+  // Initialize from cache for instant display on revisit
+  const cachedStats = getFromCache<any>(DASH_STATS_KEY, DASH_STATS_TTL);
+  const [isLoading, setIsLoading] = useState(!cachedStats);
+  const [stats, setStats] = useState<DashboardStats>(() => {
+    const c = cachedStats;
+    if (!c) return {
+      totalAssets: 0, totalFoodItems: 0, activeVehicleRentals: 0, lowStockItems: 0,
+      totalFoodCost: 0, totalVehicleCost: 0, totalFoodConsumption: 0, totalFoodSupplyValue: 0,
+      totalAmountSpent: 0, amountSpentBreakdown: { foodConsumption: 0, assetsPurchased: 0, vehicleRentalCosts: 0 },
+      recentRentals: [], vehicleStats: [], assetStats: { byStatus: [], totalValue: 0, disposedValue: 0 }
+    };
+    return {
+      totalAssets: c.totalAssets ?? 0, totalFoodItems: c.totalFoodItems ?? 0,
+      activeVehicleRentals: c.activeVehicleRentals ?? 0, lowStockItems: c.lowStockItems ?? 0,
+      totalFoodCost: c.totalFoodCost ?? 0, totalVehicleCost: c.totalVehicleCost ?? 0,
+      recentRentals: c.recentRentals ?? [], vehicleStats: c.vehicleStats ?? [],
+      assetStats: c.assetStats ?? { byStatus: [], totalValue: 0, disposedValue: 0 },
+    };
   });
 
   useEffect(() => {
     if (hasFetchedRef.current) return;
     hasFetchedRef.current = true;
-    setIsLoading(true);
+    // If we have cached stats, run in background without showing skeleton
+    if (cachedStats) {
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     
     const fetchStats = async () => {
       // Parse numeric values to ensure they're numbers, not strings
