@@ -160,16 +160,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.query.clear === 'true') {
       await prisma.rFIDAlert.deleteMany({ where: { organizationId: orgId ?? undefined } });
       await prisma.rFIDAlertRule.deleteMany({ where: { organizationId: orgId ?? undefined } });
-      // Delete scans via tag ids (no direct orgId on scan)
-      const existingTags = await prisma.rFIDTag.findMany({ where: { organizationId: orgId ?? undefined }, select: { id: true } });
+
+      // Collect asset IDs linked to RFID tags BEFORE deleting tags,
+      // so we can clean up the demo Asset records too.
+      const existingTags = await prisma.rFIDTag.findMany({
+        where: { organizationId: orgId ?? undefined },
+        select: { id: true, assetId: true },
+      });
+      const demoAssetIds = existingTags.map(t => t.assetId).filter(Boolean) as string[];
+
+      // Delete scans → tags → zones → floor plans
       if (existingTags.length) {
         await prisma.rFIDScan.deleteMany({ where: { tagId: { in: existingTags.map(t => t.id) } } });
       }
-      // Unlink tags from assets before deleting
       await prisma.rFIDTag.updateMany({ where: { organizationId: orgId ?? undefined }, data: { assetId: null } });
       await prisma.rFIDTag.deleteMany({ where: { organizationId: orgId ?? undefined } });
       await prisma.rFIDZone.deleteMany({ where: { organizationId: orgId ?? undefined } });
       await prisma.floorPlan.deleteMany({ where: { organizationId: orgId ?? undefined } });
+
+      // Delete the Asset records that were created by previous seed runs.
+      // We only delete assets that were explicitly linked to RFID tags,
+      // which are always demo assets — real assets without tags are left untouched.
+      if (demoAssetIds.length) {
+        await prisma.asset.deleteMany({ where: { id: { in: demoAssetIds } } });
+      }
     }
 
     // ── 1. Floor plans ──────────────────────────────────────────────────────
