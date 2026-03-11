@@ -1,284 +1,392 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
+// @ts-nocheck
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
-interface FloorPlan {
-  id: string;
-  name: string;
-  building?: string | null;
-  floorNumber?: number | null;
-  imageUrl: string;
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface FloorPlan { id: string; name: string; building?: string | null; floorNumber?: number | null; imageUrl: string; }
+interface Zone { id: string; name: string; mapX?: number | null; mapY?: number | null; mapWidth?: number | null; mapHeight?: number | null; isRestricted: boolean; floorPlanId?: string | null; apMacAddress?: string | null; _count?: { tags: number; scans: number }; }
+interface AssetLoc {
+  tagId: string; tagMac: string; tagType: string; status: string;
+  batteryLevel?: number | null; lastRssi?: number | null; lastSeenAt?: string | null;
+  manufacturer?: string | null; model?: string | null;
+  asset?: { id: string; name: string; type: string } | null;
+  zone?: { id: string; name: string; mapX?: number | null; mapY?: number | null; mapWidth?: number | null; mapHeight?: number | null; floorPlanId?: string | null; isRestricted?: boolean } | null;
 }
 
-interface Zone {
-  id: string;
-  name: string;
-  mapX?: number | null;
-  mapY?: number | null;
-  mapWidth?: number | null;
-  mapHeight?: number | null;
-  isRestricted: boolean;
-  floorPlanId?: string | null;
-}
+// ── Constants ─────────────────────────────────────────────────────────────────
+const REFRESH_MS = 12_000;
 
-// Matches /api/rfid/locations response shape
-interface AssetLocation {
-  tagId: string;
-  tagMac: string;
-  status: string;
-  batteryLevel?: number | null;
-  lastRssi?: number | null;
-  lastSeenAt?: string | null;
-  zone?: { id: string; name: string; mapX?: number | null; mapY?: number | null; floorPlanId?: string | null } | null;
-  asset?: { id: string; name: string } | null;
-}
-
-interface TooltipState {
-  tag: AssetLocation;
-  x: number;
-  y: number;
-}
-
-const REFRESH_INTERVAL = 10000;
-
-const STATUS_COLOR: Record<string, string> = {
-  ACTIVE:      'rgb(16,185,129)',
-  LOW_BATTERY: 'rgb(245,158,11)',
-  MISSING:     'rgb(239,68,68)',
-  UNASSIGNED:  'rgb(156,163,175)',
+const STATUS: Record<string, { color: string; ring: string; label: string; pulse: string }> = {
+  ACTIVE:      { color: '#10b981', ring: 'rgba(16,185,129,0.3)',  label: 'Active',      pulse: 'pulse-active'   },
+  LOW_BATTERY: { color: '#f59e0b', ring: 'rgba(245,158,11,0.3)', label: 'Low Battery', pulse: 'pulse-lowbat'   },
+  MISSING:     { color: '#ef4444', ring: 'rgba(239,68,68,0.4)',  label: 'Missing',     pulse: 'pulse-missing'  },
+  INACTIVE:    { color: '#64748b', ring: 'rgba(100,116,139,0.2)',label: 'Inactive',    pulse: ''               },
+  UNASSIGNED:  { color: '#a78bfa', ring: 'rgba(167,139,250,0.2)',label: 'Unassigned',  pulse: ''               },
 };
 
-const ZONE_FILL: Record<string, string> = {
-  normal:     'rgba(59,130,246,0.15)',
-  restricted: 'rgba(239,68,68,0.15)',
-};
+function timeAgo(ts?: string | null) {
+  if (!ts) return 'Never';
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60)   return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400)return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
 
+const ASSET_CSS = `
+  @keyframes pulse-active  { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1}50%{transform:translate(-50%,-50%) scale(1.18);opacity:.85} }
+  @keyframes pulse-missing  { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,.7)}60%{transform:translate(-50%,-50%) scale(1.1);opacity:.9;box-shadow:0 0 0 10px rgba(239,68,68,0)} }
+  @keyframes pulse-lowbat   { 0%,100%{transform:translate(-50%,-50%) scale(1)}70%{transform:translate(-50%,-50%) scale(1.08)} }
+  @keyframes dash-move      { to { stroke-dashoffset: -20 } }
+  .pulse-active  { animation: pulse-active  2.4s ease-in-out infinite }
+  .pulse-missing { animation: pulse-missing 1.1s ease-in-out infinite }
+  .pulse-lowbat  { animation: pulse-lowbat  2.8s ease-in-out infinite }
+  .dash-restricted { animation: dash-move 1.5s linear infinite }
+`;
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function LiveTrackingMap() {
-  const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [locations, setLocations] = useState<AssetLocation[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<FloorPlan | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [floorPlans,    setFloorPlans]    = useState<FloorPlan[]>([]);
+  const [zones,         setZones]         = useState<Zone[]>([]);
+  const [locations,     setLocations]     = useState<AssetLoc[]>([]);
+  const [selectedPlan,  setSelectedPlan]  = useState<FloorPlan | null>(null);
+  const [loading,       setLoading]       = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [lastRefresh,   setLastRefresh]   = useState(new Date());
+  const [tooltip,       setTooltip]       = useState<{ tag: AssetLoc; x: number; y: number } | null>(null);
+  const [hoveredZone,   setHoveredZone]   = useState<string | null>(null);
+  const [imgLoaded,     setImgLoaded]     = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef       = useRef<HTMLImageElement>(null);
 
-  const fetchLocations = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
     try {
-      const res = await fetch('/api/rfid/locations');
-      if (res.ok) {
-        const data = await res.json();
-        setLocations(data.locations ?? []);
-        setLastRefresh(new Date());
+      const res = await fetch(`/api/rfid/map-data${force ? '?refresh=true' : ''}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      setFloorPlans(d.floorPlans ?? []);
+      setZones(d.zones ?? []);
+      setLocations(d.locations ?? []);
+      setLastRefresh(new Date());
+      if ((d.floorPlans ?? []).length > 0) {
+        setSelectedPlan(prev => prev ?? d.floorPlans[0]);
       }
     } catch { /* silent */ }
+    finally { setLoading(false); setRefreshing(false); }
   }, []);
 
-  const fetchBase = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [plansRes, zonesRes] = await Promise.all([
-        fetch('/api/rfid/floor-plans'),
-        fetch('/api/rfid/zones'),
-      ]);
-      if (plansRes.ok) {
-        const { plans } = await plansRes.json();
-        setFloorPlans(plans ?? []);
-        if ((plans ?? []).length > 0) setSelectedPlan(plans[0]);
-      }
-      if (zonesRes.ok) {
-        const { zones: z } = await zonesRes.json();
-        setZones(z ?? []);
-      }
-      await fetchLocations();
-    } catch { /* silent */ } finally {
-      setLoading(false);
-    }
-  }, [fetchLocations]);
-
   useEffect(() => {
-    fetchBase();
-    const interval = setInterval(fetchLocations, REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [fetchBase, fetchLocations]);
+    fetchData();
+    const t = setInterval(() => fetchData(), REFRESH_MS);
+    return () => clearInterval(t);
+  }, [fetchData]);
 
-  const planZones = zones.filter(z => z.floorPlanId === selectedPlan?.id && z.mapX != null);
+  const handleRefresh = () => { setRefreshing(true); fetchData(true); };
 
-  // Assets whose current zone belongs to this floor plan
-  const planZoneIds = new Set(planZones.map(z => z.id));
-  const getZoneAssets = (zoneId: string) =>
-    locations.filter(l => l.zone?.id === zoneId);
-  const assetsInPlan = locations.filter(l => l.zone?.id && planZoneIds.has(l.zone.id));
+  // ── Derived data ──────────────────────────────────────────────────────────────
+  const planZones = useMemo(() =>
+    zones.filter(z => z.floorPlanId === selectedPlan?.id && z.mapX != null),
+    [zones, selectedPlan]
+  );
 
-  const getZoneCentroid = (zone: Zone) => ({
-    x: (zone.mapX ?? 0) + (zone.mapWidth ?? 0) / 2,
-    y: (zone.mapY ?? 0) + (zone.mapHeight ?? 0) / 2,
-  });
+  const zoneAssets = useMemo(() => {
+    const map: Record<string, AssetLoc[]> = {};
+    locations.forEach(l => {
+      const zid = l.zone?.floorPlanId === selectedPlan?.id ? l.zone?.id : null;
+      if (!zid) return;
+      if (!map[zid]) map[zid] = [];
+      map[zid].push(l);
+    });
+    return map;
+  }, [locations, selectedPlan]);
 
-  const handleDotClick = (e: React.MouseEvent, tag: AssetLocation) => {
+  const floorStats = useMemo(() => {
+    const fpId = selectedPlan?.id;
+    const inPlan = locations.filter(l => l.zone?.floorPlanId === fpId);
+    return {
+      total:   inPlan.length,
+      active:  inPlan.filter(l => l.status === 'ACTIVE').length,
+      low:     inPlan.filter(l => l.status === 'LOW_BATTERY').length,
+      missing: inPlan.filter(l => l.status === 'MISSING').length,
+    };
+  }, [locations, selectedPlan]);
+
+  // ── Dot click ─────────────────────────────────────────────────────────────────
+  const handleDotClick = (e: React.MouseEvent, tag: AssetLoc) => {
     e.stopPropagation();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setTooltip({ tag, x: e.clientX - rect.left, y: e.clientY - rect.top });
+    setTooltip(prev => prev?.tag.tagId === tag.tagId ? null : {
+      tag, x: e.clientX - rect.left, y: e.clientY - rect.top,
+    });
   };
 
-  // Stats
-  const active  = assetsInPlan.filter(l => l.status === 'ACTIVE').length;
-  const lowBat  = assetsInPlan.filter(l => l.status === 'LOW_BATTERY').length;
-  const missing = assetsInPlan.filter(l => l.status === 'MISSING').length;
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-[400px] w-full rounded-xl" />
-      </div>
-    );
-  }
-
-  if (!selectedPlan) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-xl">
-        <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+  // ── Loading skeleton ──────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 animate-pulse">
+      <div className="h-14 bg-slate-800/80" />
+      <div className="h-[500px] bg-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-slate-600">
+          <svg className="w-12 h-12 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.2"/>
+            <path d="M12 2a10 10 0 0110 10" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"/>
           </svg>
+          <p className="text-sm font-semibold">Loading floor maps…</p>
         </div>
-        <h3 className="text-lg font-semibold mb-2">No Floor Plans</h3>
-        <p className="text-sm text-muted-foreground">Switch to Edit Zones mode and upload a floor plan to enable live tracking</p>
       </div>
-    );
-  }
+    </div>
+  );
+
+  // ── No floor plans ────────────────────────────────────────────────────────────
+  if (!selectedPlan) return (
+    <div className="rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900 flex flex-col items-center justify-center py-20 gap-4">
+      <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+        <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+        </svg>
+      </div>
+      <div className="text-center">
+        <p className="font-bold text-slate-300 text-lg">No floor plans yet</p>
+        <p className="text-slate-500 text-sm mt-1">Click <strong>Load Demo Data</strong> above to populate the map, or switch to Edit Zones to upload a floor plan</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-4" onClick={() => setTooltip(null)}>
-      {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3">
-        {floorPlans.length > 1 && (
-          <Select
-            value={selectedPlan.id}
-            onValueChange={id => setSelectedPlan(floorPlans.find(p => p.id === id) ?? null)}
-          >
-            <SelectTrigger className="w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {floorPlans.map(p => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}{p.building ? ` — ${p.building}` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+    <div className="space-y-0 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-slate-950" onClick={() => setTooltip(null)}>
+      <style>{ASSET_CSS}</style>
 
-        <div className="flex gap-2 ml-auto flex-wrap">
-          {active > 0 && (
-            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0">
-              {active} Active
-            </Badge>
-          )}
-          {lowBat > 0 && (
-            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 border-0">
-              {lowBat} Low Battery
-            </Badge>
-          )}
-          {missing > 0 && (
-            <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 border-0">
-              {missing} Missing
-            </Badge>
-          )}
-          {assetsInPlan.length === 0 && (
-            <Badge variant="outline" className="text-muted-foreground">No assets on this floor</Badge>
-          )}
-          <Button variant="outline" size="sm" onClick={fetchLocations} className="h-7 text-xs">
-            Refresh
-          </Button>
+      {/* ── Header bar ─────────────────────────────────────────────────────── */}
+      <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex flex-col gap-2">
+        {/* Top row: floor tabs + action */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1 p-0.5 bg-slate-800/60 rounded-xl">
+            {floorPlans.map(fp => {
+              const fpAssets = locations.filter(l => l.zone?.floorPlanId === fp.id);
+              const hasMissing = fpAssets.some(l => l.status === 'MISSING');
+              const isActive = fp.id === selectedPlan?.id;
+              return (
+                <button key={fp.id}
+                  onClick={e => { e.stopPropagation(); setSelectedPlan(fp); setImgLoaded(false); setTooltip(null); }}
+                  className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                  }`}
+                >
+                  <span className={`text-[10px] font-black tracking-wider ${isActive ? 'text-indigo-200' : 'text-slate-500'}`}>
+                    FL{fp.floorNumber}
+                  </span>
+                  <span className="hidden sm:block truncate max-w-[120px]">
+                    {fp.name.split('—')[1]?.trim() ?? fp.name}
+                  </span>
+                  {fpAssets.length > 0 && (
+                    <span className={`flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-black ${
+                      isActive ? 'bg-indigo-400/30 text-indigo-100' : 'bg-slate-700 text-slate-300'
+                    }`}>
+                      {fpAssets.length}
+                    </span>
+                  )}
+                  {hasMissing && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Stats + refresh */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {floorStats.active > 0  && <StatChip n={floorStats.active}  color="#10b981" label="Active"      />}
+            {floorStats.low > 0     && <StatChip n={floorStats.low}     color="#f59e0b" label="Low Bat"     />}
+            {floorStats.missing > 0 && <StatChip n={floorStats.missing} color="#ef4444" label="Missing"     />}
+            <button
+              onClick={e => { e.stopPropagation(); handleRefresh(); }}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-all border border-slate-700"
+            >
+              <svg className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {/* Floor info sub-row */}
+        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+          <span className="font-semibold text-slate-400">{selectedPlan.name}</span>
+          {selectedPlan.building && <><span>·</span><span>{selectedPlan.building}</span></>}
+          <span className="ml-auto flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
+            Live · refreshes every {REFRESH_MS / 1000}s · last {lastRefresh.toLocaleTimeString()}
+          </span>
         </div>
       </div>
 
-      {/* Map */}
+      {/* ── Map area ───────────────────────────────────────────────────────── */}
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded-xl border shadow-sm select-none"
+        className="relative select-none overflow-hidden bg-slate-900"
+        style={{ minHeight: 400 }}
       >
+        {/* Floor plan image */}
         <img
+          ref={imgRef}
+          key={selectedPlan.id}
           src={selectedPlan.imageUrl}
           alt={selectedPlan.name}
-          className="w-full h-auto block"
+          className={`w-full h-auto block transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
           draggable={false}
+          onLoad={() => setImgLoaded(true)}
         />
 
-        {/* SVG Overlay — zones */}
+        {/* Image loading overlay */}
+        {!imgLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+            <div className="flex flex-col items-center gap-3 text-slate-600">
+              <svg className="w-8 h-8 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.2"/>
+                <path d="M12 2a10 10 0 0110 10" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              <p className="text-xs font-semibold">Loading floor plan…</p>
+            </div>
+          </div>
+        )}
+
+        {/* SVG overlay — zones */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
         >
-          {planZones.map(zone => (
-            <g key={zone.id}>
-              <rect
-                x={zone.mapX!} y={zone.mapY!}
-                width={zone.mapWidth!} height={zone.mapHeight!}
-                fill={zone.isRestricted ? ZONE_FILL.restricted : ZONE_FILL.normal}
-                stroke={zone.isRestricted ? 'rgba(239,68,68,0.6)' : 'rgba(59,130,246,0.4)'}
-                strokeWidth="0.3"
-                rx="0.5"
-              />
-              <text
-                x={zone.mapX! + zone.mapWidth! / 2}
-                y={zone.mapY! + 3}
-                textAnchor="middle"
-                fontSize="2.2"
-                fill={zone.isRestricted ? 'rgb(239,68,68)' : 'rgb(59,130,246)'}
-                fontWeight="600"
+          <defs>
+            <filter id="zone-glow">
+              <feGaussianBlur stdDeviation="0.5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          {planZones.map(zone => {
+            const x = zone.mapX!; const y = zone.mapY!;
+            const w = zone.mapWidth!; const h = zone.mapHeight!;
+            const cx = x + w / 2;
+            const isHovered    = hoveredZone === zone.id;
+            const hasAssets    = (zoneAssets[zone.id] ?? []).length > 0;
+            const assetCount   = (zoneAssets[zone.id] ?? []).length;
+            const hasMissing   = (zoneAssets[zone.id] ?? []).some(a => a.status === 'MISSING');
+
+            return (
+              <g key={zone.id} className="pointer-events-auto" style={{ cursor: 'default' }}
+                onMouseEnter={() => setHoveredZone(zone.id)}
+                onMouseLeave={() => setHoveredZone(null)}
               >
-                {zone.name}
-              </text>
-              {getZoneAssets(zone.id).length > 0 && (
-                <g>
-                  <circle
-                    cx={zone.mapX! + zone.mapWidth! - 3}
-                    cy={zone.mapY! + 3}
-                    r="2.5"
-                    fill="rgb(99,102,241)"
+                {/* Zone fill */}
+                <rect
+                  x={x} y={y} width={w} height={h} rx="0.8"
+                  fill={
+                    zone.isRestricted
+                      ? isHovered ? 'rgba(239,68,68,0.25)' : 'rgba(239,68,68,0.12)'
+                      : isHovered ? 'rgba(99,102,241,0.22)' : 'rgba(99,102,241,0.08)'
+                  }
+                  style={{ transition: 'fill 0.2s' }}
+                />
+
+                {/* Zone border — static for normal, animated dashes for restricted */}
+                {zone.isRestricted ? (
+                  <rect x={x} y={y} width={w} height={h} rx="0.8" fill="none"
+                    stroke={hasMissing ? '#ef4444' : 'rgba(239,68,68,0.7)'}
+                    strokeWidth="0.5"
+                    strokeDasharray="3 2"
+                    className="dash-restricted"
                   />
-                  <text
-                    x={zone.mapX! + zone.mapWidth! - 3}
-                    y={zone.mapY! + 3}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize="2"
-                    fill="white"
-                    fontWeight="700"
-                  >
-                    {getZoneAssets(zone.id).length}
+                ) : (
+                  <rect x={x} y={y} width={w} height={h} rx="0.8" fill="none"
+                    stroke={isHovered ? 'rgba(99,102,241,0.8)' : 'rgba(99,102,241,0.35)'}
+                    strokeWidth={isHovered ? '0.5' : '0.3'}
+                    style={{ transition: 'stroke 0.2s, stroke-width 0.2s' }}
+                  />
+                )}
+
+                {/* Zone name label */}
+                <rect
+                  x={cx - Math.min(zone.name.length * 1.1, 30) / 2}
+                  y={y + 2.5}
+                  width={Math.min(zone.name.length * 1.1, 30)}
+                  height={3.8}
+                  rx="0.8"
+                  fill={zone.isRestricted ? 'rgba(127,29,29,0.85)' : 'rgba(30,27,75,0.85)'}
+                />
+                <text
+                  x={cx} y={y + 5.2}
+                  textAnchor="middle"
+                  fontSize="2.4"
+                  fontFamily="system-ui, -apple-system, sans-serif"
+                  fontWeight="700"
+                  fill={zone.isRestricted ? '#fca5a5' : '#a5b4fc'}
+                  filter="url(#zone-glow)"
+                >
+                  {zone.name}
+                </text>
+
+                {/* Restricted badge */}
+                {zone.isRestricted && (
+                  <text x={cx} y={y + 9.5} textAnchor="middle" fontSize="1.8" fontWeight="700" fill="#ef4444" opacity="0.9">
+                    ⚠ RESTRICTED
                   </text>
-                </g>
-              )}
-            </g>
-          ))}
+                )}
+
+                {/* AP indicator dot */}
+                {zone.apMacAddress && (
+                  <g>
+                    <circle cx={x + w - 2.5} cy={y + 2.5} r="2" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.5)" strokeWidth="0.3"/>
+                    <circle cx={x + w - 2.5} cy={y + 2.5} r="0.8" fill="#818cf8"/>
+                  </g>
+                )}
+
+                {/* Asset count badge (top-right) */}
+                {assetCount > 0 && (
+                  <g>
+                    <rect
+                      x={x + w - 2.5 - 5.5} y={y + h - 5.5}
+                      width="5.5" height="3.8" rx="0.8"
+                      fill={hasMissing ? 'rgba(127,29,29,0.9)' : 'rgba(30,27,75,0.9)'}
+                    />
+                    <text
+                      x={x + w - 2.5 - 2.75} y={y + h - 2.8}
+                      textAnchor="middle" fontSize="2.2" fontWeight="800"
+                      fill={hasMissing ? '#fca5a5' : '#a5b4fc'}
+                    >
+                      {assetCount}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
         </svg>
 
-        {/* Asset dots (HTML positioned with %) */}
+        {/* HTML asset dots */}
         {planZones.map(zone => {
-          const assets = getZoneAssets(zone.id);
-          const centroid = getZoneCentroid(zone);
+          const assets  = zoneAssets[zone.id] ?? [];
+          const cx      = (zone.mapX ?? 0) + (zone.mapWidth ?? 0) / 2;
+          const cy      = (zone.mapY ?? 0) + (zone.mapHeight ?? 0) / 2;
+          const spread  = 3.2;
+
           return assets.map((tag, i) => {
-            const spread = assets.length > 1 ? (i - (assets.length - 1) / 2) * 2.5 : 0;
+            const offset = assets.length > 1 ? (i - (assets.length - 1) / 2) * spread : 0;
+            const s      = STATUS[tag.status] ?? STATUS.INACTIVE;
             return (
               <button
                 key={tag.tagId}
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg hover:scale-125 focus:outline-none z-10 transition-transform"
+                className={`absolute focus:outline-none z-10 ${s.pulse}`}
                 style={{
-                  left:       `${centroid.x + spread}%`,
-                  top:        `${centroid.y}%`,
-                  width:      18,
-                  height:     18,
-                  background: STATUS_COLOR[tag.status] ?? STATUS_COLOR.UNASSIGNED,
+                  left:   `${cx + offset}%`,
+                  top:    `${cy}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width:  22, height: 22,
+                  borderRadius: '50%',
+                  background: s.color,
+                  border: '2.5px solid white',
+                  boxShadow: `0 0 0 3px ${s.ring}, 0 2px 8px rgba(0,0,0,0.4)`,
                 }}
                 onClick={e => handleDotClick(e, tag)}
                 title={tag.asset?.name ?? tag.tagMac}
@@ -289,67 +397,120 @@ export default function LiveTrackingMap() {
 
         {/* Tooltip */}
         {tooltip && (() => {
-          const containerWidth = containerRef.current?.clientWidth ?? 400;
-          const left = Math.min(tooltip.x + 12, containerWidth - 220);
-          const top  = Math.max(tooltip.y - 90, 8);
+          const { tag, x, y } = tooltip;
+          const s = STATUS[tag.status] ?? STATUS.INACTIVE;
+          const bw = containerRef.current?.clientWidth ?? 600;
+          const bh = containerRef.current?.clientHeight ?? 400;
+          const tw = 230; const th = 210;
+          const tx = Math.min(Math.max(x + 14, 8), bw - tw - 8);
+          const ty = Math.min(Math.max(y - th / 2, 8), bh - th - 8);
+
           return (
             <div
-              className="absolute z-20 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border p-3 w-52 text-xs"
-              style={{ left, top }}
+              className="absolute z-30 rounded-2xl overflow-hidden shadow-2xl"
+              style={{ left: tx, top: ty, width: tw, background: 'rgba(2,6,23,0.96)', border: `1px solid ${s.color}40`, backdropFilter: 'blur(16px)' }}
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center gap-2 mb-2">
-                <div
-                  className="w-3 h-3 rounded-full flex-shrink-0"
-                  style={{ background: STATUS_COLOR[tooltip.tag.status] ?? STATUS_COLOR.UNASSIGNED }}
-                />
-                <p className="font-semibold truncate">{tooltip.tag.asset?.name ?? tooltip.tag.tagMac}</p>
-              </div>
-              <div className="space-y-1 text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Status</span>
-                  <span className="font-medium text-foreground">{tooltip.tag.status.replace('_', ' ')}</span>
+              {/* Status stripe */}
+              <div className="h-1 w-full" style={{ background: s.color }}/>
+
+              <div className="p-3.5 space-y-2.5">
+                {/* Asset name + status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-white text-sm leading-tight truncate">
+                      {tag.asset?.name ?? tag.tagMac}
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">{tag.tagMac}</p>
+                  </div>
+                  <span className="flex-shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full" style={{ background: s.color + '25', color: s.color, border: `1px solid ${s.color}40` }}>
+                    {s.label}
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Zone</span>
-                  <span className="font-medium text-foreground truncate ml-2">{tooltip.tag.zone?.name ?? '—'}</span>
+
+                {/* Zone */}
+                <div className="flex items-center gap-2 text-xs">
+                  <svg className="w-3 h-3 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                  </svg>
+                  <span className="text-slate-300 font-medium truncate">{tag.zone?.name ?? '—'}</span>
+                  {tag.zone?.isRestricted && <span className="text-[9px] text-red-400 font-bold ml-auto flex-shrink-0">RESTRICTED</span>}
                 </div>
-                {tooltip.tag.batteryLevel != null && (
-                  <div className="flex justify-between">
-                    <span>Battery</span>
-                    <span className={`font-medium ${tooltip.tag.batteryLevel <= 20 ? 'text-amber-500' : 'text-foreground'}`}>
-                      {tooltip.tag.batteryLevel}%
-                    </span>
+
+                {/* Metrics grid */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {/* Battery */}
+                  {tag.batteryLevel != null && (
+                    <div className="bg-slate-800/70 rounded-xl p-2">
+                      <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-1">Battery</p>
+                      <div className="w-full bg-slate-700 rounded-full h-1.5 mb-1">
+                        <div className="h-1.5 rounded-full transition-all" style={{ width: `${tag.batteryLevel}%`, background: tag.batteryLevel <= 20 ? '#ef4444' : tag.batteryLevel <= 40 ? '#f59e0b' : '#10b981' }}/>
+                      </div>
+                      <p className="text-xs font-bold" style={{ color: tag.batteryLevel <= 20 ? '#ef4444' : tag.batteryLevel <= 40 ? '#f59e0b' : '#10b981' }}>
+                        {tag.batteryLevel}%
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Signal */}
+                  {tag.lastRssi != null && (
+                    <div className="bg-slate-800/70 rounded-xl p-2">
+                      <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-1">Signal</p>
+                      <p className="text-xs font-bold text-slate-200">{tag.lastRssi} dBm</p>
+                      <p className="text-[9px] text-slate-500">
+                        {tag.lastRssi >= -60 ? 'Excellent' : tag.lastRssi >= -75 ? 'Good' : tag.lastRssi >= -90 ? 'Fair' : 'Weak'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tag info */}
+                {(tag.manufacturer || tag.model) && (
+                  <div className="text-[10px] text-slate-500">
+                    {tag.manufacturer} {tag.model}
                   </div>
                 )}
-                {tooltip.tag.lastSeenAt && (
-                  <div className="flex justify-between">
-                    <span>Last seen</span>
-                    <span className="font-medium text-foreground">
-                      {new Date(tooltip.tag.lastSeenAt).toLocaleTimeString()}
-                    </span>
-                  </div>
-                )}
+
+                {/* Last seen */}
+                <div className="flex items-center justify-between border-t border-slate-800 pt-2 text-[10px] text-slate-500">
+                  <span>Last seen</span>
+                  <span className="font-semibold text-slate-400">{timeAgo(tag.lastSeenAt)}</span>
+                </div>
               </div>
             </div>
           );
         })()}
       </div>
 
-      {/* Legend + refresh info */}
-      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-        {Object.entries(STATUS_COLOR).map(([status, color]) => (
-          <div key={status} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ background: color }} />
-            <span>{status.replace('_', ' ')}</span>
+      {/* ── Footer legend ──────────────────────────────────────────────────── */}
+      <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        {Object.entries(STATUS).slice(0, 4).map(([key, s]) => (
+          <div key={key} className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }}/>
+            <span className="text-[11px] text-slate-500 font-medium">{s.label}</span>
           </div>
         ))}
         <div className="flex items-center gap-1.5">
-          <div className="w-4 h-3 rounded border" style={{ background: ZONE_FILL.restricted, borderColor: 'rgba(239,68,68,0.6)' }} />
-          <span>Restricted</span>
+          <div className="w-4 h-2.5 rounded border border-red-500/60 bg-red-500/10"/>
+          <span className="text-[11px] text-slate-500 font-medium">Restricted Zone</span>
         </div>
-        <span className="ml-auto">Auto-refreshes every 10s · Last: {lastRefresh.toLocaleTimeString()}</span>
+        <div className="ml-auto flex items-center gap-3 text-[10px] text-slate-600">
+          <span>Click any asset dot to inspect</span>
+          <span className="text-slate-700">·</span>
+          <span>{floorStats.total} assets tracked</span>
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ── StatChip helper ────────────────────────────────────────────────────────────
+function StatChip({ n, color, label }: { n: number; color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold"
+      style={{ background: color + '18', color, border: `1px solid ${color}35` }}>
+      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: color }}/>
+      {n} {label}
     </div>
   );
 }

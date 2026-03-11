@@ -1,624 +1,706 @@
 'use client';
 // @ts-nocheck
-import { useState, useEffect, useCallback } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
-// ── Isometric projection constants ────────────────────────────────────────────
-// Building footprint on SVG canvas (900×580)
-const ORIGIN   = { x: 390, y: 478 };   // front-left anchor of Floor 1 top face
-const AB       = { x: 290, y: -154 };  // vector: left → right on floor
-const AD       = { x: -185, y: -103 }; // vector: front → back on floor
-const FLOOR_H  = 62;  // vertical rise per floor level (SVG px)
-const SLAB_H   = 13;  // thickness of slab face (SVG px)
+// ── Isometric projection ──────────────────────────────────────────────────────
+// Canvas: 960×580 SVG
+const O  = { x: 420, y: 492 };  // front-left anchor of Floor 1 top face
+const AB = { x: 310, y: -165 }; // right direction on floor
+const AD = { x: -200, y: -112 };// depth direction on floor
+const FH = 70;   // floor height (SVG px per level)
+const SH = 14;   // slab thickness
 
-function iso(px: number, py: number, level: number): [number, number] {
-  const oy = ORIGIN.y - level * FLOOR_H;
+function iso(px: number, py: number, lv: number): [number, number] {
   return [
-    ORIGIN.x + px * AB.x + py * AD.x,
-    oy       + px * AB.y + py * AD.y,
+    O.x + px * AB.x + py * AD.x,
+    O.y - lv * FH + px * AB.y + py * AD.y,
   ];
 }
-
-function pts(...coords: [number, number][]): string {
-  return coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+function pts(...c: [number, number][]) {
+  return c.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+}
+function zonePoly(x: number, y: number, w: number, h: number, lv: number) {
+  const [x1,y1] = [x/100, y/100];
+  const [x2,y2] = [(x+w)/100, y/100];
+  const [x3,y3] = [(x+w)/100, (y+h)/100];
+  const [x4,y4] = [x/100, (y+h)/100];
+  return pts(iso(x1,y1,lv), iso(x2,y2,lv), iso(x3,y3,lv), iso(x4,y4,lv));
+}
+function centroid(x: number, y: number, w: number, h: number, lv: number): [number,number] {
+  return iso((x+w/2)/100, (y+h/2)/100, lv);
 }
 
-// Zone percentage coords (0-100) → 4 parallelogram corners on a floor level
-function zonePoly(zx: number, zy: number, zw: number, zh: number, level: number) {
-  const [x1, y1] = [zx / 100, zy / 100];
-  const [x2, y2] = [(zx + zw) / 100, zy / 100];
-  const [x3, y3] = [(zx + zw) / 100, (zy + zh) / 100];
-  const [x4, y4] = [zx / 100, (zy + zh) / 100];
-  return pts(iso(x1, y1, level), iso(x2, y2, level), iso(x3, y3, level), iso(x4, y4, level));
-}
-
-// Centroid of zone in SVG coords
-function zoneCentroid(zx: number, zy: number, zw: number, zh: number, level: number): [number, number] {
-  return iso((zx + zw / 2) / 100, (zy + zh / 2) / 100, level);
-}
-
-// ── Static floor zone definitions (matches seed-demo.ts) ─────────────────────
-const STATIC_ZONES: Record<number, Array<{
-  name: string; x: number; y: number; w: number; h: number; restricted: boolean;
-}>> = {
-  1: [
-    { name: 'Pharmacy Store',       x: 1,  y: 8,  w: 15, h: 40, restricted: true  },
-    { name: 'Emergency Reception',  x: 17, y: 8,  w: 43, h: 40, restricted: false },
-    { name: 'Trauma Bay A',         x: 62, y: 8,  w: 36, h: 40, restricted: true  },
-    { name: 'Radiology Suite',      x: 1,  y: 52, w: 59, h: 43, restricted: false },
-    { name: 'Trauma Bay B',         x: 62, y: 52, w: 36, h: 43, restricted: true  },
+// ── Static zone layout (matches seed-demo.ts) ─────────────────────────────────
+const STATIC: Record<number, Array<{name:string;x:number;y:number;w:number;h:number;restricted:boolean}>> = {
+  1:[
+    {name:'Pharmacy Store',      x:1, y:8, w:15,h:40,restricted:true },
+    {name:'Emergency Reception', x:17,y:8, w:43,h:40,restricted:false},
+    {name:'Trauma Bay A',        x:62,y:8, w:36,h:40,restricted:true },
+    {name:'Radiology Suite',     x:1, y:52,w:59,h:43,restricted:false},
+    {name:'Trauma Bay B',        x:62,y:52,w:36,h:43,restricted:true },
   ],
-  2: [
-    { name: 'ICU Unit A',       x: 1,  y: 8,  w: 31, h: 40, restricted: false },
-    { name: 'ICU Unit B',       x: 34, y: 8,  w: 31, h: 40, restricted: false },
-    { name: 'Recovery Suite',   x: 67, y: 8,  w: 31, h: 40, restricted: false },
-    { name: 'Operating Room 1', x: 1,  y: 52, w: 47, h: 43, restricted: true  },
-    { name: 'Operating Room 2', x: 50, y: 52, w: 48, h: 43, restricted: true  },
+  2:[
+    {name:'ICU Unit A',       x:1, y:8, w:31,h:40,restricted:false},
+    {name:'ICU Unit B',       x:34,y:8, w:31,h:40,restricted:false},
+    {name:'Recovery Suite',   x:67,y:8, w:31,h:40,restricted:false},
+    {name:'Operating Room 1', x:1, y:52,w:47,h:43,restricted:true },
+    {name:'Operating Room 2', x:50,y:52,w:48,h:43,restricted:true },
   ],
-  3: [
-    { name: 'Ward A — General',      x: 1,  y: 8,  w: 31, h: 40, restricted: false },
-    { name: 'Ward B — Private',      x: 34, y: 8,  w: 31, h: 40, restricted: false },
-    { name: 'Nursing Station',       x: 67, y: 8,  w: 31, h: 40, restricted: false },
-    { name: 'Medical Supplies Store',x: 1,  y: 52, w: 50, h: 43, restricted: true  },
-    { name: 'Administration Office', x: 53, y: 52, w: 45, h: 43, restricted: false },
+  3:[
+    {name:'Ward A',              x:1, y:8, w:31,h:40,restricted:false},
+    {name:'Ward B — Private',    x:34,y:8, w:31,h:40,restricted:false},
+    {name:'Nursing Station',     x:67,y:8, w:31,h:40,restricted:false},
+    {name:'Medical Supplies',    x:1, y:52,w:50,h:43,restricted:true },
+    {name:'Administration',      x:53,y:52,w:45,h:43,restricted:false},
   ],
 };
 
-const FLOOR_ACCENT = { 1: '#6366f1', 2: '#a855f7', 3: '#14b8a6' };
-const FLOOR_LABEL  = {
-  1: 'Emergency & Diagnostic',
-  2: 'ICU & Critical Care',
-  3: 'Patient Wards & Admin',
+const ACCENT = {1:'#6366f1',2:'#a855f7',3:'#10b981'};
+const FL_LABEL = {1:'Emergency & Diagnostic',2:'ICU & Critical Care',3:'Patient Wards & Admin'};
+const SCOLOR: Record<string,string> = {
+  ACTIVE:'#10b981', LOW_BATTERY:'#f59e0b', MISSING:'#ef4444',
+  INACTIVE:'#64748b', UNASSIGNED:'#a78bfa',
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  ACTIVE:      '#10b981',
-  LOW_BATTERY: '#f59e0b',
-  MISSING:     '#ef4444',
-  INACTIVE:    '#94a3b8',
-  UNASSIGNED:  '#c084fc',
-};
+function timeAgo(ts?: string|null) {
+  if (!ts) return 'Never';
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60)   return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AssetLoc {
-  tagId: string; tagMac: string; status: string;
-  batteryLevel?: number | null; lastRssi?: number | null; lastSeenAt?: string | null;
-  zone?: { id: string; name: string; mapX?: number | null; mapY?: number | null; floorPlanId?: string | null } | null;
-  asset?: { id: string; name: string } | null;
+  tagId:string; tagMac:string; status:string;
+  batteryLevel?:number|null; lastRssi?:number|null; lastSeenAt?:string|null;
+  manufacturer?:string|null; model?:string|null;
+  asset?:{id:string;name:string;type:string}|null;
+  zone?:{id:string;name:string;mapX?:number|null;mapY?:number|null;mapWidth?:number|null;mapHeight?:number|null;floorPlanId?:string|null;isRestricted?:boolean}|null;
 }
+interface FP {id:string;name:string;floorNumber?:number|null;}
 
-interface FloorPlan { id: string; name: string; floorNumber?: number | null; }
-interface RFIDZone { id: string; name: string; floorPlanId?: string | null; }
+// ── Pre-compute all static SVG polygon strings once ───────────────────────────
+const PRECOMPUTED = (() => {
+  const out: Record<number, { polys: Record<string,[string,[number,number]]>; wallL: string; wallF: string }> = {};
+  for (const lv of [0,1,2]) {
+    const floorNum = lv + 1;
+    const zones = STATIC[floorNum] ?? [];
+    const polys: Record<string,[string,[number,number]]> = {};
+    zones.forEach(z => {
+      polys[z.name] = [zonePoly(z.x,z.y,z.w,z.h,lv), centroid(z.x,z.y,z.w,z.h,lv)];
+    });
+    // left-face wall for this slab
+    const a = iso(0,0,lv), b = iso(0,1,lv);
+    const wallL = pts(a, b, [b[0],b[1]+SH], [a[0],a[1]+SH]);
+    // front-face wall
+    const c = iso(1,0,lv);
+    const wallF = pts(a, c, [c[0],c[1]+SH], [a[0],a[1]+SH]);
+    out[floorNum] = { polys, wallL, wallF };
+  }
+  return out;
+})();
 
-interface Tooltip { asset: AssetLoc; svgX: number; svgY: number; }
+// Building-wide corners (pre-computed)
+const BC = {
+  f1fl: iso(0,0,0), f1fr: iso(1,0,0), f1bl: iso(0,1,0),
+  f3fl: iso(0,0,2), f3fr: iso(1,0,2), f3bl: iso(0,1,2),
+};
+const FULL_LEFT  = pts(BC.f3fl, BC.f3bl, [BC.f1bl[0],BC.f1bl[1]+SH], [BC.f1fl[0],BC.f1fl[1]+SH]);
+const FULL_FRONT = pts(BC.f3fl, BC.f3fr, [BC.f1fr[0],BC.f1fr[1]+SH], [BC.f1fl[0],BC.f1fl[1]+SH]);
+const DIV1 = `${iso(0,0,1)[0].toFixed(1)},${iso(0,0,1)[1].toFixed(1)} ${iso(1,0,1)[0].toFixed(1)},${iso(1,0,1)[1].toFixed(1)}`;
+const DIV2 = `${iso(0,1,0)[0].toFixed(1)},${iso(0,1,0)[1].toFixed(1)} ${iso(0,0,0)[0].toFixed(1)},${iso(0,0,0)[1].toFixed(1)}`;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function FloorMap3D() {
-  const [floorPlans,   setFloorPlans]   = useState<FloorPlan[]>([]);
-  const [zones,        setZones]        = useState<RFIDZone[]>([]);
-  const [locations,    setLocations]    = useState<AssetLoc[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [selectedFloor,setSelectedFloor]= useState<number | null>(null); // null = show all
-  const [tooltip,      setTooltip]      = useState<Tooltip | null>(null);
-  const [lastRefresh,  setLastRefresh]  = useState(new Date());
-  const [rotation,     setRotation]     = useState(0); // subtle rotation anim counter
+  const [fps,       setFps]       = useState<FP[]>([]);
+  const [locations, setLocations] = useState<AssetLoc[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [selected,  setSelected]  = useState<number|null>(null); // 1,2,3 or null=all
+  const [tooltip,   setTooltip]   = useState<{a:AssetLoc;sx:number;sy:number}|null>(null);
+  const [lastRef,   setLastRef]   = useState(new Date());
+  const [tick,      setTick]      = useState(0); // force re-renders for animation
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force=false) => {
     try {
-      const [pRes, zRes, lRes] = await Promise.all([
-        fetch('/api/rfid/floor-plans'),
-        fetch('/api/rfid/zones'),
-        fetch('/api/rfid/locations'),
-      ]);
-      if (pRes.ok) { const d = await pRes.json(); setFloorPlans(d.plans ?? []); }
-      if (zRes.ok) { const d = await zRes.json(); setZones(d.zones ?? []); }
-      if (lRes.ok) { const d = await lRes.json(); setLocations(d.locations ?? []); }
-      setLastRefresh(new Date());
-    } catch { /* silent */ } finally { setLoading(false); }
+      const r = await fetch(`/api/rfid/map-data${force?'?refresh=true':''}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      setFps(d.floorPlans ?? []);
+      setLocations(d.locations ?? []);
+      setLastRef(new Date());
+    } catch {} finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 12000);
-    return () => clearInterval(interval);
+    const data = setInterval(() => fetchData(), 12000);
+    const anim = setInterval(() => setTick(t => t+1), 2000); // animate pulsing
+    return () => { clearInterval(data); clearInterval(anim); };
   }, [fetchData]);
 
-  // Build floorNumber → floorPlanId map
-  const floorPlanByNumber: Record<number, string> = {};
-  floorPlans.forEach(fp => { if (fp.floorNumber) floorPlanByNumber[fp.floorNumber] = fp.id; });
+  // floor plan ID → floor number
+  const fpByNum = useMemo(() => {
+    const m: Record<number,string> = {};
+    fps.forEach(fp => { if (fp.floorNumber) m[fp.floorNumber] = fp.id; });
+    return m;
+  }, [fps]);
 
-  // Build zoneId → floorNumber map
-  const zoneFloor: Record<string, number> = {};
-  zones.forEach(z => {
-    const fp = floorPlans.find(f => f.id === z.floorPlanId);
-    if (fp?.floorNumber) zoneFloor[z.id] = fp.floorNumber;
-  });
+  // locations by floor
+  const byFloor = useMemo(() => {
+    const m: Record<number, AssetLoc[]> = {1:[],2:[],3:[]};
+    [1,2,3].forEach(f => {
+      const fpId = fpByNum[f];
+      if (fpId) m[f] = locations.filter(l => l.zone?.floorPlanId === fpId);
+    });
+    return m;
+  }, [locations, fpByNum]);
 
-  // Assets per floor number
-  function assetsOnFloor(floorNum: number) {
-    const fpId = floorPlanByNumber[floorNum];
-    return locations.filter(l => l.zone?.floorPlanId === fpId);
-  }
+  // zone asset map per floor
+  const zoneMap = useMemo(() => {
+    const m: Record<number, Record<string, AssetLoc[]>> = {1:{},2:{},3:{}};
+    [1,2,3].forEach(f => {
+      byFloor[f].forEach(a => {
+        const zn = a.zone?.name ?? '';
+        if (!m[f][zn]) m[f][zn] = [];
+        m[f][zn].push(a);
+      });
+    });
+    return m;
+  }, [byFloor]);
 
-  // Stats
-  const stats = {
+  const stats = useMemo(() => ({
     total:   locations.length,
-    active:  locations.filter(l => l.status === 'ACTIVE').length,
-    low:     locations.filter(l => l.status === 'LOW_BATTERY').length,
-    missing: locations.filter(l => l.status === 'MISSING').length,
-  };
+    active:  locations.filter(l => l.status==='ACTIVE').length,
+    low:     locations.filter(l => l.status==='LOW_BATTERY').length,
+    missing: locations.filter(l => l.status==='MISSING').length,
+  }), [locations]);
 
-  function handleAssetClick(e: React.MouseEvent<SVGCircleElement>, asset: AssetLoc, svgX: number, svgY: number) {
+  function handleAsset(e: React.MouseEvent, a: AssetLoc, sx: number, sy: number) {
     e.stopPropagation();
-    setTooltip(prev => prev?.asset.tagId === asset.tagId ? null : { asset, svgX, svgY });
+    setTooltip(prev => prev?.a.tagId===a.tagId ? null : {a,sx,sy});
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-[500px] w-full rounded-2xl" />
+  // ── Loading ───────────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="rounded-2xl bg-slate-950 border border-slate-800 h-[580px] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4 text-slate-600">
+        <svg className="w-10 h-10 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.15"/>
+          <path d="M12 2a10 10 0 0110 10" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round"/>
+        </svg>
+        <p className="text-sm font-semibold text-slate-500">Loading 3D building map…</p>
       </div>
-    );
-  }
-
-  // Building corner points (for walls)
-  const fl1FrontLeft  = iso(0, 0, 0);
-  const fl1FrontRight = iso(1, 0, 0);
-  const fl1BackLeft   = iso(0, 1, 0);
-  const fl1BackRight  = iso(1, 1, 0);
-  const fl3FrontLeft  = iso(0, 0, 2);
-  const fl3FrontRight = iso(1, 0, 2);
-  const fl3BackLeft   = iso(0, 1, 2);
-
-  // Slab bottom points
-  const fl1FrontLeftB  : [number, number] = [fl1FrontLeft[0],  fl1FrontLeft[1]  + SLAB_H];
-  const fl1FrontRightB : [number, number] = [fl1FrontRight[0], fl1FrontRight[1] + SLAB_H];
-  const fl1BackLeftB   : [number, number] = [fl1BackLeft[0],   fl1BackLeft[1]   + SLAB_H];
+    </div>
+  );
 
   return (
-    <div className="space-y-4" onClick={() => setTooltip(null)}>
-      {/* ── Controls ─────────────────────────────────────────────────── */}
+    <div className="space-y-3" onClick={() => setTooltip(null)}>
+      {/* ── Controls ───────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-xl">
+        <div className="flex items-center gap-1 p-0.5 bg-slate-800/80 rounded-xl border border-slate-700/50">
           <button
-            onClick={() => setSelectedFloor(null)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${!selectedFloor ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={()=>setSelected(null)}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${!selected?'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25':'text-slate-400 hover:text-slate-200'}`}
           >
             All Floors
           </button>
-          {[1, 2, 3].map(f => (
+          {[1,2,3].map(f => (
             <button key={f}
-              onClick={() => setSelectedFloor(selectedFloor === f ? null : f)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${selectedFloor === f ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={()=>setSelected(selected===f?null:f)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selected===f ? 'bg-background text-foreground shadow' : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
+              <span className="w-2 h-2 rounded-sm" style={{background: ACCENT[f]}}/>
               Floor {f}
             </button>
           ))}
         </div>
 
-        <div className="flex gap-2 ml-auto flex-wrap items-center">
-          {stats.active  > 0 && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 border-0">{stats.active} Active</Badge>}
-          {stats.low     > 0 && <Badge className="bg-amber-100  text-amber-700  dark:bg-amber-900  dark:text-amber-300  border-0">{stats.low} Low Battery</Badge>}
-          {stats.missing > 0 && <Badge className="bg-red-100    text-red-700    dark:bg-red-900    dark:text-red-300    border-0">{stats.missing} Missing</Badge>}
-          <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-lg">
-            ↻ Refresh
-          </Button>
+        <div className="flex items-center gap-2 ml-auto">
+          {stats.active  > 0 && <Chip n={stats.active}  c="#10b981" label="Active"   />}
+          {stats.low     > 0 && <Chip n={stats.low}     c="#f59e0b" label="Low Bat"  />}
+          {stats.missing > 0 && <Chip n={stats.missing} c="#ef4444" label="Missing"  />}
+          <button
+            onClick={e=>{e.stopPropagation();setLoading(true);fetchData(true);}}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs font-semibold"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* ── Main layout ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-4">
+      {/* ── Main grid ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-3">
 
-        {/* ── 3-D Building SVG ─────────────────────────────────────────── */}
-        <div className="relative rounded-2xl border border-border bg-gradient-to-br from-slate-900 via-slate-800 to-zinc-900 overflow-hidden shadow-2xl">
-          {/* Grid background */}
-          <div className="absolute inset-0 opacity-5"
-            style={{ backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,0.5) 40px)' }}
-          />
+        {/* ── 3D Building SVG ──────────────────────────────────────────────── */}
+        <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+          {/* Ambient grid */}
+          <div className="absolute inset-0 opacity-[0.03]"
+            style={{backgroundImage:'linear-gradient(rgba(99,102,241,0.8) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.8) 1px,transparent 1px)',backgroundSize:'40px 40px'}}/>
 
-          <svg viewBox="0 0 880 570" className="w-full h-auto relative z-10" onClick={() => setTooltip(null)}>
+          <svg viewBox="0 0 960 580" className="w-full h-auto relative z-10" onClick={()=>setTooltip(null)}>
             <defs>
-              {/* Gradients */}
-              <linearGradient id="leftWallGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#374151"/>
-                <stop offset="100%" stopColor="#1f2937"/>
+              <linearGradient id="wallL" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#0f172a"/><stop offset="100%" stopColor="#020617"/>
               </linearGradient>
-              <linearGradient id="frontWallGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%"   stopColor="#4b5563"/>
-                <stop offset="100%" stopColor="#374151"/>
+              <linearGradient id="wallF" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#1e293b"/><stop offset="100%" stopColor="#0f172a"/>
               </linearGradient>
-              <linearGradient id="fl1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#e0e7ff"/>
-                <stop offset="100%" stopColor="#c7d2fe"/>
+              <linearGradient id="fl1g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#1e1b4b" stopOpacity="0.9"/>
+                <stop offset="100%" stopColor="#312e81" stopOpacity="0.6"/>
               </linearGradient>
-              <linearGradient id="fl2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#f3e8ff"/>
-                <stop offset="100%" stopColor="#e9d5ff"/>
+              <linearGradient id="fl2g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#2e1065" stopOpacity="0.9"/>
+                <stop offset="100%" stopColor="#4c1d95" stopOpacity="0.6"/>
               </linearGradient>
-              <linearGradient id="fl3Grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#ccfbf1"/>
-                <stop offset="100%" stopColor="#99f6e4"/>
+              <linearGradient id="fl3g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#022c22" stopOpacity="0.9"/>
+                <stop offset="100%" stopColor="#064e3b" stopOpacity="0.6"/>
               </linearGradient>
-              <radialGradient id="assetGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%"   stopColor="white" stopOpacity="0.4"/>
-                <stop offset="100%" stopColor="white" stopOpacity="0"/>
+              <radialGradient id="glow-active" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.5"/>
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0"/>
               </radialGradient>
-              <filter id="glow">
-                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              <radialGradient id="glow-missing" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity="0.6"/>
+                <stop offset="100%" stopColor="#ef4444" stopOpacity="0"/>
+              </radialGradient>
+              <radialGradient id="glow-lowbat" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.5"/>
+                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0"/>
+              </radialGradient>
+              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="4" stdDeviation="8" floodColor="#000000" floodOpacity="0.6"/>
+              </filter>
+              <filter id="glow-filter">
+                <feGaussianBlur stdDeviation="3" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
               </filter>
               <style>{`
-                @keyframes assetPulse {
-                  0%, 100% { r: 5px; opacity: 1; }
-                  50% { r: 7px; opacity: 0.85; }
-                }
-                @keyframes assetPulseRed {
-                  0%, 100% { r: 5px; opacity: 1; }
-                  50% { r: 9px; opacity: 0.7; }
-                }
-                .pulse-active { animation: assetPulse 2.5s ease-in-out infinite; }
-                .pulse-missing { animation: assetPulseRed 1.2s ease-in-out infinite; }
+                @keyframes ap3 {0%,100%{opacity:1;r:2.5}50%{opacity:.5;r:3.5}}
+                @keyframes ms3 {0%,100%{opacity:1;r:4}60%{opacity:.5;r:6.5}}
+                @keyframes lb3 {0%,100%{opacity:1}60%{opacity:.6}}
+                @keyframes ac3 {0%,100%{opacity:1;r:4}50%{opacity:.8;r:5}}
+                .anim-active  {animation:ac3 2.5s ease-in-out infinite}
+                .anim-missing {animation:ms3 1.0s ease-in-out infinite}
+                .anim-lowbat  {animation:lb3 2.8s ease-in-out infinite}
+                .anim-ap      {animation:ap3 3s ease-in-out infinite}
               `}</style>
             </defs>
 
-            {/* ── Building label (top) ─────────────────────────────────── */}
-            <text x="440" y="28" textAnchor="middle" fontFamily="system-ui,sans-serif" fontSize="13" fontWeight="700" fill="white">Apex Medical Center — AMC Main Building</text>
-            <text x="440" y="44" textAnchor="middle" fontFamily="system-ui,sans-serif" fontSize="10" fill="#64748b">Huawei AirEngine 6776-58TI · BLE 5.0 · Real-time RFID Asset Tracking</text>
+            {/* Building title */}
+            <text x="480" y="28" textAnchor="middle" fontFamily="system-ui,sans-serif" fontSize="12" fontWeight="700" fill="#e2e8f0" letterSpacing="0.5">
+              Apex Medical Center — AMC Main Building
+            </text>
+            <text x="480" y="43" textAnchor="middle" fontFamily="system-ui,sans-serif" fontSize="9" fill="#475569">
+              Huawei AirEngine 6776-58TI · BLE 5.0 · Real-time RFID Asset Intelligence
+            </text>
 
-            {/* ── Left wall (full building height) ────────────────────── */}
-            <polygon
-              points={pts(fl3FrontLeft, fl3BackLeft, fl1BackLeftB, fl1FrontLeftB)}
-              fill="url(#leftWallGrad)" stroke="#1e293b" strokeWidth="1"
-            />
-            {/* Floor division lines on left wall */}
-            <line x1={fl1FrontLeft[0]} y1={fl1FrontLeft[1]} x2={fl1BackLeft[0]} y2={fl1BackLeft[1]} stroke="#374151" strokeWidth="1" strokeDasharray="4,3"/>
-            <line x1={iso(0,0,1)[0]} y1={iso(0,0,1)[1]} x2={iso(0,1,1)[0]} y2={iso(0,1,1)[1]} stroke="#374151" strokeWidth="1" strokeDasharray="4,3"/>
+            {/* Ground shadow ellipse */}
+            <ellipse cx={O.x + AB.x/2 + AD.x/2} cy={O.y + SH + 6}
+              rx={200} ry={35} fill="rgba(0,0,0,0.45)" filter="url(#shadow)"/>
 
-            {/* ── Front wall (full building height) ───────────────────── */}
-            <polygon
-              points={pts(fl3FrontLeft, fl3FrontRight, fl1FrontRightB, fl1FrontLeftB)}
-              fill="url(#frontWallGrad)" stroke="#1e293b" strokeWidth="1"
-            />
-            {/* Floor division lines on front wall */}
-            <line x1={fl1FrontLeft[0]} y1={fl1FrontLeft[1]} x2={fl1FrontRight[0]} y2={fl1FrontRight[1]} stroke="#374151" strokeWidth="1" strokeDasharray="4,3"/>
-            <line x1={iso(0,0,1)[0]} y1={iso(0,0,1)[1]} x2={iso(1,0,1)[0]} y2={iso(1,0,1)[1]} stroke="#374151" strokeWidth="1" strokeDasharray="4,3"/>
+            {/* Full building left + front walls */}
+            <polygon points={FULL_LEFT}  fill="url(#wallL)" stroke="#1e293b" strokeWidth="0.8"/>
+            <polygon points={FULL_FRONT} fill="url(#wallF)" stroke="#1e293b" strokeWidth="0.8"/>
+
             {/* Window rows on front wall */}
-            {[0, 1].map(level => {
-              const wy = (iso(0,0,level)[1] + iso(0,0,level+1)[1]) / 2;
-              return [0.15, 0.35, 0.55, 0.75].map((wx, wi) => {
-                const wl = iso(wx, 0, level);
-                const wr = iso(wx + 0.10, 0, level);
-                const midX = (wl[0] + wr[0]) / 2;
+            {[0,1].flatMap(lv => {
+              const midY = (iso(0,0,lv)[1] + iso(0,0,lv+1)[1]) / 2;
+              return [0.14,0.32,0.52,0.70].map((wx,wi) => {
+                const wl = iso(wx,0,lv), wr = iso(wx+0.09,0,lv);
+                const mx = (wl[0]+wr[0])/2;
                 return (
-                  <rect key={`win-${level}-${wi}`}
-                    x={midX - 12} y={wy - 9} width={24} height={14}
-                    rx="2" fill="#1e3a5f" stroke="#2563eb" strokeWidth="0.5" opacity="0.6"
-                  />
+                  <g key={`w-${lv}-${wi}`}>
+                    <rect x={mx-12} y={midY-7} width={25} height={12} rx="2"
+                      fill="#1e3a5f" stroke="#1d4ed8" strokeWidth="0.5" opacity="0.7"/>
+                    <rect x={mx-10} y={midY-5} width={10} height={8} rx="1"
+                      fill="rgba(59,130,246,0.15)"/>
+                    <rect x={mx+1} y={midY-5} width={10} height={8} rx="1"
+                      fill="rgba(59,130,246,0.1)"/>
+                  </g>
                 );
               });
             })}
 
-            {/* ── Floor slabs (bottom to top, painter's algorithm) ───── */}
-            {[1, 2, 3].map(floorNum => {
-              const level     = floorNum - 1; // 0=F1, 1=F2, 2=F3
-              const accent    = FLOOR_ACCENT[floorNum];
-              const floorFace = `fl${floorNum}Grad`;
-              const staticZones = STATIC_ZONES[floorNum] ?? [];
-              const isSelected  = selectedFloor === floorNum;
-              const isDimmed    = selectedFloor !== null && !isSelected;
-              const fpId        = floorPlanByNumber[floorNum];
-              const floorAssets = locations.filter(l => l.zone?.floorPlanId === fpId);
+            {/* Floor division lines on walls */}
+            <polyline points={DIV1} fill="none" stroke="#334155" strokeWidth="0.7" strokeDasharray="4,3"/>
+            <polyline points={`${iso(0,0,1)[0].toFixed(1)},${iso(0,0,1)[1].toFixed(1)} ${iso(0,1,1)[0].toFixed(1)},${iso(0,1,1)[1].toFixed(1)}`}
+              fill="none" stroke="#334155" strokeWidth="0.7" strokeDasharray="4,3"/>
+            <polyline points={DIV2} fill="none" stroke="#334155" strokeWidth="0.7" strokeDasharray="4,3"/>
+            <polyline points={`${iso(0,0,0)[0].toFixed(1)},${iso(0,0,0)[1].toFixed(1)} ${iso(0,1,0)[0].toFixed(1)},${iso(0,1,0)[1].toFixed(1)}`}
+              fill="none" stroke="#334155" strokeWidth="0.7" strokeDasharray="4,3"/>
 
-              // Build zone → asset map
-              const zoneAssetMap: Record<string, AssetLoc[]> = {};
-              floorAssets.forEach(a => {
-                if (!a.zone?.name) return;
-                if (!zoneAssetMap[a.zone.name]) zoneAssetMap[a.zone.name] = [];
-                zoneAssetMap[a.zone.name].push(a);
-              });
+            {/* ── Floors (bottom to top) ──────────────────────────────────── */}
+            {[1,2,3].map(fn => {
+              const lv     = fn - 1;
+              const accent = ACCENT[fn];
+              const pc     = PRECOMPUTED[fn];
+              const isHigh = selected === fn;
+              const isDim  = selected !== null && !isHigh;
+              const zones  = STATIC[fn] ?? [];
+              const zm     = zoneMap[fn] ?? {};
+
+              // Floor top face corners
+              const flPts = pts(iso(0,0,lv), iso(1,0,lv), iso(1,1,lv), iso(0,1,lv));
 
               return (
-                <g key={floorNum} opacity={isDimmed ? 0.35 : 1}
-                  style={{ cursor: 'pointer', transition: 'opacity 0.3s' }}
-                  onClick={e => { e.stopPropagation(); setSelectedFloor(isSelected ? null : floorNum); }}
+                <g key={fn}
+                  opacity={isDim ? 0.22 : 1}
+                  style={{cursor:'pointer', transition:'opacity 0.35s'}}
+                  onClick={e=>{e.stopPropagation();setSelected(isHigh?null:fn);}}
                 >
+                  {/* Slab accent bar (left face) */}
+                  <polygon points={pc.wallL} fill={accent} opacity="0.18"/>
+                  <polygon points={pc.wallL} fill="none" stroke={accent} strokeWidth="0.5" opacity="0.5"/>
+
+                  {/* Slab accent bar (front face) */}
+                  <polygon points={pc.wallF} fill={accent} opacity="0.08"/>
+
                   {/* Floor top face */}
-                  <polygon
-                    points={pts(iso(0,0,level), iso(1,0,level), iso(1,1,level), iso(0,1,level))}
-                    fill={`url(#${floorFace})`}
-                    stroke={isSelected ? accent : '#94a3b8'}
-                    strokeWidth={isSelected ? 1.5 : 0.8}
-                    opacity={isDimmed ? 0.5 : 0.95}
+                  <polygon points={flPts}
+                    fill={`url(#fl${fn}g)`}
+                    stroke={isHigh ? accent : '#334155'}
+                    strokeWidth={isHigh ? 1 : 0.5}
+                    opacity="0.95"
                   />
 
-                  {/* Floor label on the left face */}
-                  <text
-                    x={(iso(0,0,level)[0] + iso(0,1,level)[0]) / 2 - 20}
-                    y={(iso(0,0,level)[1] + iso(0,1,level)[1]) / 2 + 5}
-                    textAnchor="middle"
-                    fontFamily="system-ui,sans-serif"
-                    fontSize="8"
-                    fontWeight="600"
-                    fill={isDimmed ? '#4b5563' : '#e2e8f0'}
-                    transform={`rotate(-25 ${(iso(0,0,level)[0] + iso(0,1,level)[0]) / 2 - 20} ${(iso(0,0,level)[1] + iso(0,1,level)[1]) / 2 + 5})`}
-                  >
-                    F{floorNum}
-                  </text>
+                  {/* Subtle grid on floor face */}
+                  {[0.25,0.5,0.75].map(t => (
+                    <line key={t}
+                      x1={iso(t,0,lv)[0]} y1={iso(t,0,lv)[1]}
+                      x2={iso(t,1,lv)[0]} y2={iso(t,1,lv)[1]}
+                      stroke={accent} strokeWidth="0.3" opacity="0.15"
+                    />
+                  ))}
+                  {[0.25,0.5,0.75].map(t => (
+                    <line key={t}
+                      x1={iso(0,t,lv)[0]} y1={iso(0,t,lv)[1]}
+                      x2={iso(1,t,lv)[0]} y2={iso(1,t,lv)[1]}
+                      stroke={accent} strokeWidth="0.3" opacity="0.15"
+                    />
+                  ))}
 
                   {/* Zone polygons */}
-                  {staticZones.map(z => {
-                    const poly    = zonePoly(z.x, z.y, z.w, z.h, level);
-                    const zoneFill= z.restricted ? 'rgba(239,68,68,0.18)' : `${accent}20`;
-                    const zoneStk = z.restricted ? 'rgba(239,68,68,0.6)' : `${accent}80`;
-                    const assets  = zoneAssetMap[z.name] ?? [];
-                    const [cx, cy]= zoneCentroid(z.x, z.y, z.w, z.h, level);
+                  {zones.map(z => {
+                    const [poly, [cx,cy]] = pc.polys[z.name] ?? ['',iso(0.5,0.5,lv)];
+                    const assets   = zm[z.name] ?? [];
+                    const hasMiss  = assets.some(a => a.status==='MISSING');
+                    const zoneFill = z.restricted
+                      ? hasMiss ? 'rgba(239,68,68,0.28)' : 'rgba(239,68,68,0.14)'
+                      : `${accent}22`;
+                    const zoneStroke = z.restricted
+                      ? hasMiss ? '#ef4444' : 'rgba(239,68,68,0.6)'
+                      : `${accent}70`;
 
                     return (
                       <g key={z.name}>
-                        <polygon points={poly} fill={zoneFill} stroke={zoneStk} strokeWidth="0.7" strokeDasharray={z.restricted ? '3,2' : 'none'}/>
+                        <polygon points={poly} fill={zoneFill} stroke={zoneStroke}
+                          strokeWidth="0.6"
+                          strokeDasharray={z.restricted ? '3,2' : 'none'}
+                        />
 
-                        {/* Zone label (only if selected floor or all floors) */}
-                        {(isSelected || !selectedFloor) && (
-                          <text x={cx} y={cy - 3}
+                        {/* Zone label */}
+                        {(isHigh || !selected) && (
+                          <text x={cx} y={cy-2}
                             textAnchor="middle"
                             fontFamily="system-ui,sans-serif"
-                            fontSize={isSelected ? 7 : 5.5}
-                            fontWeight="600"
-                            fill={z.restricted ? '#ef4444' : accent}
-                            style={{ pointerEvents: 'none' }}
+                            fontSize={isHigh ? 7.5 : 5.5}
+                            fontWeight="700"
+                            fill={z.restricted ? '#fca5a5' : accent}
+                            opacity="0.95"
+                            style={{pointerEvents:'none'}}
                           >
-                            {z.name.split(' — ')[0]}
+                            {z.name.length > 18 ? z.name.slice(0,16)+'…' : z.name}
                           </text>
                         )}
 
-                        {/* Asset count badge */}
+                        {/* Asset count bubble */}
                         {assets.length > 0 && (
-                          <g>
-                            <circle cx={cx + 16} cy={cy - 10} r="6" fill={accent}/>
-                            <text x={cx + 16} y={cy - 7}
-                              textAnchor="middle"
-                              fontFamily="system-ui,sans-serif"
-                              fontSize="5.5"
-                              fontWeight="700"
-                              fill="white"
-                              style={{ pointerEvents: 'none' }}
-                            >
+                          <g style={{pointerEvents:'none'}}>
+                            <circle cx={cx+14} cy={cy-10} r="5.5" fill={hasMiss?'#7f1d1d':accent}/>
+                            <text x={cx+14} y={cy-7} textAnchor="middle"
+                              fontFamily="system-ui,sans-serif" fontSize="5" fontWeight="800" fill="white">
                               {assets.length}
                             </text>
                           </g>
                         )}
 
-                        {/* Asset dots */}
-                        {assets.map((a, idx) => {
-                          const spread = assets.length > 1 ? (idx - (assets.length - 1) / 2) * 7 : 0;
-                          const [ax, ay] = zoneCentroid(z.x, z.y + (z.h * 0.25), z.w, z.h * 0.5, level);
-                          const color = STATUS_COLOR[a.status] ?? STATUS_COLOR.UNASSIGNED;
-                          const pulseClass =
-                            a.status === 'MISSING'     ? 'pulse-missing' :
-                            a.status === 'ACTIVE'      ? 'pulse-active'  : '';
+                        {/* Asset dots — positioned within zone */}
+                        {assets.map((a,i) => {
+                          const off   = assets.length > 1 ? (i-(assets.length-1)/2) * 9 : 0;
+                          const color = SCOLOR[a.status] ?? '#94a3b8';
+                          const glowId = a.status==='ACTIVE' ? 'glow-active' : a.status==='MISSING' ? 'glow-missing' : 'glow-lowbat';
+                          const cls   = a.status==='ACTIVE' ? 'anim-active' : a.status==='MISSING' ? 'anim-missing' : a.status==='LOW_BATTERY' ? 'anim-lowbat' : '';
 
                           return (
                             <g key={a.tagId}>
-                              {/* Glow ring */}
-                              <circle
-                                cx={ax + spread} cy={ay}
-                                r="9" fill={color} opacity="0.2"
-                                filter="url(#glow)"
-                                style={{ pointerEvents: 'none' }}
+                              {/* Glow aura */}
+                              <circle cx={cx+off} cy={cy+4} r="11" fill={`url(#${glowId})`} style={{pointerEvents:'none'}}/>
+                              {/* Shadow dot on floor */}
+                              <ellipse cx={cx+off} cy={cy+8} rx="4" ry="1.5" fill="rgba(0,0,0,0.4)" style={{pointerEvents:'none'}}/>
+                              {/* Outer ring */}
+                              <circle cx={cx+off} cy={cy+2} r="6" fill={color} opacity="0.25" className={cls} style={{pointerEvents:'none'}}/>
+                              {/* Main sphere */}
+                              <circle cx={cx+off} cy={cy+2} r="4" fill={color} stroke="white" strokeWidth="1"
+                                className={cls}
+                                style={{cursor:'pointer', filter:`drop-shadow(0 1px 4px ${color}88)`}}
+                                onClick={e=>handleAsset(e, a, cx+off, cy+2)}
                               />
-                              {/* Main dot */}
-                              <circle
-                                cx={ax + spread} cy={ay}
-                                r="5" fill={color} stroke="white" strokeWidth="1.5"
-                                className={pulseClass}
-                                onClick={(e) => handleAssetClick(e, a, ax + spread, ay)}
-                                style={{ cursor: 'pointer' }}
-                              />
+                              {/* Sphere highlight */}
+                              <circle cx={cx+off-1.2} cy={cy+0.5} r="1.3" fill="white" opacity="0.5" style={{pointerEvents:'none'}}/>
                             </g>
                           );
                         })}
+
+                        {/* Restricted badge */}
+                        {z.restricted && (isHigh || !selected) && (
+                          <text x={cx} y={cy+6}
+                            textAnchor="middle"
+                            fontFamily="system-ui,sans-serif"
+                            fontSize="4.5"
+                            fill="#fca5a5"
+                            opacity="0.8"
+                            fontWeight="700"
+                            style={{pointerEvents:'none'}}
+                          >
+                            RESTRICTED
+                          </text>
+                        )}
                       </g>
                     );
                   })}
 
-                  {/* Floor accent bar on front-left edge */}
-                  <polygon
-                    points={pts(
-                      iso(0,0,level),
-                      [iso(0,0,level)[0], iso(0,0,level)[1] + SLAB_H],
-                      [iso(0,1,level)[0], iso(0,1,level)[1] + SLAB_H],
-                      iso(0,1,level),
-                    )}
-                    fill={accent} opacity="0.3"
-                  />
                   {/* Floor number label on slab face */}
                   <text
-                    x={iso(0, 0.5, level)[0] - 12}
-                    y={iso(0, 0.5, level)[1] + 8}
+                    x={iso(0,0.5,lv)[0] - 14}
+                    y={iso(0,0.5,lv)[1] + 7}
                     textAnchor="middle"
                     fontFamily="system-ui,sans-serif"
-                    fontSize="6"
-                    fontWeight="700"
+                    fontSize="7"
+                    fontWeight="800"
                     fill={accent}
+                    opacity="0.9"
+                    style={{pointerEvents:'none'}}
                   >
-                    FL{floorNum}
+                    FL{fn}
                   </text>
                 </g>
               );
             })}
 
-            {/* ── Tooltip ──────────────────────────────────────────────── */}
+            {/* ── Tooltip ────────────────────────────────────────────────── */}
             {tooltip && (() => {
-              const { asset, svgX, svgY } = tooltip;
-              const tx = svgX > 600 ? svgX - 165 : svgX + 12;
-              const ty = Math.max(svgY - 80, 55);
-              const color = STATUS_COLOR[asset.status] ?? '#94a3b8';
-              const timeAgo = asset.lastSeenAt
-                ? (() => {
-                    const s = Math.floor((Date.now() - new Date(asset.lastSeenAt).getTime()) / 1000);
-                    if (s < 60) return `${s}s ago`;
-                    if (s < 3600) return `${Math.floor(s/60)}m ago`;
-                    return `${Math.floor(s/3600)}h ago`;
-                  })()
-                : 'Unknown';
+              const {a, sx, sy} = tooltip;
+              const color = SCOLOR[a.status] ?? '#94a3b8';
+              const tx = sx > 550 ? sx - 175 : sx + 15;
+              const ty = Math.max(sy - 90, 50);
+              const hasBat = a.batteryLevel != null;
+
               return (
-                <g onClick={e => e.stopPropagation()}>
-                  <rect x={tx} y={ty} width="155" height={asset.batteryLevel != null ? 92 : 78} rx="8"
-                    fill="#0f172a" stroke={color} strokeWidth="1.5" opacity="0.97"
-                  />
-                  <circle cx={tx + 14} cy={ty + 16} r="5" fill={color}/>
-                  <text x={tx + 24} y={ty + 20} fontFamily="system-ui,sans-serif" fontSize="9" fontWeight="700" fill="white">
-                    {(asset.asset?.name ?? asset.tagMac).substring(0, 22)}
+                <g onClick={e=>e.stopPropagation()}>
+                  {/* Connection line */}
+                  <line x1={sx} y1={sy} x2={tx+5} y2={ty+5}
+                    stroke={color} strokeWidth="0.8" strokeDasharray="3,2" opacity="0.5"/>
+
+                  <rect x={tx} y={ty} width={160} height={hasBat ? 108 : 92} rx="10"
+                    fill="#020617" stroke={color} strokeWidth="1.2" opacity="0.97"/>
+                  {/* Status stripe */}
+                  <rect x={tx} y={ty} width={160} height="3" rx="2" fill={color}/>
+
+                  {/* Status dot + name */}
+                  <circle cx={tx+14} cy={ty+18} r="5" fill={color}/>
+                  <text x={tx+24} y={ty+22} fontFamily="system-ui,sans-serif" fontSize="9" fontWeight="700" fill="white">
+                    {(a.asset?.name ?? a.tagMac).slice(0,22)}
                   </text>
-                  <text x={tx + 10} y={ty + 34} fontFamily="monospace,sans-serif" fontSize="7" fill="#64748b">{asset.tagMac}</text>
-                  <text x={tx + 10} y={ty + 47} fontFamily="system-ui,sans-serif" fontSize="8" fill="#94a3b8">Status: <tspan fill={color} fontWeight="700">{asset.status.replace('_', ' ')}</tspan></text>
-                  <text x={tx + 10} y={ty + 59} fontFamily="system-ui,sans-serif" fontSize="8" fill="#94a3b8">Zone: <tspan fill="white">{asset.zone?.name ?? '—'}</tspan></text>
-                  {asset.batteryLevel != null && (
-                    <text x={tx + 10} y={ty + 71} fontFamily="system-ui,sans-serif" fontSize="8" fill="#94a3b8">Battery: <tspan fill={asset.batteryLevel <= 20 ? '#f59e0b' : '#10b981'} fontWeight="700">{asset.batteryLevel}%</tspan></text>
+                  {a.asset?.name && a.asset.name.length > 22 && (
+                    <text x={tx+24} y={ty+31} fontFamily="system-ui,sans-serif" fontSize="7" fill="#64748b">
+                      {a.asset.name.slice(22,40)}
+                    </text>
                   )}
-                  <text x={tx + 10} y={ty + (asset.batteryLevel != null ? 83 : 71)} fontFamily="system-ui,sans-serif" fontSize="8" fill="#94a3b8">Seen: <tspan fill="white">{timeAgo}</tspan></text>
+
+                  {/* Tag MAC */}
+                  <text x={tx+10} y={ty+43} fontFamily="monospace,sans-serif" fontSize="7" fill="#475569">{a.tagMac}</text>
+
+                  {/* Status badge */}
+                  <rect x={tx+10} y={ty+50} width={40} height={12} rx="4" fill={`${color}25`}/>
+                  <text x={tx+30} y={ty+59} textAnchor="middle" fontFamily="system-ui,sans-serif" fontSize="7" fontWeight="800" fill={color}>
+                    {a.status.replace('_',' ')}
+                  </text>
+
+                  {/* Zone */}
+                  <text x={tx+10} y={ty+74} fontFamily="system-ui,sans-serif" fontSize="8" fill="#94a3b8">
+                    Zone: <tspan fill="#e2e8f0" fontWeight="600">{a.zone?.name?.slice(0,18) ?? '—'}</tspan>
+                  </text>
+
+                  {/* Battery bar */}
+                  {hasBat && (
+                    <g>
+                      <text x={tx+10} y={ty+87} fontFamily="system-ui,sans-serif" fontSize="8" fill="#94a3b8">Battery: <tspan fill={a.batteryLevel<=20?'#ef4444':a.batteryLevel<=40?'#f59e0b':'#10b981'} fontWeight="700">{a.batteryLevel}%</tspan></text>
+                      <rect x={tx+10} y={ty+90} width={140} height="4" rx="2" fill="#1e293b"/>
+                      <rect x={tx+10} y={ty+90} width={140*(a.batteryLevel/100)} height="4" rx="2"
+                        fill={a.batteryLevel<=20?'#ef4444':a.batteryLevel<=40?'#f59e0b':'#10b981'}/>
+                    </g>
+                  )}
+
+                  {/* Last seen */}
+                  <text x={tx+10} y={ty+(hasBat?103:87)} fontFamily="system-ui,sans-serif" fontSize="7.5" fill="#475569">
+                    Last seen: <tspan fill="#94a3b8">{timeAgo(a.lastSeenAt)}</tspan>
+                  </text>
                 </g>
               );
             })()}
 
-            {/* ── Legend ───────────────────────────────────────────────── */}
-            {Object.entries(STATUS_COLOR).slice(0, 4).map(([status, color], i) => (
-              <g key={status} transform={`translate(${12 + i * 105}, 548)`}>
-                <circle cx="5" cy="5" r="5" fill={color}/>
-                <text x="14" y="9" fontFamily="system-ui,sans-serif" fontSize="8.5" fill="#94a3b8">
-                  {status.replace('_', ' ')}
+            {/* ── Status legend ──────────────────────────────────────────── */}
+            {Object.entries(SCOLOR).slice(0,4).map(([k,c],i) => (
+              <g key={k} transform={`translate(${10 + i*115}, 555)`}>
+                <circle cx="5" cy="5" r="4.5" fill={c} opacity="0.9"/>
+                <text x="14" y="9" fontFamily="system-ui,sans-serif" fontSize="9" fill="#64748b">
+                  {k.replace('_',' ')}
                 </text>
               </g>
             ))}
-            <text x="870" y="553" textAnchor="end" fontFamily="system-ui,sans-serif" fontSize="7.5" fill="#4b5563">
-              Auto-refresh 12s · {lastRefresh.toLocaleTimeString()}
+            <text x="950" y="560" textAnchor="end" fontFamily="system-ui,sans-serif" fontSize="7.5" fill="#334155">
+              Auto-refresh 12s · {lastRef.toLocaleTimeString()}
             </text>
           </svg>
 
-          {/* ── Building name overlay ─────────────────────────────────── */}
-          <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
-            <div className="flex gap-1">
-              {[1, 2, 3].map(f => (
-                <div key={f} className="w-2.5 h-2.5 rounded-sm" style={{ background: FLOOR_ACCENT[f] }} />
-              ))}
+          {/* Floor accent overlay pill */}
+          {selected && (
+            <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold"
+              style={{background: ACCENT[selected]+'25', color: ACCENT[selected], border: `1px solid ${ACCENT[selected]}40`}}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{background:ACCENT[selected]}}/>
+              Floor {selected} — {FL_LABEL[selected]}
             </div>
-            <span className="text-[10px] text-slate-500">3 Floors · 15 Zones</span>
-          </div>
+          )}
         </div>
 
-        {/* ── Right panel ───────────────────────────────────────────────── */}
+        {/* ── Right panel ──────────────────────────────────────────────────── */}
         <div className="space-y-3">
-          {/* Building stats card */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          {/* Building stats */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm">Building Overview</h3>
-              <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Live</span>
+              <span className="text-xs font-bold text-slate-300">Building Overview</span>
+              <span className="flex items-center gap-1.5 text-[9px] text-emerald-400 font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>LIVE
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: 'Total Assets',  value: stats.total,   color: 'text-foreground'    },
-                { label: 'Active',        value: stats.active,  color: 'text-emerald-500'   },
-                { label: 'Low Battery',   value: stats.low,     color: 'text-amber-500'     },
-                { label: 'Missing',       value: stats.missing, color: 'text-red-500'       },
-              ].map(s => (
-                <div key={s.label} className="bg-muted/40 rounded-lg p-2.5 text-center">
-                  <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
-                  <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                {label:'Total Assets', v:stats.total,   c:'text-slate-200'},
+                {label:'Active',       v:stats.active,  c:'text-emerald-400'},
+                {label:'Low Battery',  v:stats.low,     c:'text-amber-400'},
+                {label:'Missing',      v:stats.missing, c:'text-red-400'},
+              ].map(s=>(
+                <div key={s.label} className="bg-slate-800/60 rounded-xl p-2.5 text-center">
+                  <p className={`text-xl font-black ${s.c}`}>{s.v}</p>
+                  <p className="text-[9px] text-slate-500 font-semibold">{s.label}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Per-floor breakdown */}
-          {[1, 2, 3].map(floorNum => {
-            const fpId     = floorPlanByNumber[floorNum];
-            const assets   = locations.filter(l => l.zone?.floorPlanId === fpId);
-            const active   = assets.filter(a => a.status === 'ACTIVE').length;
-            const missing  = assets.filter(a => a.status === 'MISSING').length;
-            const lowBat   = assets.filter(a => a.status === 'LOW_BATTERY').length;
-            const accent   = FLOOR_ACCENT[floorNum];
-            const isSelected = selectedFloor === floorNum;
+          {/* Per-floor panels */}
+          {[1,2,3].map(fn => {
+            const accent  = ACCENT[fn];
+            const assets  = byFloor[fn] ?? [];
+            const active  = assets.filter(a=>a.status==='ACTIVE').length;
+            const miss    = assets.filter(a=>a.status==='MISSING').length;
+            const low     = assets.filter(a=>a.status==='LOW_BATTERY').length;
+            const isSel   = selected === fn;
 
             return (
-              <button key={floorNum}
-                onClick={() => setSelectedFloor(isSelected ? null : floorNum)}
-                className={`w-full rounded-xl border p-3 text-left transition-all ${
-                  isSelected
-                    ? 'border-2 bg-card shadow-md'
-                    : 'border-border bg-card/50 hover:bg-card'
+              <button key={fn}
+                onClick={()=>setSelected(isSel?null:fn)}
+                className={`w-full rounded-2xl border p-3.5 text-left transition-all group ${
+                  isSel
+                    ? 'border-2 bg-slate-900 shadow-lg'
+                    : 'border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-slate-700'
                 }`}
-                style={{ borderColor: isSelected ? accent : undefined }}
+                style={{borderColor: isSel ? accent : undefined}}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm" style={{ background: accent }}/>
-                    <span className="text-xs font-bold">Floor {floorNum}</span>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground">{assets.length} assets</span>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-3 h-3 rounded-sm" style={{background: accent}}/>
+                  <span className="text-xs font-bold text-slate-200">Floor {fn}</span>
+                  <span className="ml-auto text-[10px] text-slate-500 font-semibold">{assets.length} assets</span>
                 </div>
-                <p className="text-[10px] text-muted-foreground mb-2">{FLOOR_LABEL[floorNum]}</p>
-                <div className="flex gap-2">
-                  {active  > 0 && <span className="text-[9px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 px-1.5 py-0.5 rounded-full font-semibold">{active} active</span>}
-                  {lowBat  > 0 && <span className="text-[9px] bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-semibold">{lowBat} low bat</span>}
-                  {missing > 0 && <span className="text-[9px] bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400 px-1.5 py-0.5 rounded-full font-semibold">{missing} missing</span>}
+                <p className="text-[10px] text-slate-500 mb-2">{FL_LABEL[fn]}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {active > 0 && <MiniChip n={active} c="#10b981" label="active"/>}
+                  {low    > 0 && <MiniChip n={low}    c="#f59e0b" label="low bat"/>}
+                  {miss   > 0 && <MiniChip n={miss}   c="#ef4444" label="missing"/>}
+                  {assets.length === 0 && <span className="text-[9px] text-slate-600">No tracked assets</span>}
                 </div>
               </button>
             );
           })}
 
-          {/* Click hint */}
-          <p className="text-[10px] text-muted-foreground text-center">
-            Click a floor to focus · Click asset dot to inspect
+          <p className="text-[10px] text-slate-600 text-center px-2">
+            Click a floor to isolate · Click asset sphere to inspect
           </p>
         </div>
       </div>
 
-      {/* ── Asset list for selected floor ─────────────────────────────── */}
-      {selectedFloor && (() => {
-        const fpId = floorPlanByNumber[selectedFloor];
-        const floorAssets = locations.filter(l => l.zone?.floorPlanId === fpId);
-        if (!floorAssets.length) return null;
-
-        return (
-          <div className="rounded-2xl border border-border bg-card overflow-hidden">
-            <div className="px-5 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
-              <p className="text-sm font-semibold">
-                Floor {selectedFloor} Assets
-                <span className="ml-2 text-xs text-muted-foreground">({floorAssets.length} tracked)</span>
-              </p>
-            </div>
-            <div className="divide-y divide-border max-h-72 overflow-auto">
-              {floorAssets.map(a => {
-                const color  = STATUS_COLOR[a.status] ?? '#94a3b8';
-                const timeAgo = a.lastSeenAt
-                  ? (() => { const s = Math.floor((Date.now() - new Date(a.lastSeenAt).getTime()) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.floor(s/60)}m ago` : `${Math.floor(s/3600)}h ago`; })()
-                  : '—';
-                return (
-                  <div key={a.tagId} className="px-5 py-3 flex items-center gap-3 hover:bg-muted/20">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }}/>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{a.asset?.name ?? a.tagMac}</p>
-                      <p className="text-xs text-muted-foreground truncate">{a.zone?.name ?? '—'} · {timeAgo}</p>
-                    </div>
-                    {a.batteryLevel != null && (
-                      <span className={`text-xs font-bold ${a.batteryLevel <= 20 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                        {a.batteryLevel}%
-                      </span>
-                    )}
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full`}
-                      style={{ background: color + '20', color }}>
-                      {a.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+      {/* ── Selected floor asset list ─────────────────────────────────────── */}
+      {selected && (byFloor[selected]?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between"
+            style={{borderLeft: `3px solid ${ACCENT[selected]}`}}>
+            <p className="text-sm font-bold text-slate-200">
+              Floor {selected} — {FL_LABEL[selected]}
+              <span className="ml-2 text-xs text-slate-500">({byFloor[selected].length} assets)</span>
+            </p>
           </div>
-        );
-      })()}
+          <div className="divide-y divide-slate-800/60 max-h-72 overflow-auto">
+            {byFloor[selected].map(a => {
+              const color = SCOLOR[a.status] ?? '#94a3b8';
+              return (
+                <div key={a.tagId} className="px-5 py-3 flex items-center gap-3 hover:bg-slate-800/40 transition-colors">
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background: color}}/>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-200 truncate">{a.asset?.name ?? a.tagMac}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{a.zone?.name ?? '—'} · {timeAgo(a.lastSeenAt)}</p>
+                  </div>
+                  {a.batteryLevel != null && (
+                    <span className="text-xs font-bold flex-shrink-0"
+                      style={{color: a.batteryLevel<=20?'#ef4444':a.batteryLevel<=40?'#f59e0b':'#94a3b8'}}>
+                      {a.batteryLevel}%
+                    </span>
+                  )}
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                    style={{background:color+'20', color}}>
+                    {a.status.replace('_',' ')}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function Chip({n,c,label}:{n:number;c:string;label:string}) {
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold"
+      style={{background:c+'18',color:c,border:`1px solid ${c}35`}}>
+      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{background:c}}/>
+      {n} {label}
+    </div>
+  );
+}
+function MiniChip({n,c,label}:{n:number;c:string;label:string}) {
+  return (
+    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+      style={{background:c+'22',color:c}}>
+      {n} {label}
+    </span>
   );
 }
