@@ -3,7 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { TicketPriority, TicketStatus, AuditLogType } from '@prisma/client';
-import { isAdminOrManager } from '@/util/roleCheck';
+import { isAdminOrManager, getUserRoleData } from '@/util/roleCheck';
 import { withAuditLog } from '../middleware/audit-middleware';
 import { logUserActivity } from '@/lib/audit';
 
@@ -110,32 +110,38 @@ async function ticketsHandler(
           return res.status(200).json(cached.data);
         }
 
-        // Check if user is admin or manager
-        const userIsAdminOrManager = await isAdminOrManager(user.id);
+        // Check if user is admin or manager — uses cached role data
+        const roleData = await getUserRoleData(user.id);
+        const userIsAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
+        const orgId = roleData?.organizationId ?? null;
         logApiEvent(`User role check: isAdminOrManager=${userIsAdminOrManager}`);
-        
-        // Fetch tickets for the authenticated user with a timeout
+
+        // Build scoped where clause — always filter by org to avoid full-table scans
+        let ticketWhere: any = {};
+        if (userIsAdminOrManager) {
+          // Scope to organization when possible; fallback to userId
+          ticketWhere = orgId
+            ? { asset: { organizationId: orgId } }
+            : { userId: user.id };
+        } else {
+          ticketWhere = { userId: user.id };
+        }
+
+        // Fetch tickets with a 8-second timeout guard
         const tickets = await Promise.race([
           prisma.ticket.findMany({
-            where: userIsAdminOrManager
-              ? {} // Empty where clause returns all tickets for admin/manager
-              : { userId: user.id }, // Only return tickets created by the user
-            include: {
-              asset: {
-                select: {
-                  id: true,
-                  name: true,
-                  assetId: true,
-                },
-              },
+            where: ticketWhere,
+            select: {
+              id: true, title: true, description: true, status: true,
+              priority: true, userId: true, assetId: true,
+              createdAt: true, updatedAt: true,
+              asset: { select: { id: true, name: true, assetId: true } },
             },
-            orderBy: {
-              createdAt: 'desc',
-            },
-            take: 500, // Safety limit — prevents unbounded queries
+            orderBy: { createdAt: 'desc' },
+            take: 200,
           }),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Database query timeout')), 10000)
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Database query timeout')), 8_000)
           )
         ]) as any;
         
