@@ -1,5 +1,8 @@
 // @ts-nocheck
 import { useEffect, useState, useCallback } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const VT_KEY = "/api/vehicles/tracking";
+const VT_TTL = 30_000; // short TTL — this is live tracking data
 import { useRouter } from "next/router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useTranslation } from "@/contexts/TranslationContext";
@@ -112,8 +115,8 @@ export default function VehicleTrackingPage() {
   const { t } = useTranslation();
   const router = useRouter();
 
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [vehicles, setVehicles] = useState<Vehicle[]>(() => getFromCache<any>(VT_KEY, VT_TTL)?.vehicles ?? []);
+  const [loading, setLoading] = useState(() => !getFromCache(VT_KEY, VT_TTL));
   const [activeTab, setActiveTab] = useState("map");
   const [backgroundTrackingEnabled, setBackgroundTrackingEnabled] = useState(true);
   const [trackingInterval, setTrackingInterval] = useState(30000);
@@ -153,28 +156,23 @@ export default function VehicleTrackingPage() {
         }
       : null;
 
-  const fetchVehicles = useCallback(async () => {
+  const fetchVehicles = useCallback(async (background = false) => {
+    if (!background) { setLoading(true); setError(null); }
     try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch("/api/vehicles/tracking");
-      if (res.ok) {
-        const data = await res.json();
-        setVehicles(data.vehicles);
-      } else {
-        const err = await res.json().catch(() => ({ error: "Unknown error" }));
-        setError(err.error || "Failed to fetch vehicles");
-      }
+      const data = await fetchWithCache<any>(VT_KEY, { maxAge: VT_TTL });
+      if (data?.vehicles) setVehicles(data.vehicles);
     } catch {
-      setError("Network error when fetching vehicle data");
+      if (!background) setError("Failed to fetch vehicle tracking data");
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchVehicles();
-    const id = setInterval(fetchVehicles, 30000);
+    // Show cached data immediately, then poll every 30s for live updates
+    const hasCached = !!getFromCache(VT_KEY, VT_TTL);
+    if (!hasCached) fetchVehicles(false);
+    const id = setInterval(() => fetchVehicles(true), 30000);
     return () => clearInterval(id);
   }, [fetchVehicles]);
 

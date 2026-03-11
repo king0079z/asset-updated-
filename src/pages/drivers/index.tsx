@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const DRIVERS_KEY = "/api/drivers";
+const DRIVERS_TTL = 60_000;
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -57,30 +60,29 @@ const StatChip = ({ label, value, icon: Icon, color }: { label: string; value: s
 export default function DriversPage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [drivers, setDrivers] = useState<Driver[]>(() => getFromCache<any>(DRIVERS_KEY, DRIVERS_TTL)?.drivers ?? []);
+  const [loading, setLoading] = useState(() => !getFromCache(DRIVERS_KEY, DRIVERS_TTL));
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => { fetchDrivers(); }, []);
+  useEffect(() => {
+    if (getFromCache(DRIVERS_KEY, DRIVERS_TTL)) {
+      setTimeout(() => fetchDrivers(true), 300);
+    } else {
+      fetchDrivers(false);
+    }
+  }, []);
 
-  const fetchDrivers = async () => {
+  const fetchDrivers = async (background = false) => {
+    if (!background) { setLoading(true); setError(null); }
     try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch("/api/drivers");
-      if (res.ok) {
-        const data = await res.json();
-        setDrivers(data.drivers ?? []);
-      } else {
-        const d = await res.json().catch(() => ({ error: "Unknown error" }));
-        setError(d.error || "Failed to fetch drivers");
-      }
+      const data = await fetchWithCache<any>(DRIVERS_KEY, { maxAge: DRIVERS_TTL });
+      setDrivers(data?.drivers ?? []);
     } catch {
-      setError("Network error when fetching driver data");
+      if (!background) setError("Failed to fetch drivers");
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 

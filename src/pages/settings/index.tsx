@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useState } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const VENDORS_KEY = "/api/vendors";
+const VENDORS_TTL = 3 * 60_000;
 import { VendorManagementDialog } from "@/components/VendorManagementDialog";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,32 +60,33 @@ const ScoreBar = ({ value }: { value: number | null }) => {
 };
 
 export default function SettingsPage() {
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [filteredVendors, setFilteredVendors] = useState<Vendor[]>([]);
+  const cachedVendors = getFromCache<Vendor[]>(VENDORS_KEY, VENDORS_TTL) ?? [];
+  const [vendors, setVendors] = useState<Vendor[]>(cachedVendors);
+  const [filteredVendors, setFilteredVendors] = useState<Vendor[]>(cachedVendors);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !getFromCache(VENDORS_KEY, VENDORS_TTL));
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | undefined>(undefined);
   const { toast } = useToast();
   const { t } = useTranslation();
   const { user } = useAuth();
 
-  const loadVendors = async () => {
-    setIsLoading(true);
+  const loadVendors = async (background = false) => {
+    if (!background) setIsLoading(true);
     try {
-      const response = await fetch("/api/vendors");
-      if (!response.ok) throw new Error("Failed to load vendors");
-      const data = await response.json();
-      setVendors(data);
-      setFilteredVendors(data);
+      const data = await fetchWithCache<Vendor[]>(VENDORS_KEY, { maxAge: VENDORS_TTL });
+      if (data) { setVendors(data); setFilteredVendors(data); }
     } catch {
-      toast({ title: "Error", description: "Failed to load vendors", variant: "destructive" });
+      if (!background) toast({ title: "Error", description: "Failed to load vendors", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      if (!background) setIsLoading(false);
     }
   };
 
-  useEffect(() => { loadVendors(); }, []);
+  useEffect(() => {
+    if (getFromCache(VENDORS_KEY, VENDORS_TTL)) { setTimeout(() => loadVendors(true), 300); }
+    else { loadVendors(false); }
+  }, []);
 
   useEffect(() => {
     if (!searchQuery.trim()) { setFilteredVendors(vendors); return; }

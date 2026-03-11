@@ -7,6 +7,13 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useState } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const CUSTOM_ROLES_KEY = "/api/admin/custom-roles";
+const USERS_PENDING_KEY = "/api/admin/users?status=PENDING";
+const USERS_APPROVED_KEY = "/api/admin/users?status=APPROVED";
+const USERS_REJECTED_KEY = "/api/admin/users?status=REJECTED";
+const PAGES_KEY = "/api/admin/pages";
+const ADMIN_TTL = 2 * 60_000;
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -88,12 +95,13 @@ const UserAvatar = ({ email }: { email: string }) => {
 };
 
 export default function UserManagementPage() {
-  const [pendingUsers, setPendingUsers] = useState<User[]>([]);
-  const [approvedUsers, setApprovedUsers] = useState<User[]>([]);
-  const [rejectedUsers, setRejectedUsers] = useState<User[]>([]);
-  const [availablePages, setAvailablePages] = useState<Page[]>([]);
-  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
-  const [loading, setLoading] = useState(true);
+  const hasCachedUsers = !!(getFromCache(USERS_APPROVED_KEY, ADMIN_TTL));
+  const [pendingUsers, setPendingUsers] = useState<User[]>(() => getFromCache<User[]>(USERS_PENDING_KEY, ADMIN_TTL) ?? []);
+  const [approvedUsers, setApprovedUsers] = useState<User[]>(() => getFromCache<User[]>(USERS_APPROVED_KEY, ADMIN_TTL) ?? []);
+  const [rejectedUsers, setRejectedUsers] = useState<User[]>(() => getFromCache<User[]>(USERS_REJECTED_KEY, ADMIN_TTL) ?? []);
+  const [availablePages, setAvailablePages] = useState<Page[]>(() => getFromCache<Page[]>(PAGES_KEY, ADMIN_TTL) ?? []);
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>(() => getFromCache<CustomRole[]>(CUSTOM_ROLES_KEY, ADMIN_TTL) ?? []);
+  const [loading, setLoading] = useState(() => !hasCachedUsers);
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -113,60 +121,36 @@ export default function UserManagementPage() {
     }
   };
 
-  const loadUsers = async () => {
-    setLoading(true);
+  const loadUsers = async (background = false) => {
+    if (!background) setLoading(true);
     try {
-      // Load custom roles first (separate try so it never blocks user loading)
-      let customRolesData: CustomRole[] = [];
-      try {
-        const customRolesRes = await fetch("/api/admin/custom-roles");
-        if (customRolesRes.ok) {
-          const d = await customRolesRes.json();
-          if (Array.isArray(d)) customRolesData = d;
-        }
-      } catch { /* non-fatal */ }
-      setCustomRoles(customRolesData);
-
-      const roleMap = customRolesData.reduce(
-        (m: Record<string, string>, r: CustomRole) => { m[r.id] = r.name; return m; },
-        {}
-      );
-      const addRoleNames = (users: User[]) =>
-        users.map(u =>
-          u.customRoleId && roleMap[u.customRoleId]
-            ? { ...u, customRoleName: roleMap[u.customRoleId] }
-            : u
-        );
-
-      // Fetch all user lists in parallel — individual failures fall back to []
-      const [pendRes, appRes, rejRes, pagesRes] = await Promise.all([
-        fetch("/api/admin/users?status=PENDING").catch(() => null),
-        fetch("/api/admin/users?status=APPROVED").catch(() => null),
-        fetch("/api/admin/users?status=REJECTED").catch(() => null),
-        fetch("/api/admin/pages").catch(() => null),
+      const [customRolesData, pendData, appData, rejData, pagesData] = await Promise.all([
+        fetchWithCache<CustomRole[]>(CUSTOM_ROLES_KEY, { maxAge: ADMIN_TTL }).catch(() => []),
+        fetchWithCache<User[]>(USERS_PENDING_KEY, { maxAge: ADMIN_TTL }).catch(() => []),
+        fetchWithCache<User[]>(USERS_APPROVED_KEY, { maxAge: ADMIN_TTL }).catch(() => []),
+        fetchWithCache<User[]>(USERS_REJECTED_KEY, { maxAge: ADMIN_TTL }).catch(() => []),
+        fetchWithCache<Page[]>(PAGES_KEY, { maxAge: ADMIN_TTL }).catch(() => []),
       ]);
-
-      const [pendData, appData, rejData, pagesData] = await Promise.all([
-        safeJson(pendRes),
-        safeJson(appRes),
-        safeJson(rejRes),
-        safeJson(pagesRes),
-      ]);
-
-      setPendingUsers(addRoleNames(pendData));
-      setApprovedUsers(addRoleNames(appData));
-      setRejectedUsers(addRoleNames(rejData));
-      setAvailablePages(pagesData);
+      const roles = Array.isArray(customRolesData) ? customRolesData : [];
+      setCustomRoles(roles);
+      const roleMap = roles.reduce((m: Record<string, string>, r: CustomRole) => { m[r.id] = r.name; return m; }, {});
+      const addRoleNames = (users: User[]) => (Array.isArray(users) ? users : []).map(u =>
+        u.customRoleId && roleMap[u.customRoleId] ? { ...u, customRoleName: roleMap[u.customRoleId] } : u);
+      setPendingUsers(addRoleNames(pendData as User[]));
+      setApprovedUsers(addRoleNames(appData as User[]));
+      setRejectedUsers(addRoleNames(rejData as User[]));
+      setAvailablePages(Array.isArray(pagesData) ? pagesData as Page[] : []);
     } catch (err) {
-      console.error("Error loading data:", err);
-      toast({ title: "Error", description: "Failed to load users", variant: "destructive" });
+      if (!background) toast({ title: "Error", description: "Failed to load users", variant: "destructive" });
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!background) { setLoading(false); setRefreshing(false); }
     }
   };
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => {
+    if (hasCachedUsers) { setTimeout(() => loadUsers(true), 300); }
+    else { loadUsers(false); }
+  }, []);
 
   const handleStatusChange = async (userId: string, status: string) => {
     try {

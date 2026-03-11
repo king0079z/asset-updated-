@@ -1,5 +1,10 @@
 // @ts-nocheck
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const MY_VEHICLE_KEY = "/api/vehicles/my-vehicle";
+const TRIP_STATS_KEY = "/api/vehicles/trip-stats";
+const ACTIVE_TRIP_KEY = "/api/vehicles/active-trip";
+const MY_VEHICLE_TTL = 60_000;
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -347,8 +352,9 @@ function TripHistorySection({ userId }: { userId?: string }) {
 export default function MyVehiclePage() {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedVehicleData = getFromCache<any>(MY_VEHICLE_KEY, MY_VEHICLE_TTL);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(() => cachedVehicleData?.vehicle ?? null);
+  const [loading, setLoading] = useState(() => !cachedVehicleData);
   const [error, setError] = useState<string | null>(null);
   const [totalDistance, setTotalDistance] = useState<number>(0);
   const [totalTripDuration, setTotalTripDuration] = useState<string | null>(null);
@@ -400,48 +406,31 @@ export default function MyVehiclePage() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (background = false) => {
+    if (!background) { setLoading(true); setError(null); }
     try {
-      setLoading(true);
-      setError(null);
-      const [vRes, sRes, aRes] = await Promise.all([
-        fetch("/api/vehicles/my-vehicle"),
-        fetch("/api/vehicles/trip-stats").catch(() => null),
-        fetch("/api/vehicles/active-trip").catch(() => null),
+      const [vData, sData, aData] = await Promise.all([
+        fetchWithCache<any>(MY_VEHICLE_KEY, { maxAge: MY_VEHICLE_TTL }),
+        fetchWithCache<any>(TRIP_STATS_KEY, { maxAge: MY_VEHICLE_TTL }).catch(() => null),
+        fetchWithCache<any>(ACTIVE_TRIP_KEY, { maxAge: 30_000 }).catch(() => null),
       ]);
-
-      if (vRes.ok) {
-        const d = await vRes.json();
-        setVehicle(d.vehicle);
-        setTotalDistance(d.totalDistance || 0);
-      } else {
-        const err = await vRes.json().catch(() => ({ error: "Unknown error" }));
-        setError(err.error || "Failed to fetch vehicle data");
-      }
-
-      if (sRes?.ok) {
-        const sd = await sRes.json();
-        setTotalTripDuration(sd.totalDuration);
-      }
-
-      if (aRes?.ok) {
-        const ad = await aRes.json();
-        if (ad.hasActiveTrip && ad.trip) {
-          setTrip({ ...ad.trip, startTime: new Date(ad.trip.startTime) });
-          previousCoordinatesRef.current = { lat: ad.trip.startLatitude, lng: ad.trip.startLongitude };
-          setLastMovementTime(new Date());
-        }
+      if (vData?.vehicle) { setVehicle(vData.vehicle); setTotalDistance(vData.totalDistance || 0); }
+      if (sData?.totalDuration) setTotalTripDuration(sData.totalDuration);
+      if (aData?.hasActiveTrip && aData.trip) {
+        setTrip({ ...aData.trip, startTime: new Date(aData.trip.startTime) });
+        previousCoordinatesRef.current = { lat: aData.trip.startLatitude, lng: aData.trip.startLongitude };
+        setLastMovementTime(new Date());
       }
     } catch {
-      setError("Network error when fetching vehicle data");
+      if (!background) setError("Failed to fetch vehicle data");
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchAll();
-    const id = setInterval(fetchAll, 120000);
+    if (!cachedVehicleData) fetchAll(false);
+    const id = setInterval(() => fetchAll(true), 120000);
     return () => clearInterval(id);
   }, [fetchAll]);
 

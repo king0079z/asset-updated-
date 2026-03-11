@@ -1,16 +1,18 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
-import { logDataAccess } from '@/lib/audit';
+import { getUserRoleData } from '@/util/roleCheck';
+
+// 30-second server cache — matches the polling interval so repeat polls are free
+const trackingCache = new Map<string, { data: any; ts: number }>();
+const TRACKING_TTL = 30_000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Authenticate the user
     const supabase = createClient(req, res);
     const { data: { session }, error } = await supabase.auth.getSession();
     const user = session?.user ?? null;
@@ -19,19 +21,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Log the action using the correct function from audit.ts
-    await logDataAccess(
-      'vehicle',
-      'all',
-      { action: 'VEHICLE_TRACKING_VIEW', description: 'User viewed vehicle tracking data' }
-    );
+    // Use cached role data (5-min TTL) — avoids fresh DB query every 30s poll
+    const roleData = await getUserRoleData(user.id);
+    const orgId = roleData?.organizationId ?? null;
 
-    // Scope to caller's organization
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { organizationId: true }
-    });
-    const orgId = userRecord?.organizationId ?? null;
+    // Serve from server cache when fresh
+    const cacheKey = `tracking:${orgId ?? 'global'}`;
+    const cached = trackingCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < TRACKING_TTL) {
+      res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=10');
+      return res.status(200).json(cached.data);
+    }
 
     // Fetch vehicles with their latest location data
     const vehicles = await prisma.vehicle.findMany({
@@ -77,8 +77,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : undefined,
     }));
 
+    const payload = { vehicles: transformedVehicles };
+    trackingCache.set(cacheKey, { data: payload, ts: Date.now() });
     res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=10');
-    return res.status(200).json({ vehicles: transformedVehicles });
+    return res.status(200).json(payload);
   } catch (error) {
     console.error('Error fetching vehicle tracking data:', error);
     return res.status(500).json({ error: 'Internal server error' });

@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useState } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const VENDORS_KEY = "/api/vendors";
+const VENDORS_TTL = 3 * 60_000;
 import { useTranslation } from "@/contexts/TranslationContext";
 import { VendorPerformanceCard } from "@/components/VendorPerformanceCard";
 import Link from "next/link";
@@ -47,27 +50,29 @@ const calcAvg = (v: Vendor): number | null => {
 type TabValue = "all" | "needs-review" | "reviewed";
 
 export default function VendorPerformancePage() {
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>(() => getFromCache<Vendor[]>(VENDORS_KEY, VENDORS_TTL) ?? []);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !getFromCache(VENDORS_KEY, VENDORS_TTL));
   const [activeTab, setActiveTab] = useState<TabValue>("all");
   const { toast } = useToast();
   const { t } = useTranslation();
 
-  const loadVendors = async () => {
-    setIsLoading(true);
+  const loadVendors = async (background = false) => {
+    if (!background) setIsLoading(true);
     try {
-      const res = await fetch("/api/vendors");
-      if (!res.ok) throw new Error();
-      setVendors(await res.json());
+      const data = await fetchWithCache<Vendor[]>(VENDORS_KEY, { maxAge: VENDORS_TTL });
+      if (data) setVendors(data);
     } catch {
-      toast({ title: "Error", description: "Failed to load vendors", variant: "destructive" });
+      if (!background) toast({ title: "Error", description: "Failed to load vendors", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      if (!background) setIsLoading(false);
     }
   };
 
-  useEffect(() => { loadVendors(); }, []);
+  useEffect(() => {
+    if (getFromCache(VENDORS_KEY, VENDORS_TTL)) { setTimeout(() => loadVendors(true), 300); }
+    else { loadVendors(false); }
+  }, []);
 
   const tabs: { value: TabValue; label: string }[] = [
     { value: "all", label: "All Vendors" },

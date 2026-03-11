@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const REPORTS_HISTORY_KEY = "/api/reports/history";
+const REPORTS_TTL = 2 * 60_000;
 import { useTranslation } from "@/contexts/TranslationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -37,31 +40,28 @@ export default function PrintReportPage() {
   const { toast } = useToast();
   const printFrameRef = useRef<HTMLIFrameElement>(null);
   
-  const [reportHistory, setReportHistory] = useState<ReportHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [reportHistory, setReportHistory] = useState<ReportHistoryItem[]>(() => getFromCache<ReportHistoryItem[]>(REPORTS_HISTORY_KEY, REPORTS_TTL) ?? []);
+  const [loading, setLoading] = useState(() => !getFromCache(REPORTS_HISTORY_KEY, REPORTS_TTL));
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [currentReportType, setCurrentReportType] = useState<"asset" | "food" | "vehicle" | "ai">("asset");
   const [reportData, setReportData] = useState<any[]>([]);
   const [isPrinting, setIsPrinting] = useState(false);
   const [options, setOptions] = useState<ReportOptions | null>(null);
 
-  // Fetch report history
   useEffect(() => {
-    const fetchReportHistory = async () => {
+    const load = async (background = false) => {
+      if (!background) setLoading(true);
       try {
-        const response = await fetch("/api/reports/history");
-        if (response.ok) {
-          const data = await response.json();
-          setReportHistory(data);
-        }
-      } catch (error) {
-        console.error("Error fetching report history:", error);
-      } finally {
-        setLoading(false);
-      }
+        const data = await fetchWithCache<ReportHistoryItem[]>(REPORTS_HISTORY_KEY, { maxAge: REPORTS_TTL });
+        if (data) setReportHistory(data);
+      } catch {}
+      finally { if (!background) setLoading(false); }
     };
-
-    fetchReportHistory();
+    if (getFromCache(REPORTS_HISTORY_KEY, REPORTS_TTL)) {
+      setTimeout(() => load(true), 300);
+    } else {
+      load(false);
+    }
   }, []);
 
   const handleReportIconClick = (reportType: "asset" | "food" | "vehicle" | "ai") => {

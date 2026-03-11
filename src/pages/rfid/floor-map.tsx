@@ -1,5 +1,8 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const RFID_ZONES_KEY = "/api/rfid/zones";
+const RFID_ZONES_TTL = 30_000;
 import { useRouter } from 'next/router';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -328,8 +331,8 @@ function IsometricBuilding({
  * ────────────────────────────────────────────────────────────────────────────── */
 export default function RFIDFloorMapPage() {
   const router = useRouter();
-  const [zones,          setZones]          = useState<Zone[]>([]);
-  const [loading,        setLoading]        = useState(true);
+  const [zones,          setZones]          = useState<Zone[]>(() => getFromCache<any>(RFID_ZONES_KEY, RFID_ZONES_TTL)?.zones ?? []);
+  const [loading,        setLoading]        = useState(() => !getFromCache(RFID_ZONES_KEY, RFID_ZONES_TTL));
   const [seeding,        setSeeding]        = useState(false);
   const [seedMsg,        setSeedMsg]        = useState('');
   const [selectedFloor,  setSelectedFloor]  = useState<number | null>(null);
@@ -338,21 +341,20 @@ export default function RFIDFloorMapPage() {
   const [lastRefresh,    setLastRefresh]    = useState<Date | null>(null);
   const intervalRef = useRef<any>(null);
 
-  const fetchZones = useCallback(async () => {
+  const fetchZones = useCallback(async (background = false) => {
     try {
-      const r = await fetch('/api/rfid/zones');
-      const d = await r.json();
-      setZones(d.zones ?? []);
-      setLastRefresh(new Date());
-    } catch {}
+      const d = await fetchWithCache<any>(RFID_ZONES_KEY, { maxAge: RFID_ZONES_TTL });
+      if (d?.zones) { setZones(d.zones); setLastRefresh(new Date()); }
+      if (!background) setLoading(false);
+    } catch { if (!background) setLoading(false); }
   }, []);
 
   useEffect(() => {
-    (async () => {
-      await fetchZones();
-      setLoading(false);
-    })();
-    intervalRef.current = setInterval(fetchZones, 30_000);
+    if (!getFromCache(RFID_ZONES_KEY, RFID_ZONES_TTL)) {
+      fetchZones(false);
+    }
+    // Poll every 30s for live RFID zone updates
+    intervalRef.current = setInterval(() => fetchZones(true), 30_000);
     return () => clearInterval(intervalRef.current);
   }, [fetchZones]);
 

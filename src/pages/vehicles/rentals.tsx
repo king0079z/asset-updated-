@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const RENTALS_KEY = "/api/vehicles/rentals";
+const RENTALS_TTL = 60_000;
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -47,119 +50,45 @@ interface VehicleRental {
 }
 
 export default function VehicleRentalsPage() {
-  const [rentals, setRentals] = useState<VehicleRental[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [rentals, setRentals] = useState<VehicleRental[]>(() => getFromCache<VehicleRental[]>(RENTALS_KEY, RENTALS_TTL) ?? []);
+  const [isLoading, setIsLoading] = useState(() => !getFromCache(RENTALS_KEY, RENTALS_TTL));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
   const { t } = useTranslation();
 
   useEffect(() => {
-    fetchRentals();
+    if (getFromCache(RENTALS_KEY, RENTALS_TTL)) {
+      setTimeout(() => fetchRentals(true), 300);
+    } else {
+      fetchRentals(false);
+    }
   }, []);
 
-  const fetchRentals = async () => {
+  const processRentals = (raw: any[]) => raw.map((rental: any) => ({
+    ...rental,
+    id: rental.id || '',
+    vehicleId: rental.vehicleId || '',
+    userId: rental.userId || '',
+    userName: rental.userName || t('unknown_user'),
+    startDate: rental.startDate ? new Date(rental.startDate) : new Date(),
+    endDate: rental.endDate ? new Date(rental.endDate) : undefined,
+    status: rental.status || 'ACTIVE',
+    vehicle: rental.vehicle || { id: '', name: t('unknown_vehicle'), model: '', year: 0, plateNumber: '', type: '' },
+    dailyRate: rental.dailyRate || rental.vehicle?.rentalAmount || 0,
+  }));
+
+  const fetchRentals = async (background = false) => {
+    if (!background) { setIsLoading(true); setIsRefreshing(true); }
     try {
-      setIsLoading(true);
-      setIsRefreshing(true);
-      
-      console.log('Fetching vehicle rentals data');
-      const response = await fetch('/api/vehicles/rentals', {
-        // Add cache-busting parameter to prevent stale data
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!response.ok) {
-        let errorMessage = `Error: ${response.status}`;
-        
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-        } catch (parseError) {
-          console.error('Error parsing error response:', parseError);
-        }
-        
-        throw new Error(errorMessage);
-      }
-      
-      let data;
-      try {
-        data = await response.json();
-        console.log('Rentals data received:', data);
-      } catch (parseError) {
-        console.error('Error parsing rentals response:', parseError);
-        throw new Error(t('unexpected_response_format'));
-      }
-      
-      // Validate the response data structure
-      if (!data || !Array.isArray(data.rentals)) {
-        console.error('Invalid rentals data format:', data);
-        throw new Error(t('invalid_data_format'));
-      }
-      
-      console.log(`Retrieved ${data.rentals.length} rentals`);
-      
-      // Process the rentals to ensure all required fields are present
-      const processedRentals = data.rentals.map((rental: any) => {
-        // Ensure dates are properly formatted
-        let startDate = rental.startDate;
-        let endDate = rental.endDate;
-        
-        // Convert date strings to Date objects if needed
-        if (typeof startDate === 'string') {
-          startDate = new Date(startDate);
-        }
-        
-        if (endDate && typeof endDate === 'string') {
-          endDate = new Date(endDate);
-        }
-        
-        return {
-          ...rental,
-          // Ensure these fields are always present
-          id: rental.id || '',
-          vehicleId: rental.vehicleId || '',
-          userId: rental.userId || '',
-          userName: rental.userName || t('unknown_user'),
-          startDate: startDate || new Date(),
-          endDate: endDate,
-          status: rental.status || 'ACTIVE',
-          vehicle: rental.vehicle || {
-            id: '',
-            name: t('unknown_vehicle'),
-            model: '',
-            year: 0,
-            plateNumber: '',
-            type: ''
-          },
-          // Ensure dailyRate is populated
-          dailyRate: rental.dailyRate || (rental.vehicle && rental.vehicle.rentalAmount) || 0
-        };
-      });
-      
-      setRentals(processedRentals);
-      
-      // Only show success toast if there are rentals or this is the initial load
-      if (processedRentals.length > 0 || !isRefreshing) {
-        toast({
-          title: t('success'),
-          description: t('vehicle_rentals_loaded_successfully'),
-          variant: "default",
-        });
-      }
+      const data = await fetchWithCache<any>(RENTALS_KEY, { maxAge: RENTALS_TTL });
+      if (data?.rentals) setRentals(processRentals(data.rentals));
     } catch (error) {
-      console.error('Error fetching rentals:', error);
-      setRentals([]); // Clear rentals on error
-      toast({
-        title: t('error'),
-        description: error instanceof Error ? error.message : t('failed_to_load_vehicle_rentals'),
-        variant: "destructive",
-      });
+      if (!background) {
+        setRentals([]);
+        toast({ title: t('error'), description: t('failed_to_load_vehicle_rentals'), variant: 'destructive' });
+      }
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (!background) { setIsLoading(false); setIsRefreshing(false); }
     }
   };
   

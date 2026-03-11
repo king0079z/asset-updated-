@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+const PLANNER_KEY = "/api/planner";
+const PLANNER_TTL = 60_000;
 import { useTranslation } from '@/contexts/TranslationContext';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { TaskCalendar } from '@/components/TaskCalendar';
@@ -39,8 +42,9 @@ type Task = {
 function PlannerPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const parseTasks = (raw: any[]) => raw.map((t: any) => ({ ...t, startDate: new Date(t.startDate), endDate: t.endDate ? new Date(t.endDate) : null }));
+  const [tasks, setTasks] = useState<Task[]>(() => { const c = getFromCache<any[]>(PLANNER_KEY, PLANNER_TTL); return c ? parseTasks(c) : []; });
+  const [loading, setLoading] = useState(() => !getFromCache(PLANNER_KEY, PLANNER_TTL));
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -52,38 +56,22 @@ function PlannerPage() {
   const [timeframeFilter, setTimeframeFilter] = useState<string>('all');
 
   useEffect(() => {
-    fetchTasks();
+    if (getFromCache(PLANNER_KEY, PLANNER_TTL)) {
+      setTimeout(() => fetchTasks(true), 300);
+    } else {
+      fetchTasks(false);
+    }
   }, []);
 
-  const fetchTasks = async () => {
-    setLoading(true);
+  const fetchTasks = async (background = false) => {
+    if (!background) setLoading(true);
     try {
-      const response = await fetch('/api/planner');
-      if (response.ok) {
-        const data = await response.json();
-        // Convert date strings to Date objects
-        const formattedTasks = data.map((task: any) => ({
-          ...task,
-          startDate: new Date(task.startDate),
-          endDate: task.endDate ? new Date(task.endDate) : null,
-        }));
-        setTasks(formattedTasks);
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to fetch tasks',
-          variant: 'destructive',
-        });
-      }
+      const data = await fetchWithCache<any[]>(PLANNER_KEY, { maxAge: PLANNER_TTL });
+      if (data) setTasks(parseTasks(data));
     } catch (error) {
-      console.error('Error fetching tasks:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch tasks',
-        variant: 'destructive',
-      });
+      if (!background) toast({ title: 'Error', description: 'Failed to fetch tasks', variant: 'destructive' });
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 
