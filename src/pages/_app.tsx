@@ -17,6 +17,7 @@ import { setupGlobalErrorHandler } from '@/lib/globalErrorHandler';
 import { useRouter } from 'next/router';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { prefetchAllData, resetPrefetch } from '@/lib/prefetch';
+import { DiagnosticsPanel } from '@/components/DiagnosticsPanel';
 
 // Lazy load non-critical components
 const QuickActionsMenu = lazy(() => 
@@ -224,6 +225,7 @@ export default function App({ Component, pageProps }: AppProps) {
         )}
       </Head>
       {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
+      <DiagnosticsPanel />
       <PerformanceProvider>
         <ThemeProvider>
           <TranslationProvider>
