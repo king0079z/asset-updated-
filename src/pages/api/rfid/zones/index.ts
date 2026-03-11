@@ -25,6 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       orderBy: { createdAt: 'desc' },
     });
+    res.setHeader('Cache-Control', 'private, max-age=20, stale-while-revalidate=60');
     return res.status(200).json({ zones });
   }
 

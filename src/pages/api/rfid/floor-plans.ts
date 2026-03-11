@@ -20,6 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       include: { _count: { select: { zones: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
     return res.status(200).json({ plans });
   }
 

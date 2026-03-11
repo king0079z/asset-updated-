@@ -32,6 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }),
   ]);
 
+  res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
   return res.status(200).json({
     totalTags, activeTags, lowBattery, missing, unassigned, totalZones, scans24h,
   });

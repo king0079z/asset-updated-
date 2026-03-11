@@ -21,6 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       orderBy: { updatedAt: 'desc' },
     });
+    res.setHeader('Cache-Control', 'private, max-age=10, stale-while-revalidate=20');
     return res.status(200).json({ tags });
   }
 

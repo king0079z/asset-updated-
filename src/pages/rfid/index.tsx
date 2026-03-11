@@ -97,21 +97,23 @@ export default function RFIDPage() {
 
   const [expandedTagId, setExpandedTagId] = useState<string | null>(null);
 
-  // ── Data loading ────────────────────────────────────────────────────────────
+  // ── Data loading — single endpoint replaces 3 separate API calls ────────────
   const loadAll = useCallback(async (force = false) => {
     try {
-      const [tagsRes, zonesRes, statsRes] = await Promise.all([
-        fetch('/api/rfid/tags'),
-        fetch('/api/rfid/zones'),
-        fetch('/api/rfid/stats'),
-      ]);
-      if (tagsRes.ok)  { const d = await tagsRes.json();  setTags(d.tags ?? []); }
-      if (zonesRes.ok) { const d = await zonesRes.json(); setZones(d.zones ?? []); }
-      if (statsRes.ok) { const d = await statsRes.json(); setStats(d); }
+      const url = `/api/rfid/dashboard${force ? '?refresh=true' : ''}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const d = await res.json();
+        setTags(d.tags   ?? []);
+        setZones(d.zones ?? []);
+        setStats(d.stats ?? null);
+        setUnresolvedAlerts(d.stats?.unresolvedAlerts ?? 0);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
