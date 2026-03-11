@@ -75,6 +75,12 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+
+const ASSETS_KEY = "/api/assets";
+const VENDORS_KEY = "/api/vendors";
+const ASSETS_TTL = 60_000;   // 1 min
+const VENDORS_TTL = 5 * 60_000; // 5 min
 import { exportToExcel } from "@/util/excel";
 import {
   Table,
@@ -156,8 +162,9 @@ function isValidImageUrl(url: string | null | undefined): url is string {
 
 export default function AssetsPage() {
   const [isOpen, setIsOpen] = useState(false);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  // Initialize from module-level cache → no loading flash when navigating back
+  const [vendors, setVendors] = useState<Vendor[]>(() => getFromCache<Vendor[]>(VENDORS_KEY, VENDORS_TTL) ?? []);
+  const [assets, setAssets] = useState<Asset[]>(() => getFromCache<Asset[]>(ASSETS_KEY, ASSETS_TTL) ?? []);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [showBarcodeDialog, setShowBarcodeDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -179,45 +186,47 @@ export default function AssetsPage() {
     },
   });
 
-  const loadVendors = async () => {
+  const loadVendors = async (background = false) => {
     try {
-      const response = await fetch("/api/vendors");
-      if (!response.ok) throw new Error(`Failed to load vendors: ${response.status}`);
-      const data = await response.json();
-      setVendors(data);
+      const data = await fetchWithCache<Vendor[]>(VENDORS_KEY, { maxAge: VENDORS_TTL });
+      if (data) setVendors(data);
     } catch (error) {
-      console.error("Error loading vendors:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load vendors",
-        variant: "destructive",
-      });
+      if (!background) {
+        toast({ title: "Error", description: "Failed to load vendors", variant: "destructive" });
+      }
     }
   };
 
   const loadAssets = async (bypassCache = false) => {
+    if (!bypassCache && !isLoadingAssets) {
+      // Silently revalidate in background
+      fetchWithCache<Asset[]>(ASSETS_KEY, { maxAge: ASSETS_TTL }).then(d => { if (d) setAssets(d); }).catch(() => {});
+      return;
+    }
     setIsLoadingAssets(true);
     try {
-      const url = bypassCache ? "/api/assets?refresh=1" : "/api/assets";
-      const response = await fetch(url, bypassCache ? { headers: { 'Cache-Control': 'no-cache' } } : undefined);
-      if (!response.ok) throw new Error(`Failed to load assets: ${response.status}`);
-      const data = await response.json();
-      setAssets(data);
+      const url = bypassCache ? "/api/assets?refresh=1" : ASSETS_KEY;
+      // Bypass client cache when explicitly refreshing
+      const data = bypassCache
+        ? await fetch(url, { headers: { 'Cache-Control': 'no-cache' } }).then(r => r.json())
+        : await fetchWithCache<Asset[]>(ASSETS_KEY, { maxAge: ASSETS_TTL });
+      setAssets(data ?? []);
     } catch (error) {
-      console.error("Error loading assets:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load assets",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to load assets", variant: "destructive" });
     } finally {
       setIsLoadingAssets(false);
     }
   };
 
   useEffect(() => {
-    // Load vendors and assets in parallel
-    Promise.all([loadVendors(), loadAssets()]);
+    const hasAssets = !!getFromCache(ASSETS_KEY, ASSETS_TTL);
+    const hasVendors = !!getFromCache(VENDORS_KEY, VENDORS_TTL);
+    // If cache is warm, show instantly and revalidate silently in background
+    if (hasAssets && hasVendors) {
+      setTimeout(() => { loadVendors(true); fetchWithCache(ASSETS_KEY, { maxAge: ASSETS_TTL }).then(d => { if (d) setAssets(d as Asset[]); }).catch(() => {}); }, 200);
+    } else {
+      Promise.all([loadVendors(), loadAssets()]);
+    }
 
     // Add event listener for dispose asset button
     const handleDisposeAsset = (event: Event) => {
@@ -279,7 +288,8 @@ export default function AssetsPage() {
   const [isDisposing, setIsDisposing] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [isLoadingAssets, setIsLoadingAssets] = useState(true);
+  // No spinner if data already in cache
+  const [isLoadingAssets, setIsLoadingAssets] = useState(() => !getFromCache(ASSETS_KEY, ASSETS_TTL));
   // Search / filter / view state
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");

@@ -37,6 +37,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+
+const FS_KEY   = "/api/food-supply";
+const STATS_KEY = "/api/food-supply/stats";
+const CONSUMED_KEY = "/api/food-supply/total-consumed";
+const VENDORS_FS_KEY = "/api/vendors?type=FOOD_SUPPLY";
+const KITCHENS_KEY  = "/api/kitchens";
+const FS_TTL    = 60_000;
+const STATS_TTL = 3 * 60_000;
+const LONG_TTL  = 5 * 60_000;
 import { useRouter } from "next/router";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useTranslation } from "@/contexts/TranslationContext";
@@ -461,17 +471,18 @@ export default function FoodSupplyPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [showConsumptionScanner, setShowConsumptionScanner] = useState(false);
   const [scannerKitchenId, setScannerKitchenId] = useState("");
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [foodSupplies, setFoodSupplies] = useState<any[]>([]);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Initialize from module-level cache — no loading flash when navigating back
+  const [vendors, setVendors] = useState<Vendor[]>(() => getFromCache<Vendor[]>(VENDORS_FS_KEY, LONG_TTL) ?? []);
+  const [foodSupplies, setFoodSupplies] = useState<any[]>(() => getFromCache<any[]>(FS_KEY, FS_TTL) ?? []);
+  const [stats, setStats] = useState<DashboardStats | null>(() => getFromCache<DashboardStats>(STATS_KEY, STATS_TTL) ?? null);
+  const [isLoading, setIsLoading] = useState(() => !getFromCache(FS_KEY, FS_TTL));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refillDialogState, setRefillDialogState] = useState<{ open: boolean; item: any }>({ open: false, item: null });
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "expired" | "critical" | "expiring" | "good">("all");
-  const [kitchens, setKitchens] = useState<{ id: string; name: string }[]>([]);
+  const [kitchens, setKitchens] = useState<{ id: string; name: string }[]>(() => getFromCache<any[]>(KITCHENS_KEY, LONG_TTL) ?? []);
   const [consumptionHistory, setConsumptionHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "expiry" | "quantity" | "value" | "created">("expiry");
@@ -501,40 +512,52 @@ export default function FoodSupplyPage() {
     } catch { setConsumptionHistory([]); } finally { setIsLoadingHistory(false); }
   };
 
-  const loadFoodSupplies = useCallback(async (silent = false) => {
-    if (silent) setIsRefreshing(true); else setIsLoading(true);
+  const loadFoodSupplies = useCallback(async (silent = false, background = false) => {
+    if (!background) { if (silent) setIsRefreshing(true); else setIsLoading(true); }
     try {
-      const res = await fetch("/api/food-supply");
-      const data = await res.json();
+      const data = await fetchWithCache<any[]>(FS_KEY, { maxAge: FS_TTL });
       setFoodSupplies(Array.isArray(data) ? data : []);
-      if (router?.query?.highlight) {
+      if (!background && router?.query?.highlight) {
         const id = Array.isArray(router.query.highlight) ? router.query.highlight[0] : router.query.highlight;
-        const item = data.find((fs: any) => fs.id === id);
+        const item = (data ?? []).find((fs: any) => fs.id === id);
         if (item) setTimeout(() => setRefillDialogState({ open: true, item: { id: item.id, name: item.name, quantity: item.quantity, unit: item.unit, expirationDate: new Date(item.expirationDate), isExpired: new Date(item.expirationDate) < new Date() } }), 300);
       }
-    } catch { toast({ title: "Error", description: "Failed to load food supplies", variant: "destructive" }); }
-    finally { setIsLoading(false); setIsRefreshing(false); }
+    } catch { if (!background) toast({ title: "Error", description: "Failed to load food supplies", variant: "destructive" }); }
+    finally { if (!background) { setIsLoading(false); setIsRefreshing(false); } }
   }, [router, toast]);
 
-  const loadStats = async () => {
+  const loadStats = async (background = false) => {
     try {
-      const [sr, cr] = await Promise.all([fetch("/api/food-supply/stats"), fetch("/api/food-supply/total-consumed")]);
-      const sd = await sr.json(); const cd = await cr.json();
-      setStats({ ...sd, totalConsumed: cd.totalConsumed });
+      const [sd, cd] = await Promise.all([
+        fetchWithCache<any>(STATS_KEY, { maxAge: STATS_TTL }),
+        fetchWithCache<any>(CONSUMED_KEY, { maxAge: STATS_TTL }),
+      ]);
+      setStats({ ...sd, totalConsumed: cd?.totalConsumed });
     } catch {}
   };
 
   useEffect(() => {
-    const loadVendors = async () => {
-      try { const r = await fetch("/api/vendors?type=FOOD_SUPPLY"); setVendors(await r.json()); } catch {}
-    };
-    const loadKitchens = async () => {
+    const loadVendors = async (background = false) => {
       try {
-        const r = await fetch("/api/kitchens"); const d = await r.json();
-        setKitchens(d); if (d.length > 0) setScannerKitchenId(d[0].id);
+        const d = await fetchWithCache<Vendor[]>(VENDORS_FS_KEY, { maxAge: LONG_TTL });
+        if (d) setVendors(d);
       } catch {}
     };
-    loadVendors(); loadFoodSupplies(); loadStats(); loadKitchens();
+    const loadKitchens = async (background = false) => {
+      try {
+        const d = await fetchWithCache<any[]>(KITCHENS_KEY, { maxAge: LONG_TTL });
+        if (d) { setKitchens(d); if (d.length > 0 && !scannerKitchenId) setScannerKitchenId(d[0].id); }
+      } catch {}
+    };
+    const hasCached = !!getFromCache(FS_KEY, FS_TTL);
+    if (hasCached) {
+      // Data already in state from cache — revalidate everything in background
+      setTimeout(() => {
+        loadVendors(true); loadFoodSupplies(false, true); loadStats(true); loadKitchens(true);
+      }, 300);
+    } else {
+      loadVendors(); loadFoodSupplies(); loadStats(); loadKitchens();
+    }
   }, []);
 
   /* ─── Derived ── */

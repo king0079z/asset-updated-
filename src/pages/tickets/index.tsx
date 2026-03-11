@@ -1,4 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+
+const TICKETS_KEY = "/api/tickets";
+const TICKETS_TTL = 60_000; // 1 min
 import { useAuth } from "@/contexts/AuthContext";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -66,125 +70,58 @@ export default function TicketsPage() {
 function TicketsContent() {
   const { user } = useAuth();
   const { t } = useTranslation();
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Initialize from module-level cache — instant display when navigating back
+  const [tickets, setTickets] = useState<Ticket[]>(() => getFromCache<Ticket[]>(TICKETS_KEY, TICKETS_TTL) ?? []);
+  const [isLoading, setIsLoading] = useState(() => !getFromCache(TICKETS_KEY, TICKETS_TTL));
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "priority">("newest");
   const [viewMode, setViewMode] = useState<"card" | "list">("list");
 
-  // Memoized fetch function to prevent unnecessary re-renders
-  const fetchTickets = useCallback(async () => {
+  const normalizeTickets = (data: any[]): Ticket[] =>
+    data.map(ticket => ({
+      id: ticket.id || "",
+      displayId: ticket.displayId || null,
+      title: ticket.title || "Untitled Ticket",
+      description: ticket.description || "",
+      status: Object.values(TicketStatus).includes(ticket.status) ? ticket.status : TicketStatus.OPEN,
+      priority: Object.values(TicketPriority).includes(ticket.priority) ? ticket.priority : TicketPriority.MEDIUM,
+      assetId: ticket.assetId || null,
+      asset: ticket.asset || null,
+      createdAt: ticket.createdAt || new Date().toISOString(),
+      updatedAt: ticket.updatedAt || new Date().toISOString(),
+    }));
+
+  const fetchTickets = useCallback(async (background = false) => {
     if (!user) return;
-    
-    setIsLoading(true);
+    if (!background) setIsLoading(true);
     try {
-      console.log("Fetching tickets...");
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-      
-      const response = await fetch("/api/tickets", { signal: controller.signal });
-      
-      clearTimeout(timeoutId);
-      console.log("Tickets API response status:", response.status);
-      
-      // Handle non-OK responses
-      if (!response.ok) {
-        let errorMessage = `Failed to fetch tickets. Status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          console.error("Error response data:", errorData);
-          if (errorData && errorData.error) {
-            errorMessage = errorData.error;
-          }
-        } catch (parseError) {
-          console.error("Error parsing error response:", parseError);
-        }
-        throw new Error(errorMessage);
-      }
-      
-      // Parse the JSON response with error handling
-      let data;
-      try {
-        const text = await response.text();
-        console.log("Raw response:", text.substring(0, 200) + (text.length > 200 ? '...' : ''));
-        
-        // Only try to parse if we have content
-        if (text.trim()) {
-          try {
-            data = JSON.parse(text);
-          } catch (jsonError) {
-            console.error("JSON parse error:", jsonError);
-            throw new Error("Invalid JSON response from server");
-          }
-        } else {
-          console.log("Empty response from tickets API");
-          data = [];
-        }
-      } catch (parseError) {
-        console.error("Error parsing tickets data:", parseError);
-        throw new Error("Invalid response format from server");
-      }
-      
-      // Ensure data is an array
-      if (!Array.isArray(data)) {
-        console.error("Unexpected response format:", data);
-        // If we got an object with an error message, display it
-        if (data && typeof data === 'object' && 'error' in data) {
-          throw new Error(data.error as string);
-        }
-        // Otherwise use a generic error
-        throw new Error("Received invalid data format from server");
-      }
-      
-      console.log("Tickets data received:", data.length, "items");
-      
-      // Validate and normalize each ticket
-      const validatedTickets = data.map(ticket => {
-        // Ensure required fields exist with fallbacks
-        return {
-          id: ticket.id || "",
-          displayId: ticket.displayId || null,
-          title: ticket.title || "Untitled Ticket",
-          description: ticket.description || "",
-          status: Object.values(TicketStatus).includes(ticket.status) 
-            ? ticket.status 
-            : TicketStatus.OPEN,
-          priority: Object.values(TicketPriority).includes(ticket.priority)
-            ? ticket.priority
-            : TicketPriority.MEDIUM,
-          assetId: ticket.assetId || null,
-          asset: ticket.asset || null,
-          createdAt: ticket.createdAt || new Date().toISOString(),
-          updatedAt: ticket.updatedAt || new Date().toISOString()
-        };
-      });
-      
-      console.log("Tickets processed successfully:", validatedTickets.length);
-      setTickets(validatedTickets);
+      const data = await fetchWithCache<any[]>(TICKETS_KEY, { maxAge: TICKETS_TTL });
+      if (Array.isArray(data)) setTickets(normalizeTickets(data));
     } catch (error) {
-      console.error("Error fetching tickets:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error 
-          ? error.message 
-          : "Could not connect to the server. Please check your connection and try again.",
-        variant: "destructive",
-      });
-      // Set empty array to prevent undefined errors
-      setTickets([]);
+      if (!background) {
+        toast({ title: "Error", description: "Could not load tickets. Please try again.", variant: "destructive" });
+        setTickets([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (!background) setIsLoading(false);
     }
   }, [user]);
 
-  // Fetch on mount and user change only — tab switching filters client-side
+  // Fetch on mount — if cache is warm, show instantly and revalidate in background
   useEffect(() => {
-    if (user) {
-      fetchTickets();
+    if (!user) return;
+    const cached = getFromCache<any[]>(TICKETS_KEY, TICKETS_TTL);
+    if (cached) {
+      setTickets(normalizeTickets(cached));
+      setIsLoading(false);
+      // Revalidate silently after a short delay
+      setTimeout(() => fetchTickets(true), 300);
+    } else {
+      fetchTickets(false);
     }
-  }, [user, fetchTickets]);
+  }, [user]);
   
   // Set up a refresh interval to periodically check for ticket updates
   useEffect(() => {

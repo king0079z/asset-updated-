@@ -1,5 +1,7 @@
 /**
- * API caching utilities to improve dashboard performance
+ * API caching utilities to improve dashboard performance.
+ * Module-level variables survive SPA page navigations — data cached here
+ * is available instantly when navigating back to any page.
  */
 
 import { logDebug } from '@/lib/client-logger';
@@ -13,7 +15,7 @@ type CacheOptions = {
   maxAge: number; // Cache expiration time in milliseconds
 };
 
-// In-memory cache store
+// Module-level cache — persists across Next.js SPA page navigations
 const cacheStore = new Map<string, CacheEntry<any>>();
 const pendingRequests = new Map<string, Promise<any>>();
 
@@ -21,6 +23,18 @@ const pendingRequests = new Map<string, Promise<any>>();
 const defaultOptions: CacheOptions = {
   maxAge: 5 * 60 * 1000, // 5 minutes default cache time
 };
+
+/**
+ * Synchronously reads from cache. Returns data if fresh, null if missing/stale.
+ * Use this in useState(() => getFromCache(...)) to avoid loading flash on revisit.
+ */
+export function getFromCache<T>(url: string, maxAge = defaultOptions.maxAge): T | null {
+  const entry = cacheStore.get(url);
+  if (entry && Date.now() - entry.timestamp < maxAge) {
+    return entry.data as T;
+  }
+  return null;
+}
 
 /**
  * Fetches data with caching support

@@ -19,6 +19,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+
+const VEHICLES_KEY = "/api/vehicles";
+const RENTAL_COSTS_KEY = "/api/vehicles/rental-costs";
+const VEHICLES_TTL = 60_000;
+const COSTS_TTL = 5 * 60_000;
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Vehicle {
@@ -116,39 +122,45 @@ const FILTER_TABS = [
 ] as const;
 
 export default function VehiclesPage() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  // Initialize from cache → instant display on revisit
+  const cachedVehicles = getFromCache<{ vehicles: Vehicle[] }>(VEHICLES_KEY, VEHICLES_TTL);
+  const cachedCosts = getFromCache<{ monthlyTotal: number; yearlyTotal: number }>(RENTAL_COSTS_KEY, COSTS_TTL);
+
+  const [vehicles, setVehicles] = useState<Vehicle[]>(() => cachedVehicles?.vehicles ?? []);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditStatusOpen, setIsEditStatusOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [monthlyTotal, setMonthlyTotal] = useState(0);
-  const [yearlyTotal, setYearlyTotal] = useState(0);
+  const [loading, setLoading] = useState(() => !cachedVehicles);
+  const [monthlyTotal, setMonthlyTotal] = useState(() => cachedCosts?.monthlyTotal ?? 0);
+  const [yearlyTotal, setYearlyTotal] = useState(() => cachedCosts?.yearlyTotal ?? 0);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchVehicles();
+    const hasCached = !!getFromCache(VEHICLES_KEY, VEHICLES_TTL);
+    if (hasCached) {
+      // Background revalidation
+      setTimeout(() => fetchVehicles(true), 300);
+    } else {
+      fetchVehicles(false);
+    }
   }, []);
 
-  const fetchVehicles = async () => {
+  const fetchVehicles = async (background = false) => {
+    if (!background) setLoading(true);
     try {
-      setLoading(true);
-      const [vRes, cRes] = await Promise.all([
-        fetch("/api/vehicles"),
-        fetch("/api/vehicles/rental-costs").catch(() => null),
+      const [vData, cData] = await Promise.all([
+        fetchWithCache<{ vehicles: Vehicle[] }>(VEHICLES_KEY, { maxAge: VEHICLES_TTL }),
+        fetchWithCache<{ monthlyTotal: number; yearlyTotal: number }>(RENTAL_COSTS_KEY, { maxAge: COSTS_TTL }).catch(() => null),
       ]);
-      if (!vRes.ok) throw new Error("Failed to fetch vehicles");
-      const vData = await vRes.json();
-      const cData = cRes?.ok ? await cRes.json() : { monthlyTotal: 0, yearlyTotal: 0 };
-      setVehicles(vData.vehicles || []);
-      setMonthlyTotal(cData.monthlyTotal || 0);
-      setYearlyTotal(cData.yearlyTotal || 0);
+      if (vData?.vehicles) setVehicles(vData.vehicles);
+      if (cData) { setMonthlyTotal(cData.monthlyTotal || 0); setYearlyTotal(cData.yearlyTotal || 0); }
     } catch {
-      toast({ title: "Error", description: "Failed to load vehicles", variant: "destructive" });
+      if (!background) toast({ title: "Error", description: "Failed to load vehicles", variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 

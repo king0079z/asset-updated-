@@ -168,9 +168,7 @@ export default function App({ Component, pageProps }: AppProps) {
     <div className={`min-h-screen bg-background text-foreground transition-colors duration-300 ${isRTL ? 'rtl-mode' : 'ltr-mode'}`}>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-        <meta httpEquiv="Pragma" content="no-cache" />
-        <meta httpEquiv="Expires" content="0" />
+        {/* Removed no-cache meta tags — they prevented browser from caching API responses */}
         
         {/* Performance optimization meta tags */}
         <meta name="theme-color" content="#000000" />

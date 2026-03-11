@@ -5,6 +5,12 @@ import { KitchenAssignmentManager } from "@/components/KitchenAssignmentManager"
 import { useAuth } from '@/contexts/AuthContext';
 import { usePageAccess } from '@/hooks/usePageAccess';
 import { useState, useEffect } from "react";
+import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+
+const KITCHENS_KEY = "/api/kitchens";
+const FOOD_STATS_KEY = "/api/food-supply/stats";
+const KITCHENS_TTL = 5 * 60_000;
+const FOOD_STATS_TTL = 3 * 60_000;
 import { useTranslation } from "@/contexts/TranslationContext";
 import { Building2, Users, ChefHat, Package, Utensils, ArrowRight, AlertTriangle, TrendingDown, BarChart3, RefreshCw } from "lucide-react";
 import { useRouter } from "next/router";
@@ -23,8 +29,20 @@ export default function KitchensPage() {
   const { user } = useAuth();
   const { isAdmin, isManager, loading } = usePageAccess();
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
-  const [kitchenStats, setKitchenStats] = useState<KitchenStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
+
+  // Initialize from cache — instant display on revisit
+  const buildStats = (kitchens: any[], stats: any): KitchenStats => ({
+    totalKitchens: Array.isArray(kitchens) ? kitchens.length : 0,
+    totalItems: stats?.totalSupplies ?? 0,
+    expiringCount: stats?.expiringSupplies ?? 0,
+    lowStockCount: 0,
+  });
+  const cachedKitchens = getFromCache<any[]>(KITCHENS_KEY, KITCHENS_TTL);
+  const cachedStats = getFromCache<any>(FOOD_STATS_KEY, FOOD_STATS_TTL);
+  const [kitchenStats, setKitchenStats] = useState<KitchenStats | null>(
+    cachedKitchens && cachedStats ? buildStats(cachedKitchens, cachedStats) : null
+  );
+  const [statsLoading, setStatsLoading] = useState(!kitchenStats);
   const [activeTab, setActiveTab] = useState<"my-kitchens" | "assignments">("my-kitchens");
   const { t } = useTranslation();
   const router = useRouter();
@@ -34,25 +52,23 @@ export default function KitchensPage() {
   }, [isAdmin, isManager, loading]);
 
   useEffect(() => {
-    const loadStats = async () => {
-      setStatsLoading(true);
+    const loadStats = async (background = false) => {
+      if (!background) setStatsLoading(true);
       try {
-        const [kitchensRes, statsRes] = await Promise.all([
-          fetch('/api/kitchens'),
-          fetch('/api/food-supply/stats'),
+        const [kitchens, stats] = await Promise.all([
+          fetchWithCache<any[]>(KITCHENS_KEY, { maxAge: KITCHENS_TTL }),
+          fetchWithCache<any>(FOOD_STATS_KEY, { maxAge: FOOD_STATS_TTL }),
         ]);
-        const kitchens = await kitchensRes.json();
-        const stats = await statsRes.json();
-        setKitchenStats({
-          totalKitchens: Array.isArray(kitchens) ? kitchens.length : 0,
-          totalItems: stats?.totalSupplies ?? 0,
-          expiringCount: stats?.expiringSupplies ?? 0,
-          lowStockCount: 0,
-        });
+        setKitchenStats(buildStats(kitchens ?? [], stats ?? {}));
       } catch {}
-      finally { setStatsLoading(false); }
+      finally { if (!background) setStatsLoading(false); }
     };
-    loadStats();
+    // If cache is warm, show instantly and revalidate silently
+    if (kitchenStats) {
+      setTimeout(() => loadStats(true), 300);
+    } else {
+      loadStats(false);
+    }
   }, []);
 
   if (loading) {
