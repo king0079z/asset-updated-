@@ -19,6 +19,7 @@ const ZoneMapEditor   = dynamic(() => import('@/components/rfid/ZoneMapEditor'),
 const LiveTrackingMap = dynamic(() => import('@/components/rfid/LiveTrackingMap'), { ssr: false });
 const AlertRulesPanel = dynamic(() => import('@/components/rfid/AlertRulesPanel'), { ssr: false });
 const AlertsLog       = dynamic(() => import('@/components/rfid/AlertsLog'),       { ssr: false });
+const FloorMap3D      = dynamic(() => import('@/components/rfid/FloorMap3D'),      { ssr: false });
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface RFIDTag {
@@ -77,7 +78,8 @@ export default function RFIDPage() {
   const [loading,     setLoading]     = useState(true);
   const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'zone-map' | 'alerts' | 'setup'>('overview');
   const [unresolvedAlerts, setUnresolvedAlerts] = useState(0);
-  const [zoneMapMode, setZoneMapMode] = useState<'edit' | 'live'>('live');
+  const [zoneMapMode, setZoneMapMode] = useState<'edit' | 'live' | '3d'>('3d');
+  const [seedingDemo, setSeedingDemo] = useState(false);
   const [search,      setSearch]      = useState('');
   const [refreshing,  setRefreshing]  = useState(false);
 
@@ -196,6 +198,26 @@ export default function RFIDPage() {
     } finally { setSavingZone(false); }
   };
 
+  // ── Seed demo data ──────────────────────────────────────────────────────────
+  const handleSeedDemo = async (clear = true) => {
+    if (!confirm(`This will ${clear ? 'CLEAR existing RFID data and ' : ''}load the Apex Medical Center demo dataset.\n\nContinue?`)) return;
+    setSeedingDemo(true);
+    try {
+      const res  = await fetch(`/api/rfid/seed-demo${clear ? '?clear=true' : ''}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Seed failed');
+      toast({
+        title: '🏥 Demo data loaded!',
+        description: `Apex Medical Center · ${data.created.assets} assets · ${data.created.rfidTags} tags · ${data.created.zones} zones · ${data.created.scans} scans`,
+      });
+      await loadAll(true);
+    } catch (e: any) {
+      toast({ title: 'Seed failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setSeedingDemo(false);
+    }
+  };
+
   // ── Delete zone ─────────────────────────────────────────────────────────────
   const handleDeleteZone = async (id: string) => {
     if (!confirm('Delete this zone? Tag scans will lose their zone reference.')) return;
@@ -254,8 +276,15 @@ export default function RFIDPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button onClick={() => window.location.href = '/rfid/floor-map'} className="bg-indigo-600/80 hover:bg-indigo-600 text-white border border-indigo-500/40 gap-2 rounded-xl backdrop-blur">
-                  <Layers className="h-4 w-4" /> 3D Floor Map
+                <Button
+                  onClick={() => handleSeedDemo(true)}
+                  disabled={seedingDemo}
+                  className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 gap-2 rounded-xl backdrop-blur"
+                >
+                  {seedingDemo
+                    ? <><RefreshCw className="h-4 w-4 animate-spin" /> Loading Demo…</>
+                    : <><Zap className="h-4 w-4" /> Load Demo Data</>
+                  }
                 </Button>
                 <Button onClick={handleRefresh} disabled={refreshing} className="bg-white/10 hover:bg-white/20 text-white border border-white/15 gap-2 rounded-xl backdrop-blur">
                   <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
@@ -738,6 +767,16 @@ export default function RFIDPage() {
               {/* Mode toggle */}
               <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-xl w-fit">
                 <button
+                  onClick={() => setZoneMapMode('3d')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    zoneMapMode === '3d'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Layers className="h-4 w-4 text-indigo-500" /> 3D Building
+                </button>
+                <button
                   onClick={() => setZoneMapMode('live')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                     zoneMapMode === 'live'
@@ -745,7 +784,7 @@ export default function RFIDPage() {
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <Activity className="h-4 w-4 text-green-500" /> Live View
+                  <Activity className="h-4 w-4 text-green-500" /> Live 2D Map
                 </button>
                 <button
                   onClick={() => setZoneMapMode('edit')}
@@ -755,14 +794,30 @@ export default function RFIDPage() {
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <Layers className="h-4 w-4 text-blue-500" /> Edit Zones
+                  <Settings className="h-4 w-4 text-blue-500" /> Edit Zones
                 </button>
               </div>
 
+              {/* 3D building banner when in 3D mode */}
+              {zoneMapMode === '3d' && (
+                <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+                  <Layers className="h-4 w-4 text-indigo-500 flex-shrink-0" />
+                  <p className="text-sm text-indigo-700 dark:text-indigo-300">
+                    <span className="font-semibold">Apex Medical Center</span> · 3-floor isometric building view · Click floors to focus · Click asset dots for details
+                  </p>
+                  <button
+                    onClick={() => setZoneMapMode('live')}
+                    className="ml-auto text-xs text-indigo-500 hover:text-indigo-700 font-semibold"
+                  >
+                    Switch to 2D →
+                  </button>
+                </div>
+              )}
+
               <div className="min-h-[600px]">
-                {zoneMapMode === 'live'
-                  ? <LiveTrackingMap />
-                  : <ZoneMapEditor onZoneUpdated={() => loadAll()} />
+                {zoneMapMode === '3d'   ? <FloorMap3D /> :
+                 zoneMapMode === 'live' ? <LiveTrackingMap /> :
+                                          <ZoneMapEditor onZoneUpdated={() => loadAll()} />
                 }
               </div>
             </div>
