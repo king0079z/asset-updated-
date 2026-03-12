@@ -146,22 +146,16 @@ export default function PrintReportPage() {
       });
       
       setReportData(data);
-      
-      // Refresh report history
-      try {
-        const historyResponse = await fetch("/api/reports/history");
-        if (historyResponse.ok) {
-          const historyData = await historyResponse.json();
-          setReportHistory(historyData);
-        }
-      } catch (historyError) {
-        console.error("Error refreshing report history:", historyError);
-        // Non-critical error, so we don't show a toast
-      }
 
-      // Prepare the report content for printing
+      // Refresh report history (non-blocking)
+      fetch("/api/reports/history")
+        .then((r) => r.ok ? r.json() : null)
+        .then((historyData) => { if (historyData) setReportHistory(historyData); })
+        .catch(() => {});
+
+      // Use fresh data for print (state not updated yet)
       const reportTitle = getReportTypeName(reportOptions.reportType);
-      const reportContent = formatReportContent();
+      const reportContent = formatReportContent(data);
       
       if (reportContent) {
         try {
@@ -262,21 +256,6 @@ export default function PrintReportPage() {
   const renderReport = () => {
     if (!reportData || !reportData.length) return null;
 
-    // Add more detailed logging for debugging
-    console.log(`Rendering ${currentReportType} report with data:`, {
-      dataType: typeof reportData,
-      isArray: Array.isArray(reportData),
-      length: Array.isArray(reportData) ? reportData.length : 'not an array',
-      itemScope: options?.itemScope,
-      firstItem: Array.isArray(reportData) && reportData.length > 0 ? {
-        id: reportData[0].id,
-        hasHistory: Array.isArray(reportData[0].history),
-        historyLength: Array.isArray(reportData[0].history) ? reportData[0].history.length : 'no history',
-        hasTickets: Array.isArray(reportData[0].tickets),
-        ticketsLength: Array.isArray(reportData[0].tickets) ? reportData[0].tickets.length : 'no tickets'
-      } : 'no items'
-    });
-
     switch (currentReportType) {
       case "asset":
         return (
@@ -304,45 +283,24 @@ export default function PrintReportPage() {
     );
   };
 
-  // Function to format the report content for printing in the iframe
-  const formatReportContent = () => {
-    if (!reportData) {
-      console.error("No report data available for formatting");
-      return null;
-    }
-    
-    // Ensure reportData is always an array
-    const dataArray = Array.isArray(reportData) ? reportData : [reportData];
-    
-    if (dataArray.length === 0) {
-      console.error("Empty report data array");
-      return null;
-    }
-
-    console.log("Formatting report content for type:", currentReportType);
-    console.log("Report data sample:", {
-      isArray: Array.isArray(reportData),
-      length: dataArray.length,
-      firstItem: dataArray.length > 0 ? {
-        id: dataArray[0].id,
-        name: dataArray[0].name || dataArray[0].assetId || 'no name',
-        type: dataArray[0].type || 'no type'
-      } : 'no items'
-    });
+  // Function to format the report content for printing in the iframe.
+  // Pass dataOverride when printing right after generate (state is not updated yet).
+  const formatReportContent = (dataOverride?: any) => {
+    const source = dataOverride ?? reportData;
+    if (source == null) return null;
+    const dataArray = Array.isArray(source) ? source : [source];
+    if (dataArray.length === 0) return null;
 
     const reportTitle = getReportTypeName(currentReportType);
     const dateStr = format(new Date(), "PPP p");
     const dir = t('language') === 'العربية' ? 'rtl' : 'ltr';
     const textAlign = dir === 'rtl' ? 'right' : 'left';
 
-    // Different report formats based on type
     let reportContentHtml = '';
     switch (currentReportType) {
       case "asset":
-        // For asset reports, we'll create a detailed HTML representation
-        if (options?.itemScope === 'specific' && reportData.length === 1) {
-          // Single asset detailed report with history and tickets
-          const asset = reportData[0];
+        if (options?.itemScope === 'specific' && dataArray.length === 1) {
+          const asset = dataArray[0];
           
           // Format history records if available
           let historyHtml = '';
@@ -584,7 +542,7 @@ export default function PrintReportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  ${reportData.map((asset: any) => `
+                  ${dataArray.map((asset: any) => `
                     <tr class="border-b">
                       <td class="border p-2">${asset.assetId || asset.id || 'N/A'}</td>
                       <td class="border p-2">${asset.name || 'N/A'}</td>
@@ -622,7 +580,7 @@ export default function PrintReportPage() {
                 </tr>
               </thead>
               <tbody>
-                ${reportData.map((item: any) => `
+                ${dataArray.map((item: any) => `
                   <tr class="border-b">
                     <td class="border p-2">${item.name || 'N/A'}</td>
                     <td class="border p-2">${item.quantity || 0}</td>
@@ -686,7 +644,7 @@ export default function PrintReportPage() {
                 </tr>
               </thead>
               <tbody>
-                ${reportData.map((vehicle: any) => `
+                ${dataArray.map((vehicle: any) => `
                   <tr class="border-b">
                     <td class="border p-2">${vehicle.make || 'N/A'}</td>
                     <td class="border p-2">${vehicle.model || 'N/A'}</td>
@@ -717,7 +675,7 @@ export default function PrintReportPage() {
                 </tr>
               </thead>
               <tbody>
-                ${reportData.map((alert: any) => `
+                ${dataArray.map((alert: any) => `
                   <tr class="border-b">
                     <td class="border p-2">${alert.type || 'N/A'}</td>
                     <td class="border p-2">${alert.severity || 'N/A'}</td>
