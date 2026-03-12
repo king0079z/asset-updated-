@@ -3,21 +3,29 @@ import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { logDataAccess } from '@/lib/audit';
 
+// 30-second cache per user
+const myVehicleCache = new Map<string, { data: any; ts: number }>();
+const MY_VEHICLE_TTL = 30_000;
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Authenticate the user
     const supabase = createClient(req, res);
     const { data: { session }, error } = await supabase.auth.getSession();
     const user = session?.user ?? null;
 
     if (error || !user) {
-      console.error('Authentication error:', error);
       return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Cache hit
+    const cached = myVehicleCache.get(user.id);
+    if (cached && Date.now() - cached.ts < MY_VEHICLE_TTL) {
+      res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=30');
+      return res.status(200).json(cached.data);
     }
 
     // Find vehicle assigned to this user with rental and user details
@@ -78,10 +86,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Continue execution even if logging fails
     }
 
-    return res.status(200).json({ 
-      vehicle,
-      totalDistance
-    });
+    const payload = { vehicle, totalDistance };
+    myVehicleCache.set(user.id, { data: payload, ts: Date.now() });
+    res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=30');
+    return res.status(200).json(payload);
   } catch (error) {
     console.error('Error fetching assigned vehicle:', error);
     return res.status(500).json({ error: 'Internal server error' });

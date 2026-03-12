@@ -1,23 +1,30 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { calculateTripDistance, detectStopPoints, filterLocationPoints } from '@/util/tripTracking';
 
+// 10-second cache — short because trip status changes frequently
+const activeTripCache = new Map<string, { data: any; ts: number }>();
+const ACTIVE_TRIP_TTL = 10_000;
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Authenticate the user
     const supabase = createClient(req, res);
     const { data: { session }, error } = await supabase.auth.getSession();
     const user = session?.user ?? null;
 
     if (error || !user) {
-      console.error('Authentication error:', error);
       return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const cached = activeTripCache.get(user.id);
+    if (cached && Date.now() - cached.ts < ACTIVE_TRIP_TTL) {
+      res.setHeader('Cache-Control', 'private, max-age=10, stale-while-revalidate=10');
+      return res.status(200).json(cached.data);
     }
 
     // Find vehicle assigned to this user
@@ -121,7 +128,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       durationMinutes
     });
 
-    return res.status(200).json({ 
+    const payload = { 
       hasActiveTrip: true,
       trip: {
         id: activeTrip.id,
@@ -152,7 +159,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           licensePlate: vehicle.licensePlate
         }
       }
-    });
+    };
+    activeTripCache.set(user.id, { data: payload, ts: Date.now() });
+    res.setHeader('Cache-Control', 'private, max-age=10, stale-while-revalidate=10');
+    return res.status(200).json(payload);
   } catch (error) {
     console.error('Error checking active trip:', error);
     return res.status(500).json({ error: 'Internal server error' });

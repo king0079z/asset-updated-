@@ -5,8 +5,12 @@ import prisma from '@/lib/prisma';
 import { logDataAccess } from '@/lib/audit';
 import { calculateDistance } from '@/util/tripTracking';
 
+// Server-side rate limit: ignore duplicate location POSTs within 5 seconds per user
+// This prevents 3× GPS pings firing simultaneously during tracking init
+const lastUpdate = new Map<string, number>();
+const RATE_LIMIT_MS = 5_000;
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -18,9 +22,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const user = session?.user ?? null;
 
     if (error || !user) {
-      console.error('Authentication error:', error);
       return res.status(401).json({ error: 'Unauthorized' });
     }
+
+    // Rate-limit: skip duplicate pings within 5 seconds
+    const now = Date.now();
+    const last = lastUpdate.get(user.id) ?? 0;
+    if (now - last < RATE_LIMIT_MS) {
+      return res.status(200).json({ ok: true, skipped: true, reason: 'rate_limited' });
+    }
+    lastUpdate.set(user.id, now);
 
     // Get location data from request body
     const { 

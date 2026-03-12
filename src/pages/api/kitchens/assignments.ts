@@ -1,30 +1,36 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { logDataModification, logUserActivity } from '@/lib/audit';
+import { getUserRoleData } from '@/util/roleCheck';
+
+// 2-minute cache keyed by user+query
+const assignmentsCache = new Map<string, { data: any; ts: number }>();
+const ASSIGNMENTS_TTL = 2 * 60_000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const supabase = createClient(req, res);
   const { data: { session }, error: authError } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
+  const user = session?.user ?? null;
 
   if (authError || !user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // Check if user is admin for certain operations
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { isAdmin: true, role: true }
-  });
-
-  const isAdminOrManager = dbUser?.isAdmin || dbUser?.role === 'MANAGER';
+  // Use cached role data instead of sequential findUnique
+  const roleData = await getUserRoleData(user.id);
+  const isAdminOrManager = roleData?.isAdmin || roleData?.role === 'MANAGER';
 
   try {
     switch (req.method) {
-      case 'GET':
-        // Get kitchen assignments for a user or all assignments
+      case 'GET': {
         const { userId: queryUserId } = req.query;
+        const cacheKey = `asgn:${user.id}:${queryUserId ?? 'all'}`;
+        const cached = assignmentsCache.get(cacheKey);
+        if (cached && Date.now() - cached.ts < ASSIGNMENTS_TTL) {
+          res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
+          return res.status(200).json(cached.data);
+        }
         
         // If userId is provided, get assignments for that user
         if (queryUserId) {
@@ -34,33 +40,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               kitchen: true
             }
           });
+          assignmentsCache.set(cacheKey, { data: assignments, ts: Date.now() });
+          res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
           return res.status(200).json(assignments);
-        } 
-        
+        }
+
         // If no userId and user is admin/manager, get all assignments
         if (isAdminOrManager) {
           const assignments = await prisma.kitchenAssignment.findMany({
             include: {
               kitchen: true,
-              user: {
-                select: {
-                  id: true,
-                  email: true
-                }
-              }
-            }
+              user: { select: { id: true, email: true } },
+            },
           });
+          assignmentsCache.set(cacheKey, { data: assignments, ts: Date.now() });
+          res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
           return res.status(200).json(assignments);
         }
-        
-        // If not admin/manager and no userId, return only their assignments
+
+        // Non-admin: return only their own assignments
         const userAssignments = await prisma.kitchenAssignment.findMany({
           where: { userId: user.id },
-          include: {
-            kitchen: true
-          }
+          include: { kitchen: true },
         });
+        assignmentsCache.set(cacheKey, { data: userAssignments, ts: Date.now() });
+        res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
         return res.status(200).json(userAssignments);
+      }
 
       case 'POST':
         // Only admin or manager can create assignments

@@ -10,6 +10,10 @@ import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { getUserRoleData } from '@/util/roleCheck';
 
+// 20-second cache per org
+const locCache = new Map<string, { data: any; ts: number }>();
+const LOC_TTL  = 20_000;
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -19,6 +23,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const roleData = await getUserRoleData(session.user.id);
   const orgId    = roleData?.organizationId ?? null;
+  const cacheKey = `loc:${orgId ?? 'global'}`;
+
+  const cached = locCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < LOC_TTL) {
+    res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
+    return res.status(200).json(cached.data);
+  }
 
   const tags = await prisma.rFIDTag.findMany({
     where: {
@@ -72,6 +83,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     trail:       historyByTag[tag.id] ?? [],
   }));
 
-  res.setHeader('Cache-Control', 'no-store');
-  return res.status(200).json({ locations, total: locations.length });
+  const payload = { locations, total: locations.length };
+  locCache.set(cacheKey, { data: payload, ts: Date.now() });
+  res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
+  return res.status(200).json(payload);
 }

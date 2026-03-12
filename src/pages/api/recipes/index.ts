@@ -3,29 +3,37 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { logDataModification } from "@/lib/audit";
+import { getUserRoleData } from '@/util/roleCheck';
+
+// 5-minute cache per org+query key
+const recipesCache = new Map<string, { data: any; ts: number }>();
+const RECIPES_TTL  = 5 * 60_000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const supabase = createClient(req, res);
   const { data: { session }, error: authError } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
+  const user = session?.user ?? null;
 
   if (authError || !user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // Resolve calling user's organization for scoping
-  const userRecord = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { organizationId: true }
-  });
-  const orgId = userRecord?.organizationId ?? null;
+  // Use cached role data instead of a raw findUnique
+  const roleData = await getUserRoleData(user.id);
+  const orgId = roleData?.organizationId ?? null;
   const orgFilter = orgId ? { OR: [{ organizationId: orgId }, { organizationId: null }] } : {};
 
   // GET - Retrieve all recipes
   if (req.method === 'GET') {
     try {
       const { popular, subrecipesOnly, kitchenId } = req.query;
-      
+      const cacheKey = `recipes:${orgId ?? 'global'}:${popular}:${subrecipesOnly}:${kitchenId ?? ''}`;
+      const cached = recipesCache.get(cacheKey);
+      if (cached && Date.now() - cached.ts < RECIPES_TTL) {
+        res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
+        return res.status(200).json(cached.data);
+      }
+
       // Handle popular recipes request
       if (popular === 'true') {
         console.info('[Recipes API] Fetching popular recipes');
@@ -73,11 +81,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Sort by usage count (most used first)
         const sortedRecipes = recipesWithStats
           .sort((a, b) => b.usageCount - a.usageCount)
-          .slice(0, 10); // Limit to top 10
+          .slice(0, 10);
         
-        return res.status(200).json({
-          items: sortedRecipes
-        });
+        const popularPayload = { items: sortedRecipes };
+        recipesCache.set(cacheKey, { data: popularPayload, ts: Date.now() });
+        res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
+        return res.status(200).json(popularPayload);
       }
       
       // Regular recipe listing, with optional subrecipe filtering + org scoping

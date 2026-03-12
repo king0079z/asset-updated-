@@ -2,6 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 
+// 2-minute cache per kitchenId
+const fmCache = new Map<string, { data: any; ts: number }>();
+const FM_TTL  = 2 * 60_000;
+
 // Enhanced logging function
 const logApiEvent = (message: string, data?: any) => {
   try {
@@ -36,6 +40,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (userError || !user) {
       return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Cache hit
+    const cached = fmCache.get(kitchenId);
+    if (cached && Date.now() - cached.ts < FM_TTL) {
+      res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
+      return res.status(200).json(cached.data);
     }
 
     logApiEvent(`Processing financial metrics for kitchen: ${kitchenId}`);
@@ -248,10 +259,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       profitMargin: response.profitMargin
     });
 
-    logApiEvent(`Calculated financial metrics for kitchen ${kitchenId}`, response);
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
-
-
+    fmCache.set(kitchenId, { data: response, ts: Date.now() });
+    res.setHeader('Cache-Control', 'private, max-age=120, stale-while-revalidate=60');
     return res.status(200).json(response);
   } catch (error) {
     logApiEvent('Error fetching kitchen financial metrics', error);
