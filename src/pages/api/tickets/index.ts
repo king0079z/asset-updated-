@@ -116,21 +116,37 @@ async function ticketsHandler(
         const orgId = roleData?.organizationId ?? null;
         logApiEvent(`User role check: isAdminOrManager=${userIsAdminOrManager}`);
 
-        // Build scoped where clause — always filter by org to avoid full-table scans
-        let ticketWhere: any = {};
-        if (userIsAdminOrManager) {
-          // Scope to organization when possible; fallback to userId
-          ticketWhere = orgId
-            ? { asset: { organizationId: orgId } }
-            : { userId: user.id };
-        } else {
-          ticketWhere = { userId: user.id };
+        // Build scoped where: use Ticket.organizationId (no join) to avoid timeouts and 500s
+        let ticketWhere: any = { userId: user.id };
+        if (userIsAdminOrManager && orgId) {
+          ticketWhere = { organizationId: orgId };
+        } else if (userIsAdminOrManager && !orgId) {
+          ticketWhere = { OR: [{ organizationId: null }, { userId: user.id }] };
         }
 
-        // Fetch tickets with a 8-second timeout guard
-        const tickets = await Promise.race([
-          prisma.ticket.findMany({
-            where: ticketWhere,
+        let tickets: any[];
+        try {
+          tickets = await Promise.race([
+            prisma.ticket.findMany({
+              where: ticketWhere,
+              select: {
+                id: true, title: true, description: true, status: true,
+                priority: true, userId: true, assetId: true,
+                createdAt: true, updatedAt: true,
+                asset: { select: { id: true, name: true, assetId: true } },
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 200,
+            }),
+            new Promise<any[]>((_, reject) =>
+              setTimeout(() => reject(new Error('Database query timeout')), 8_000)
+            )
+          ]) as any[];
+        } catch (queryError) {
+          // Fallback: return only user's own tickets so we never 500
+          logApiEvent('Tickets query failed, using fallback', queryError instanceof Error ? queryError.message : queryError);
+          tickets = await prisma.ticket.findMany({
+            where: { userId: user.id },
             select: {
               id: true, title: true, description: true, status: true,
               priority: true, userId: true, assetId: true,
@@ -139,11 +155,8 @@ async function ticketsHandler(
             },
             orderBy: { createdAt: 'desc' },
             take: 200,
-          }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Database query timeout')), 8_000)
-          )
-        ]) as any;
+          });
+        }
         
         endTimer(fetchTimer, 'Database query');
         logApiEvent(`Successfully found ${tickets.length} tickets for user ${user.id}`);

@@ -63,76 +63,43 @@ export default async function handler(
     const startOfYear = new Date(today.getFullYear(), 0, 1);
     const endOfYear = new Date(today.getFullYear(), 11, 31);
 
+    const since = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+    const TAKE = 2000; // Safe limits to avoid Vercel timeout and OOM
+
     // Wrap the whole computation so concurrent requests share one Promise.
     mlInFlight = (async () => {
     try {
       console.info('Path: /api/ai-analysis/ml-predictions Fetching data for ML analysis');
-      // Fetch all required data for ML analysis - no user filtering as per requirements
       const [foodConsumptions, foodSupplies, vehicleRentals, assets, kitchenConsumptions, assetHistoryRecords] = await Promise.all([
-        // Food consumptions with related food supply - no user filtering
         prisma.foodConsumption.findMany({
-          where: {
-            date: {
-              gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
-            }
-          },
-          include: {
-            foodSupply: true
-          }
+          where: { date: { gte: since } },
+          include: { foodSupply: true },
+          take: TAKE,
         }),
-        
-        // Food supplies with related consumption - no user filtering
         prisma.foodSupply.findMany({
           include: {
             consumption: {
-              where: {
-                date: {
-                  gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
-                }
-              }
+              where: { date: { gte: since } },
+              take: 500,
             }
-          }
+          },
+          take: TAKE,
         }),
-        
-        // Vehicle rentals - no user filtering
         prisma.vehicleRental.findMany({
-          where: {
-            startDate: {
-              gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
-            }
-          },
-          include: {
-            vehicle: true
-          }
+          where: { startDate: { gte: since } },
+          include: { vehicle: true },
+          take: 500,
         }),
-        
-        // Assets - no user filtering
-        prisma.asset.findMany(),
-        
-        // Kitchen consumptions with kitchen details - no user filtering
+        prisma.asset.findMany({ take: TAKE }),
         prisma.foodConsumption.findMany({
-          where: {
-            date: {
-              gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
-            }
-          },
-          include: {
-            foodSupply: true,
-            kitchen: true
-          }
+          where: { date: { gte: since } },
+          include: { foodSupply: true, kitchen: true },
+          take: TAKE,
         }),
-        
-        // Asset history for disposals - no user filtering
         prisma.assetHistory.findMany({
-          where: {
-            action: 'DISPOSED',
-            createdAt: {
-              gte: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
-            }
-          },
-          include: {
-            asset: true
-          }
+          where: { action: 'DISPOSED', createdAt: { gte: since } },
+          include: { asset: true },
+          take: 500,
         })
       ]);
 
@@ -204,27 +171,68 @@ export default async function handler(
     }
     })(); // end mlInFlight IIFE
 
-    const result = await mlInFlight;
+    const ML_TIMEOUT_MS = 9_000; // Under Vercel 10s limit
+    let result: any;
+    try {
+      result = await Promise.race([
+        mlInFlight,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('ML computation timeout')), ML_TIMEOUT_MS))
+      ]);
+    } catch (timeoutOrError) {
+      mlInFlight = null;
+      const fallback = {
+        mlAnalysis: { consumptionPredictions: [], optimizationRecommendations: [], budgetPredictions: [], anomalyDetections: [] },
+        insights: {
+          summary: { title: 'ML Analysis', description: 'Analysis is taking longer than expected.', keyPoints: ['Refresh to try again.'] },
+          predictions: { title: 'Predictions', description: '', items: [] },
+          optimizations: { title: 'Optimizations', description: '', items: [] },
+          anomalies: { title: 'Anomalies', description: '', items: [] },
+          budget: { title: 'Budget', description: '', predictions: [] },
+          kitchenAnomalies: { title: 'Kitchen Anomalies', description: '', items: [] },
+          assetDisposals: { title: 'Asset Disposals', description: '', items: [] },
+          locationOverpurchasing: { title: 'Location Overpurchasing', description: '', items: [] }
+        }
+      };
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      return res.status(200).json(fallback);
+    }
     res.setHeader('Cache-Control', 'private, max-age=300');
     return res.status(200).json(result);
 
   } catch (error) {
     console.error('Error generating ML predictions:', error);
-    // Log the error for debugging
-    await logError({
-      message: 'Failed to generate ML predictions',
-      error: error instanceof Error ? error.message : 'Unknown error',
-      context: {
-        endpoint: '/api/ai-analysis/ml-predictions',
-        timestamp: new Date().toISOString()
+    try {
+      await logError({
+        message: 'Failed to generate ML predictions',
+        context: {
+          endpoint: '/api/ai-analysis/ml-predictions',
+          details: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString()
+        },
+        severity: ErrorSeverity.HIGH
+      });
+    } catch (_) { /* avoid 500 from logging failure */ }
+    // Return 200 with empty analysis so dashboard does not break
+    const fallback = {
+      mlAnalysis: {
+        consumptionPredictions: [],
+        optimizationRecommendations: [],
+        budgetPredictions: [],
+        anomalyDetections: []
       },
-      severity: ErrorSeverity.HIGH
-    });
-    
-    return res.status(500).json({ 
-      error: 'Failed to generate ML predictions',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+      insights: {
+        summary: { title: 'ML Analysis', description: 'Analysis is temporarily unavailable.', keyPoints: ['Try again in a moment.'] },
+        predictions: { title: 'Predictions', description: '', items: [] },
+        optimizations: { title: 'Optimizations', description: '', items: [] },
+        anomalies: { title: 'Anomalies', description: '', items: [] },
+        budget: { title: 'Budget', description: '', predictions: [] },
+        kitchenAnomalies: { title: 'Kitchen Anomalies', description: '', items: [] },
+        assetDisposals: { title: 'Asset Disposals', description: '', items: [] },
+        locationOverpurchasing: { title: 'Location Overpurchasing', description: '', items: [] }
+      }
+    };
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    return res.status(200).json(fallback);
   }
 }
 
