@@ -145,11 +145,12 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
       return setCamLoading(false);
     }
 
-    // 260×200: wide enough for 1D barcodes, tall enough for QR; 20 fps for quick detection
+    // Larger scan area (280×220) so codes are easier to fit; 20 fps for quick detection
     const scanConfig = {
       fps: 20,
-      qrbox: { width: 260, height: 200 },
+      qrbox: { width: 280, height: 220 },
       disableFlip: false,
+      videoConstraints: { width: { ideal: 1280 }, height: { ideal: 720 } },
     };
 
     try {
@@ -167,7 +168,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
           try {
             await qrRef.current.start(cam.id, scanConfig, onCode, onFrame);
           } catch {
-            await qrRef.current.start(cam.id, { fps: 15, qrbox: { width: 260, height: 200 } }, onCode, onFrame);
+            await qrRef.current.start(cam.id, { fps: 18, qrbox: { width: 280, height: 220 } }, onCode, onFrame);
           }
           ok = true;
         }
@@ -793,16 +794,16 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                       <defs>
                         <mask id="scan-mask">
                           <rect width="100%" height="100%" fill="white" />
-                          <rect x="50%" y="42%" width="260" height="200"
-                            transform="translate(-130,-100)" rx="16" fill="black" />
+                          <rect x="50%" y="42%" width="280" height="220"
+                            transform="translate(-140,-110)" rx="16" fill="black" />
                         </mask>
                       </defs>
                       <rect width="100%" height="100%" fill="rgba(0,0,0,0.68)" mask="url(#scan-mask)" />
                     </svg>
 
-                    {/* corner brackets: 260×200 to match scanner qrbox for barcode + QR */}
-                    <div className="absolute inset-0 flex items-start justify-center" style={{ paddingTop: 'calc(42% - 100px)' }}>
-                      <div className="relative" style={{ width: 260, height: 200 }}>
+                    {/* corner brackets: 280×220 to match scanner qrbox */}
+                    <div className="absolute inset-0 flex items-start justify-center" style={{ paddingTop: 'calc(42% - 110px)' }}>
+                      <div className="relative" style={{ width: 280, height: 220 }}>
                         {[
                           'top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-[18px]',
                           'top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-[18px]',
@@ -866,8 +867,12 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
 
                 {/* camera bottom hint */}
                 {view === 'camera' && !camLoading && !camError && (
-                  <div className="absolute bottom-0 inset-x-0 z-10 pb-7 px-6 flex flex-col items-center gap-4">
-                    <p className="text-white/30 text-[12px] tracking-wide">Align barcode or QR code within the frame</p>
+                  <div className="absolute bottom-0 inset-x-0 z-10 pb-7 px-6 flex flex-col items-center gap-3">
+                    <p className="text-primary/90 text-[13px] font-medium">Scanning…</p>
+                    <p className="text-white/40 text-[12px] tracking-wide text-center max-w-[280px]">
+                      Put the full barcode or QR code inside the frame. Hold steady for a moment.
+                    </p>
+                    <p className="text-white/25 text-[11px]">Tip: On phones, use the back camera for best results.</p>
                     <button onClick={() => { stopCam(); setView('manual'); }}
                       className="flex items-center gap-2 text-white/35 hover:text-white/70 text-sm transition-colors py-1">
                       <Keyboard className="h-3.5 w-3.5" /> Enter code manually
