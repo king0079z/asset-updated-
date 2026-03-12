@@ -39,6 +39,8 @@ import {
   ArrowRight,
   MoreHorizontal,
   Printer,
+  ZoomIn,
+  X,
 } from "lucide-react";
 import { EditAssetDialog } from "./EditAssetDialog";
 import { AssignAssetDialog } from "./AssignAssetDialog";
@@ -159,6 +161,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateTicketDialogOpen, setIsCreateTicketDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [barcodeZoomOpen, setBarcodeZoomOpen] = useState(false);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [history, setHistory] = useState<AssetHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -243,6 +246,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   const hasImage = isValidImageUrl(displayAsset.imageUrl);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[90dvh] flex flex-col">
         <VisuallyHidden>
@@ -371,6 +375,16 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
               </div>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => setBarcodeZoomOpen(true)}
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+                Zoom
+              </Button>
               <PrintBarcodeButton
                 barcodeValue={displayAsset.barcode || displayAsset.assetId}
                 displayText={displayAsset.assetId}
@@ -900,5 +914,41 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
         />
       </DialogContent>
     </Dialog>
+
+    {/* Full-size barcode/QR zoom for easy scanning */}
+    <Dialog open={barcodeZoomOpen} onOpenChange={setBarcodeZoomOpen}>
+      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <DialogTitle className="text-base font-semibold">Scan barcode or QR code</DialogTitle>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setBarcodeZoomOpen(false)} aria-label="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="p-6 bg-white space-y-8">
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Barcode</p>
+            <div className="bg-white p-4 rounded-lg border border-border">
+              <Barcode
+                value={displayAsset.barcode || displayAsset.assetId}
+                width={2.2}
+                height={72}
+                format="CODE128"
+                displayValue={true}
+                margin={8}
+                fontSize={14}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">QR Code</p>
+            <div className="bg-white p-4 rounded-lg border border-border">
+              <QRCode value={displayAsset.barcode || displayAsset.assetId} size={200} level="H" />
+            </div>
+          </div>
+          <p className="text-center text-xs text-muted-foreground">Hold your scanner to this screen to read the code.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
