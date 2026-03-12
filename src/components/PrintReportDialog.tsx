@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "@/contexts/TranslationContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -66,15 +66,30 @@ export function PrintReportDialog({
         const response = await fetch(endpoint);
         if (response.ok) {
           const data = await response.json();
+          // APIs return different shapes: array, { vehicles }, { assets }, etc. Normalize to array.
+          const list = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.vehicles)
+            ? data.vehicles
+            : Array.isArray(data?.assets)
+            ? data.assets
+            : Array.isArray(data?.items)
+            ? data.items
+            : Array.isArray(data?.foodSupplies)
+            ? data.foodSupplies
+            : [];
           setItems(
-            data.map((item: any) => ({
+            list.map((item: any) => ({
               id: item.id,
-              name: item.name || item.title || item.model || item.id,
+              name: item.name || item.title || item.model || item.make || item.assetId || item.id,
             }))
           );
+        } else {
+          setItems([]);
         }
       } catch (error) {
         console.error("Error fetching items:", error);
+        setItems([]);
       } finally {
         setLoading(false);
       }
@@ -116,9 +131,12 @@ export function PrintReportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px]" aria-describedby="print-report-dialog-description">
         <DialogHeader>
           <DialogTitle>{getReportTypeTitle()}</DialogTitle>
+          <DialogDescription id="print-report-dialog-description">
+            {t("print_report")} — {reportType === "asset" ? t("asset_reports") : reportType === "food" ? t("food_reports") : reportType === "vehicle" ? t("vehicle_reports") : t("ai_reports")}. Choose scope and date range, then generate.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-6 py-4">

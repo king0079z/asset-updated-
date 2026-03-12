@@ -37,10 +37,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { q } = req.query;
-  if (!q || typeof q !== 'string' || !q.trim()) {
+  if (!q || typeof q !== 'string') {
     return res.status(400).json({ error: 'Missing search query' });
   }
-  const term = q.trim();
+  // Normalize: trim, collapse spaces, remove control chars (from camera/QR noise)
+  const term = (q as string).replace(/\s+/g, ' ').replace(/[\x00-\x1F\x7F]/g, '').trim();
+  if (!term) {
+    return res.status(400).json({ error: 'Missing search query' });
+  }
 
   // ── Fast auth: read JWT from cookie, no Supabase network call ──────────────
   let orgId: string | null = null;

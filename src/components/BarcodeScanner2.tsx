@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,9 +20,27 @@ import {
 import { AssignAssetDialog } from '@/components/AssignAssetDialog';
 
 /* ──────────────────────────────── Scan cache ── */
-// Module-level memory cache — survives re-renders, cleared on page unload
 const scanCache = new Map<string, { asset: any; ts: number }>();
 const CACHE_TTL = 60_000; // 1 minute
+
+/* ──────────────────────────────── Scanner config ── */
+// Support both QR and common 1D/2D barcodes for asset lookup
+const SCANNER_FORMATS = [
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+  Html5QrcodeSupportedFormats.PDF_417,
+];
+
+function normalizeScannedCode(raw: string): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\s+/g, ' ').replace(/[\x00-\x1F\x7F]/g, '').trim();
+}
 
 /* ──────────────────────────────── Types ── */
 interface Asset {
@@ -127,8 +145,19 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
       return setCamLoading(false);
     }
 
+    // 260×200: wide enough for 1D barcodes, tall enough for QR; 20 fps for quick detection
+    const scanConfig = {
+      fps: 20,
+      qrbox: { width: 260, height: 200 },
+      disableFlip: false,
+    };
+
     try {
-      qrRef.current = new Html5Qrcode(MOUNT_ID, { verbose: false });
+      qrRef.current = new Html5Qrcode(MOUNT_ID, {
+        verbose: false,
+        formatsToSupport: SCANNER_FORMATS,
+        useBarCodeDetectorIfSupported: true,
+      });
       let ok = false;
 
       try {
@@ -136,16 +165,16 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
         if (devices?.length) {
           const cam = devices.find(d => /back|rear|environment/i.test(d.label || '')) || devices[0];
           try {
-            await qrRef.current.start(cam.id, { fps: 15, qrbox: { width: 240, height: 240 } }, onCode, onFrame);
+            await qrRef.current.start(cam.id, scanConfig, onCode, onFrame);
           } catch {
-            await qrRef.current.start(cam.id, { fps: 10, qrbox: 220 }, onCode, onFrame);
+            await qrRef.current.start(cam.id, { fps: 15, qrbox: { width: 260, height: 200 } }, onCode, onFrame);
           }
           ok = true;
         }
       } catch {}
 
       if (!ok) {
-        await qrRef.current.start({ facingMode: { ideal: 'environment' } }, { fps: 15, qrbox: { width: 240, height: 240 } }, onCode, onFrame);
+        await qrRef.current.start({ facingMode: { ideal: 'environment' } }, scanConfig, onCode, onFrame);
       }
     } catch (err: any) {
       await stopCam();
@@ -232,15 +261,20 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
   }, []);
 
   const onCode = useCallback(async (raw: string) => {
-    if (!raw || scanned.current) return;
+    const code = normalizeScannedCode(raw);
+    if (!code || scanned.current) return;
     scanned.current = true;
     try { await qrRef.current?.pause(); } catch {}
-    await findAsset(raw);
+    await findAsset(code);
+    // If not found, allow re-scan after cooldown so user can try another code without tapping "Scan again"
+    setTimeout(() => {
+      scanned.current = false;
+      try { qrRef.current?.resume?.(); } catch {}
+    }, 1500);
   }, [findAsset]);
 
-  const onFrame = useCallback((err: any) => {
-    const m = typeof err === 'string' ? err : (err?.message || '');
-    if (m.includes('No MultiFormat') || m.includes('QR code parse')) return;
+  const onFrame = useCallback((_err: any) => {
+    // Suppress noisy per-frame "no code found" logs
   }, []);
 
   /* ── Lifecycle ─────────────────────────────────────── */
@@ -759,16 +793,16 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                       <defs>
                         <mask id="scan-mask">
                           <rect width="100%" height="100%" fill="white" />
-                          <rect x="50%" y="40%" width="220" height="220"
-                            transform="translate(-110,-110)" rx="18" fill="black" />
+                          <rect x="50%" y="42%" width="260" height="200"
+                            transform="translate(-130,-100)" rx="16" fill="black" />
                         </mask>
                       </defs>
                       <rect width="100%" height="100%" fill="rgba(0,0,0,0.68)" mask="url(#scan-mask)" />
                     </svg>
 
-                    {/* corner brackets positioned at the viewfinder */}
-                    <div className="absolute inset-0 flex items-start justify-center" style={{ paddingTop: 'calc(40% - 110px)' }}>
-                      <div className="relative" style={{ width: 220, height: 220 }}>
+                    {/* corner brackets: 260×200 to match scanner qrbox for barcode + QR */}
+                    <div className="absolute inset-0 flex items-start justify-center" style={{ paddingTop: 'calc(42% - 100px)' }}>
+                      <div className="relative" style={{ width: 260, height: 200 }}>
                         {[
                           'top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-[18px]',
                           'top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-[18px]',
