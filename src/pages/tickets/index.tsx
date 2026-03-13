@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fetchWithCache, getFromCache } from "@/lib/api-cache";
 
 const TICKETS_KEY = "/api/tickets";
@@ -74,14 +74,11 @@ export default function TicketsPage() {
 }
 
 function TicketsContent() {
-  const { user, initializing } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
   // Initialize from module-level cache — instant display when navigating back
-  const [tickets, setTickets] = useState<Ticket[]>(() => {
-    const cached = getFromCache<any[]>(TICKETS_KEY, TICKETS_TTL);
-    return cached && Array.isArray(cached) ? cached : [];
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const [tickets, setTickets] = useState<Ticket[]>(() => getFromCache<Ticket[]>(TICKETS_KEY, TICKETS_TTL) ?? []);
+  const [isLoading, setIsLoading] = useState(() => !getFromCache(TICKETS_KEY, TICKETS_TTL));
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,7 +86,6 @@ function TicketsContent() {
   const [viewMode, setViewMode] = useState<"card" | "list">("list");
   const [staffMembers, setStaffMembers] = useState<{ id: string; email: string }[]>([]);
   const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
-  const hasFetchedRef = React.useRef(false);
 
   const normalizeTickets = (data: any[]): Ticket[] =>
     data.map(ticket => ({
@@ -108,51 +104,44 @@ function TicketsContent() {
     }));
 
   const fetchTickets = useCallback(async (background = false) => {
+    if (!user) return;
     if (!background) setIsLoading(true);
     try {
       const data = await fetchWithCache<any[]>(TICKETS_KEY, { maxAge: TICKETS_TTL });
-      if (Array.isArray(data)) {
-        setTickets(normalizeTickets(data));
-      } else if (data && typeof data === 'object' && Array.isArray((data as any).tickets)) {
-        // Handle wrapped response { tickets: [...] }
-        setTickets(normalizeTickets((data as any).tickets));
-      }
+      if (Array.isArray(data)) setTickets(normalizeTickets(data));
     } catch (error) {
-      // DO NOT clear tickets on error — keep existing data and show a toast
       if (!background) {
         toast({ title: "Error", description: "Could not load tickets. Please try again.", variant: "destructive" });
+        setTickets([]);
       }
     } finally {
       if (!background) setIsLoading(false);
     }
-  }, []);
+  }, [user]);
 
-  // Single effect: wait for auth to be ready, then load tickets.
-  // Does NOT depend on `user` so it doesn't re-run on every token refresh —
-  // which was clearing tickets every time Supabase refreshed the JWT.
+  // Fetch on mount — if cache is warm, show instantly and revalidate in background
   useEffect(() => {
-    if (initializing) return; // Wait for auth to settle
-
+    if (!user) return;
     const cached = getFromCache<any[]>(TICKETS_KEY, TICKETS_TTL);
-    if (cached && Array.isArray(cached) && cached.length > 0) {
-      // Show cached data immediately, revalidate quietly in background
+    if (cached) {
       setTickets(normalizeTickets(cached));
       setIsLoading(false);
-      if (!hasFetchedRef.current) {
-        hasFetchedRef.current = true;
-        setTimeout(() => fetchTickets(true), 400);
-      }
+      // Revalidate silently after a short delay
+      setTimeout(() => fetchTickets(true), 300);
     } else {
-      hasFetchedRef.current = true;
       fetchTickets(false);
     }
-  }, [initializing, fetchTickets]);
-
-  // Background poll every 2 minutes — keeps data fresh without blocking the UI
+  }, [user]);
+  
+  // Set up a refresh interval to periodically check for ticket updates
   useEffect(() => {
-    const intervalId = setInterval(() => fetchTickets(true), 120_000);
+    if (!user) return;
+    
+    // Refresh every 2 minutes — tickets don't change that rapidly
+    const intervalId = setInterval(() => fetchTickets(), 120_000);
+    
     return () => clearInterval(intervalId);
-  }, [fetchTickets]);
+  }, [user, fetchTickets]);
 
   // Fetch staff for Portal tab assign dropdown
   useEffect(() => {

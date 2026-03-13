@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useContext, useEffect, useMemo, useState, useRef } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { AuthContext } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -9,11 +9,6 @@ import { Button } from '@/components/ui/button';
 import { CreditCard } from 'lucide-react';
 import SubscriptionKeyInput from '@/components/SubscriptionKeyInput';
 import { logDebug } from '@/lib/client-logger';
-
-// Module-level cache: avoids repeating the Supabase User lookup on every navigation.
-// Keyed by userId, expires after 5 minutes.
-const _statusCache = new Map<string, { data: any; ts: number }>();
-const _STATUS_TTL = 5 * 60 * 1000;
 
 const publicRoutes = ['/', '/login', '/signup', '/forgot-password', '/magic-link-login', '/reset-password'];
 // Routes that are accessible even with an expired subscription
@@ -52,51 +47,34 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         return;
       }
 
-      // Serve from module-level cache to avoid Supabase PostgREST call on every navigation
-      const cached = _statusCache.get(user.id);
-      if (cached && Date.now() - cached.ts < _STATUS_TTL) {
-        const d = cached.data;
-        setUserStatus(d.status);
-        setIsAdmin(d.isAdmin);
-        setIsManager(d.role === 'MANAGER');
-        setPageAccess(d.pageAccess);
-        setUserEmail(d.email);
-        const hasSeenKeyInput = localStorage.getItem(`subscription_key_shown_${user.id}`);
-        setHasSubscriptionKey(!!hasSeenKeyInput);
-        setLoading(false);
-        return;
-      }
-
       try {
         logDebug(`[ProtectedRoute] Checking status for user ${user.id} on path ${router.pathname}`);
+        const { data, error } = await supabase
+          .from('User')
+          .select('status, isAdmin, role, pageAccess, email')
+          .eq('id', user.id)
+          .single();
 
-        // Use /api/users/permissions (Prisma, not PostgREST) to get user data
-        const res = await fetch('/api/users/permissions');
-        if (!res.ok) {
-          // If the request fails, grant access based on what we already know from auth
-          // rather than blocking the user. A failed permission check should not lock out.
+        if (error) {
+          console.error('Error fetching user status:', error);
           setLoading(false);
           return;
         }
-        const data = await res.json();
 
-        // Populate the cache
-        _statusCache.set(user.id, { data, ts: Date.now() });
-
-        logDebug(`[ProtectedRoute] User ${user.id} status: ${data.status}, role: ${data.role}, isAdmin: ${data.isAdmin}`);
+        logDebug(`[ProtectedRoute] User ${user.id} (${data.email}) status: ${data.status}, role: ${data.role}, isAdmin: ${data.isAdmin}`);
         setUserStatus(data.status);
         setIsAdmin(data.isAdmin);
         setIsManager(data.role === 'MANAGER');
         setPageAccess(data.pageAccess);
         setUserEmail(data.email);
-
+        
+        // Check if this user has previously been shown the subscription key input
         const hasSeenKeyInput = localStorage.getItem(`subscription_key_shown_${user.id}`);
         setHasSubscriptionKey(!!hasSeenKeyInput);
-
+        
         setLoading(false);
       } catch (error) {
-        console.error('[ProtectedRoute] Error fetching user status:', error);
-        // Do not block the user on error — degrade gracefully
+        console.error('Error:', error);
         setLoading(false);
       }
     };
@@ -104,8 +82,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (!initializing) {
       checkUserStatus();
     }
+    // router.pathname intentionally excluded: re-querying Supabase on every
+    // navigation is expensive. We only need to re-check when the user object changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, initializing]);
+  }, [user, initializing, supabase]);
 
   useEffect(() => {
     if (!initializing && !user && !publicRoutes.includes(router.pathname)) {

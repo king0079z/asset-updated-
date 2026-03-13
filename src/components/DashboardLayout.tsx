@@ -352,8 +352,18 @@ function Sidebar({ className }: SidebarProps) {
       <div className="flex-1 px-4 py-6 space-y-8 overflow-y-auto scrollbar-none max-h-[calc(100vh-200px)]">
         {/* Get page access information once for all sections */}
         {(() => {
-          // Render nav items immediately — hide non-accessible ones once permissions resolve.
-          // Avoids an indefinite spinner on slow API / Vercel cold start.
+          // Don't render any menu sections until permissions are loaded
+          if (loading) {
+            return (
+              <div className="flex items-center justify-center h-32">
+                <motion.div
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin"
+                />
+              </div>
+            );
+          }
           
           return (
             <>
