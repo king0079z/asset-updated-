@@ -1,13 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
-import { useReactToPrint } from 'react-to-print';
 import TicketReport from './TicketReport';
 import { printBarcode } from '@/util/barcode';
-import { printContent, printContentWithIframe } from '@/util/print';
+import { printContentWithIframe } from '@/util/print';
 import { useToast } from "@/components/ui/use-toast";
 import ReactDOMServer from 'react-dom/server';
 import { Progress } from "@/components/ui/progress";
+import JsBarcode from 'jsbarcode';
 
 // Define ticket status and priority enums to match Prisma schema
 enum TicketStatus {
@@ -178,6 +178,20 @@ const PrintTicketButton: React.FC<PrintTicketButtonProps> = ({
             console.warn("Could not fetch ticket history");
             ticketData.history = [];
           }
+
+          // Generate a real barcode image data URL (barcode field is a raw ID string, not base64)
+          if (ticketData.barcode) {
+            try {
+              const canvas = document.createElement('canvas');
+              JsBarcode(canvas, ticketData.barcode, {
+                format: "CODE128", lineColor: "#000", width: 2, height: 80,
+                displayValue: true, fontSize: 14, margin: 8, background: "#fff",
+              });
+              ticketData.barcodeImageUrl = canvas.toDataURL('image/png');
+            } catch {
+              ticketData.barcodeImageUrl = undefined;
+            }
+          }
           
           // Generate the report HTML directly
           const reportHtml = ReactDOMServer.renderToString(<TicketReport ticket={ticketData} />);
@@ -236,14 +250,6 @@ const PrintTicketButton: React.FC<PrintTicketButtonProps> = ({
         {size !== "icon" && <span className="ml-2">{printBarcodeOnly ? "Print Barcode" : "Print"}</span>}
       </Button>
       
-      {/* Hidden report template for printing */}
-      {!printBarcodeOnly && (
-        <div className="hidden">
-          <div ref={reportRef}>
-            <TicketReport ticket={ticket} />
-          </div>
-        </div>
-      )}
       
       {/* Progress bar loading animation */}
       {isLoading && (

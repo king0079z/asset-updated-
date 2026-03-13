@@ -294,17 +294,17 @@ const TicketReport: React.FC<TicketReportProps> = ({ ticket }) => {
         </div>
       )}
 
-      {/* Ticket Barcode Section */}
-      {ticket.barcode && (
+      {/* Ticket Barcode Section — only when a pre-generated image URL is passed */}
+      {(ticket as any).barcodeImageUrl && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
           <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 rounded-t-lg">
             <h2 className="text-xl font-semibold text-gray-800">Ticket Barcode</h2>
           </div>
           <div className="p-6 flex justify-center">
             <div className="text-center">
-              <img 
-                src={`data:image/png;base64,${ticket.barcode}`} 
-                alt="Ticket Barcode" 
+              <img
+                src={(ticket as any).barcodeImageUrl}
+                alt="Ticket Barcode"
                 className="max-w-xs mx-auto"
               />
               <p className="mt-2 text-sm text-gray-500">
