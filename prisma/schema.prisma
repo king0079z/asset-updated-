@@ -725,6 +725,7 @@ model ErrorLog {
   @@index([status])
   @@index([severity])
   @@index([organizationId])
+  @@index([message, lastOccurredAt])
 }
 
 model AssetDocument {
