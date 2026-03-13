@@ -323,48 +323,33 @@ function PortalContent() {
   const [filterOpen, setFilterOpen]       = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  /* Parallel load: tickets + permissions + notifications together */
+  /* Single-request load: one auth check, one DB round-trip */
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    Promise.all([
-      fetch("/api/tickets").then(r => r.ok ? r.json() : []),
-      fetch("/api/users/permissions").then(r => r.ok ? r.json() : null),
-      fetch("/api/notifications?unreadOnly=0&limit=30").then(r => r.ok ? r.json() : []),
-    ]).then(([tkts, perms, notifs]) => {
-      const normalized = (tkts || []).map((t: any) => ({
-        ...t,
-        status: Object.values(TicketStatus).includes(t.status) ? t.status : TicketStatus.OPEN,
-        priority: Object.values(TicketPriority).includes(t.priority) ? t.priority : TicketPriority.MEDIUM,
-      }));
-      setTickets(normalized);
-      if (perms) {
-        setDashAccess(!!(perms.isAdmin || perms.role === "MANAGER" || perms.pageAccess?.["/dashboard"]));
-      }
-      setNotifications(notifs || []);
-    }).catch(() => {
-      setTickets([]);
-    }).finally(() => {
-      setLoading(false);
-      setAccessReady(true);
-    });
+    fetch("/api/portal/data")
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(({ tickets: tkts, notifications: notifs, permissions: perms }) => {
+        setTickets(tkts || []);
+        setNotifications(notifs || []);
+        if (perms) setDashAccess(!!perms.hasDashboardAccess);
+      })
+      .catch(() => setTickets([]))
+      .finally(() => { setLoading(false); setAccessReady(true); });
   }, [user]);
 
-  /* Refresh tickets only */
+  /* Refresh — bust cache then reload */
   const refreshTickets = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch("/api/tickets");
+      const res = await fetch("/api/portal/data", { headers: { "Cache-Control": "no-cache" } });
       if (!res.ok) return;
-      const data = await res.json();
-      const normalized = (data || []).map((t: any) => ({
-        ...t,
-        status: Object.values(TicketStatus).includes(t.status) ? t.status : TicketStatus.OPEN,
-        priority: Object.values(TicketPriority).includes(t.priority) ? t.priority : TicketPriority.MEDIUM,
-      }));
-      setTickets(normalized);
+      const { tickets: tkts, notifications: notifs, permissions: perms } = await res.json();
+      setTickets(tkts || []);
+      setNotifications(notifs || []);
+      if (perms) setDashAccess(!!perms.hasDashboardAccess);
       if (selectedTicket) {
-        const updated = normalized.find(t => t.id === selectedTicket.id);
+        const updated = (tkts || []).find((t: Ticket) => t.id === selectedTicket.id);
         if (updated) setSelectedTicket(updated);
       }
     } catch {}
