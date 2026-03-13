@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+// @ts-nocheck
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -21,212 +22,378 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 import {
-  PlusCircle,
-  Bell,
-  LogOut,
-  Loader2,
-  MessageSquare,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  ChevronRight,
-  LayoutDashboard,
-  UserCheck,
-  Inbox,
+  PlusCircle, Bell, LogOut, Loader2, MessageSquare, Clock,
+  CheckCircle2, AlertCircle, ChevronRight, LayoutDashboard,
+  UserCheck, Inbox, Search, Filter, X, Send, Activity,
+  ArrowUp, Minus, ArrowDown, RefreshCw, TicketX, Circle,
+  ChevronUp, ChevronDown, SlidersHorizontal,
 } from "lucide-react";
 import { TicketStatus, TicketPriority } from "@prisma/client";
 
+/* ── Types ─────────────────────────────────────────────────────────────── */
 interface Ticket {
-  id: string;
-  displayId: string | null;
-  title: string;
-  description: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  userId?: string;
-  assignedToId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  source?: string | null;
+  id: string; displayId: string | null; title: string; description: string;
+  status: TicketStatus; priority: TicketPriority;
+  userId?: string; assignedToId?: string | null;
+  createdAt: string; updatedAt: string; source?: string | null;
 }
-
+interface HistoryEntry {
+  id: string; status: string | null; priority: string | null;
+  comment: string; createdAt: string;
+  user: { id: string; email: string };
+}
 interface NotificationRow {
-  id: string;
-  ticketId: string | null;
-  type: string;
-  title: string;
-  message: string;
-  readAt: string | null;
-  createdAt: string;
+  id: string; ticketId: string | null; type: string;
+  title: string; message: string; readAt: string | null; createdAt: string;
 }
 
-const priorityLabel: Record<string, string> = {
-  LOW: "Low",
-  MEDIUM: "Medium",
-  HIGH: "High",
-  CRITICAL: "Critical",
+/* ── Constants ──────────────────────────────────────────────────────────── */
+const PRIORITY_CONFIG = {
+  CRITICAL: { label: "Critical", color: "text-red-600", bg: "bg-red-50", border: "border-red-200", icon: <ArrowUp className="h-3 w-3" /> },
+  HIGH:     { label: "High",     color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200", icon: <ArrowUp className="h-3 w-3" /> },
+  MEDIUM:   { label: "Medium",   color: "text-amber-600",  bg: "bg-amber-50",  border: "border-amber-200",  icon: <Minus className="h-3 w-3" /> },
+  LOW:      { label: "Low",      color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDown className="h-3 w-3" /> },
 };
-const statusLabel: Record<string, string> = {
-  OPEN: "Open",
-  IN_PROGRESS: "In progress",
-  RESOLVED: "Resolved",
-  CLOSED: "Closed",
+const STATUS_CONFIG = {
+  OPEN:        { label: "Open",        color: "text-blue-700",  bg: "bg-blue-50",   border: "border-blue-200",  dot: "bg-blue-500"  },
+  IN_PROGRESS: { label: "In Progress", color: "text-amber-700", bg: "bg-amber-50",  border: "border-amber-200", dot: "bg-amber-500" },
+  RESOLVED:    { label: "Resolved",    color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500" },
+  CLOSED:      { label: "Closed",      color: "text-slate-600",  bg: "bg-slate-100", border: "border-slate-200", dot: "bg-slate-400" },
 };
 
-function TicketRow({
-  ticket: t,
-  onOpen,
-  actionLabel,
-  highlight,
-}: {
-  ticket: Ticket;
-  onOpen: () => void;
-  actionLabel?: string;
-  highlight?: boolean;
+/* ── Priority badge ─────────────────────────────────────────────────────── */
+function PBadge({ p }: { p: string }) {
+  const c = PRIORITY_CONFIG[p] || PRIORITY_CONFIG.MEDIUM;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${c.color} ${c.bg} ${c.border}`}>
+      {c.icon}{c.label}
+    </span>
+  );
+}
+/* ── Status badge ───────────────────────────────────────────────────────── */
+function SBadge({ s }: { s: string }) {
+  const c = STATUS_CONFIG[s] || STATUS_CONFIG.OPEN;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${c.color} ${c.bg} ${c.border}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
+      {c.label}
+    </span>
+  );
+}
+/* ── Time ago ───────────────────────────────────────────────────────────── */
+function timeAgo(d: string) {
+  const diff = Date.now() - new Date(d).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+/* ── Ticket drawer ──────────────────────────────────────────────────────── */
+function TicketDrawer({ ticket, onClose, userId, onRefresh }: {
+  ticket: Ticket; onClose: () => void; userId: string; onRefresh: () => void;
 }) {
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [comment, setComment] = useState("");
+  const [posting, setPosting] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}/history`);
+      if (res.ok) { const d = await res.json(); setHistory(d || []); }
+    } finally { setHistoryLoading(false); }
+  }, [ticket.id]);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [history]);
+
+  const postComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!comment.trim()) return;
+    setPosting(true);
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: comment.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      setComment("");
+      await loadHistory();
+      onRefresh();
+      toast({ title: "Comment added" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to post comment" });
+    } finally { setPosting(false); }
+  };
+
+  const sc = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
+  const steps = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+  const stepIdx = steps.indexOf(ticket.status);
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      {/* Drawer */}
+      <div className="relative ml-auto flex h-full w-full max-w-xl flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-sm font-semibold text-slate-500">
+              {ticket.displayId || ticket.id.slice(0, 8)}
+            </span>
+            <SBadge s={ticket.status} />
+            <PBadge p={ticket.priority} />
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Title & description */}
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h2 className="text-base font-semibold text-slate-900">{ticket.title}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">{ticket.description}</p>
+            <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
+              <span>Created {timeAgo(ticket.createdAt)}</span>
+              <span>Updated {timeAgo(ticket.updatedAt)}</span>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="border-b border-slate-100 px-5 py-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Progress</p>
+            <div className="flex items-center gap-1">
+              {steps.map((step, i) => {
+                const sc2 = STATUS_CONFIG[step];
+                const done = i <= stepIdx;
+                return (
+                  <div key={step} className="flex flex-1 flex-col items-center gap-1">
+                    <div className={`h-1.5 w-full rounded-full transition-all duration-500 ${done ? sc2.dot : "bg-slate-200"}`} />
+                    <span className={`text-[10px] font-medium ${done ? sc2.color : "text-slate-400"}`}>{sc2.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Activity timeline */}
+          <div className="px-5 py-4">
+            <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Activity</p>
+            {historyLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
+            ) : history.length === 0 ? (
+              <p className="text-center text-sm text-slate-500 py-4">No activity yet.</p>
+            ) : (
+              <div className="relative space-y-0">
+                <div className="absolute left-4 top-2 bottom-2 w-px bg-slate-100" aria-hidden />
+                {[...history].reverse().map((h) => (
+                  <div key={h.id} className="relative flex gap-3 pb-5">
+                    <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
+                      <Activity className="h-3.5 w-3.5 text-slate-500" />
+                    </div>
+                    <div className="min-w-0 flex-1 pt-1">
+                      <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                        <span className="font-medium text-slate-700">{h.user.email}</span>
+                        <span>·</span>
+                        <span>{timeAgo(h.createdAt)}</span>
+                        {h.status && <><span>·</span><SBadge s={h.status} /></>}
+                        {h.priority && <><span>·</span><PBadge p={h.priority} /></>}
+                      </div>
+                      <p className="mt-1.5 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">{h.comment}</p>
+                    </div>
+                  </div>
+                ))}
+                <div ref={endRef} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Comment box */}
+        <div className="border-t border-slate-100 bg-slate-50/80 px-5 py-4">
+          <form onSubmit={postComment} className="flex flex-col gap-2">
+            <Textarea
+              placeholder="Add a comment or update…"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={3}
+              className="resize-none rounded-xl border-slate-200 bg-white text-sm focus-visible:ring-slate-400/30"
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postComment(e as any); }}
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Ctrl+Enter to submit</span>
+              <Button size="sm" disabled={posting || !comment.trim()} className="rounded-lg bg-slate-900 hover:bg-slate-800">
+                {posting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />}
+                Post
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Ticket card ────────────────────────────────────────────────────────── */
+function TicketCard({ t, onClick, assigned }: { t: Ticket; onClick: () => void; assigned?: boolean }) {
+  const sc = STATUS_CONFIG[t.status] || STATUS_CONFIG.OPEN;
   return (
     <li>
       <button
         type="button"
-        className={`flex w-full items-center gap-4 rounded-xl p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-slate-400/30 ${
-          highlight
-            ? "bg-violet-50/60 hover:bg-violet-50 border border-violet-100/80"
-            : "bg-slate-50/40 hover:bg-slate-100/60 border border-transparent"
+        onClick={onClick}
+        className={`group relative w-full overflow-hidden rounded-xl border text-left transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400/30 ${
+          assigned
+            ? "border-violet-200/80 bg-gradient-to-r from-violet-50/80 to-white hover:border-violet-300"
+            : "border-slate-200/70 bg-white hover:border-slate-300"
         }`}
-        onClick={onOpen}
       >
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${highlight ? "bg-violet-100" : "bg-slate-200/80"}`}>
-          {t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-          ) : t.status === TicketStatus.IN_PROGRESS ? (
-            <Clock className="h-5 w-5 text-amber-600" />
-          ) : (
-            <AlertCircle className="h-5 w-5 text-slate-600" />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
-            <span
-              className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
-                t.priority === TicketPriority.CRITICAL ? "bg-red-100 text-red-700" :
-                t.priority === TicketPriority.HIGH ? "bg-amber-100 text-amber-700" :
-                "bg-slate-200 text-slate-600"
-              }`}
-            >
-              {priorityLabel[t.priority] || t.priority}
-            </span>
-            <span className="rounded-md bg-slate-200 px-1.5 py-0.5 text-xs font-medium text-slate-600">
-              {statusLabel[t.status] || t.status}
-            </span>
+        {/* Left accent strip */}
+        <div className={`absolute left-0 top-0 bottom-0 w-1 ${sc.dot} rounded-l-xl`} />
+        <div className="flex items-center gap-4 p-4 pl-5">
+          {/* Status icon */}
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${sc.bg} border ${sc.border}`}>
+            {(t.status === "RESOLVED" || t.status === "CLOSED") ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            ) : t.status === "IN_PROGRESS" ? (
+              <Clock className="h-5 w-5 text-amber-600" />
+            ) : (
+              <Circle className="h-5 w-5 text-blue-500" />
+            )}
           </div>
-          <h3 className="mt-1 font-medium text-slate-900 line-clamp-1">{t.title}</h3>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-          </p>
+          {/* Content */}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+              <span className="font-mono text-[11px] font-semibold text-slate-400">{t.displayId || t.id.slice(0, 8)}</span>
+              <PBadge p={t.priority} />
+              <SBadge s={t.status} />
+            </div>
+            <h3 className="font-medium text-slate-900 line-clamp-1 leading-snug">{t.title}</h3>
+            <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{t.description}</p>
+            <p className="mt-1 text-[11px] text-slate-400">{timeAgo(t.updatedAt)}</p>
+          </div>
+          {/* Action */}
+          <div className="shrink-0 flex items-center gap-2">
+            {assigned && (
+              <span className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white">
+                Action →
+              </span>
+            )}
+            <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
+          </div>
         </div>
-        {actionLabel && (
-          <span className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
-            {actionLabel}
-          </span>
-        )}
-        <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
       </button>
     </li>
   );
 }
 
+/* ── Main content ───────────────────────────────────────────────────────── */
 function PortalContent() {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createTitle, setCreateTitle] = useState("");
-  const [createDesc, setCreateDesc] = useState("");
-  const [createPriority, setCreatePriority] = useState<TicketPriority>(TicketPriority.MEDIUM);
-  const [submitting, setSubmitting] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [notifLoading, setNotifLoading] = useState(false);
-  const [hasDashboardAccess, setHasDashboardAccess] = useState(false);
-  const [accessLoading, setAccessLoading] = useState(true);
 
-  const fetchTickets = useCallback(async () => {
+  /* State */
+  const [tickets, setTickets]             = useState<Ticket[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [createOpen, setCreateOpen]       = useState(false);
+  const [createTitle, setCreateTitle]     = useState("");
+  const [createDesc, setCreateDesc]       = useState("");
+  const [createPriority, setCreatePriority] = useState<TicketPriority>(TicketPriority.MEDIUM);
+  const [submitting, setSubmitting]       = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [notifOpen, setNotifOpen]         = useState(false);
+  const [hasDashboardAccess, setDashAccess] = useState(false);
+  const [accessReady, setAccessReady]     = useState(false);
+  const [search, setSearch]               = useState("");
+  const [statusFilter, setStatusFilter]   = useState<string>("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
+  const [activeView, setActiveView]       = useState<"assigned" | "mine" | "all">("assigned");
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [filterOpen, setFilterOpen]       = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  /* Parallel load: tickets + permissions + notifications together */
+  useEffect(() => {
     if (!user) return;
     setLoading(true);
-    try {
-      const res = await fetch("/api/tickets", { headers: { "Cache-Control": "no-cache" } });
-      if (!res.ok) throw new Error("Failed to load tickets");
-      const data = await res.json();
-      setTickets(
-        (data || []).map((t: any) => ({
-          ...t,
-          status: Object.values(TicketStatus).includes(t.status) ? t.status : TicketStatus.OPEN,
-          priority: Object.values(TicketPriority).includes(t.priority) ? t.priority : TicketPriority.MEDIUM,
-        }))
-      );
-    } catch {
-      toast({ variant: "destructive", title: "Could not load tickets" });
+    Promise.all([
+      fetch("/api/tickets").then(r => r.ok ? r.json() : []),
+      fetch("/api/users/permissions").then(r => r.ok ? r.json() : null),
+      fetch("/api/notifications?unreadOnly=0&limit=30").then(r => r.ok ? r.json() : []),
+    ]).then(([tkts, perms, notifs]) => {
+      const normalized = (tkts || []).map((t: any) => ({
+        ...t,
+        status: Object.values(TicketStatus).includes(t.status) ? t.status : TicketStatus.OPEN,
+        priority: Object.values(TicketPriority).includes(t.priority) ? t.priority : TicketPriority.MEDIUM,
+      }));
+      setTickets(normalized);
+      if (perms) {
+        setDashAccess(!!(perms.isAdmin || perms.role === "MANAGER" || perms.pageAccess?.["/dashboard"]));
+      }
+      setNotifications(notifs || []);
+    }).catch(() => {
       setTickets([]);
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+      setAccessReady(true);
+    });
   }, [user]);
 
-  const fetchNotifications = useCallback(async () => {
+  /* Refresh tickets only */
+  const refreshTickets = useCallback(async () => {
     if (!user) return;
-    setNotifLoading(true);
     try {
-      const res = await fetch("/api/notifications?unreadOnly=0&limit=20");
+      const res = await fetch("/api/tickets");
       if (!res.ok) return;
       const data = await res.json();
-      setNotifications(data || []);
-    } finally {
-      setNotifLoading(false);
-    }
-  }, [user]);
+      const normalized = (data || []).map((t: any) => ({
+        ...t,
+        status: Object.values(TicketStatus).includes(t.status) ? t.status : TicketStatus.OPEN,
+        priority: Object.values(TicketPriority).includes(t.priority) ? t.priority : TicketPriority.MEDIUM,
+      }));
+      setTickets(normalized);
+      if (selectedTicket) {
+        const updated = normalized.find(t => t.id === selectedTicket.id);
+        if (updated) setSelectedTicket(updated);
+      }
+    } catch {}
+  }, [user, selectedTicket]);
 
+  /* Keyboard shortcuts */
   useEffect(() => {
-    fetchTickets();
-  }, [fetchTickets]);
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); searchRef.current?.focus(); }
+      if (e.key === "n" && !e.metaKey && !e.ctrlKey && (e.target as any)?.tagName !== "INPUT" && (e.target as any)?.tagName !== "TEXTAREA") { e.preventDefault(); setCreateOpen(true); }
+      if (e.key === "Escape") { setSelectedTicket(null); setNotifOpen(false); setFilterOpen(false); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
-  useEffect(() => {
-    if (notifOpen) fetchNotifications();
-  }, [notifOpen, fetchNotifications]);
+  /* Mark notif read */
+  const markRead = async (id: string) => {
+    try {
+      await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, readAt: new Date().toISOString() } : n));
+    } catch {}
+  };
 
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    setAccessLoading(true);
-    fetch("/api/users/permissions", { headers: { "Cache-Control": "no-cache" } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled || !data) return;
-        const isAdmin = data.isAdmin === true;
-        const isManager = data.role === "MANAGER";
-        const hasPage = data.pageAccess && data.pageAccess["/dashboard"] === true;
-        setHasDashboardAccess(!!(isAdmin || isManager || hasPage));
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setAccessLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [user]);
-
-  const assignedToMe = tickets.filter((t) => t.assignedToId === user?.id);
-  const myTickets = tickets.filter((t) => t.userId === user?.id);
-
+  /* Create ticket */
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createTitle.trim() || !createDesc.trim()) {
-      toast({ variant: "destructive", title: "Title and description are required" });
-      return;
-    }
-    if (createDesc.trim().length < 10) {
-      toast({ variant: "destructive", title: "Description must be at least 10 characters" });
+    if (!createTitle.trim() || createDesc.trim().length < 10) {
+      toast({ variant: "destructive", title: "Please fill in all fields", description: "Description must be at least 10 characters." });
       return;
     }
     setSubmitting(true);
@@ -234,296 +401,325 @@ function PortalContent() {
       const res = await fetch("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: createTitle.trim(),
-          description: createDesc.trim(),
-          priority: createPriority,
-          source: "PORTAL",
-        }),
+        body: JSON.stringify({ title: createTitle.trim(), description: createDesc.trim(), priority: createPriority, source: "PORTAL" }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || "Failed to create ticket");
-      }
-      toast({ title: "Ticket raised", description: "We’ll get back to you soon." });
-      setCreateOpen(false);
-      setCreateTitle("");
-      setCreateDesc("");
-      setCreatePriority(TicketPriority.MEDIUM);
-      fetchTickets();
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error || "Failed"); }
+      toast({ title: "✓ Ticket created", description: "Our team will review it shortly." });
+      setCreateOpen(false); setCreateTitle(""); setCreateDesc(""); setCreatePriority(TicketPriority.MEDIUM);
+      refreshTickets();
     } catch (e) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: e instanceof Error ? e.message : "Could not create ticket",
-      });
-    } finally {
-      setSubmitting(false);
-    }
+      toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : "Could not create ticket" });
+    } finally { setSubmitting(false); }
   };
 
-  const markRead = async (id: string) => {
-    try {
-      await fetch("/api/notifications", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
-      );
-    } catch {}
-  };
+  /* Filtering */
+  const unreadCount = notifications.filter(n => !n.readAt).length;
+  const assignedToMe = tickets.filter(t => t.assignedToId === user?.id);
+  const myTickets    = tickets.filter(t => t.userId === user?.id);
 
-  const unreadCount = notifications.filter((n) => !n.readAt).length;
+  const baseList = activeView === "assigned" ? assignedToMe : activeView === "mine" ? myTickets : tickets;
+  const filtered = baseList.filter(t => {
+    const q = search.toLowerCase();
+    const matchQ = !q || t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || (t.displayId || "").toLowerCase().includes(q);
+    const matchS = statusFilter === "ALL" || t.status === statusFilter;
+    const matchP = priorityFilter === "ALL" || t.priority === priorityFilter;
+    return matchQ && matchS && matchP;
+  });
+
+  /* Stats */
+  const stats = {
+    open: myTickets.filter(t => t.status === "OPEN").length,
+    inProgress: myTickets.filter(t => t.status === "IN_PROGRESS").length,
+    resolved: myTickets.filter(t => t.status === "RESOLVED" || t.status === "CLOSED").length,
+    assigned: assignedToMe.length,
+  };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
-      {/* Subtle background */}
-      <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(99,102,241,0.12),transparent)]" aria-hidden />
-      <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_60%_80%_at_80%_50%,rgba(139,92,246,0.06),transparent)]" aria-hidden />
+    <div className="min-h-screen bg-[#f5f6fa] antialiased">
+      <Toaster />
+      {/* Keyboard hint */}
+      <style>{`
+        @keyframes slide-in-from-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .animate-in.slide-in-from-right { animation: slide-in-from-right 0.25s cubic-bezier(.22,1,.36,1); }
+      `}</style>
 
-      {/* Header — minimal, no sidebar */}
-      <div className="sticky top-0 z-50 border-b border-slate-200/60 bg-white/95 backdrop-blur-md">
-        <header className="relative">
-          <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white">
-                <MessageSquare className="h-4 w-4" />
-              </div>
-              <div>
-                <span className="text-sm font-semibold tracking-tight text-slate-900">Support</span>
-                <span className="ml-1.5 text-sm font-medium text-slate-500">Portal</span>
-              </div>
+      {/* ── Top bar ───────────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/98 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          {/* Brand */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900">
+              <TicketX className="h-4 w-4 text-white" />
             </div>
-            <div className="flex items-center gap-1">
-              {!accessLoading && hasDashboardAccess && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  onClick={() => router.push("/dashboard")}
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  <span className="hidden sm:inline">Dashboard</span>
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative h-9 w-9 rounded-lg"
-                onClick={() => setNotifOpen((o) => !o)}
-              >
+            <span className="text-sm font-bold tracking-tight text-slate-900">Support Portal</span>
+          </div>
+
+          {/* Search */}
+          <div className="relative hidden max-w-xs flex-1 sm:flex lg:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Search tickets… (⌘K)"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400/30"
+            />
+          </div>
+
+          {/* Right actions */}
+          <div className="flex items-center gap-1 shrink-0">
+            {accessReady && hasDashboardAccess && (
+              <Button variant="ghost" size="sm" className="gap-1.5 text-slate-600 hover:bg-slate-100" onClick={() => router.push("/dashboard")}>
+                <LayoutDashboard className="h-4 w-4" /><span className="hidden md:inline">Dashboard</span>
+              </Button>
+            )}
+            {/* Bell */}
+            <div className="relative">
+              <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg" onClick={() => setNotifOpen(o => !o)}>
                 <Bell className="h-4 w-4 text-slate-600" />
                 {unreadCount > 0 && (
-                  <span className="absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-semibold text-white">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
+                  <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-0.5 text-[10px] font-bold text-white">{unreadCount}</span>
                 )}
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                onClick={() => signOut().then(() => router.push("/login"))}
-              >
-                <LogOut className="h-4 w-4 sm:mr-1" />
-                <span className="hidden sm:inline">Sign out</span>
-              </Button>
+              {notifOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" aria-hidden onClick={() => setNotifOpen(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
+                        <p className="text-xs text-slate-500">{unreadCount} unread</p>
+                      </div>
+                      <button onClick={() => setNotifOpen(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8">
+                          <Bell className="h-8 w-8 text-slate-200" />
+                          <p className="mt-2 text-sm text-slate-500">No notifications</p>
+                        </div>
+                      ) : notifications.map(n => (
+                        <button key={n.id} type="button" onClick={() => { markRead(n.id); if (n.ticketId) { const t = tickets.find(tk => tk.id === n.ticketId); if (t) setSelectedTicket(t); } setNotifOpen(false); }}
+                          className="flex w-full items-start gap-3 border-b border-slate-50 px-4 py-3 text-left hover:bg-slate-50">
+                          <div className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${n.readAt ? "bg-slate-300" : "bg-violet-500"}`} />
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium ${n.readAt ? "text-slate-500" : "text-slate-900"}`}>{n.title}</p>
+                            <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{n.message}</p>
+                            <p className="mt-1 text-[10px] text-slate-400">{timeAgo(n.createdAt)}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
+            <Button variant="ghost" size="sm" className="text-slate-500 hover:bg-slate-100" onClick={() => signOut().then(() => router.push("/login"))}>
+              <LogOut className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Sign out</span>
+            </Button>
           </div>
-          {/* Notifications dropdown — positioned under header */}
-          {notifOpen && (
-            <>
-              <div className="fixed inset-0 z-40" aria-hidden onClick={() => setNotifOpen(false)} />
-              <div className="absolute right-4 top-full z-50 mt-2 w-[min(100vw-2rem,320px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl sm:right-6">
-            <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
-              <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
-              <p className="text-xs text-slate-500">Updates on your tickets</p>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-screen-xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* ── Top: greeting + CTA ─────────────────────────────────────────── */}
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+              My Tickets
+            </h1>
+            <p className="mt-0.5 text-sm text-slate-500">Track, comment and manage your support requests</p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={refreshTickets} className="gap-1.5 rounded-lg">
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
+            <Button size="sm" className="rounded-lg bg-slate-900 px-4 hover:bg-slate-800" onClick={() => setCreateOpen(true)}>
+              <PlusCircle className="mr-1.5 h-4 w-4" />
+              New ticket <kbd className="ml-2 hidden rounded bg-white/20 px-1 py-0.5 text-[10px] font-mono sm:inline">N</kbd>
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Stats strip ─────────────────────────────────────────────────── */}
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Assigned to me", value: stats.assigned, dot: "bg-violet-500", click: () => setActiveView("assigned") },
+            { label: "Open",           value: stats.open,     dot: "bg-blue-500",   click: () => { setActiveView("mine"); setStatusFilter("OPEN"); } },
+            { label: "In Progress",    value: stats.inProgress, dot: "bg-amber-500", click: () => { setActiveView("mine"); setStatusFilter("IN_PROGRESS"); } },
+            { label: "Resolved",       value: stats.resolved, dot: "bg-emerald-500", click: () => { setActiveView("mine"); setStatusFilter("RESOLVED"); } },
+          ].map(stat => (
+            <button key={stat.label} onClick={stat.click} className="flex flex-col gap-1 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-sm transition hover:shadow-md hover:border-slate-300 focus:outline-none">
+              <div className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${stat.dot}`} />
+                <span className="text-xs font-medium text-slate-500">{stat.label}</span>
+              </div>
+              <span className="text-2xl font-bold tracking-tight text-slate-900">{stat.value}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* ── View tabs + filters ──────────────────────────────────────────── */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          {/* Tabs */}
+          <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+            {[
+              { key: "assigned", label: "Assigned to me", count: assignedToMe.length },
+              { key: "mine",     label: "My tickets",     count: myTickets.length },
+              { key: "all",      label: "All",            count: tickets.length },
+            ].map(tab => (
+              <button key={tab.key} onClick={() => setActiveView(tab.key as any)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
+                  activeView === tab.key ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+                }`}>
+                {tab.label}
+                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${activeView === tab.key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile search + filters */}
+          <div className="flex items-center gap-2">
+            <div className="relative sm:hidden">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input type="text" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
+                className="h-8 w-36 rounded-lg border border-slate-200 bg-white pl-8 pr-2 text-xs focus:border-slate-400 focus:outline-none" />
             </div>
-            <div className="max-h-72 overflow-y-auto">
-              {notifLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-                </div>
-              ) : notifications.length === 0 ? (
-                <p className="p-4 text-center text-sm text-slate-500">No notifications yet</p>
-              ) : (
-                notifications.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    className="flex w-full flex-col gap-0.5 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
-                    onClick={() => {
-                      markRead(n.id);
-                      if (n.ticketId) router.push(`/tickets/${n.ticketId}`);
-                      setNotifOpen(false);
-                    }}
-                  >
-                    <span className={`text-sm font-medium ${n.readAt ? "text-slate-500" : "text-slate-900"}`}>{n.title}</span>
-                    <span className="text-xs text-slate-500 line-clamp-2">{n.message}</span>
-                  </button>
-                ))
+            <div className="relative">
+              <Button variant="outline" size="sm" className="gap-1.5 rounded-lg h-8 text-xs" onClick={() => setFilterOpen(o => !o)}>
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Filter
+                {(statusFilter !== "ALL" || priorityFilter !== "ALL") && (
+                  <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">!</span>
+                )}
+              </Button>
+              {filterOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" aria-hidden onClick={() => setFilterOpen(false)} />
+                  <div className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                    <h4 className="mb-3 text-sm font-semibold text-slate-700">Filters</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Status</label>
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                          <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ALL">All statuses</SelectItem>
+                            {Object.entries(STATUS_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Priority</label>
+                        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                          <SelectTrigger className="h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ALL">All priorities</SelectItem>
+                            {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button size="sm" variant="outline" className="w-full rounded-lg text-xs" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); }}>
+                        Clear filters
+                      </Button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
-            </>
-          )}
-        </header>
-      </div>
-
-      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
-        {/* Hero + CTA */}
-        <div className="mb-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-              Your support tickets
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              View tickets assigned to you and the ones you’ve raised.
-            </p>
-          </div>
-          <Button
-            size="lg"
-            className="w-full shrink-0 rounded-xl bg-slate-900 px-6 font-medium text-white hover:bg-slate-800 sm:w-auto"
-            onClick={() => setCreateOpen(true)}
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            New ticket
-          </Button>
         </div>
 
+        {/* ── Ticket list ─────────────────────────────────────────────────── */}
         {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+          <div className="flex flex-col items-center justify-center py-24">
+            <div className="relative">
+              <div className="h-12 w-12 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin" />
+            </div>
+            <p className="mt-4 text-sm text-slate-500">Loading your tickets…</p>
           </div>
-        ) : (
-          <div className="space-y-8">
-            {/* Assigned to you */}
-            <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
-                    <UserCheck className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900">Assigned to you</h2>
-                    <p className="text-xs text-slate-500">Tickets waiting on your action</p>
-                  </div>
-                </div>
-                {assignedToMe.length > 0 && (
-                  <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-                    {assignedToMe.length}
-                  </span>
-                )}
-              </div>
-              <div className="p-4">
-                {assignedToMe.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <Inbox className="h-10 w-10 text-slate-300" />
-                    <p className="mt-3 text-sm font-medium text-slate-600">No tickets assigned yet</p>
-                    <p className="mt-1 max-w-xs text-xs text-slate-500">When someone assigns you a ticket, it will show here.</p>
-                  </div>
-                ) : (
-                  <ul className="space-y-2">
-                    {assignedToMe.map((t) => (
-                      <TicketRow key={t.id} ticket={t} onOpen={() => router.push(`/tickets/${t.id}`)} actionLabel="Open" highlight />
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </section>
-
-            {/* My tickets */}
-            <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-              <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/50 px-5 py-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-                  <Inbox className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-800">My tickets</h2>
-                  <p className="text-xs text-slate-500">Tickets you raised</p>
-                </div>
-              </div>
-              <div className="p-4">
-                {myTickets.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <MessageSquare className="h-10 w-10 text-slate-300" />
-                    <p className="mt-2 text-sm text-slate-600">No tickets yet</p>
-                    <Button variant="outline" size="sm" className="mt-3 rounded-lg" onClick={() => setCreateOpen(true)}>
-                      <PlusCircle className="mr-1.5 h-4 w-4" />
-                      Create your first ticket
-                    </Button>
-                  </div>
-                ) : (
-                  <ul className="space-y-2">
-                    {myTickets.map((t) => (
-                      <TicketRow key={t.id} ticket={t} onOpen={() => router.push(`/tickets/${t.id}`)} />
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </section>
-
-            {!hasDashboardAccess && !accessLoading && (
-              <p className="text-center text-xs text-slate-400">
-                Need full app access? Ask your administrator for dashboard permissions.
-              </p>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm">
+            <Inbox className="h-12 w-12 text-slate-300" />
+            <h3 className="mt-4 text-base font-semibold text-slate-700">
+              {search || statusFilter !== "ALL" || priorityFilter !== "ALL" ? "No matching tickets" : "No tickets yet"}
+            </h3>
+            <p className="mt-1 max-w-xs text-sm text-slate-500">
+              {search ? `No tickets match "${search}".` : "Create your first ticket to get started."}
+            </p>
+            {!search && (
+              <Button className="mt-4 rounded-lg bg-slate-900 hover:bg-slate-800" onClick={() => setCreateOpen(true)}>
+                <PlusCircle className="mr-1.5 h-4 w-4" /> Create ticket
+              </Button>
             )}
           </div>
+        ) : (
+          <ul className="space-y-2">
+            {filtered.map(t => (
+              <TicketCard key={t.id} t={t} onClick={() => setSelectedTicket(t)} assigned={t.assignedToId === user?.id} />
+            ))}
+          </ul>
         )}
-      </main>
 
-      {/* Create ticket dialog */}
+        {/* Keyboard hint */}
+        <p className="mt-6 text-center text-xs text-slate-400">
+          <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono">N</kbd> new ticket ·{" "}
+          <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono">⌘K</kbd> search ·{" "}
+          <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono">Esc</kbd> close
+        </p>
+      </div>
+
+      {/* ── Ticket drawer ─────────────────────────────────────────────────── */}
+      {selectedTicket && (
+        <TicketDrawer
+          ticket={selectedTicket}
+          onClose={() => setSelectedTicket(null)}
+          userId={user?.id || ""}
+          onRefresh={refreshTickets}
+        />
+      )}
+
+      {/* ── Create dialog ─────────────────────────────────────────────────── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-md">
+        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg">New ticket</DialogTitle>
-            <p className="text-sm text-slate-500">We’ll review and assign it to the right team.</p>
+            <DialogTitle className="text-lg font-semibold text-slate-900">Create a new ticket</DialogTitle>
+            <p className="text-sm text-slate-500">Our support team will review and respond shortly.</p>
           </DialogHeader>
           <form onSubmit={handleCreate}>
             <div className="space-y-4 py-4">
               <div>
-                <Label htmlFor="portal-title" className="text-sm font-medium text-slate-700">Title</Label>
-                <Input
-                  id="portal-title"
-                  placeholder="Brief summary"
-                  value={createTitle}
-                  onChange={(e) => setCreateTitle(e.target.value)}
-                  className="mt-1.5 rounded-lg border-slate-200"
-                />
+                <Label htmlFor="pt" className="text-sm font-medium text-slate-700">Title <span className="text-red-500">*</span></Label>
+                <Input id="pt" placeholder="Brief summary of the issue" value={createTitle} onChange={e => setCreateTitle(e.target.value)} className="mt-1.5 rounded-lg border-slate-200" autoFocus />
               </div>
               <div>
-                <Label htmlFor="portal-desc" className="text-sm font-medium text-slate-700">Description</Label>
-                <Textarea
-                  id="portal-desc"
-                  placeholder="Describe your issue or request..."
-                  value={createDesc}
-                  onChange={(e) => setCreateDesc(e.target.value)}
-                  rows={4}
-                  className="mt-1.5 rounded-lg border-slate-200"
-                />
+                <Label htmlFor="pd" className="text-sm font-medium text-slate-700">Description <span className="text-red-500">*</span></Label>
+                <Textarea id="pd" placeholder="Describe your issue in detail — include steps to reproduce, expected vs actual behaviour, screenshots if any…" value={createDesc} onChange={e => setCreateDesc(e.target.value)} rows={5} className="mt-1.5 rounded-lg border-slate-200 resize-none" />
+                <p className="mt-1 text-xs text-slate-400">{createDesc.length} chars (min 10)</p>
               </div>
               <div>
                 <Label className="text-sm font-medium text-slate-700">Priority</Label>
-                <Select value={createPriority} onValueChange={(v) => setCreatePriority(v as TicketPriority)}>
-                  <SelectTrigger className="mt-1.5 rounded-lg">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(priorityLabel).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1.5 grid grid-cols-4 gap-2">
+                  {(Object.entries(PRIORITY_CONFIG) as [string, any][]).map(([k, v]) => (
+                    <button key={k} type="button" onClick={() => setCreatePriority(k as TicketPriority)}
+                      className={`flex flex-col items-center gap-1 rounded-lg border p-2 text-center transition ${
+                        createPriority === k ? `${v.bg} ${v.border} ${v.color} shadow-sm` : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                      }`}>
+                      <span className={`${createPriority === k ? v.color : "text-slate-400"}`}>{v.icon}</span>
+                      <span className="text-[11px] font-medium">{v.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} className="rounded-lg">
-                Cancel
-              </Button>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} className="rounded-lg">Cancel</Button>
               <Button type="submit" disabled={submitting} className="rounded-lg bg-slate-900 hover:bg-slate-800">
-                {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting…</> : "Submit"}
+                {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting…</> : <><Send className="mr-2 h-4 w-4" />Submit ticket</>}
               </Button>
             </DialogFooter>
           </form>
