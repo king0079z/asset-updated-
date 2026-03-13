@@ -7,12 +7,12 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { toast } from "@/components/ui/use-toast";
 import { formatTicketId } from "@/util/ticketFormat";
 import {
-  AlertCircle, Clock, CheckCircle2, XCircle, ArrowLeft, Printer,
+  AlertCircle, Clock, CheckCircle2, XCircle, ArrowLeft,
   Calendar, Tag, Info, Loader2, MessageSquare, History, Activity,
-  User, MapPin, Phone, Building, Send, RefreshCw, UserPlus,
+  User, MapPin, Phone, Send, RefreshCw,
   ChevronRight, Zap, AlertTriangle, HelpCircle, Inbox, FileText,
-  CheckCircle, Circle, ArrowUp, Minus, ArrowDown, Eye, Ticket,
-  BarChart3, X, Package, Settings, Star,
+  CheckCircle, Circle, ArrowUp, Minus, ArrowDown, Package, Settings,
+  Brain, Sparkles, Target, Shield, TrendingUp, Cpu,
 } from "lucide-react";
 import Link from "next/link";
 import TicketBarcodeDisplay from "@/components/TicketBarcodeDisplay";
@@ -114,9 +114,11 @@ function TicketDetailsContent() {
   const [comment, setComment] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [assignedToId, setAssignedToId] = useState<string>("");
-  const [staffMembers, setStaffMembers] = useState<{ id: string; email: string }[]>([]);
-  const [activeTab, setActiveTab] = useState<"details" | "history" | "barcode">("details");
+  const [staffMembers, setStaffMembers] = useState<{ id: string; email: string; name?: string; activeTicketCount?: number }[]>([]);
+  const [activeTab, setActiveTab] = useState<"details" | "history" | "barcode" | "ai">("details");
   const isUpdatingRef = React.useRef(false);
+  const [aiInsights, setAiInsights] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     if (!id || typeof id !== "string") return;
@@ -137,15 +139,36 @@ function TicketDetailsContent() {
 
   useEffect(() => { isUpdatingRef.current = isUpdating; }, [isUpdating]);
 
-  // Fetch staff members
+  // Fetch staff members with ticket counts
   useEffect(() => {
     fetch("/api/planner/users").then(r => r.ok ? r.json() : null).then(data => {
-      const list = (data?.users ?? Array.isArray(data) ? data : [])
-        .map((u: any) => ({ id: u.id || "", email: u.email || "" }))
+      const list = (data?.users ?? [])
+        .map((u: any) => ({
+          id: u.id || "",
+          email: u.email || "",
+          name: u.name || u.email?.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) || "",
+          activeTicketCount: u.activeTicketCount ?? 0,
+        }))
         .filter((u: { id: string }) => u.id);
       setStaffMembers(list);
     }).catch(() => {});
   }, []);
+
+  // Fetch AI insights for this ticket
+  const fetchAiInsights = async (ticketId: string) => {
+    setAiLoading(true);
+    try {
+      const r = await fetch("/api/tickets/ai-assist", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "insights", ticketId }),
+      });
+      if (r.ok) setAiInsights(await r.json());
+    } catch {} finally { setAiLoading(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === "ai" && ticket?.id && !aiInsights) fetchAiInsights(ticket.id);
+  }, [activeTab, ticket?.id]);
 
   const fetchTicket = async (ticketId: string) => {
     setIsLoading(true);
@@ -408,6 +431,7 @@ function TicketDetailsContent() {
             {[
               { key: "details",  label: "Details",  icon: Info },
               { key: "history",  label: "Activity", icon: History },
+              { key: "ai",       label: "AI Intel", icon: Brain },
               ...(ticket.barcode ? [{ key: "barcode", label: "Barcode", icon: Tag }] : []),
             ].map(tab => {
               const Icon = tab.icon;
@@ -498,6 +522,128 @@ function TicketDetailsContent() {
             <TicketBarcodeDisplay key={`barcode-${ticket.id}`} ticketId={ticket.id} ticketTitle={ticket.title} barcode={ticket.barcode} displayId={ticket.displayId} />
           )}
 
+          {/* AI Intelligence tab */}
+          {activeTab === "ai" && (
+            <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white overflow-hidden">
+              <div className="flex items-center justify-between border-b border-violet-100 bg-gradient-to-r from-violet-900 to-slate-900 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
+                    <Brain className="h-5 w-5 text-violet-300" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">AI Intelligence Report</p>
+                    <p className="text-xs text-violet-300">Real-time analysis for this ticket</p>
+                  </div>
+                </div>
+                <button onClick={() => { setAiInsights(null); fetchAiInsights(ticket.id); }}
+                  disabled={aiLoading}
+                  className="rounded-xl p-2 text-violet-300 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50">
+                  {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5">
+                {aiLoading ? (
+                  <div className="flex items-center justify-center gap-3 py-8">
+                    <Cpu className="h-6 w-6 text-violet-400 animate-pulse" />
+                    <p className="text-sm text-violet-600 font-medium">Analysing ticket…</p>
+                  </div>
+                ) : aiInsights ? (
+                  <>
+                    {/* SLA Status */}
+                    <div className={`rounded-2xl border p-4 ${aiInsights.sla?.breached ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Shield className={`h-4 w-4 ${aiInsights.sla?.breached ? "text-red-600" : "text-emerald-600"}`} />
+                          <p className={`text-sm font-bold ${aiInsights.sla?.breached ? "text-red-700" : "text-emerald-700"}`}>
+                            SLA: {aiInsights.sla?.breached ? "⚠ Breached" : "✓ On Track"} — Target: {aiInsights.sla?.target}
+                          </p>
+                        </div>
+                        <span className={`text-sm font-black ${aiInsights.sla?.breached ? "text-red-700" : "text-emerald-700"}`}>
+                          {aiInsights.sla?.progressPct}%
+                        </span>
+                      </div>
+                      <div className="h-2.5 w-full rounded-full bg-white/60 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${aiInsights.sla?.breached ? "bg-red-500" : "bg-emerald-500"}`}
+                          style={{ width: `${Math.min(aiInsights.sla?.progressPct || 0, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Sentiment */}
+                    {aiInsights.sentiment && (
+                      <div className="flex items-center gap-3 rounded-2xl bg-white border border-slate-100 px-4 py-3">
+                        <span className="text-2xl">{aiInsights.sentiment.emoji}</span>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">Requester Sentiment: {aiInsights.sentiment.sentiment}</p>
+                          <p className="text-xs text-slate-500">Detected from ticket description</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* AI Insights */}
+                    {aiInsights.insights?.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-bold uppercase tracking-wider text-violet-600">AI Insights</p>
+                        {aiInsights.insights.map((ins: string, i: number) => (
+                          <div key={i} className="flex items-start gap-2.5 rounded-xl bg-white border border-violet-100 px-3.5 py-2.5">
+                            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" />
+                            <p className="text-sm text-slate-700">{ins}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Suggested Assignee */}
+                    {aiInsights.suggestedAssignee && (
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Target className="h-4 w-4 text-blue-600" />
+                          <p className="text-sm font-bold text-blue-700">AI Suggested Assignee</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-700 text-sm font-bold text-white">
+                            {aiInsights.suggestedAssignee.name[0]}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-900">{aiInsights.suggestedAssignee.name}</p>
+                            <p className="text-xs text-slate-500">{aiInsights.suggestedAssignee.email} · {aiInsights.suggestedAssignee.activeTickets} active tickets</p>
+                            <p className="text-xs text-blue-600 font-medium">{aiInsights.suggestedAssignee.reason}</p>
+                          </div>
+                          <button
+                            onClick={() => assignTicket(aiInsights.suggestedAssignee.id)}
+                            className="ml-auto rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition-colors">
+                            Assign Now
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Benchmark */}
+                    {aiInsights.benchmark && (
+                      <div className="flex items-center justify-between rounded-2xl bg-white border border-slate-100 px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4 text-slate-400" />
+                          <p className="text-sm text-slate-600">Similar ticket avg. resolution</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-base font-black text-slate-800">{aiInsights.benchmark.avgResolutionFormatted}</p>
+                          <p className="text-[10px] text-slate-400">{aiInsights.benchmark.sampleSize} tickets</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 py-8 text-center">
+                    <Brain className="h-10 w-10 text-violet-200" />
+                    <p className="text-sm text-slate-500">Click refresh to run AI analysis</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Update / Comment form ── */}
           <div className="rounded-2xl border border-slate-100 bg-white p-5">
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -572,9 +718,13 @@ function TicketDetailsContent() {
                 value={assignedToId}
                 onChange={e => assignTicket(e.target.value)}
                 disabled={isUpdating}
-                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors disabled:opacity-50">
-                <option value="">Unassigned</option>
-                {staffMembers.map(s => <option key={s.id} value={s.id}>{s.email}</option>)}
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors disabled:opacity-50 cursor-pointer">
+                <option value="">⊘ Unassigned</option>
+                {staffMembers.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name || s.email.split("@")[0]} — {s.activeTicketCount ?? 0} active
+                  </option>
+                ))}
               </select>
               {isUpdating && <Loader2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />}
             </div>

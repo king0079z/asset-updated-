@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 
@@ -24,19 +24,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log(`Path: ${req.url} Fetching users for task assignment`);
       
       try {
-        // Get all users from the database
+        // Get all users with their active ticket counts for workload display
         const users = await prisma.user.findMany({
           select: {
             id: true,
             email: true,
+            role: true,
+            _count: {
+              select: {
+                assignedTickets: {
+                  where: {
+                    status: { in: ['OPEN', 'IN_PROGRESS'] },
+                  },
+                },
+              },
+            },
           },
-          orderBy: {
-            email: 'asc',
-          },
+          orderBy: { email: 'asc' },
         });
+
+        const enriched = users.map(u => ({
+          id: u.id,
+          email: u.email,
+          role: u.role,
+          name: u.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          activeTicketCount: u._count.assignedTickets,
+        }));
         
         console.log(`Path: ${req.url} Successfully fetched ${users.length} users`);
-        return res.status(200).json({ users: users });
+        return res.status(200).json({ users: enriched });
       } catch (error) {
         console.error(`Path: ${req.url} Error fetching users:`, error);
         return res.status(500).json({ error: 'Failed to fetch users', details: error instanceof Error ? error.message : 'Unknown error' });
