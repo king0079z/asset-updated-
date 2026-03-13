@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 import {
-  Package,
   PlusCircle,
   Bell,
   LogOut,
@@ -74,6 +73,69 @@ const statusLabel: Record<string, string> = {
   RESOLVED: "Resolved",
   CLOSED: "Closed",
 };
+
+function TicketRow({
+  ticket: t,
+  onOpen,
+  actionLabel,
+  highlight,
+}: {
+  ticket: Ticket;
+  onOpen: () => void;
+  actionLabel?: string;
+  highlight?: boolean;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        className={`flex w-full items-center gap-4 rounded-xl p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-slate-400/30 ${
+          highlight
+            ? "bg-violet-50/60 hover:bg-violet-50 border border-violet-100/80"
+            : "bg-slate-50/40 hover:bg-slate-100/60 border border-transparent"
+        }`}
+        onClick={onOpen}
+      >
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${highlight ? "bg-violet-100" : "bg-slate-200/80"}`}>
+          {t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED ? (
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          ) : t.status === TicketStatus.IN_PROGRESS ? (
+            <Clock className="h-5 w-5 text-amber-600" />
+          ) : (
+            <AlertCircle className="h-5 w-5 text-slate-600" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
+                t.priority === TicketPriority.CRITICAL ? "bg-red-100 text-red-700" :
+                t.priority === TicketPriority.HIGH ? "bg-amber-100 text-amber-700" :
+                "bg-slate-200 text-slate-600"
+              }`}
+            >
+              {priorityLabel[t.priority] || t.priority}
+            </span>
+            <span className="rounded-md bg-slate-200 px-1.5 py-0.5 text-xs font-medium text-slate-600">
+              {statusLabel[t.status] || t.status}
+            </span>
+          </div>
+          <h3 className="mt-1 font-medium text-slate-900 line-clamp-1">{t.title}</h3>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+          </p>
+        </div>
+        {actionLabel && (
+          <span className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">
+            {actionLabel}
+          </span>
+        )}
+        <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+      </button>
+    </li>
+  );
+}
 
 function PortalContent() {
   const router = useRouter();
@@ -216,266 +278,187 @@ function PortalContent() {
   const unreadCount = notifications.filter((n) => !n.readAt).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-lg shadow-indigo-500/25">
-              <Package className="h-5 w-5 text-white" />
+    <div className="min-h-screen bg-[#f8fafc]">
+      {/* Subtle background */}
+      <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(99,102,241,0.12),transparent)]" aria-hidden />
+      <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_60%_80%_at_80%_50%,rgba(139,92,246,0.06),transparent)]" aria-hidden />
+
+      {/* Header — minimal, no sidebar */}
+      <div className="sticky top-0 z-50 border-b border-slate-200/60 bg-white/95 backdrop-blur-md">
+        <header className="relative">
+          <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white">
+                <MessageSquare className="h-4 w-4" />
+              </div>
+              <div>
+                <span className="text-sm font-semibold tracking-tight text-slate-900">Support</span>
+                <span className="ml-1.5 text-sm font-medium text-slate-500">Portal</span>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight text-slate-900">Support Portal</h1>
-              <p className="text-xs text-slate-500">Raise and track tickets</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {!accessLoading && hasDashboardAccess && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
-                onClick={() => router.push("/dashboard")}
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                Dashboard
-              </Button>
-            )}
-            <div className="relative">
+            <div className="flex items-center gap-1">
+              {!accessLoading && hasDashboardAccess && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  onClick={() => router.push("/dashboard")}
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative h-10 w-10 rounded-full"
+                className="relative h-9 w-9 rounded-lg"
                 onClick={() => setNotifOpen((o) => !o)}
               >
-                <Bell className="h-5 w-5 text-slate-600" />
+                <Bell className="h-4 w-4 text-slate-600" />
                 {unreadCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-xs font-semibold text-white">
+                  <span className="absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-semibold text-white">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
               </Button>
-              {notifOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    aria-hidden
-                    onClick={() => setNotifOpen(false)}
-                  />
-                  <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-                    <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
-                      <h3 className="font-semibold text-slate-800">Notifications</h3>
-                      <p className="text-xs text-slate-500">Updates on your tickets</p>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {notifLoading ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-                        </div>
-                      ) : notifications.length === 0 ? (
-                        <p className="p-4 text-center text-sm text-slate-500">No notifications yet</p>
-                      ) : (
-                        notifications.map((n) => (
-                          <button
-                            key={n.id}
-                            type="button"
-                            className="flex w-full flex-col gap-0.5 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
-                            onClick={() => {
-                              markRead(n.id);
-                              if (n.ticketId) router.push(`/tickets/${n.ticketId}`);
-                              setNotifOpen(false);
-                            }}
-                          >
-                            <span className={`text-sm font-medium ${n.readAt ? "text-slate-600" : "text-slate-900"}`}>
-                              {n.title}
-                            </span>
-                            <span className="text-xs text-slate-500 line-clamp-2">{n.message}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => signOut().then(() => router.push("/login"))}
+              >
+                <LogOut className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Sign out</span>
+              </Button>
+            </div>
+          </div>
+          {/* Notifications dropdown — positioned under header */}
+          {notifOpen && (
+            <>
+              <div className="fixed inset-0 z-40" aria-hidden onClick={() => setNotifOpen(false)} />
+              <div className="absolute right-4 top-full z-50 mt-2 w-[min(100vw-2rem,320px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl sm:right-6">
+            <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+              <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
+              <p className="text-xs text-slate-500">Updates on your tickets</p>
+            </div>
+            <div className="max-h-72 overflow-y-auto">
+              {notifLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                </div>
+              ) : notifications.length === 0 ? (
+                <p className="p-4 text-center text-sm text-slate-500">No notifications yet</p>
+              ) : (
+                notifications.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    className="flex w-full flex-col gap-0.5 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
+                    onClick={() => {
+                      markRead(n.id);
+                      if (n.ticketId) router.push(`/tickets/${n.ticketId}`);
+                      setNotifOpen(false);
+                    }}
+                  >
+                    <span className={`text-sm font-medium ${n.readAt ? "text-slate-500" : "text-slate-900"}`}>{n.title}</span>
+                    <span className="text-xs text-slate-500 line-clamp-2">{n.message}</span>
+                  </button>
+                ))
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-slate-600"
-              onClick={() => signOut().then(() => router.push("/login"))}
-            >
-              <LogOut className="mr-1.5 h-4 w-4" />
-              Sign out
-            </Button>
           </div>
-        </div>
-      </header>
+            </>
+          )}
+        </header>
+      </div>
 
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+        {/* Hero + CTA */}
+        <div className="mb-10 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Support Portal</h2>
-            <p className="mt-1 text-sm text-slate-500">Tickets assigned to you and ones you created</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              Your support tickets
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              View tickets assigned to you and the ones you’ve raised.
+            </p>
           </div>
           <Button
             size="lg"
-            className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-lg shadow-indigo-500/25 hover:from-indigo-700 hover:to-violet-700"
+            className="w-full shrink-0 rounded-xl bg-slate-900 px-6 font-medium text-white hover:bg-slate-800 sm:w-auto"
             onClick={() => setCreateOpen(true)}
           >
-            <PlusCircle className="mr-2 h-5 w-5" />
-            Raise a ticket
+            <PlusCircle className="mr-2 h-4 w-4" />
+            New ticket
           </Button>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+          <div className="flex items-center justify-center py-24">
+            <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
           </div>
         ) : (
-          <div className="space-y-10">
-            {/* Assigned to me — world-class hero section for staff */}
-            <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-4">
+          <div className="space-y-8">
+            {/* Assigned to you */}
+            <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-5 py-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
-                    <UserCheck className="h-5 w-5 text-white" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
+                    <UserCheck className="h-4 w-4" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-white">Assigned to you</h3>
-                    <p className="text-sm text-white/90">Tickets for you to action</p>
+                    <h2 className="text-sm font-semibold text-slate-900">Assigned to you</h2>
+                    <p className="text-xs text-slate-500">Tickets waiting on your action</p>
                   </div>
-                  {assignedToMe.length > 0 && (
-                    <span className="ml-auto rounded-full bg-white/25 px-3 py-1 text-sm font-semibold text-white">
-                      {assignedToMe.length}
-                    </span>
-                  )}
                 </div>
+                {assignedToMe.length > 0 && (
+                  <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                    {assignedToMe.length}
+                  </span>
+                )}
               </div>
               <div className="p-4">
                 {assignedToMe.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <Inbox className="h-12 w-12 text-slate-300" />
-                    <p className="mt-3 text-sm font-medium text-slate-600">No tickets assigned to you yet</p>
-                    <p className="mt-1 text-xs text-slate-500">When management assigns you a ticket, it will appear here.</p>
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Inbox className="h-10 w-10 text-slate-300" />
+                    <p className="mt-3 text-sm font-medium text-slate-600">No tickets assigned yet</p>
+                    <p className="mt-1 max-w-xs text-xs text-slate-500">When someone assigns you a ticket, it will show here.</p>
                   </div>
                 ) : (
-                  <ul className="grid gap-3">
+                  <ul className="space-y-2">
                     {assignedToMe.map((t) => (
-                      <li key={t.id}>
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                          onClick={() => router.push(`/tickets/${t.id}`)}
-                        >
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-100">
-                            {t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED ? (
-                              <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                            ) : t.status === TicketStatus.IN_PROGRESS ? (
-                              <Clock className="h-6 w-6 text-amber-500" />
-                            ) : (
-                              <AlertCircle className="h-6 w-6 text-indigo-500" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                  t.priority === TicketPriority.CRITICAL
-                                    ? "bg-rose-100 text-rose-700"
-                                    : t.priority === TicketPriority.HIGH
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-slate-100 text-slate-600"
-                                }`}
-                              >
-                                {priorityLabel[t.priority] || t.priority}
-                              </span>
-                              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700">
-                                {statusLabel[t.status] || t.status}
-                              </span>
-                            </div>
-                            <h3 className="mt-1 font-semibold text-slate-900 line-clamp-1">{t.title}</h3>
-                            <p className="mt-0.5 text-xs text-slate-500">
-                              {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-                            </p>
-                          </div>
-                          <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white">
-                            Action
-                          </span>
-                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-                        </button>
-                      </li>
+                      <TicketRow key={t.id} ticket={t} onOpen={() => router.push(`/tickets/${t.id}`)} actionLabel="Open" highlight />
                     ))}
                   </ul>
                 )}
               </div>
             </section>
 
-            {/* My tickets — created by me */}
-            <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
-              <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-3">
-                <h3 className="text-base font-semibold text-slate-800">My tickets</h3>
-                <p className="text-xs text-slate-500">Tickets you raised</p>
+            {/* My tickets */}
+            <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+              <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/50 px-5 py-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                  <Inbox className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-800">My tickets</h2>
+                  <p className="text-xs text-slate-500">Tickets you raised</p>
+                </div>
               </div>
               <div className="p-4">
                 {myTickets.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
                     <MessageSquare className="h-10 w-10 text-slate-300" />
                     <p className="mt-2 text-sm text-slate-600">No tickets yet</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 rounded-xl"
-                      onClick={() => setCreateOpen(true)}
-                    >
+                    <Button variant="outline" size="sm" className="mt-3 rounded-lg" onClick={() => setCreateOpen(true)}>
                       <PlusCircle className="mr-1.5 h-4 w-4" />
-                      Raise your first ticket
+                      Create your first ticket
                     </Button>
                   </div>
                 ) : (
-                  <ul className="grid gap-3">
+                  <ul className="space-y-2">
                     {myTickets.map((t) => (
-                      <li key={t.id}>
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-indigo-200 hover:shadow focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                          onClick={() => router.push(`/tickets/${t.id}`)}
-                        >
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100">
-                            {t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED ? (
-                              <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                            ) : t.status === TicketStatus.IN_PROGRESS ? (
-                              <Clock className="h-6 w-6 text-amber-500" />
-                            ) : (
-                              <AlertCircle className="h-6 w-6 text-indigo-500" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                  t.priority === TicketPriority.CRITICAL
-                                    ? "bg-rose-100 text-rose-700"
-                                    : t.priority === TicketPriority.HIGH
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-slate-100 text-slate-600"
-                                }`}
-                              >
-                                {priorityLabel[t.priority] || t.priority}
-                              </span>
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                                {statusLabel[t.status] || t.status}
-                              </span>
-                            </div>
-                            <h3 className="mt-1 font-semibold text-slate-900 line-clamp-1">{t.title}</h3>
-                            <p className="mt-0.5 text-xs text-slate-500">
-                              {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-                            </p>
-                          </div>
-                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-                        </button>
-                      </li>
+                      <TicketRow key={t.id} ticket={t} onOpen={() => router.push(`/tickets/${t.id}`)} />
                     ))}
                   </ul>
                 )}
@@ -484,7 +467,7 @@ function PortalContent() {
 
             {!hasDashboardAccess && !accessLoading && (
               <p className="text-center text-xs text-slate-400">
-                Need access to the full app? Ask your administrator to assign you dashboard access.
+                Need full app access? Ask your administrator for dashboard permissions.
               </p>
             )}
           </div>
@@ -495,64 +478,52 @@ function PortalContent() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="rounded-2xl border-slate-200 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Raise a ticket</DialogTitle>
+            <DialogTitle className="text-lg">New ticket</DialogTitle>
             <p className="text-sm text-slate-500">We’ll review and assign it to the right team.</p>
           </DialogHeader>
           <form onSubmit={handleCreate}>
             <div className="space-y-4 py-4">
               <div>
-                <Label htmlFor="portal-title">Title</Label>
+                <Label htmlFor="portal-title" className="text-sm font-medium text-slate-700">Title</Label>
                 <Input
                   id="portal-title"
-                  placeholder="Short summary"
+                  placeholder="Brief summary"
                   value={createTitle}
                   onChange={(e) => setCreateTitle(e.target.value)}
-                  className="mt-1.5 rounded-xl"
+                  className="mt-1.5 rounded-lg border-slate-200"
                 />
               </div>
               <div>
-                <Label htmlFor="portal-desc">Description</Label>
+                <Label htmlFor="portal-desc" className="text-sm font-medium text-slate-700">Description</Label>
                 <Textarea
                   id="portal-desc"
-                  placeholder="Describe your issue or request in detail..."
+                  placeholder="Describe your issue or request..."
                   value={createDesc}
                   onChange={(e) => setCreateDesc(e.target.value)}
                   rows={4}
-                  className="mt-1.5 rounded-xl"
+                  className="mt-1.5 rounded-lg border-slate-200"
                 />
               </div>
               <div>
-                <Label>Priority</Label>
-                <Select
-                  value={createPriority}
-                  onValueChange={(v) => setCreatePriority(v as TicketPriority)}
-                >
-                  <SelectTrigger className="mt-1.5 rounded-xl">
+                <Label className="text-sm font-medium text-slate-700">Priority</Label>
+                <Select value={createPriority} onValueChange={(v) => setCreatePriority(v as TicketPriority)}>
+                  <SelectTrigger className="mt-1.5 rounded-lg">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {Object.entries(priorityLabel).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>
-                        {v}
-                      </SelectItem>
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} className="rounded-lg">
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting} className="rounded-xl bg-indigo-600 hover:bg-indigo-700">
-                {submitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting…
-                  </>
-                ) : (
-                  "Submit ticket"
-                )}
+              <Button type="submit" disabled={submitting} className="rounded-lg bg-slate-900 hover:bg-slate-800">
+                {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Submitting…</> : "Submit"}
               </Button>
             </DialogFooter>
           </form>

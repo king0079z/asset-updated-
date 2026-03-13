@@ -31,6 +31,8 @@ const PUBLIC_ROUTES = [
   '/', '/login', '/signup', '/forgot-password',
   '/magic-link-login', '/reset-password',
 ];
+const PORTAL_ROUTES = ['/portal'];
+const ROUTES_WITHOUT_SHELL = [...PUBLIC_ROUTES, ...PORTAL_ROUTES];
 
 /**
  * Renders the persistent sidebar shell when authenticated.
@@ -40,7 +42,7 @@ const PUBLIC_ROUTES = [
 function AppShellWrapper({ children }: { children: React.ReactNode }) {
   const { user, initializing } = useAuth();
   const router = useRouter();
-  const isPublic = PUBLIC_ROUTES.includes(router.pathname);
+  const skipShell = ROUTES_WITHOUT_SHELL.includes(router.pathname);
   const prefetchedRef = useRef(false);
 
   // Pre-warm every page's cache once the user is confirmed logged in
@@ -56,8 +58,8 @@ function AppShellWrapper({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  // Public pages or during auth init: no shell needed
-  if (isPublic || !user || initializing) {
+  // Public, portal, or during auth init: no shell (no sidebar)
+  if (skipShell || !user || initializing) {
     return <>{children}</>;
   }
 
