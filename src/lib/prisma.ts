@@ -14,8 +14,8 @@ declare const globalThis: {
   prismaGlobal: ReturnType<typeof prismaClientSingleton>;
 } & typeof global;
 
+// Always reuse the global client — prevents connection pool exhaustion on Vercel serverless
 const prisma = globalThis.prismaGlobal ?? prismaClientSingleton()
+globalThis.prismaGlobal = prisma
 
 export default prisma
-
-if (process.env.VERCEL_ENV !== 'production') globalThis.prismaGlobal = prisma

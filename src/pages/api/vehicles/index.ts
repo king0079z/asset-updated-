@@ -13,16 +13,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   
   try {
     const supabase = createClient(req, res);
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
 
-    if (authError) {
-      console.error(`Authentication error:`, authError);
-      return res.status(401).json({ message: 'Unauthorized', error: authError.message });
+    let user: any = null;
+    try {
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      if (authError) {
+        return res.status(401).json({ message: 'Unauthorized', error: authError.message });
+      }
+      user = session?.user ?? null;
+    } catch (authException: any) {
+      // getSession() can throw when the refresh token is completely invalid
+      return res.status(401).json({ message: 'Unauthorized - Session error', error: authException?.message });
     }
 
     if (!user) {
-      console.error(`No user found in request`);
       return res.status(401).json({ message: 'Unauthorized - No user found' });
     }
 
