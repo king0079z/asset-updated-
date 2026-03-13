@@ -2,40 +2,35 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
-import ProtectedRoute from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import {
   PlusCircle, Bell, LogOut, Loader2, MessageSquare, Clock,
   CheckCircle2, AlertCircle, ChevronRight, LayoutDashboard,
-  UserCheck, Inbox, Search, Filter, X, Send, Activity,
+  UserCheck, Inbox, Search, X, Send, Activity,
   ArrowUp, Minus, ArrowDown, RefreshCw, TicketX, Circle,
-  ChevronUp, ChevronDown, SlidersHorizontal,
+  SlidersHorizontal,
 } from "lucide-react";
 import { TicketStatus, TicketPriority } from "@prisma/client";
+import { createClient as createSSRClient } from "@/util/supabase/server-props";
+import { getUserRoleData } from "@/util/roleCheck";
+import prisma from "@/lib/prisma";
+import type { GetServerSideProps } from "next";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 interface Ticket {
   id: string; displayId: string | null; title: string; description: string;
-  status: TicketStatus; priority: TicketPriority;
+  status: string; priority: string;
   userId?: string; assignedToId?: string | null;
   createdAt: string; updatedAt: string; source?: string | null;
 }
@@ -48,22 +43,27 @@ interface NotificationRow {
   id: string; ticketId: string | null; type: string;
   title: string; message: string; readAt: string | null; createdAt: string;
 }
+interface PortalProps {
+  initialTickets: Ticket[];
+  initialNotifications: NotificationRow[];
+  hasDashboardAccess: boolean;
+}
 
 /* ── Constants ──────────────────────────────────────────────────────────── */
-const PRIORITY_CONFIG = {
-  CRITICAL: { label: "Critical", color: "text-red-600", bg: "bg-red-50", border: "border-red-200", icon: <ArrowUp className="h-3 w-3" /> },
-  HIGH:     { label: "High",     color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200", icon: <ArrowUp className="h-3 w-3" /> },
-  MEDIUM:   { label: "Medium",   color: "text-amber-600",  bg: "bg-amber-50",  border: "border-amber-200",  icon: <Minus className="h-3 w-3" /> },
+const PRIORITY_CONFIG: Record<string, any> = {
+  CRITICAL: { label: "Critical", color: "text-red-600",     bg: "bg-red-50",     border: "border-red-200",     icon: <ArrowUp className="h-3 w-3" /> },
+  HIGH:     { label: "High",     color: "text-orange-600",  bg: "bg-orange-50",  border: "border-orange-200",  icon: <ArrowUp className="h-3 w-3" /> },
+  MEDIUM:   { label: "Medium",   color: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-200",   icon: <Minus className="h-3 w-3" /> },
   LOW:      { label: "Low",      color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", icon: <ArrowDown className="h-3 w-3" /> },
 };
-const STATUS_CONFIG = {
-  OPEN:        { label: "Open",        color: "text-blue-700",  bg: "bg-blue-50",   border: "border-blue-200",  dot: "bg-blue-500"  },
-  IN_PROGRESS: { label: "In Progress", color: "text-amber-700", bg: "bg-amber-50",  border: "border-amber-200", dot: "bg-amber-500" },
+const STATUS_CONFIG: Record<string, any> = {
+  OPEN:        { label: "Open",        color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    dot: "bg-blue-500"    },
+  IN_PROGRESS: { label: "In Progress", color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",   dot: "bg-amber-500"   },
   RESOLVED:    { label: "Resolved",    color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500" },
-  CLOSED:      { label: "Closed",      color: "text-slate-600",  bg: "bg-slate-100", border: "border-slate-200", dot: "bg-slate-400" },
+  CLOSED:      { label: "Closed",      color: "text-slate-600",   bg: "bg-slate-100",  border: "border-slate-200",   dot: "bg-slate-400"   },
 };
 
-/* ── Priority badge ─────────────────────────────────────────────────────── */
+/* ── Small helpers ──────────────────────────────────────────────────────── */
 function PBadge({ p }: { p: string }) {
   const c = PRIORITY_CONFIG[p] || PRIORITY_CONFIG.MEDIUM;
   return (
@@ -72,7 +72,6 @@ function PBadge({ p }: { p: string }) {
     </span>
   );
 }
-/* ── Status badge ───────────────────────────────────────────────────────── */
 function SBadge({ s }: { s: string }) {
   const c = STATUS_CONFIG[s] || STATUS_CONFIG.OPEN;
   return (
@@ -82,7 +81,6 @@ function SBadge({ s }: { s: string }) {
     </span>
   );
 }
-/* ── Time ago ───────────────────────────────────────────────────────────── */
 function timeAgo(d: string) {
   const diff = Date.now() - new Date(d).getTime();
   const m = Math.floor(diff / 60000);
@@ -94,8 +92,8 @@ function timeAgo(d: string) {
 }
 
 /* ── Ticket drawer ──────────────────────────────────────────────────────── */
-function TicketDrawer({ ticket, onClose, userId, onRefresh }: {
-  ticket: Ticket; onClose: () => void; userId: string; onRefresh: () => void;
+function TicketDrawer({ ticket, onClose, onRefresh }: {
+  ticket: Ticket; onClose: () => void; onRefresh: () => void;
 }) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -107,7 +105,7 @@ function TicketDrawer({ ticket, onClose, userId, onRefresh }: {
     setHistoryLoading(true);
     try {
       const res = await fetch(`/api/tickets/${ticket.id}/history`);
-      if (res.ok) { const d = await res.json(); setHistory(d || []); }
+      if (res.ok) setHistory(await res.json() || []);
     } finally { setHistoryLoading(false); }
   }, [ticket.id]);
 
@@ -134,37 +132,29 @@ function TicketDrawer({ ticket, onClose, userId, onRefresh }: {
     } finally { setPosting(false); }
   };
 
-  const sc = STATUS_CONFIG[ticket.status] || STATUS_CONFIG.OPEN;
   const steps = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
   const stepIdx = steps.indexOf(ticket.status);
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      {/* Drawer */}
-      <div className="relative ml-auto flex h-full w-full max-w-xl flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+      <div className="relative ml-auto flex h-full w-full max-w-xl flex-col bg-white shadow-2xl" style={{ animation: "slideIn .22s cubic-bezier(.22,1,.36,1)" }}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-sm font-semibold text-slate-500">
-              {ticket.displayId || ticket.id.slice(0, 8)}
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm font-semibold text-slate-400">{ticket.displayId || ticket.id.slice(0, 8)}</span>
             <SBadge s={ticket.status} />
             <PBadge p={ticket.priority} />
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
-            <X className="h-4 w-4" />
-          </button>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
         </div>
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
-          {/* Title & description */}
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="text-base font-semibold text-slate-900">{ticket.title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">{ticket.description}</p>
-            <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
+            <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
               <span>Created {timeAgo(ticket.createdAt)}</span>
               <span>Updated {timeAgo(ticket.updatedAt)}</span>
             </div>
@@ -172,15 +162,15 @@ function TicketDrawer({ ticket, onClose, userId, onRefresh }: {
 
           {/* Progress bar */}
           <div className="border-b border-slate-100 px-5 py-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Progress</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Progress</p>
             <div className="flex items-center gap-1">
               {steps.map((step, i) => {
-                const sc2 = STATUS_CONFIG[step];
+                const sc = STATUS_CONFIG[step];
                 const done = i <= stepIdx;
                 return (
                   <div key={step} className="flex flex-1 flex-col items-center gap-1">
-                    <div className={`h-1.5 w-full rounded-full transition-all duration-500 ${done ? sc2.dot : "bg-slate-200"}`} />
-                    <span className={`text-[10px] font-medium ${done ? sc2.color : "text-slate-400"}`}>{sc2.label}</span>
+                    <div className={`h-1.5 w-full rounded-full transition-all duration-500 ${done ? sc.dot : "bg-slate-200"}`} />
+                    <span className={`text-[10px] font-medium ${done ? sc.color : "text-slate-400"}`}>{sc.label}</span>
                   </div>
                 );
               })}
@@ -189,15 +179,15 @@ function TicketDrawer({ ticket, onClose, userId, onRefresh }: {
 
           {/* Activity timeline */}
           <div className="px-5 py-4">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Activity</p>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">Activity</p>
             {historyLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
             ) : history.length === 0 ? (
-              <p className="text-center text-sm text-slate-500 py-4">No activity yet.</p>
+              <p className="py-4 text-center text-sm text-slate-500">No activity yet.</p>
             ) : (
               <div className="relative space-y-0">
-                <div className="absolute left-4 top-2 bottom-2 w-px bg-slate-100" aria-hidden />
-                {[...history].reverse().map((h) => (
+                <div className="absolute bottom-2 left-4 top-2 w-px bg-slate-100" aria-hidden />
+                {[...history].reverse().map(h => (
                   <div key={h.id} className="relative flex gap-3 pb-5">
                     <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-2 ring-white">
                       <Activity className="h-3.5 w-3.5 text-slate-500" />
@@ -205,8 +195,7 @@ function TicketDrawer({ ticket, onClose, userId, onRefresh }: {
                     <div className="min-w-0 flex-1 pt-1">
                       <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
                         <span className="font-medium text-slate-700">{h.user.email}</span>
-                        <span>·</span>
-                        <span>{timeAgo(h.createdAt)}</span>
+                        <span>·</span><span>{timeAgo(h.createdAt)}</span>
                         {h.status && <><span>·</span><SBadge s={h.status} /></>}
                         {h.priority && <><span>·</span><PBadge p={h.priority} /></>}
                       </div>
@@ -226,10 +215,10 @@ function TicketDrawer({ ticket, onClose, userId, onRefresh }: {
             <Textarea
               placeholder="Add a comment or update…"
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={e => setComment(e.target.value)}
               rows={3}
-              className="resize-none rounded-xl border-slate-200 bg-white text-sm focus-visible:ring-slate-400/30"
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postComment(e as any); }}
+              className="resize-none rounded-xl border-slate-200 bg-white text-sm"
+              onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postComment(e as any); }}
             />
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400">Ctrl+Enter to submit</span>
@@ -250,47 +239,32 @@ function TicketCard({ t, onClick, assigned }: { t: Ticket; onClick: () => void; 
   const sc = STATUS_CONFIG[t.status] || STATUS_CONFIG.OPEN;
   return (
     <li>
-      <button
-        type="button"
-        onClick={onClick}
+      <button type="button" onClick={onClick}
         className={`group relative w-full overflow-hidden rounded-xl border text-left transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400/30 ${
-          assigned
-            ? "border-violet-200/80 bg-gradient-to-r from-violet-50/80 to-white hover:border-violet-300"
-            : "border-slate-200/70 bg-white hover:border-slate-300"
-        }`}
-      >
-        {/* Left accent strip */}
-        <div className={`absolute left-0 top-0 bottom-0 w-1 ${sc.dot} rounded-l-xl`} />
+          assigned ? "border-violet-200/80 bg-gradient-to-r from-violet-50/80 to-white hover:border-violet-300"
+                   : "border-slate-200/70 bg-white hover:border-slate-300"
+        }`}>
+        <div className={`absolute bottom-0 left-0 top-0 w-1 rounded-l-xl ${sc.dot}`} />
         <div className="flex items-center gap-4 p-4 pl-5">
-          {/* Status icon */}
           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${sc.bg} border ${sc.border}`}>
-            {(t.status === "RESOLVED" || t.status === "CLOSED") ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            ) : t.status === "IN_PROGRESS" ? (
-              <Clock className="h-5 w-5 text-amber-600" />
-            ) : (
-              <Circle className="h-5 w-5 text-blue-500" />
-            )}
+            {(t.status === "RESOLVED" || t.status === "CLOSED")
+              ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              : t.status === "IN_PROGRESS"
+              ? <Clock className="h-5 w-5 text-amber-600" />
+              : <Circle className="h-5 w-5 text-blue-500" />}
           </div>
-          {/* Content */}
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+            <div className="mb-1 flex flex-wrap items-center gap-1.5">
               <span className="font-mono text-[11px] font-semibold text-slate-400">{t.displayId || t.id.slice(0, 8)}</span>
-              <PBadge p={t.priority} />
-              <SBadge s={t.status} />
+              <PBadge p={t.priority} /><SBadge s={t.status} />
             </div>
-            <h3 className="font-medium text-slate-900 line-clamp-1 leading-snug">{t.title}</h3>
-            <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{t.description}</p>
+            <h3 className="font-medium leading-snug text-slate-900 line-clamp-1">{t.title}</h3>
+            <p className="mt-0.5 text-xs text-slate-500 line-clamp-1">{t.description}</p>
             <p className="mt-1 text-[11px] text-slate-400">{timeAgo(t.updatedAt)}</p>
           </div>
-          {/* Action */}
-          <div className="shrink-0 flex items-center gap-2">
-            {assigned && (
-              <span className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white">
-                Action →
-              </span>
-            )}
-            <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
+          <div className="flex shrink-0 items-center gap-2">
+            {assigned && <span className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white">Action →</span>}
+            <ChevronRight className="h-4 w-4 text-slate-300 transition-colors group-hover:text-slate-500" />
           </div>
         </div>
       </button>
@@ -298,62 +272,30 @@ function TicketCard({ t, onClick, assigned }: { t: Ticket; onClick: () => void; 
   );
 }
 
-/* ── Main content ───────────────────────────────────────────────────────── */
-function PortalContent() {
+/* ── Main page ──────────────────────────────────────────────────────────── */
+function PortalContent({ initialTickets, initialNotifications, hasDashboardAccess }: PortalProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
 
-  /* State */
-  const [tickets, setTickets]             = useState<Ticket[]>([]);
-  const [loading, setLoading]             = useState(true);
+  // Data state — seeded from SSR props, no loading needed
+  const [tickets, setTickets]             = useState<Ticket[]>(initialTickets);
+  const [notifications, setNotifications] = useState<NotificationRow[]>(initialNotifications);
+  const [refreshing, setRefreshing]       = useState(false);
+
+  // UI state
   const [createOpen, setCreateOpen]       = useState(false);
   const [createTitle, setCreateTitle]     = useState("");
   const [createDesc, setCreateDesc]       = useState("");
-  const [createPriority, setCreatePriority] = useState<TicketPriority>(TicketPriority.MEDIUM);
+  const [createPriority, setCreatePriority] = useState<string>(TicketPriority.MEDIUM);
   const [submitting, setSubmitting]       = useState(false);
-  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [notifOpen, setNotifOpen]         = useState(false);
-  const [hasDashboardAccess, setDashAccess] = useState(false);
-  const [accessReady, setAccessReady]     = useState(false);
   const [search, setSearch]               = useState("");
-  const [statusFilter, setStatusFilter]   = useState<string>("ALL");
-  const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter]   = useState("ALL");
+  const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [activeView, setActiveView]       = useState<"assigned" | "mine" | "all">("assigned");
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [filterOpen, setFilterOpen]       = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  /* Single-request load: one auth check, one DB round-trip */
-  useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-    fetch("/api/portal/data")
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(({ tickets: tkts, notifications: notifs, permissions: perms }) => {
-        setTickets(tkts || []);
-        setNotifications(notifs || []);
-        if (perms) setDashAccess(!!perms.hasDashboardAccess);
-      })
-      .catch(() => setTickets([]))
-      .finally(() => { setLoading(false); setAccessReady(true); });
-  }, [user]);
-
-  /* Refresh — bust cache then reload */
-  const refreshTickets = useCallback(async () => {
-    if (!user) return;
-    try {
-      const res = await fetch("/api/portal/data", { headers: { "Cache-Control": "no-cache" } });
-      if (!res.ok) return;
-      const { tickets: tkts, notifications: notifs, permissions: perms } = await res.json();
-      setTickets(tkts || []);
-      setNotifications(notifs || []);
-      if (perms) setDashAccess(!!perms.hasDashboardAccess);
-      if (selectedTicket) {
-        const updated = (tkts || []).find((t: Ticket) => t.id === selectedTicket.id);
-        if (updated) setSelectedTicket(updated);
-      }
-    } catch {}
-  }, [user, selectedTicket]);
 
   /* Keyboard shortcuts */
   useEffect(() => {
@@ -366,7 +308,23 @@ function PortalContent() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  /* Mark notif read */
+  /* Background refresh — no full-page loading spinner */
+  const doRefresh = useCallback(async (bustCache = false) => {
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/portal/data", bustCache ? { headers: { "Cache-Control": "no-cache" } } : {});
+      if (!res.ok) return;
+      const { tickets: tkts, notifications: notifs } = await res.json();
+      setTickets(tkts || []);
+      setNotifications(notifs || []);
+      if (selectedTicket) {
+        const upd = (tkts || []).find((t: Ticket) => t.id === selectedTicket.id);
+        if (upd) setSelectedTicket(upd);
+      }
+    } catch {} finally { setRefreshing(false); }
+  }, [selectedTicket]);
+
+  /* Notifications */
   const markRead = async (id: string) => {
     try {
       await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
@@ -391,7 +349,7 @@ function PortalContent() {
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error || "Failed"); }
       toast({ title: "✓ Ticket created", description: "Our team will review it shortly." });
       setCreateOpen(false); setCreateTitle(""); setCreateDesc(""); setCreatePriority(TicketPriority.MEDIUM);
-      refreshTickets();
+      doRefresh(true);
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : "Could not create ticket" });
     } finally { setSubmitting(false); }
@@ -401,60 +359,44 @@ function PortalContent() {
   const unreadCount = notifications.filter(n => !n.readAt).length;
   const assignedToMe = tickets.filter(t => t.assignedToId === user?.id);
   const myTickets    = tickets.filter(t => t.userId === user?.id);
-
-  const baseList = activeView === "assigned" ? assignedToMe : activeView === "mine" ? myTickets : tickets;
-  const filtered = baseList.filter(t => {
+  const baseList     = activeView === "assigned" ? assignedToMe : activeView === "mine" ? myTickets : tickets;
+  const filtered     = baseList.filter(t => {
     const q = search.toLowerCase();
-    const matchQ = !q || t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || (t.displayId || "").toLowerCase().includes(q);
-    const matchS = statusFilter === "ALL" || t.status === statusFilter;
-    const matchP = priorityFilter === "ALL" || t.priority === priorityFilter;
-    return matchQ && matchS && matchP;
+    return (!q || t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || (t.displayId || "").toLowerCase().includes(q))
+      && (statusFilter === "ALL" || t.status === statusFilter)
+      && (priorityFilter === "ALL" || t.priority === priorityFilter);
   });
 
-  /* Stats */
   const stats = {
-    open: myTickets.filter(t => t.status === "OPEN").length,
+    open:       myTickets.filter(t => t.status === "OPEN").length,
     inProgress: myTickets.filter(t => t.status === "IN_PROGRESS").length,
-    resolved: myTickets.filter(t => t.status === "RESOLVED" || t.status === "CLOSED").length,
-    assigned: assignedToMe.length,
+    resolved:   myTickets.filter(t => t.status === "RESOLVED" || t.status === "CLOSED").length,
+    assigned:   assignedToMe.length,
   };
 
   return (
     <div className="min-h-screen bg-[#f5f6fa] antialiased">
+      <style>{`@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
       <Toaster />
-      {/* Keyboard hint */}
-      <style>{`
-        @keyframes slide-in-from-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
-        .animate-in.slide-in-from-right { animation: slide-in-from-right 0.25s cubic-bezier(.22,1,.36,1); }
-      `}</style>
 
-      {/* ── Top bar ───────────────────────────────────────────────────────── */}
+      {/* ── Top bar ──────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/98 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          {/* Brand */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex shrink-0 items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900">
               <TicketX className="h-4 w-4 text-white" />
             </div>
             <span className="text-sm font-bold tracking-tight text-slate-900">Support Portal</span>
           </div>
 
-          {/* Search */}
           <div className="relative hidden max-w-xs flex-1 sm:flex lg:max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search tickets… (⌘K)"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400/30"
-            />
+            <input ref={searchRef} type="text" placeholder="Search tickets… (⌘K)" value={search} onChange={e => setSearch(e.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400/30" />
           </div>
 
-          {/* Right actions */}
-          <div className="flex items-center gap-1 shrink-0">
-            {accessReady && hasDashboardAccess && (
+          <div className="flex shrink-0 items-center gap-1">
+            {hasDashboardAccess && (
               <Button variant="ghost" size="sm" className="gap-1.5 text-slate-600 hover:bg-slate-100" onClick={() => router.push("/dashboard")}>
                 <LayoutDashboard className="h-4 w-4" /><span className="hidden md:inline">Dashboard</span>
               </Button>
@@ -463,27 +405,19 @@ function PortalContent() {
             <div className="relative">
               <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg" onClick={() => setNotifOpen(o => !o)}>
                 <Bell className="h-4 w-4 text-slate-600" />
-                {unreadCount > 0 && (
-                  <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-0.5 text-[10px] font-bold text-white">{unreadCount}</span>
-                )}
+                {unreadCount > 0 && <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-0.5 text-[10px] font-bold text-white">{unreadCount}</span>}
               </Button>
               {notifOpen && (
                 <>
                   <div className="fixed inset-0 z-40" aria-hidden onClick={() => setNotifOpen(false)} />
                   <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
                     <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                      <div>
-                        <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
-                        <p className="text-xs text-slate-500">{unreadCount} unread</p>
-                      </div>
+                      <div><h3 className="text-sm font-semibold text-slate-800">Notifications</h3><p className="text-xs text-slate-500">{unreadCount} unread</p></div>
                       <button onClick={() => setNotifOpen(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>
                     </div>
                     <div className="max-h-72 overflow-y-auto">
                       {notifications.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8">
-                          <Bell className="h-8 w-8 text-slate-200" />
-                          <p className="mt-2 text-sm text-slate-500">No notifications</p>
-                        </div>
+                        <div className="flex flex-col items-center justify-center py-8"><Bell className="h-8 w-8 text-slate-200" /><p className="mt-2 text-sm text-slate-500">No notifications</p></div>
                       ) : notifications.map(n => (
                         <button key={n.id} type="button" onClick={() => { markRead(n.id); if (n.ticketId) { const t = tickets.find(tk => tk.id === n.ticketId); if (t) setSelectedTicket(t); } setNotifOpen(false); }}
                           className="flex w-full items-start gap-3 border-b border-slate-50 px-4 py-3 text-left hover:bg-slate-50">
@@ -508,47 +442,40 @@ function PortalContent() {
       </div>
 
       <div className="mx-auto max-w-screen-xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* ── Top: greeting + CTA ─────────────────────────────────────────── */}
+        {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-              My Tickets
-            </h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">My Tickets</h1>
             <p className="mt-0.5 text-sm text-slate-500">Track, comment and manage your support requests</p>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={refreshTickets} className="gap-1.5 rounded-lg">
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Refresh</span>
+            <Button size="sm" variant="outline" onClick={() => doRefresh(true)} disabled={refreshing} className="gap-1.5 rounded-lg">
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /><span className="hidden sm:inline">Refresh</span>
             </Button>
             <Button size="sm" className="rounded-lg bg-slate-900 px-4 hover:bg-slate-800" onClick={() => setCreateOpen(true)}>
-              <PlusCircle className="mr-1.5 h-4 w-4" />
-              New ticket <kbd className="ml-2 hidden rounded bg-white/20 px-1 py-0.5 text-[10px] font-mono sm:inline">N</kbd>
+              <PlusCircle className="mr-1.5 h-4 w-4" />New ticket
+              <kbd className="ml-2 hidden rounded bg-white/20 px-1 py-0.5 font-mono text-[10px] sm:inline">N</kbd>
             </Button>
           </div>
         </div>
 
-        {/* ── Stats strip ─────────────────────────────────────────────────── */}
+        {/* Stats */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: "Assigned to me", value: stats.assigned, dot: "bg-violet-500", click: () => setActiveView("assigned") },
-            { label: "Open",           value: stats.open,     dot: "bg-blue-500",   click: () => { setActiveView("mine"); setStatusFilter("OPEN"); } },
-            { label: "In Progress",    value: stats.inProgress, dot: "bg-amber-500", click: () => { setActiveView("mine"); setStatusFilter("IN_PROGRESS"); } },
-            { label: "Resolved",       value: stats.resolved, dot: "bg-emerald-500", click: () => { setActiveView("mine"); setStatusFilter("RESOLVED"); } },
-          ].map(stat => (
-            <button key={stat.label} onClick={stat.click} className="flex flex-col gap-1 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-sm transition hover:shadow-md hover:border-slate-300 focus:outline-none">
-              <div className="flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${stat.dot}`} />
-                <span className="text-xs font-medium text-slate-500">{stat.label}</span>
-              </div>
-              <span className="text-2xl font-bold tracking-tight text-slate-900">{stat.value}</span>
+            { label: "Assigned to me", value: stats.assigned,   dot: "bg-violet-500", click: () => setActiveView("assigned") },
+            { label: "Open",           value: stats.open,       dot: "bg-blue-500",   click: () => { setActiveView("mine"); setStatusFilter("OPEN"); } },
+            { label: "In Progress",    value: stats.inProgress, dot: "bg-amber-500",  click: () => { setActiveView("mine"); setStatusFilter("IN_PROGRESS"); } },
+            { label: "Resolved",       value: stats.resolved,   dot: "bg-emerald-500",click: () => { setActiveView("mine"); setStatusFilter("RESOLVED"); } },
+          ].map(s => (
+            <button key={s.label} onClick={s.click} className="flex flex-col gap-1 rounded-xl border border-slate-200/80 bg-white p-4 text-left shadow-sm transition hover:border-slate-300 hover:shadow-md focus:outline-none">
+              <div className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${s.dot}`} /><span className="text-xs font-medium text-slate-500">{s.label}</span></div>
+              <span className="text-2xl font-bold tracking-tight text-slate-900">{s.value}</span>
             </button>
           ))}
         </div>
 
-        {/* ── View tabs + filters ──────────────────────────────────────────── */}
+        {/* Tabs + filters */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          {/* Tabs */}
           <div className="flex rounded-lg border border-slate-200 bg-white p-1">
             {[
               { key: "assigned", label: "Assigned to me", count: assignedToMe.length },
@@ -560,14 +487,10 @@ function PortalContent() {
                   activeView === tab.key ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
                 }`}>
                 {tab.label}
-                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${activeView === tab.key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
-                  {tab.count}
-                </span>
+                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${activeView === tab.key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>{tab.count}</span>
               </button>
             ))}
           </div>
-
-          {/* Mobile search + filters */}
           <div className="flex items-center gap-2">
             <div className="relative sm:hidden">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
@@ -575,12 +498,9 @@ function PortalContent() {
                 className="h-8 w-36 rounded-lg border border-slate-200 bg-white pl-8 pr-2 text-xs focus:border-slate-400 focus:outline-none" />
             </div>
             <div className="relative">
-              <Button variant="outline" size="sm" className="gap-1.5 rounded-lg h-8 text-xs" onClick={() => setFilterOpen(o => !o)}>
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Filter
-                {(statusFilter !== "ALL" || priorityFilter !== "ALL") && (
-                  <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">!</span>
-                )}
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-lg text-xs" onClick={() => setFilterOpen(o => !o)}>
+                <SlidersHorizontal className="h-3.5 w-3.5" />Filter
+                {(statusFilter !== "ALL" || priorityFilter !== "ALL") && <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">!</span>}
               </Button>
               {filterOpen && (
                 <>
@@ -608,9 +528,7 @@ function PortalContent() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button size="sm" variant="outline" className="w-full rounded-lg text-xs" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); }}>
-                        Clear filters
-                      </Button>
+                      <Button size="sm" variant="outline" className="w-full rounded-lg text-xs" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); }}>Clear filters</Button>
                     </div>
                   </div>
                 </>
@@ -619,15 +537,8 @@ function PortalContent() {
           </div>
         </div>
 
-        {/* ── Ticket list ─────────────────────────────────────────────────── */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-24">
-            <div className="relative">
-              <div className="h-12 w-12 rounded-full border-4 border-slate-200 border-t-slate-800 animate-spin" />
-            </div>
-            <p className="mt-4 text-sm text-slate-500">Loading your tickets…</p>
-          </div>
-        ) : filtered.length === 0 ? (
+        {/* Ticket list — no loading spinner, data is SSR */}
+        {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm">
             <Inbox className="h-12 w-12 text-slate-300" />
             <h3 className="mt-4 text-base font-semibold text-slate-700">
@@ -638,7 +549,7 @@ function PortalContent() {
             </p>
             {!search && (
               <Button className="mt-4 rounded-lg bg-slate-900 hover:bg-slate-800" onClick={() => setCreateOpen(true)}>
-                <PlusCircle className="mr-1.5 h-4 w-4" /> Create ticket
+                <PlusCircle className="mr-1.5 h-4 w-4" />Create ticket
               </Button>
             )}
           </div>
@@ -650,7 +561,6 @@ function PortalContent() {
           </ul>
         )}
 
-        {/* Keyboard hint */}
         <p className="mt-6 text-center text-xs text-slate-400">
           <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono">N</kbd> new ticket ·{" "}
           <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono">⌘K</kbd> search ·{" "}
@@ -658,21 +568,16 @@ function PortalContent() {
         </p>
       </div>
 
-      {/* ── Ticket drawer ─────────────────────────────────────────────────── */}
+      {/* Drawer */}
       {selectedTicket && (
-        <TicketDrawer
-          ticket={selectedTicket}
-          onClose={() => setSelectedTicket(null)}
-          userId={user?.id || ""}
-          onRefresh={refreshTickets}
-        />
+        <TicketDrawer ticket={selectedTicket} onClose={() => setSelectedTicket(null)} onRefresh={() => doRefresh(true)} />
       )}
 
-      {/* ── Create dialog ─────────────────────────────────────────────────── */}
+      {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold text-slate-900">Create a new ticket</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">Create a new ticket</DialogTitle>
             <p className="text-sm text-slate-500">Our support team will review and respond shortly.</p>
           </DialogHeader>
           <form onSubmit={handleCreate}>
@@ -683,18 +588,18 @@ function PortalContent() {
               </div>
               <div>
                 <Label htmlFor="pd" className="text-sm font-medium text-slate-700">Description <span className="text-red-500">*</span></Label>
-                <Textarea id="pd" placeholder="Describe your issue in detail — include steps to reproduce, expected vs actual behaviour, screenshots if any…" value={createDesc} onChange={e => setCreateDesc(e.target.value)} rows={5} className="mt-1.5 rounded-lg border-slate-200 resize-none" />
+                <Textarea id="pd" placeholder="Describe your issue in detail…" value={createDesc} onChange={e => setCreateDesc(e.target.value)} rows={5} className="mt-1.5 resize-none rounded-lg border-slate-200" />
                 <p className="mt-1 text-xs text-slate-400">{createDesc.length} chars (min 10)</p>
               </div>
               <div>
                 <Label className="text-sm font-medium text-slate-700">Priority</Label>
                 <div className="mt-1.5 grid grid-cols-4 gap-2">
                   {(Object.entries(PRIORITY_CONFIG) as [string, any][]).map(([k, v]) => (
-                    <button key={k} type="button" onClick={() => setCreatePriority(k as TicketPriority)}
+                    <button key={k} type="button" onClick={() => setCreatePriority(k)}
                       className={`flex flex-col items-center gap-1 rounded-lg border p-2 text-center transition ${
                         createPriority === k ? `${v.bg} ${v.border} ${v.color} shadow-sm` : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
                       }`}>
-                      <span className={`${createPriority === k ? v.color : "text-slate-400"}`}>{v.icon}</span>
+                      <span className={createPriority === k ? v.color : "text-slate-400"}>{v.icon}</span>
                       <span className="text-[11px] font-medium">{v.label}</span>
                     </button>
                   ))}
@@ -714,10 +619,77 @@ function PortalContent() {
   );
 }
 
-export default function PortalPage() {
-  return (
-    <ProtectedRoute>
-      <PortalContent />
-    </ProtectedRoute>
-  );
+/* ── getServerSideProps — runs on the server, zero client loading ────────── */
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  try {
+    // Auth via cookie — no network call to Supabase, reads from request headers
+    const supabase = createSSRClient(ctx);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      return { redirect: { destination: "/login", permanent: false } };
+    }
+    const userId = session.user.id;
+
+    // Role + tickets + notifications all in parallel — one DB round-trip each
+    const [roleData, rawTickets, rawNotifications] = await Promise.all([
+      getUserRoleData(userId),
+      (async () => {
+        const isAdminOrManager = await (async () => {
+          const rd = await getUserRoleData(userId);
+          return rd?.role === "ADMIN" || rd?.role === "MANAGER";
+        })();
+        // getUserRoleData is cached so calling twice is free
+        const rd2 = await getUserRoleData(userId);
+        const orgId = rd2?.organizationId ?? null;
+        const where = isAdminOrManager && orgId
+          ? { organizationId: orgId }
+          : isAdminOrManager
+          ? { OR: [{ organizationId: null }, { userId }] }
+          : { OR: [{ userId }, { assignedToId: userId }] };
+
+        return prisma.ticket.findMany({
+          where,
+          select: { id: true, displayId: true, title: true, description: true, status: true, priority: true, userId: true, assignedToId: true, source: true, createdAt: true, updatedAt: true },
+          orderBy: { createdAt: "desc" },
+          take: 200,
+        });
+      })(),
+      prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+      }),
+    ]);
+
+    const hasDashboardAccess = !!(
+      roleData?.isAdmin ||
+      roleData?.role === "ADMIN" ||
+      roleData?.role === "MANAGER" ||
+      (roleData?.pageAccess as any)?.["/dashboard"]
+    );
+
+    return {
+      props: {
+        initialTickets: rawTickets.map(t => ({
+          ...t,
+          createdAt: t.createdAt.toISOString(),
+          updatedAt: t.updatedAt.toISOString(),
+        })),
+        initialNotifications: rawNotifications.map(n => ({
+          ...n,
+          createdAt: n.createdAt.toISOString(),
+          readAt: n.readAt?.toISOString() ?? null,
+        })),
+        hasDashboardAccess,
+      },
+    };
+  } catch (err) {
+    console.error("[Portal SSR]", err);
+    return { redirect: { destination: "/login", permanent: false } };
+  }
+};
+
+/* ── Default export ─────────────────────────────────────────────────────── */
+export default function PortalPage(props: PortalProps) {
+  return <PortalContent {...props} />;
 }
