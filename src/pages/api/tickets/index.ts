@@ -116,8 +116,8 @@ async function ticketsHandler(
         const orgId = roleData?.organizationId ?? null;
         logApiEvent(`User role check: isAdminOrManager=${userIsAdminOrManager}`);
 
-        // Build scoped where: use Ticket.organizationId (no join) to avoid timeouts and 500s
-        let ticketWhere: any = { userId: user.id };
+        // Build scoped where: staff see tickets they created OR assigned to them; admin/manager see org tickets
+        let ticketWhere: any = { OR: [{ userId: user.id }, { assignedToId: user.id }] };
         if (userIsAdminOrManager && orgId) {
           ticketWhere = { organizationId: orgId };
         } else if (userIsAdminOrManager && !orgId) {
@@ -147,7 +147,7 @@ async function ticketsHandler(
           // Fallback: return only user's own tickets so we never 500
           logApiEvent('Tickets query failed, using fallback', queryError instanceof Error ? queryError.message : queryError);
           tickets = await prisma.ticket.findMany({
-            where: { userId: user.id },
+            where: { OR: [{ userId: user.id }, { assignedToId: user.id }] },
             select: {
               id: true, title: true, description: true, status: true,
               priority: true, userId: true, assetId: true, source: true,

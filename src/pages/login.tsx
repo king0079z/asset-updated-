@@ -1,7 +1,6 @@
 // @ts-nocheck
 import React, { useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import Link from 'next/link';
 import { AuthContext } from '@/contexts/AuthContext';
 import { useToast } from "@/components/ui/use-toast";
 import { createClient } from '@/util/supabase/component';
@@ -150,13 +149,10 @@ export default function LoginPage() {
       await signIn(email, password);
       const supabase = createClient();
       const { data } = await supabase.from('User').select('status').eq('email', email).single();
-      const isPortal = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('portal') === '1';
       if (data?.status === 'PENDING') {
         router.push('/pending-approval');
-      } else if (isPortal) {
-        router.push('/portal');
       } else {
-        router.push('/dashboard');
+        router.push('/portal');
       }
     } catch {
       toast({ variant: 'destructive', title: 'Login failed', description: 'Check your credentials and try again.' });
@@ -384,7 +380,7 @@ export default function LoginPage() {
                   <Shield style={{ width: 22, height: 22, color: 'white' }}/>
                 </div>
                 <h2 style={{ fontSize: 26, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.5px', marginBottom: 6 }}>Welcome back</h2>
-                <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.5 }}>Sign in to your AssetXAI dashboard to manage your assets in real time.</p>
+                <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.5 }}>Sign in to the Support Portal to raise tickets and track your requests.</p>
               </div>
 
               {/* Form */}
@@ -427,21 +423,13 @@ export default function LoginPage() {
                     ) : (
                       <>
                         <Shield style={{ width: 18, height: 18 }}/>
-                        Sign in to Dashboard
+                        Sign in
                         <ArrowRight style={{ width: 17, height: 17, marginLeft: 'auto' }}/>
                       </>
                     )}
                   </button>
                 </div>
               </form>
-
-              {/* Support Portal link */}
-              <div className="su4" style={{ marginTop: 16, textAlign: 'center' }}>
-                <Link href="/login?portal=1" style={{ fontSize: 13, fontWeight: 600, color: '#64748b', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Package style={{ width: 14, height: 14, color: '#7c3aed' }}/>
-                  Sign in to Support Portal (raise & track tickets)
-                </Link>
-              </div>
 
               {/* Security note */}
               <div className="su4" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18, padding: '9px 16px', borderRadius: 999, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>

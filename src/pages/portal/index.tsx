@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,9 @@ import {
   CheckCircle2,
   AlertCircle,
   ChevronRight,
+  LayoutDashboard,
+  UserCheck,
+  Inbox,
 } from "lucide-react";
 import { TicketStatus, TicketPriority } from "@prisma/client";
 
@@ -43,6 +45,8 @@ interface Ticket {
   description: string;
   status: TicketStatus;
   priority: TicketPriority;
+  userId?: string;
+  assignedToId?: string | null;
   createdAt: string;
   updatedAt: string;
   source?: string | null;
@@ -84,6 +88,8 @@ function PortalContent() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [hasDashboardAccess, setHasDashboardAccess] = useState(false);
+  const [accessLoading, setAccessLoading] = useState(true);
 
   const fetchTickets = useCallback(async () => {
     if (!user) return;
@@ -127,6 +133,29 @@ function PortalContent() {
   useEffect(() => {
     if (notifOpen) fetchNotifications();
   }, [notifOpen, fetchNotifications]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    setAccessLoading(true);
+    fetch("/api/users/permissions", { headers: { "Cache-Control": "no-cache" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const isAdmin = data.isAdmin === true;
+        const isManager = data.role === "MANAGER";
+        const hasPage = data.pageAccess && data.pageAccess["/dashboard"] === true;
+        setHasDashboardAccess(!!(isAdmin || isManager || hasPage));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setAccessLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  const assignedToMe = tickets.filter((t) => t.assignedToId === user?.id);
+  const myTickets = tickets.filter((t) => t.userId === user?.id);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,6 +230,17 @@ function PortalContent() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {!accessLoading && hasDashboardAccess && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                onClick={() => router.push("/dashboard")}
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard
+              </Button>
+            )}
             <div className="relative">
               <Button
                 variant="ghost"
@@ -274,8 +314,8 @@ function PortalContent() {
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">My tickets</h2>
-            <p className="mt-1 text-sm text-slate-500">Create a ticket or track existing ones</p>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Support Portal</h2>
+            <p className="mt-1 text-sm text-slate-500">Tickets assigned to you and ones you created</p>
           </div>
           <Button
             size="lg"
@@ -291,76 +331,164 @@ function PortalContent() {
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
           </div>
-        ) : tickets.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-            <MessageSquare className="mx-auto h-12 w-12 text-slate-300" />
-            <h3 className="mt-4 text-lg font-semibold text-slate-700">No tickets yet</h3>
-            <p className="mt-2 text-sm text-slate-500">Raise a ticket and we’ll help you as soon as possible.</p>
-            <Button
-              className="mt-6 rounded-xl bg-indigo-600 font-semibold hover:bg-indigo-700"
-              onClick={() => setCreateOpen(true)}
-            >
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Raise your first ticket
-            </Button>
-          </div>
         ) : (
-          <ul className="grid gap-4 sm:grid-cols-1">
-            {tickets.map((t) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-indigo-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  onClick={() => router.push(`/tickets/${t.id}`)}
-                >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100">
-                    {t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED ? (
-                      <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                    ) : t.status === TicketStatus.IN_PROGRESS ? (
-                      <Clock className="h-6 w-6 text-amber-500" />
-                    ) : (
-                      <AlertCircle className="h-6 w-6 text-indigo-500" />
-                    )}
+          <div className="space-y-10">
+            {/* Assigned to me — world-class hero section for staff */}
+            <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+                    <UserCheck className="h-5 w-5 text-white" />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          t.priority === TicketPriority.CRITICAL
-                            ? "bg-rose-100 text-rose-700"
-                            : t.priority === TicketPriority.HIGH
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {priorityLabel[t.priority] || t.priority}
-                      </span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        {statusLabel[t.status] || t.status}
-                      </span>
-                    </div>
-                    <h3 className="mt-1 font-semibold text-slate-900 line-clamp-1">{t.title}</h3>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {new Date(t.createdAt).toLocaleDateString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </p>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Assigned to you</h3>
+                    <p className="text-sm text-white/90">Tickets for you to action</p>
                   </div>
-                  <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                  {assignedToMe.length > 0 && (
+                    <span className="ml-auto rounded-full bg-white/25 px-3 py-1 text-sm font-semibold text-white">
+                      {assignedToMe.length}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="p-4">
+                {assignedToMe.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <Inbox className="h-12 w-12 text-slate-300" />
+                    <p className="mt-3 text-sm font-medium text-slate-600">No tickets assigned to you yet</p>
+                    <p className="mt-1 text-xs text-slate-500">When management assigns you a ticket, it will appear here.</p>
+                  </div>
+                ) : (
+                  <ul className="grid gap-3">
+                    {assignedToMe.map((t) => (
+                      <li key={t.id}>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          onClick={() => router.push(`/tickets/${t.id}`)}
+                        >
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-100">
+                            {t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED ? (
+                              <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                            ) : t.status === TicketStatus.IN_PROGRESS ? (
+                              <Clock className="h-6 w-6 text-amber-500" />
+                            ) : (
+                              <AlertCircle className="h-6 w-6 text-indigo-500" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  t.priority === TicketPriority.CRITICAL
+                                    ? "bg-rose-100 text-rose-700"
+                                    : t.priority === TicketPriority.HIGH
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {priorityLabel[t.priority] || t.priority}
+                              </span>
+                              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700">
+                                {statusLabel[t.status] || t.status}
+                              </span>
+                            </div>
+                            <h3 className="mt-1 font-semibold text-slate-900 line-clamp-1">{t.title}</h3>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white">
+                            Action
+                          </span>
+                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
 
-        <p className="mt-8 text-center text-xs text-slate-400">
-          Need the full app?{" "}
-          <Link href="/login" className="font-medium text-indigo-600 hover:underline">
-            Sign in to dashboard
-          </Link>
-        </p>
+            {/* My tickets — created by me */}
+            <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-3">
+                <h3 className="text-base font-semibold text-slate-800">My tickets</h3>
+                <p className="text-xs text-slate-500">Tickets you raised</p>
+              </div>
+              <div className="p-4">
+                {myTickets.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <MessageSquare className="h-10 w-10 text-slate-300" />
+                    <p className="mt-2 text-sm text-slate-600">No tickets yet</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 rounded-xl"
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      <PlusCircle className="mr-1.5 h-4 w-4" />
+                      Raise your first ticket
+                    </Button>
+                  </div>
+                ) : (
+                  <ul className="grid gap-3">
+                    {myTickets.map((t) => (
+                      <li key={t.id}>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-indigo-200 hover:shadow focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          onClick={() => router.push(`/tickets/${t.id}`)}
+                        >
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                            {t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED ? (
+                              <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                            ) : t.status === TicketStatus.IN_PROGRESS ? (
+                              <Clock className="h-6 w-6 text-amber-500" />
+                            ) : (
+                              <AlertCircle className="h-6 w-6 text-indigo-500" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  t.priority === TicketPriority.CRITICAL
+                                    ? "bg-rose-100 text-rose-700"
+                                    : t.priority === TicketPriority.HIGH
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {priorityLabel[t.priority] || t.priority}
+                              </span>
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                {statusLabel[t.status] || t.status}
+                              </span>
+                            </div>
+                            <h3 className="mt-1 font-semibold text-slate-900 line-clamp-1">{t.title}</h3>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {new Date(t.createdAt).toLocaleDateString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+
+            {!hasDashboardAccess && !accessLoading && (
+              <p className="text-center text-xs text-slate-400">
+                Need access to the full app? Ask your administrator to assign you dashboard access.
+              </p>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Create ticket dialog */}
