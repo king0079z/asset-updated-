@@ -130,11 +130,26 @@ const DialogContent = React.forwardRef<
     }
   };
 
+  // Detect if any direct or nested child is a DialogDescription.
+  // If not, suppress the Radix aria-describedby warning with undefined.
+  const hasDesc = React.useMemo(() => {
+    const check = (nodes: React.ReactNode): boolean => {
+      return React.Children.toArray(nodes).some((child) => {
+        if (!React.isValidElement(child)) return false;
+        if ((child.type as any)?.displayName === 'DialogDescription' || (child.type as any) === DialogPrimitive.Description) return true;
+        if ((child.props as any)?.children) return check((child.props as any).children);
+        return false;
+      });
+    };
+    return check(children);
+  }, [children]);
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
+        aria-describedby={!hasDesc ? undefined : props['aria-describedby']}
         className={cn(
           "fixed z-50 grid w-full gap-4 border bg-background shadow-xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
           isFullscreen 

@@ -75,10 +75,12 @@ export default async function handler(
         }
         const isOwnerOrAssignee = ticket.userId === user.id || ticket.assignedToId === user.id;
         const roleData = await getUserRoleData(user.id);
-        const canManage = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
-        const sameOrg = roleData?.organizationId && ticket.organizationId === roleData.organizationId;
-        const adminOrManagerForTicket = roleData?.isAdmin || (canManage && sameOrg);
-        if (!isOwnerOrAssignee && !adminOrManagerForTicket) {
+        const isAdminUser = roleData?.isAdmin || roleData?.role === 'ADMIN';
+        const isManagerUser = roleData?.role === 'MANAGER';
+        // For managers: same org OR either side has no org. Admins bypass entirely.
+        const orgMatch = !roleData?.organizationId || !ticket.organizationId || roleData.organizationId === ticket.organizationId;
+        const hasAccess = isOwnerOrAssignee || isAdminUser || (isManagerUser && orgMatch);
+        if (!hasAccess) {
           return res.status(404).json({ error: 'Ticket not found or you do not have permission to access it' });
         }
 
@@ -150,9 +152,10 @@ export default async function handler(
         }
         const isOwnerOrAssignee = existingTicket.userId === user.id || existingTicket.assignedToId === user.id;
         const roleData = await getUserRoleData(user.id);
-        const canManage = await isAdminOrManager(user.id);
-        const sameOrg = roleData?.organizationId && existingTicket.organizationId === roleData.organizationId;
-        const adminOrManagerForTicket = (roleData?.isAdmin) || (canManage && sameOrg);
+        const isAdminUserPatch = roleData?.isAdmin || roleData?.role === 'ADMIN';
+        const isManagerUserPatch = roleData?.role === 'MANAGER';
+        const orgMatchPatch = !roleData?.organizationId || !existingTicket.organizationId || roleData.organizationId === existingTicket.organizationId;
+        const adminOrManagerForTicket = isAdminUserPatch || (isManagerUserPatch && orgMatchPatch);
         if (!isOwnerOrAssignee && !adminOrManagerForTicket) {
           return res.status(404).json({ error: 'Ticket not found or you do not have permission to access it' });
         }

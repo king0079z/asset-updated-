@@ -211,11 +211,21 @@ export default function TicketBarcodeDisplay({ ticketId, ticketTitle, barcode, d
     const canvasRef = activeTab === 'barcode' ? barcodeCanvasRef : qrCodeCanvasRef;
     if (canvasRef.current) {
       try {
+        const dataUrl = canvasRef.current.toDataURL('image/png');
+        // Use Blob + object URL to avoid ERR_INVALID_URL from data URLs in some browsers
+        const byteString = atob(dataUrl.split(',')[1]);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+        const blob = new Blob([ab], { type: 'image/png' });
+        const objectUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        // Use displayId in the filename when available
         link.download = `ticket-${ticketDisplayId}-${activeTab}.png`;
-        link.href = canvasRef.current.toDataURL('image/png');
+        link.href = objectUrl;
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
       } catch (error) {
         console.error(`Error downloading ${activeTab}:`, error);
         toast({

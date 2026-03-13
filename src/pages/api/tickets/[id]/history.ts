@@ -40,16 +40,20 @@ export default async function handler(
 
     if (req.method === 'GET') {
       try {
-        // First check if the ticket belongs to the user
-        const ticket = await prisma.ticket.findFirst({
-          where: { 
-            id,
-            userId: user.id
-          }
-        });
-
+        // Fetch ticket, then verify access (owner, assignee, admin, or manager)
+        const ticket = await prisma.ticket.findUnique({ where: { id } });
         if (!ticket) {
-          logApiEvent(`Ticket ${id} not found for user ${user.id}`);
+          logApiEvent(`Ticket ${id} not found`);
+          return res.status(404).json({ error: 'Ticket not found' });
+        }
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { role: true, isAdmin: true, organizationId: true },
+        });
+        const isAdminOrMgr = dbUser?.isAdmin || dbUser?.role === 'ADMIN' || dbUser?.role === 'MANAGER';
+        const isOwnerOrAssignee = ticket.userId === user.id || ticket.assignedToId === user.id;
+        if (!isOwnerOrAssignee && !isAdminOrMgr) {
+          logApiEvent(`Access denied for user ${user.id} on ticket ${id}`);
           return res.status(404).json({ error: 'Ticket not found' });
         }
 
@@ -126,17 +130,20 @@ export default async function handler(
           });
         }
 
-        // First check if the ticket belongs to the user
-        const ticket = await prisma.ticket.findFirst({
-          where: { 
-            id,
-            userId: user.id
-          }
-        });
-
-        if (!ticket) {
-          logApiEvent(`Ticket ${id} not found for user ${user.id}`);
+        // Fetch ticket then verify access
+        const ticketPost = await prisma.ticket.findUnique({ where: { id } });
+        if (!ticketPost) {
+          logApiEvent(`Ticket ${id} not found`);
           return res.status(404).json({ error: 'Ticket not found' });
+        }
+        const dbUserPost = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { role: true, isAdmin: true },
+        });
+        const canPostHistory = ticketPost.userId === user.id || ticketPost.assignedToId === user.id
+          || dbUserPost?.isAdmin || dbUserPost?.role === 'ADMIN' || dbUserPost?.role === 'MANAGER';
+        if (!canPostHistory) {
+          return res.status(403).json({ error: 'Access denied' });
         }
 
         // Create history entry
