@@ -60,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } else if (ing.foodSupply) {
           const price = ing.foodSupplyId === id ? newPrice : (ing.foodSupply.pricePerUnit || 0);
           let wastePct = 0;
-          if (ing.wastes?.length > 0) wastePct = parseFloat(ing.wastes[0].wastePercentage) || 0;
+          if (ing.wastes?.length > 0) wastePct = Number(ing.wastes[0].wastePercentage) || 0;
           totalCost += ing.quantity * price * (1 + wastePct / 100);
         }
       }

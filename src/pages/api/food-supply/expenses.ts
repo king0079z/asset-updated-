@@ -66,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       const { data, error: authError } = authResponse;
-      user = session?.user;
+      user = data?.session?.user ?? null;
 
       if (authError || !user) {
         logApiEvent('Authentication error', authError);

@@ -65,6 +65,8 @@ interface MovementTypeDetectionOptions {
    *   <5 km/h   → cannot be in a vehicle
    */
   gpsSpeedKmh?: number;
+  /** Use adaptive thresholds for classification */
+  adaptiveThresholds?: boolean;
 }
 
 interface AccelerationSample {

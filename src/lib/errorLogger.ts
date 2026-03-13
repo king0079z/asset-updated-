@@ -2,27 +2,6 @@
 import prisma from '@/lib/prisma';
 import { ErrorSeverity } from '@prisma/client';
 
-// In-process deduplication: within a warm serverless instance, avoid writing
-// the same error message to the DB more than once per minute.
-const _recentErrors = new Map<string, number>(); // normalized message → epoch ms
-const _DEDUP_WINDOW = 60_000; // 1 minute
-
-function _isDuplicate(message: string): boolean {
-  const key = message.substring(0, 500);
-  const last = _recentErrors.get(key);
-  const now = Date.now();
-  if (last && now - last < _DEDUP_WINDOW) return true;
-  _recentErrors.set(key, now);
-  // Evict stale entries when the map grows large
-  if (_recentErrors.size > 200) {
-    const cutoff = now - _DEDUP_WINDOW;
-    for (const [k, ts] of _recentErrors) {
-      if (ts < cutoff) _recentErrors.delete(k);
-    }
-  }
-  return false;
-}
-
 export type ErrorContext = {
   componentName?: string;
   functionName?: string;
@@ -64,38 +43,37 @@ export type ErrorLogInput = {
 };
 
 /**
- * Logs an error to the database.
- * Deduplicates within the same serverless instance (1 min window) to reduce
- * DB writes. When an existing record is found it increments the counter only —
- * no expensive JSON merge.
+ * Logs an error to the database
  */
 export async function logError(error: ErrorLogInput): Promise<void> {
   try {
-    // Fast in-process dedup — skips DB entirely for repeated errors
-    if (_isDuplicate(error.message)) return;
-
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    // Only fetch the id — no need to return all fields
+    // Check if a similar error already exists
     const existingError = await prisma.errorLog.findFirst({
       where: {
         message: error.message,
-        lastOccurredAt: { gte: since24h },
+        // Only match errors from the last 24 hours
+        lastOccurredAt: {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
+        }
       },
-      select: { id: true },
     });
 
     if (existingError) {
-      // Increment counter only — avoid expensive JSON context merge
+      // Update the existing error
       await prisma.errorLog.update({
         where: { id: existingError.id },
         data: {
           occurrences: { increment: 1 },
           lastOccurredAt: new Date(),
+          // Update context if new context is provided
+          context: error.context ? { ...existingError.context, ...error.context } : existingError.context,
+          // Update user info if not previously available
+          userId: existingError.userId || error.userId,
+          userEmail: existingError.userEmail || error.userEmail,
         },
-        select: { id: true },
       });
     } else {
+      // Create a new error log
       await prisma.errorLog.create({
         data: {
           message: error.message,
@@ -107,11 +85,12 @@ export async function logError(error: ErrorLogInput): Promise<void> {
           userEmail: error.userEmail,
           severity: error.severity || 'MEDIUM',
         },
-        select: { id: true },
       });
     }
   } catch (loggingError) {
+    // If we can't log to the database, log to console as fallback
     console.error('Failed to log error to database:', loggingError);
+    console.error('Original error:', error);
   }
 }
 

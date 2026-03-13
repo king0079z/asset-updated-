@@ -185,7 +185,7 @@ export default function DriversPage() {
               <div>
                 <p className="font-semibold text-sm">{t('error_fetching_data')}</p>
                 <p className="text-xs mt-0.5">{error}</p>
-                <button onClick={fetchDrivers} className="text-xs underline mt-1 hover:opacity-75">{t('try_again')}</button>
+                <button onClick={() => fetchDrivers()} className="text-xs underline mt-1 hover:opacity-75">{t('try_again')}</button>
               </div>
             </div>
           )}

@@ -1,29 +1,12 @@
 import { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '@/contexts/AuthContext';
+import { createClient } from '@/util/supabase/component';
 import { logDebug, warnDebug } from '@/lib/client-logger';
 
-// Module-level cache: avoids re-fetching when multiple components mount simultaneously
-// and survives SPA navigations within the same session.
-const _permCache = new Map<string, { data: any; ts: number }>();
-const _PERM_TTL = 5 * 60 * 1000; // 5 minutes — was 30 seconds (reduced PostgREST calls by ~10×)
-
-async function fetchPermissions(userId: string) {
-  const cached = _permCache.get(userId);
-  if (cached && Date.now() - cached.ts < _PERM_TTL) return cached.data;
-
-  // Uses Prisma on the server — bypasses PostgREST entirely
-  const res = await fetch('/api/users/permissions');
-  if (!res.ok) throw new Error('Failed to fetch permissions');
-  const data = await res.json();
-  _permCache.set(userId, { data, ts: Date.now() });
-  return data;
-}
-
 /**
- * Hook to provide page access information for the current user.
- * Permissions are fetched via /api/users/permissions (Prisma, not PostgREST)
- * and cached client-side for 5 minutes to eliminate the previous 30-second
- * polling storm that generated 60k+ Supabase User table queries.
+ * Hook to provide page access information for the current user
+ * This hook fetches the user's role and page access permissions
+ * and provides functions to check if a user has access to specific pages
  */
 export function usePageAccess() {
   const { user } = useContext(AuthContext);
@@ -43,26 +26,49 @@ export function usePageAccess() {
       }
       
       try {
-        const data = await fetchPermissions(user.id);
-
-        logDebug(`[usePageAccess] User ${user.id} (${data.email}) role: ${data.role}, isAdmin: ${data.isAdmin}`);
-
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('User')
+          .select('isAdmin, role, pageAccess, status, email, customRoleId')
+          .eq('id', user.id)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching user access:', error);
+          setLoading(false);
+          return;
+        }
+        
+        logDebug(`[usePageAccess] User ${user.id} (${data.email}) status: ${data.status}, role: ${data.role}, isAdmin: ${data.isAdmin}, customRoleId: ${data.customRoleId}`);
+        
         setIsAdmin(data.isAdmin || false);
         setRole(data.role || 'STAFF');
         setIsManager(data.role === 'MANAGER');
         setPageAccess(data.pageAccess || {});
-
-        if (data.customRole) {
-          setCustomRole(data.customRole);
-          if (data.customRole.name?.toLowerCase().includes('supervisor')) {
-            setIsSupervisor(true);
+        
+        // Check if user has a custom role and if it's a supervisor role
+        if (data.customRoleId) {
+          const { data: customRoleData, error: customRoleError } = await supabase
+            .from('CustomRole')
+            .select('id, name, description')
+            .eq('id', data.customRoleId)
+            .single();
+          
+          if (!customRoleError && customRoleData) {
+            setCustomRole(customRoleData);
+            
+            // Check if the custom role name contains "supervisor"
+            if (customRoleData.name.toLowerCase().includes('supervisor')) {
+              setIsSupervisor(true);
+              logDebug(`[usePageAccess] User ${user.id} is a supervisor with custom role: ${customRoleData.name}`);
+            }
           }
         }
-
+        
         setLoading(false);
-
+        
         if (data.status !== 'APPROVED') {
-          warnDebug(`[usePageAccess] Warning: User ${user.id} has status ${data.status}`);
+          warnDebug(`[usePageAccess] Warning: User ${user.id} has status ${data.status} which may prevent access`);
         }
       } catch (error) {
         console.error('Error in usePageAccess:', error);
@@ -71,10 +77,9 @@ export function usePageAccess() {
     };
     
     fetchUserAccess();
-
-    // Refresh every 5 minutes instead of every 30 seconds.
-    // The module-level cache means back-to-back calls within the TTL are free.
-    const refreshInterval = setInterval(fetchUserAccess, _PERM_TTL);
+    
+    // Set up a refresh interval to periodically check for permission changes
+    const refreshInterval = setInterval(fetchUserAccess, 30000); // Check every 30 seconds
     
     return () => clearInterval(refreshInterval);
   }, [user]);

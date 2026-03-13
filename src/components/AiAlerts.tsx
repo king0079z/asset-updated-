@@ -135,7 +135,14 @@ export function AiAlerts({ className }: AiAlertsProps) {
       setError(null);
 
       // Use shared in-memory cache (5 min TTL) — deduplicates with AI Analysis page requests.
-      const data = await fetchWithCache('/api/ai-analysis/ml-predictions', { maxAge: 5 * 60 * 1000 });
+      const data = (await fetchWithCache('/api/ai-analysis/ml-predictions', { maxAge: 5 * 60 * 1000 })) as { insights?: {
+        summary?: { keyPoints?: string[] };
+        anomalies?: { items?: Anomaly[] };
+        optimizations?: { items?: Optimization[] };
+        kitchenAnomalies?: { items?: KitchenAnomaly[] };
+        assetDisposals?: { items?: AssetDisposal[] };
+        locationOverpurchasing?: { items?: LocationOverpurchasing[] };
+      } };
 
       // Extract the relevant data from the response
       const analysisData: AiAnalysisData = {

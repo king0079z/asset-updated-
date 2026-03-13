@@ -103,7 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     fetchSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: string, session) => {
       if (event === 'TOKEN_REFRESH_FAILED') {
         // Silently redirect — the Supabase client already logs internally
         await forceSignOut('Token refresh failed');

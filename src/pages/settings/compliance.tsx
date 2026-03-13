@@ -94,8 +94,8 @@ const CompliancePage: NextPage = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Use the proper isAdmin field from AuthContext
-  const isAdmin = user?.isAdmin === true;
+  // Admin check: Supabase User does not have isAdmin; use permissions or extended user type if needed
+  const isAdmin = (user as { isAdmin?: boolean } | null)?.isAdmin === true;
 
   // ── Data fetching ────────────────────────────────────────────────────────────
 

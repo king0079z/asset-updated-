@@ -3,7 +3,6 @@ import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { logError, analyzePossibleSolutions } from '@/lib/errorLogger';
 import { ErrorSeverity } from '@prisma/client';
-import { getUserRoleData } from '@/util/roleCheck';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Get the Supabase client
@@ -15,8 +14,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Get authenticated user if available
       let user = null;
       try {
-        const { data: { user: authUser } } = await supabase.auth.getSession();
-        user = authUser || null;
+        const { data } = await supabase.auth.getSession();
+        user = data?.session?.user ?? null;
       } catch (authError) {
         console.error('Error getting authenticated user:', authError);
         // Continue without user data
@@ -76,8 +75,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // For GET requests, check if user is admin
   if (req.method === 'GET' && user) {
-    const roleData = await getUserRoleData(user.id);
-    if (!roleData || (roleData.role !== 'ADMIN' && roleData.role !== 'MANAGER' && !roleData.isAdmin)) {
+    // First try to get user data from the 'users' table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role, isAdmin')
+      .eq('id', user.id)
+      .single();
+    
+    // If that fails, try the 'User' table (note the capital 'U')
+    const { data: userDataCapital, error: userErrorCapital } = await supabase
+      .from('User')
+      .select('role, isAdmin')
+      .eq('id', user.id)
+      .single();
+    
+    // Use whichever data we found
+    const finalUserData = userData || userDataCapital;
+    
+    console.log(`User data check for ${user.id} (${user.email}): users table data:`, userData, 'User table data:', userDataCapital);
+    
+    // Check if user is admin or manager by role OR has isAdmin flag set to true
+    if (!finalUserData || ((finalUserData.role !== 'ADMIN' && finalUserData.role !== 'MANAGER') && !finalUserData.isAdmin)) {
+      console.log(`Access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
       return res.status(403).json({ error: 'Forbidden: Admin access required' });
     }
 
@@ -127,8 +146,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // POST requests are already handled above
   // For PATCH requests, update error status or add solution
   else if (req.method === 'PATCH' && user) {
-    const roleData = await getUserRoleData(user.id);
-    if (!roleData || (roleData.role !== 'ADMIN' && roleData.role !== 'MANAGER' && !roleData.isAdmin)) {
+    // First try to get user data from the 'users' table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role, isAdmin')
+      .eq('id', user.id)
+      .single();
+    
+    // If that fails, try the 'User' table (note the capital 'U')
+    const { data: userDataCapital, error: userErrorCapital } = await supabase
+      .from('User')
+      .select('role, isAdmin')
+      .eq('id', user.id)
+      .single();
+    
+    // Use whichever data we found
+    const finalUserData = userData || userDataCapital;
+    
+    console.log(`PATCH - User data check for ${user.id} (${user.email}): users table data:`, userData, 'User table data:', userDataCapital);
+    
+    // Check if user is admin or manager by role OR has isAdmin flag set to true
+    if (!finalUserData || ((finalUserData.role !== 'ADMIN' && finalUserData.role !== 'MANAGER') && !finalUserData.isAdmin)) {
+      console.log(`Access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
       return res.status(403).json({ error: 'Forbidden: Admin access required' });
     }
 
@@ -161,8 +200,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   // For DELETE requests, delete an error log
   else if (req.method === 'DELETE' && user) {
-    const roleData = await getUserRoleData(user.id);
-    if (!roleData || (roleData.role !== 'ADMIN' && !roleData.isAdmin)) {
+    // First try to get user data from the 'users' table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role, isAdmin')
+      .eq('id', user.id)
+      .single();
+    
+    // If that fails, try the 'User' table (note the capital 'U')
+    const { data: userDataCapital, error: userErrorCapital } = await supabase
+      .from('User')
+      .select('role, isAdmin')
+      .eq('id', user.id)
+      .single();
+    
+    // Use whichever data we found
+    const finalUserData = userData || userDataCapital;
+    
+    console.log(`DELETE - User data check for ${user.id} (${user.email}): users table data:`, userData, 'User table data:', userDataCapital);
+    
+    // For DELETE, we're more strict - require either ADMIN role or isAdmin flag
+    if (!finalUserData || (finalUserData.role !== 'ADMIN' && !finalUserData.isAdmin)) {
+      console.log(`Delete access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
       return res.status(403).json({ error: 'Forbidden: Admin access required' });
     }
 

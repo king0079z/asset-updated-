@@ -143,7 +143,7 @@ export default function VendorPerformancePage() {
                   <Users className="h-4 w-4 mr-2" /> Users
                 </Button>
               </Link>
-              <Button variant="ghost" size="icon" className="text-white/80 hover:text-white hover:bg-white/15" onClick={loadVendors}>
+              <Button variant="ghost" size="icon" className="text-white/80 hover:text-white hover:bg-white/15" onClick={() => loadVendors()}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>

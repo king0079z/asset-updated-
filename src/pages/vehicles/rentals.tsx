@@ -215,7 +215,7 @@ export default function VehicleRentalsPage() {
             <Button 
               variant="outline" 
               className="w-full sm:w-auto"
-              onClick={fetchRentals}
+              onClick={() => fetchRentals()}
               disabled={isLoading || isRefreshing}
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />

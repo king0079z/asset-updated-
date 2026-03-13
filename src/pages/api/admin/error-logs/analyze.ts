@@ -3,26 +3,52 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { analyzePossibleSolutions } from '@/lib/errorLogger';
-import { getUserRoleData } from '@/util/roleCheck';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Only allow POST requests
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
 
+  // Get the Supabase client
   const supabase = createClient(req, res);
+  
+  // Get user from session
   const { data: { session } } = await supabase.auth.getSession();
   const user = session?.user || null;
-
+  
   if (!user) {
+    console.warn('Unauthorized access attempt to error logs analyze API');
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const roleData = await getUserRoleData(user.id);
-  const isAdminOrManager = roleData && (roleData.role === 'ADMIN' || roleData.role === 'MANAGER' || roleData.isAdmin);
-  if (!isAdminOrManager && user.email !== 'admin@example.com') {
-    return res.status(403).json({ error: 'Forbidden: Admin access required' });
+  // First try to get user data from the 'users' table
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('role, isAdmin')
+    .eq('id', user.id)
+    .single();
+  
+  // If that fails, try the 'User' table (note the capital 'U')
+  const { data: userDataCapital, error: userErrorCapital } = await supabase
+    .from('User')
+    .select('role, isAdmin')
+    .eq('id', user.id)
+    .single();
+  
+  // Use whichever data we found
+  const finalUserData = userData || userDataCapital;
+  
+  // Check if user is admin or manager by role OR has isAdmin flag set to true
+  if (!finalUserData || ((finalUserData.role !== 'ADMIN' && finalUserData.role !== 'MANAGER') && !finalUserData.isAdmin)) {
+    // Special case for admin@example.com - automatically grant access
+    if (user.email === 'admin@example.com') {
+      console.log(`Granting access to admin@example.com despite role/flag issues`);
+    } else {
+      console.log(`Access denied for user ${user.id}. Role: ${finalUserData?.role}, isAdmin: ${finalUserData?.isAdmin}`);
+      return res.status(403).json({ error: 'Forbidden: Admin access required' });
+    }
   }
 
   try {

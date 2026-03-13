@@ -77,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await prisma.assetHistory.create({
       data: {
         assetId: String(id),
-        action: 'LOCATION_UPDATED',
+        action: 'LOCATION_SHARED',
         userId: user.id,
         details: {
           latitude,
