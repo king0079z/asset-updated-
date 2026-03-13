@@ -63,7 +63,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const forceSignOut = async (reason = 'Session expired') => {
-      console.warn(`[Auth] ${reason} — clearing session and redirecting to login`);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[Auth] ${reason} — clearing session and redirecting to login`);
+      }
       clearCache();
       try { await supabase.auth.signOut(); } catch { /* already gone */ }
       setUser(null);

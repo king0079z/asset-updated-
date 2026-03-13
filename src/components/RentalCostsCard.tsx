@@ -66,13 +66,16 @@ export function RentalCostsCard({ monthlyTotal = 0, yearlyTotal = 0 }: RentalCos
         totalVehicles: vehiclesData?.vehicles?.length || 0,
         vehicles: vehiclesData?.vehicles || []
       });
-    } catch (error) {
-      console.error("Error in fetchData:", error);
-      toast({
-        title: t('error'),
-        description: t('failed_to_load_rental_data'),
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      // AbortError = request cancelled (e.g. redirect to login) — don't log or show toast
+      if (error?.name !== 'AbortError') {
+        console.error("Error in fetchData:", error);
+        toast({
+          title: t('error'),
+          description: t('failed_to_load_rental_data'),
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }

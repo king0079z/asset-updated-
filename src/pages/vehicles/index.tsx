@@ -157,8 +157,10 @@ export default function VehiclesPage() {
       ]);
       if (vData?.vehicles) setVehicles(vData.vehicles);
       if (cData) { setMonthlyTotal(cData.monthlyTotal || 0); setYearlyTotal(cData.yearlyTotal || 0); }
-    } catch {
-      if (!background) toast({ title: "Error", description: "Failed to load vehicles", variant: "destructive" });
+    } catch (err: any) {
+      if (!background && err?.name !== 'AbortError') {
+        toast({ title: "Error", description: "Failed to load vehicles", variant: "destructive" });
+      }
     } finally {
       if (!background) setLoading(false);
     }

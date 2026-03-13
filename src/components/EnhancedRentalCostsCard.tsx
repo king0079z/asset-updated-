@@ -85,13 +85,15 @@ export function EnhancedRentalCostsCard({
         totalVehicles: vehiclesData?.vehicles?.length || 0,
         vehicles: vehiclesData?.vehicles || []
       });
-    } catch (error) {
-      console.error("Error in fetchData:", error);
-      toast({
-        title: t('error'),
-        description: t('failed_to_load_rental_data'),
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') {
+        console.error("Error in fetchData:", error);
+        toast({
+          title: t('error'),
+          description: t('failed_to_load_rental_data'),
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }

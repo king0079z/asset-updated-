@@ -92,8 +92,12 @@ export async function fetchWithCache<T>(
 
   try {
     return await requestPromise;
-  } catch (error) {
-    console.error(`[Cache] Error fetching ${url}:`, error);
+  } catch (error: any) {
+    // AbortError is expected when user is redirected (e.g. to login) or request times out — don't log as error
+    const isAbort = error?.name === 'AbortError' || (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError');
+    if (!isAbort) {
+      console.error(`[Cache] Error fetching ${url}:`, error);
+    }
 
     // If we have stale cache, return it as fallback
     if (cachedEntry) {
