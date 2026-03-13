@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@/util/supabase/api';
+import { requireAuth } from '@/util/supabase/require-auth';
 import prisma from '@/lib/prisma';
 
 // Enhanced logging function
@@ -18,15 +18,9 @@ export default async function handler(
   logApiEvent(`Received ${req.method} request`);
   
   try {
-    // Create Supabase client and authenticate user
-    const supabase = createClient(req, res);
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-
-    if (authError || !user) {
-      logApiEvent('Authentication error', authError);
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    const { user } = auth;
 
     // Extract and validate ticket ID from URL
     const { id } = req.query;

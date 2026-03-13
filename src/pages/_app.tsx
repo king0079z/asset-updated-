@@ -101,7 +101,8 @@ export default function App({ Component, pageProps }: AppProps) {
   const [mounted, setMounted] = useState(false);
   const [isRTL, setIsRTL] = useState(false);
 
-  // Throttled re-render function to prevent excessive re-renders
+  // Throttled re-render function to prevent excessive re-renders (throttle deps intentional)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleLanguageChange = useCallback(throttle(() => {
     // Force a controlled re-render of the application
     setMounted(false);

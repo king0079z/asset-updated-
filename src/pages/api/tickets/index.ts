@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@/util/supabase/api';
+import { requireAuth } from '@/util/supabase/require-auth';
 import prisma from '@/lib/prisma';
 import { TicketPriority, TicketStatus, AuditLogType } from '@prisma/client';
 import { isAdminOrManager, getUserRoleData } from '@/util/roleCheck';
@@ -73,26 +73,10 @@ async function ticketsHandler(
   logApiEvent(`Tickets API: Received ${req.method} request`);
   
   try {
-    // Create Supabase client and authenticate user
-    const supabase = createClient(req, res);
-    
-    // Wrap auth check in try-catch to handle potential Supabase errors
-    let user;
-    try {
-      const { data: { session }, error: authError } = await supabase.auth.getSession();
-      user = session?.user ?? null;
-      
-      if (authError || !user || !user.id) {
-        logApiEvent('Authentication error', authError || 'No user found');
-        return res.status(401).json({ error: 'Unauthorized - Please log in to continue' });
-      }
-      
-      logApiEvent(`User authenticated successfully`, { userId: user.id });
-    } catch (authError) {
-      logApiEvent('Unexpected authentication error', authError);
-      return res.status(500).json({ error: 'Authentication service error - Please try again later' });
-    }
-
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    const { user } = auth;
+    logApiEvent(`User authenticated successfully`, { userId: user.id });
     console.log(`Processing ${req.method} request for tickets from user: ${user.id}`);
 
     if (req.method === 'GET') {

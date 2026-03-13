@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
-import { createClient } from "@/util/supabase/api";
+import { requireAuth } from '@/util/supabase/require-auth';
 
 // Enhanced logging function
 const logApiEvent = (message: string, data?: any) => {
@@ -44,15 +44,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const supabase = createClient(req, res);
-    // getSession() decodes the JWT from the cookie locally — no Supabase network call.
-    const { data: { session }, error } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-
-    if (error || !user) {
-      logApiEvent('Authentication error', error);
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    const { user } = auth;
 
     // Check per-user cache
     const now = Date.now();

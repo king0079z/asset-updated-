@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
-import { createClient } from "@/util/supabase/api";
+import { getSessionSafe } from "@/util/supabase/require-auth";
 import { getUserRoleData } from "@/util/roleCheck";
 
 // Server-side cache: per-user asset list, 1-min TTL
@@ -9,15 +9,9 @@ const ASSETS_CACHE_TTL = 60 * 1000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    const supabase = createClient(req, res);
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-
-    // GET: allow unauthenticated for scanner fallback; non-GET requires auth
-    if (req.method !== "GET") {
-      if (authError || !user) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
+    const { user } = await getSessionSafe(req, res);
+    if (req.method !== "GET" && !user) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
     if (req.method === "GET") {

@@ -231,7 +231,7 @@ export const createRTLAwareStyles = (styles: Record<string, any>): Record<string
   return rtlStyles;
 };
 
-export default {
+const rtlUtils = {
   isRTL,
   getRTLPosition,
   getRTLFlexDirection,
@@ -243,3 +243,5 @@ export default {
   getRTLAnimationDirection,
   createRTLAwareStyles
 };
+
+export default rtlUtils;

@@ -242,7 +242,7 @@ export const applyRTLComponentFixes = (element: HTMLElement): void => {
   });
 };
 
-export default {
+const rtlComponentFixes = {
   fixRTLDropdown,
   fixRTLDialog,
   fixRTLForm,
@@ -251,3 +251,5 @@ export default {
   fixRTLNavigation,
   applyRTLComponentFixes
 };
+
+export default rtlComponentFixes;

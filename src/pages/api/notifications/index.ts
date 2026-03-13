@@ -1,16 +1,13 @@
 // GET: list notifications for current user (optional ?unreadOnly=1)
 // PATCH: mark notification(s) as read (body: { id } or { ids: string[] })
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@/util/supabase/api';
+import { requireAuth } from '@/util/supabase/require-auth';
 import prisma from '@/lib/prisma';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const supabase = createClient(req, res);
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  if (!user?.id) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  const auth = await requireAuth(req, res);
+  if (!auth) return;
+  const { user } = auth;
 
   if (req.method === 'GET') {
     const unreadOnly = req.query.unreadOnly === '1';

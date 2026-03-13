@@ -65,25 +65,27 @@ export async function fetchWithCache<T>(
     return pendingRequest as Promise<T>;
   }
   
-  // No valid cache, make the actual fetch request
+  // No valid cache, make the actual fetch request (timeout 20s, credentials for auth)
   logDebug(`[Cache] Fetching fresh data for ${url}`);
+  const API_TIMEOUT_MS = 20000;
   const requestPromise = (async () => {
-    // Let browser + CDN decide caching for GET requests.
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        signal: controller.signal,
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      cacheStore.set(cacheKey, { data, timestamp: now });
+      return data as T;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
     }
-    
-    const data = await response.json();
-    
-    // Store in cache
-    cacheStore.set(cacheKey, {
-      data,
-      timestamp: now
-    });
-    
-    return data as T;
   })();
 
   pendingRequests.set(cacheKey, requestPromise);

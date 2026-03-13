@@ -4,7 +4,7 @@
  * Eliminates the 3× Supabase getSession() round-trips the portal used to make.
  */
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@/util/supabase/api';
+import { requireAuth } from '@/util/supabase/require-auth';
 import prisma from '@/lib/prisma';
 import { TicketStatus, TicketPriority } from '@prisma/client';
 import { getUserRoleData } from '@/util/roleCheck';
@@ -19,13 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // ── 1. Auth — single getSession call ────────────────────────────────────
-  const supabase = createClient(req, res);
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
-  if (authError || !user?.id) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  const auth = await requireAuth(req, res);
+  if (!auth) return;
+  const { user } = auth;
 
   // ── 2. Server-side cache hit? ────────────────────────────────────────────
   const bypassCache = req.headers['cache-control'] === 'no-cache';
