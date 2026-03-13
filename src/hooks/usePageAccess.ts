@@ -11,12 +11,20 @@ async function fetchPermissions(userId: string) {
   const cached = _permCache.get(userId);
   if (cached && Date.now() - cached.ts < _PERM_TTL) return cached.data;
 
-  // Uses Prisma on the server — bypasses PostgREST entirely
-  const res = await fetch('/api/users/permissions');
-  if (!res.ok) throw new Error('Failed to fetch permissions');
-  const data = await res.json();
-  _permCache.set(userId, { data, ts: Date.now() });
-  return data;
+  // 6-second abort timeout — prevents indefinite spinner on Vercel cold-start
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6_000);
+
+  try {
+    // Uses Prisma on the server — bypasses PostgREST entirely
+    const res = await fetch('/api/users/permissions', { signal: controller.signal });
+    if (!res.ok) throw new Error('Failed to fetch permissions');
+    const data = await res.json();
+    _permCache.set(userId, { data, ts: Date.now() });
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

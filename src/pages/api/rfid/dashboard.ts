@@ -25,9 +25,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Single auth check ────────────────────────────────────────────────────────
   const supabase = createClient(req, res);
-  const { data: { session } } = await supabase.auth.getSession();
+  let session: any = null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    session = data.session;
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   if (!session?.user) return res.status(401).json({ error: 'Unauthorized' });
 
+  try {
   const roleData = await getUserRoleData(session.user.id);
   const orgId    = roleData?.organizationId ?? null;
   const where    = orgId ? { organizationId: orgId } : {};
@@ -121,4 +128,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader('X-Cache', 'MISS');
   res.setHeader('Cache-Control', 'private, max-age=10, stale-while-revalidate=30');
   return res.status(200).json(data);
+  } catch (err: any) {
+    console.error('[rfid/dashboard] Error:', err?.message ?? err);
+    return res.status(500).json({ error: 'Internal server error', detail: err?.message });
+  }
 }
