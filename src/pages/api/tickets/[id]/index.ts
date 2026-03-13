@@ -214,7 +214,13 @@ export default async function handler(
                 select: {
                   email: true,
                 }
-              }
+              },
+              assignedTo: {
+                select: {
+                  id: true,
+                  email: true,
+                },
+              },
             },
           });
 
@@ -340,16 +346,35 @@ export default async function handler(
         console.log(`Successfully updated ticket ${id}`);
 
         // Notify ticket creator when someone else (staff) updates the ticket (Jira-style)
+        // Include assigned staff name and contact so the user can reach them
         if (existingTicket.userId !== user.id) {
           try {
-            const summary = [isStatusChanged && `Status: ${validStatus}`, isPriorityChanged && `Priority: ${validPriority}`, (comment && comment.trim()) && 'Comment added'].filter(Boolean).join('. ') || 'Ticket was updated.';
+            const assignee = result.assignedTo;
+            const assigneeName = assignee?.email ? assignee.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null;
+            const assigneeContact = assignee?.email ? `Email: ${assignee.email}` : null;
+            const assigneeBlock = assigneeName && assigneeContact
+              ? ` Assigned to: ${assigneeName}. Contact: ${assigneeContact}`
+              : '';
+
+            const summaryParts = [
+              isStatusChanged && `Status: ${validStatus}`,
+              isPriorityChanged && `Priority: ${validPriority}`,
+              (comment && comment.trim()) && 'Comment added',
+            ].filter(Boolean);
+            const summary = summaryParts.length ? summaryParts.join('. ') : 'Ticket was updated.';
+            const message = `${existingTicket.displayId || id}: ${summary}.${assigneeBlock}`;
+
             await prisma.notification.create({
               data: {
                 userId: existingTicket.userId,
                 ticketId: id,
                 type: newAssignedToId !== undefined ? 'TICKET_ASSIGNED' : 'TICKET_UPDATE',
-                title: newAssignedToId !== undefined ? 'Ticket assigned' : 'Ticket updated',
-                message: `${existingTicket.displayId || id}: ${summary}`,
+                title: newAssignedToId !== undefined
+                  ? (assigneeName ? `Ticket assigned to ${assigneeName}` : 'Ticket assigned')
+                  : (isStatusChanged && validStatus === 'IN_PROGRESS' && assigneeName
+                    ? `In progress — assigned to ${assigneeName}`
+                    : 'Ticket updated'),
+                message,
               },
             });
           } catch (notifErr) {

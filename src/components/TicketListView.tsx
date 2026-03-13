@@ -25,6 +25,9 @@ interface Ticket {
   status: TicketStatus;
   priority: TicketPriority;
   assetId: string | null;
+  ticketType?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
   asset: {
     id: string;
     name: string;
@@ -33,6 +36,13 @@ interface Ticket {
   createdAt: string;
   updatedAt: string;
 }
+
+const TICKET_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
+  ISSUE:      { label: "Issue",     bg: "bg-red-50",     text: "text-red-700" },
+  REQUEST:    { label: "Request",   bg: "bg-blue-50",    text: "text-blue-700" },
+  INQUIRY:    { label: "Inquiry",   bg: "bg-purple-50",  text: "text-purple-700" },
+  MANAGEMENT: { label: "Mgmt",       bg: "bg-slate-100",  text: "text-slate-700" },
+};
 
 interface TicketListViewProps {
   tickets: Ticket[];
@@ -162,7 +172,12 @@ export default function TicketListView({ tickets, isLoading }: TicketListViewPro
           {/* Ticket info - mobile view is stacked, desktop is grid */}
           <div className="col-span-5 min-w-0">
             <Link href={`/tickets/${ticket.id}`} className="block group">
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {ticket.ticketType && TICKET_TYPE_LABELS[ticket.ticketType] && (
+                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${TICKET_TYPE_LABELS[ticket.ticketType].bg} ${TICKET_TYPE_LABELS[ticket.ticketType].text}`}>
+                    {TICKET_TYPE_LABELS[ticket.ticketType].label}
+                  </span>
+                )}
                 <h3 className="font-medium text-lg truncate group-hover:text-primary transition-colors">
                   {ticket.title}
                 </h3>

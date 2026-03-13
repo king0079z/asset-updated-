@@ -121,6 +121,97 @@ function StaffSelect({ value, staffMembers, disabled, onChange }: {
   );
 }
 
+/* ── Assign & Start Progress Modal ── */
+function AssignAndStartModal({
+  open, onOpenChange, ticketId, ticketTitle, ticketType, staffMembers, actionLabel, onSuccess,
+}: {
+  open: boolean; onOpenChange: (v: boolean) => void;
+  ticketId: string; ticketTitle: string; ticketType: string;
+  staffMembers: StaffMember[]; actionLabel: string; onSuccess: () => void;
+}) {
+  const [assigneeId, setAssigneeId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const tc = TICKET_TYPE_CFG[ticketType as keyof typeof TICKET_TYPE_CFG] || TICKET_TYPE_CFG.ISSUE;
+  const TypeIcon = tc.icon;
+
+  const handleConfirm = async () => {
+    if (!assigneeId.trim()) {
+      toast({ variant: "destructive", title: "Please select a staff member to assign this ticket to." });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const r = await fetch(`/api/tickets/${ticketId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: TicketStatus.IN_PROGRESS,
+          assignedToId: assigneeId,
+          comment: `${actionLabel} — assigned to staff. The requester will be notified with your contact details.`,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      toast({ title: "Ticket assigned and in progress", description: "The user has been notified with the assignee's contact details." });
+      onOpenChange(false);
+      setAssigneeId("");
+      onSuccess();
+    } catch {
+      toast({ variant: "destructive", title: "Failed to assign and start progress" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => onOpenChange(false)} />
+      <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+        <div className={`flex items-center gap-3 border-b px-5 py-4 ${tc.bg} ${tc.border}`}>
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tc.border} border bg-white`}>
+            <TypeIcon className={`h-5 w-5 ${tc.color}`} />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900">Assign & start progress</h3>
+            <p className="text-xs text-slate-500">The requester will be notified with the assignee&apos;s name and contact details.</p>
+          </div>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-slate-600 line-clamp-2">&quot;{ticketTitle}&quot;</p>
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Assign to (required)</label>
+            <select
+              value={assigneeId}
+              onChange={e => setAssigneeId(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
+            >
+              <option value="">Select staff member…</option>
+              {staffMembers.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name || s.email.split("@")[0]} — {s.activeTicketCount} active · {s.email}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[10px] text-slate-400">The user will see this person&apos;s name and email in their notification.</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4">
+          <button type="button" onClick={() => onOpenChange(false)}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+            Cancel
+          </button>
+          <button type="button" onClick={handleConfirm} disabled={submitting || !assigneeId}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+            {submitting ? "Starting…" : `${actionLabel} & notify user`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Portal Ticket Card ── */
 function PortalTicketCard({ t, staffMembers, updatingId, onAssign, onApprove }: {
   t: MgmtTicket; staffMembers: StaffMember[]; updatingId: string | null;
@@ -129,6 +220,8 @@ function PortalTicketCard({ t, staffMembers, updatingId, onAssign, onApprove }: 
   const tc = TICKET_TYPE_CFG[t.ticketType as keyof typeof TICKET_TYPE_CFG] || TICKET_TYPE_CFG.ISSUE;
   const TypeIcon = tc.icon;
   const isUpdating = updatingId === t.id;
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignModalAction, setAssignModalAction] = useState<{ label: string } | null>(null);
 
   const actionsByType: Record<string, { label: string; statusTo: TicketStatus; color: string }[]> = {
     ISSUE:      [{ label: "Investigate", statusTo: TicketStatus.IN_PROGRESS, color: "bg-orange-600 hover:bg-orange-700" }, { label: "Resolve", statusTo: TicketStatus.RESOLVED, color: "bg-emerald-600 hover:bg-emerald-700" }],
@@ -139,104 +232,141 @@ function PortalTicketCard({ t, staffMembers, updatingId, onAssign, onApprove }: 
   const actions = (actionsByType[t.ticketType || "ISSUE"] || actionsByType.ISSUE)
     .filter(a => t.status !== a.statusTo && t.status !== TicketStatus.CLOSED && t.status !== TicketStatus.RESOLVED);
 
+  const startProgressAction = actions.find(a => a.statusTo === TicketStatus.IN_PROGRESS);
+
+  const runStartProgress = () => {
+    setAssignModalAction(startProgressAction || { label: "Start progress" });
+    setAssignModalOpen(true);
+  };
+
+  const runApprove = () => {
+    setAssignModalAction({ label: "Approve" });
+    setAssignModalOpen(true);
+  };
+
+  const runAction = async (a: { label: string; statusTo: TicketStatus; color: string }) => {
+    if (a.statusTo === TicketStatus.IN_PROGRESS) {
+      runStartProgress();
+      return;
+    }
+    try {
+      const r = await fetch(`/api/tickets/${t.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: a.statusTo, comment: `Ticket ${a.label.toLowerCase()}d by support team` }),
+      });
+      if (!r.ok) throw new Error();
+      toast({ title: `Ticket ${a.label.toLowerCase()}d` });
+      onApprove(t.id);
+    } catch { toast({ variant: "destructive", title: "Failed to update ticket" }); }
+  };
+
   const assignedStaff = staffMembers.find(s => s.id === t.assignedToId);
 
   return (
-    <div className="group rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 transition-all overflow-hidden">
-      <div className={`h-1 w-full ${PRIORITY_CFG[t.priority]?.dot || "bg-slate-200"}`} />
-      <div className="p-5">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-start gap-3 min-w-0 flex-1">
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${tc.bg} ${tc.border}`}>
-              <TypeIcon className={`h-5 w-5 ${tc.color}`} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                <span className="font-mono text-[11px] font-bold text-slate-400">{t.displayId || "#" + t.id.slice(0, 8)}</span>
-                <SBadge s={t.status} />
-              </div>
-              <Link href={`/tickets/${t.id}`} className="font-semibold text-slate-900 hover:text-blue-600 line-clamp-1 transition-colors">{t.title}</Link>
-              <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{t.description}</p>
-            </div>
-          </div>
-          <PBadge p={t.priority} />
+    <>
+      <div className="group rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 transition-all overflow-hidden">
+        {/* Type strip + priority bar */}
+        <div className="flex">
+          <div className={`w-1 min-h-[4px] shrink-0 ${tc.border} border-r-0 rounded-l-none rounded-r-full ${tc.bg}`} style={{ minHeight: "6px" }} />
+          <div className={`flex-1 h-1.5 ${PRIORITY_CFG[t.priority]?.dot || "bg-slate-200"}`} />
         </div>
+        <div className="p-5">
+          {/* Type badge + ID + status */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold ${tc.color} ${tc.bg} ${tc.border}`}>
+              <TypeIcon className="h-3.5 w-3.5" />
+              {tc.label}
+            </span>
+            <span className="font-mono text-[11px] font-bold text-slate-400">{t.displayId || "#" + t.id.slice(0, 8)}</span>
+            <SBadge s={t.status} />
+            <PBadge p={t.priority} />
+          </div>
 
-        {/* Requester */}
-        <div className="mb-3 rounded-xl bg-slate-50 border border-slate-100 p-3">
-          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Submitted by</p>
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-xs font-bold text-white">
-                {(t.user?.email || t.requesterName || "U")[0].toUpperCase()}
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-700">{t.requesterName || t.user?.email?.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase()) || "Unknown"}</p>
-                <p className="text-[10px] text-slate-400">{t.user?.email}</p>
-              </div>
+          {/* Title + description */}
+          <div className="mb-3">
+            <Link href={`/tickets/${t.id}`} className="font-semibold text-slate-900 hover:text-blue-600 line-clamp-1 transition-colors block">
+              {t.title}
+            </Link>
+            <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{t.description}</p>
+          </div>
+
+          {/* Category + subcategory */}
+          {(t.category || t.subcategory) && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {t.category && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">{t.category.replace(/_/g, " ")}</span>}
+              {t.subcategory && <span className="rounded-lg bg-blue-50 border border-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-600">{t.subcategory}</span>}
             </div>
-            {t.location && <span className="flex items-center gap-1 text-xs text-slate-500"><MapPin className="h-3.5 w-3.5 text-slate-400" />{t.location}</span>}
-            {t.contactDetails && <span className="flex items-center gap-1 text-xs text-slate-500"><Phone className="h-3.5 w-3.5 text-slate-400" />{t.contactDetails}</span>}
-          </div>
-        </div>
-
-        {(t.category || t.subcategory) && (
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {t.category && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">{t.category.replace(/_/g, " ")}</span>}
-            {t.subcategory && <span className="rounded-lg bg-blue-50 border border-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-600">{t.subcategory}</span>}
-          </div>
-        )}
-
-        {/* Assign */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assign to Staff</p>
-            {assignedStaff && (
-              <span className="text-[10px] text-amber-600 font-semibold">{assignedStaff.activeTicketCount} active tickets</span>
-            )}
-          </div>
-          <StaffSelect
-            value={t.assignedToId || ""}
-            staffMembers={staffMembers}
-            disabled={isUpdating}
-            onChange={v => onAssign(t.id, v || null)}
-          />
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/tickets/${t.id}`}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
-            <Eye className="h-3.5 w-3.5" /> View
-          </Link>
-          {t.status === TicketStatus.OPEN && (
-            <button onClick={() => onApprove(t.id)} disabled={isUpdating}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Approve
-            </button>
           )}
-          {actions.map(a => (
-            <button key={a.label} disabled={isUpdating}
-              onClick={async () => {
-                try {
-                  const r = await fetch(`/api/tickets/${t.id}`, {
-                    method: "PATCH", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ status: a.statusTo, comment: `Ticket ${a.label.toLowerCase()}d by support team` }),
-                  });
-                  if (!r.ok) throw new Error();
-                  toast({ title: `Ticket ${a.label.toLowerCase()}d` });
-                  onApprove(t.id);
-                } catch { toast({ variant: "destructive", title: "Failed to update ticket" }); }
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-colors ${a.color}`}>
-              {a.label}
-            </button>
-          ))}
+
+          {/* Requester */}
+          <div className="mb-3 rounded-xl bg-slate-50 border border-slate-100 p-3">
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Submitted by</p>
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-xs font-bold text-white">
+                  {(t.user?.email || t.requesterName || "U")[0].toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">{t.requesterName || t.user?.email?.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase()) || "Unknown"}</p>
+                  <p className="text-[10px] text-slate-400">{t.user?.email}</p>
+                </div>
+              </div>
+              {t.location && <span className="flex items-center gap-1 text-xs text-slate-500"><MapPin className="h-3.5 w-3.5 text-slate-400" />{t.location}</span>}
+              {t.contactDetails && <span className="flex items-center gap-1 text-xs text-slate-500"><Phone className="h-3.5 w-3.5 text-slate-400" />{t.contactDetails}</span>}
+            </div>
+          </div>
+
+          {/* Assign */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assign to Staff</p>
+              {assignedStaff && (
+                <span className="text-[10px] text-amber-600 font-semibold">{assignedStaff.activeTicketCount} active</span>
+              )}
+            </div>
+            <StaffSelect
+              value={t.assignedToId || ""}
+              staffMembers={staffMembers}
+              disabled={isUpdating}
+              onChange={v => onAssign(t.id, v || null)}
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/tickets/${t.id}`}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+              <Eye className="h-3.5 w-3.5" /> View
+            </Link>
+            {t.status === TicketStatus.OPEN && (
+              <button onClick={runApprove} disabled={isUpdating}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Approve
+              </button>
+            )}
+            {actions.map(a => (
+              <button key={a.label} disabled={isUpdating}
+                onClick={() => runAction(a)}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-colors ${a.color}`}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400">{timeAgo(t.createdAt)}</p>
         </div>
-        <p className="mt-3 text-[11px] text-slate-400">{timeAgo(t.createdAt)}</p>
       </div>
-    </div>
+
+      <AssignAndStartModal
+        open={assignModalOpen}
+        onOpenChange={setAssignModalOpen}
+        ticketId={t.id}
+        ticketTitle={t.title}
+        ticketType={t.ticketType || "ISSUE"}
+        staffMembers={staffMembers}
+        actionLabel={assignModalAction?.label || "Start progress"}
+        onSuccess={onApprove}
+      />
+    </>
   );
 }
 

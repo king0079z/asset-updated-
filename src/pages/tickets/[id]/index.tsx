@@ -119,6 +119,9 @@ function TicketDetailsContent() {
   const isUpdatingRef = React.useRef(false);
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [assignStartOpen, setAssignStartOpen] = useState(false);
+  const [assignStartAssigneeId, setAssignStartAssigneeId] = useState("");
+  const [assignStartActionLabel, setAssignStartActionLabel] = useState("");
 
   useEffect(() => {
     if (!id || typeof id !== "string") return;
@@ -265,6 +268,12 @@ function TicketDetailsContent() {
 
   const quickAction = async (toStatus: TicketStatus, label: string) => {
     if (!id || typeof id !== "string") return;
+    if (toStatus === TicketStatus.IN_PROGRESS) {
+      setAssignStartActionLabel(label);
+      setAssignStartAssigneeId(assignedToId || "");
+      setAssignStartOpen(true);
+      return;
+    }
     setIsUpdating(true);
     try {
       const r = await fetch(`/api/tickets/${id}`, {
@@ -278,6 +287,34 @@ function TicketDetailsContent() {
       toast({ title: `Ticket ${label.toLowerCase()}` });
       setActiveTab("history");
     } catch { toast({ variant: "destructive", title: "Failed to update ticket" }); }
+    finally { setIsUpdating(false); }
+  };
+
+  const confirmAssignAndStart = async () => {
+    if (!assignStartAssigneeId.trim() || !id || typeof id !== "string") {
+      toast({ variant: "destructive", title: "Please select a staff member to assign this ticket to." });
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      const r = await fetch(`/api/tickets/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: TicketStatus.IN_PROGRESS,
+          assignedToId: assignStartAssigneeId,
+          comment: `${assignStartActionLabel} — assigned to staff. The requester will be notified with your contact details.`,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      const updated = await r.json();
+      applyTicketData(updated, id as string);
+      setAssignedToId(assignStartAssigneeId);
+      setAssignStartOpen(false);
+      setAssignStartAssigneeId("");
+      setActiveTab("history");
+      toast({ title: "Ticket in progress", description: "The user has been notified with the assignee's contact details." });
+    } catch { toast({ variant: "destructive", title: "Failed to assign and start progress" }); }
     finally { setIsUpdating(false); }
   };
 
@@ -401,6 +438,54 @@ function TicketDetailsContent() {
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Assign & Start Progress Modal ── */}
+      {assignStartOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setAssignStartOpen(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden mx-4">
+            <div className={`flex items-center gap-3 border-b px-5 py-4 ${tc.bg} ${tc.border}`}>
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-white ${tc.border}`}>
+                <TypeIcon className={`h-5 w-5 ${tc.color}`} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Assign & start progress</h3>
+                <p className="text-xs text-slate-500">The requester will be notified with the assignee&apos;s name and contact details.</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-slate-600 line-clamp-2">&quot;{ticket.title}&quot;</p>
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Assign to (required)</label>
+                <select
+                  value={assignStartAssigneeId}
+                  onChange={e => setAssignStartAssigneeId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value="">Select staff member…</option>
+                  {staffMembers.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name || s.email.split("@")[0]} — {s.activeTicketCount ?? 0} active · {s.email}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] text-slate-400">The user will see this person&apos;s name and email in their notification.</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4">
+              <button type="button" onClick={() => setAssignStartOpen(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button type="button" onClick={confirmAssignAndStart} disabled={isUpdating || !assignStartAssigneeId}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                {isUpdating ? "Starting…" : `${assignStartActionLabel} & notify user`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

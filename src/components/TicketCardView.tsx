@@ -27,6 +27,9 @@ interface Ticket {
   status: TicketStatus;
   priority: TicketPriority;
   assetId: string | null;
+  ticketType?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
   asset: {
     id: string;
     name: string;
@@ -35,6 +38,13 @@ interface Ticket {
   createdAt: string;
   updatedAt: string;
 }
+
+const TICKET_TYPE_LABELS: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  ISSUE:      { label: "Issue",     bg: "bg-red-50",     text: "text-red-700",    border: "border-red-200" },
+  REQUEST:    { label: "Request",   bg: "bg-blue-50",    text: "text-blue-700",   border: "border-blue-200" },
+  INQUIRY:    { label: "Inquiry",   bg: "bg-purple-50",  text: "text-purple-700", border: "border-purple-200" },
+  MANAGEMENT: { label: "Mgmt",       bg: "bg-slate-100",  text: "text-slate-700",  border: "border-slate-200" },
+};
 
 interface TicketCardViewProps {
   tickets: Ticket[];
@@ -170,7 +180,12 @@ export default function TicketCardView({ tickets, isLoading }: TicketCardViewPro
             <CardHeader className="pb-2">
               <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
                 <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {ticket.ticketType && TICKET_TYPE_LABELS[ticket.ticketType] && (
+                      <span className={`rounded-lg border px-2 py-0.5 text-[11px] font-bold ${TICKET_TYPE_LABELS[ticket.ticketType].bg} ${TICKET_TYPE_LABELS[ticket.ticketType].text} ${TICKET_TYPE_LABELS[ticket.ticketType].border}`}>
+                        {TICKET_TYPE_LABELS[ticket.ticketType].label}
+                      </span>
+                    )}
                     <CardTitle className="text-xl group-hover:text-primary transition-colors">
                       {ticket.title}
                     </CardTitle>
