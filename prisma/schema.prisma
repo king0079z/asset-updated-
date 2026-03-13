@@ -135,6 +135,7 @@ model User {
   assignedTickets          Ticket[]             @relation("AssignedTickets")
   tickets                  Ticket[]
   ticketHistory            TicketHistory[]
+  notifications            Notification[]
   organization             Organization?        @relation(fields: [organizationId], references: [id])
   vehicleMaintenances      VehicleMaintenance[]
   vehicles                 VehicleRental[]
@@ -598,6 +599,7 @@ model Ticket {
   assignedToId   String?         @db.Uuid
   requesterName  String?
   organizationId String?
+  source         String?         @default("INTERNAL") // "PORTAL" | "INTERNAL"
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   asset          Asset?          @relation(fields: [assetId], references: [id])
@@ -605,6 +607,18 @@ model Ticket {
   organization   Organization?   @relation(fields: [organizationId], references: [id])
   user           User            @relation(fields: [userId], references: [id])
   history        TicketHistory[]
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String    @db.Uuid
+  ticketId  String?
+  type      String    // e.g. "TICKET_UPDATE", "TICKET_ASSIGNED"
+  title     String
+  message   String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model TicketHistory {

@@ -131,7 +131,8 @@ async function ticketsHandler(
               where: ticketWhere,
               select: {
                 id: true, title: true, description: true, status: true,
-                priority: true, userId: true, assetId: true,
+                priority: true, userId: true, assetId: true, source: true,
+                displayId: true, assignedToId: true,
                 createdAt: true, updatedAt: true,
                 asset: { select: { id: true, name: true, assetId: true } },
               },
@@ -149,7 +150,8 @@ async function ticketsHandler(
             where: { userId: user.id },
             select: {
               id: true, title: true, description: true, status: true,
-              priority: true, userId: true, assetId: true,
+              priority: true, userId: true, assetId: true, source: true,
+              displayId: true, assignedToId: true,
               createdAt: true, updatedAt: true,
               asset: { select: { id: true, name: true, assetId: true } },
             },
@@ -200,7 +202,7 @@ async function ticketsHandler(
         }
         
         // Extract ticket data from request body
-        const { title, description, priority, assetId, assignedToId, requesterName } = req.body;
+        const { title, description, priority, assetId, assignedToId, requesterName, source } = req.body;
         
         logApiEvent(`Ticket creation request received`, { 
           title, 
@@ -284,6 +286,10 @@ async function ticketsHandler(
         logApiEvent(`Creating ticket for user ${user.id}`, { title, priority: validPriority });
         
         try {
+          const roleData = await getUserRoleData(user.id);
+          const orgId = roleData?.organizationId ?? null;
+          const ticketSource = (source === 'PORTAL' ? 'PORTAL' : 'INTERNAL') as string;
+          
           // Generate a user-friendly display ID in format TKT-YYYYMMDD-XXXX
           const today = new Date();
           const datePart = today.toISOString().slice(0, 10).replace(/-/g, '');
@@ -308,13 +314,15 @@ async function ticketsHandler(
           logApiEvent(`Generated display ID for new ticket: ${displayId}`);
           
           // Prepare the ticket data
-          const ticketData = {
+          const ticketData: Record<string, unknown> = {
             title: title.trim(),
             description: description.trim(),
             priority: validPriority,
             status: TicketStatus.OPEN,
             userId: user.id,
             displayId: displayId,
+            organizationId: orgId,
+            source: ticketSource,
             ...(requesterName ? { requesterName: requesterName.trim() } : {})
           };
           

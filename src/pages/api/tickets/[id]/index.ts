@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 import { TicketPriority, TicketStatus } from '@prisma/client';
+import { getUserRoleData, isAdminOrManager } from '@/util/roleCheck';
 
 // Enhanced logging function
 const logApiEvent = (message: string, data?: any) => {
@@ -48,16 +49,10 @@ export default async function handler(
 
     if (req.method === 'GET') {
       try {
-        // Fetch ticket with user ownership or assignment check
+        // Fetch ticket by id; allow if user is creator, assignee, or admin/manager for same org
         console.log(`Attempting to fetch ticket ${id} for user ${user.id}`);
-        const ticket = await prisma.ticket.findFirst({
-          where: { 
-            id,
-            OR: [
-              { userId: user.id },
-              { assignedToId: user.id }
-            ]
-          },
+        const ticket = await prisma.ticket.findUnique({
+          where: { id },
           include: {
             asset: {
               select: {
@@ -76,7 +71,14 @@ export default async function handler(
         });
 
         if (!ticket) {
-          console.log(`Ticket ${id} not found or not accessible by user ${user.id}`);
+          return res.status(404).json({ error: 'Ticket not found' });
+        }
+        const isOwnerOrAssignee = ticket.userId === user.id || ticket.assignedToId === user.id;
+        const roleData = await getUserRoleData(user.id);
+        const canManage = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
+        const sameOrg = roleData?.organizationId && ticket.organizationId === roleData.organizationId;
+        const adminOrManagerForTicket = roleData?.isAdmin || (canManage && sameOrg);
+        if (!isOwnerOrAssignee && !adminOrManagerForTicket) {
           return res.status(404).json({ error: 'Ticket not found or you do not have permission to access it' });
         }
 
@@ -115,7 +117,7 @@ export default async function handler(
       }
     } else if (req.method === 'PUT' || req.method === 'PATCH') {
       try {
-        const { title, description, status, priority, assetId, comment } = req.body;
+        const { title, description, status, priority, assetId, comment, assignedToId } = req.body;
         
         console.log(`Ticket update request data (${req.method}):`, { 
           id,
@@ -124,7 +126,8 @@ export default async function handler(
           status,
           priority, 
           assetId,
-          hasComment: !!comment
+          hasComment: !!comment,
+          assignedToId: assignedToId ?? undefined
         });
 
         // Special handling for status-only updates from mobile quick actions
@@ -140,31 +143,39 @@ export default async function handler(
           });
         }
 
-        // Check if the ticket belongs to the user or is assigned to them
-        console.log(`Checking if ticket ${id} belongs to or is assigned to user ${user.id}`);
-        const existingTicket = await prisma.ticket.findFirst({
-          where: {
-            id,
-            OR: [
-              { userId: user.id },
-              { assignedToId: user.id }
-            ]
-          }
-        });
-
+        // Fetch ticket by id and determine permission (owner, assignee, or admin/manager for org)
+        const existingTicket = await prisma.ticket.findUnique({ where: { id } });
         if (!existingTicket) {
-          console.log(`Cannot update ticket ${id}: not found or not accessible by user ${user.id}`);
+          return res.status(404).json({ error: 'Ticket not found' });
+        }
+        const isOwnerOrAssignee = existingTicket.userId === user.id || existingTicket.assignedToId === user.id;
+        const roleData = await getUserRoleData(user.id);
+        const canManage = await isAdminOrManager(user.id);
+        const sameOrg = roleData?.organizationId && existingTicket.organizationId === roleData.organizationId;
+        const adminOrManagerForTicket = (roleData?.isAdmin) || (canManage && sameOrg);
+        if (!isOwnerOrAssignee && !adminOrManagerForTicket) {
           return res.status(404).json({ error: 'Ticket not found or you do not have permission to access it' });
         }
 
-        // Use default values if status or priority are missing
+        // Only admin/manager (for this ticket) can set or clear assignedToId
+        let newAssignedToId: string | null | undefined = undefined; // undefined = do not change
+        if (assignedToId !== undefined && adminOrManagerForTicket) {
+          if (assignedToId === null || assignedToId === '') {
+            newAssignedToId = null;
+          } else {
+            const assignee = await prisma.user.findUnique({ where: { id: assignedToId as string }, select: { id: true } });
+            newAssignedToId = assignee ? assignee.id : null;
+          }
+        }
+
+        // Use provided status/priority or keep existing (for partial PATCH)
         const validStatus = status && Object.values(TicketStatus).includes(status as TicketStatus)
           ? status as TicketStatus
-          : TicketStatus.OPEN;
+          : existingTicket.status;
 
         const validPriority = priority && Object.values(TicketPriority).includes(priority as TicketPriority)
           ? priority as TicketPriority
-          : TicketPriority.MEDIUM;
+          : existingTicket.priority;
 
         // Check if status or priority is being changed
         const isStatusChanged = existingTicket.status !== validStatus;
@@ -176,19 +187,25 @@ export default async function handler(
           console.log(`Comment provided: ${comment ? 'Yes' : 'No'}`);
         }
 
+        // Build update payload (assignedToId only when allowed)
+        const updateData: Record<string, unknown> = {
+          title: title ?? existingTicket.title,
+          description: description ?? existingTicket.description,
+          status: validStatus,
+          priority: validPriority,
+          assetId: assetId !== undefined ? (assetId || null) : existingTicket.assetId,
+          updatedAt: new Date(),
+        };
+        if (newAssignedToId !== undefined) {
+          updateData.assignedToId = newAssignedToId;
+        }
+
         // Start a transaction to update ticket and create history entry
         const result = await prisma.$transaction(async (tx) => {
           // Update the ticket
           const updatedTicket = await tx.ticket.update({
             where: { id },
-            data: {
-              title,
-              description,
-              status: validStatus,
-              priority: validPriority,
-              assetId: assetId || null,
-              updatedAt: new Date(),
-            },
+            data: updateData as any,
             include: {
               asset: {
                 select: {
@@ -325,6 +342,24 @@ export default async function handler(
         });
 
         console.log(`Successfully updated ticket ${id}`);
+
+        // Notify ticket creator when someone else (staff) updates the ticket (Jira-style)
+        if (existingTicket.userId !== user.id) {
+          try {
+            const summary = [isStatusChanged && `Status: ${validStatus}`, isPriorityChanged && `Priority: ${validPriority}`, (comment && comment.trim()) && 'Comment added'].filter(Boolean).join('. ') || 'Ticket was updated.';
+            await prisma.notification.create({
+              data: {
+                userId: existingTicket.userId,
+                ticketId: id,
+                type: newAssignedToId !== undefined ? 'TICKET_ASSIGNED' : 'TICKET_UPDATE',
+                title: newAssignedToId !== undefined ? 'Ticket assigned' : 'Ticket updated',
+                message: `${existingTicket.displayId || id}: ${summary}`,
+              },
+            });
+          } catch (notifErr) {
+            console.error('Failed to create notification for ticket update:', notifErr);
+          }
+        }
 
         // Ensure dates are properly formatted
         const formattedTicket = {

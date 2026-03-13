@@ -101,6 +101,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     // Manager has access to all pages except admin pages
     if (isManager && !router.pathname.startsWith('/admin')) return true;
     
+    // Support portal: any authenticated user can access their ticket page
+    if (router.pathname === '/portal' || router.pathname.startsWith('/portal/')) return true;
+    
     if (!pageAccess) {
       logDebug(`[ProtectedRoute] No pageAccess object found for user ${user?.id}`);
       return false;
