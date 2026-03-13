@@ -117,95 +117,35 @@ export default function TicketBarcodeDisplay({ ticketId, ticketTitle, barcode, d
     }
   };
 
-  // Generate codes when component mounts or barcode/displayId changes
-  useEffect(() => {
-    if (barcode) {
-      console.log("Barcode value changed, regenerating codes:", barcode);
-      
-      // Use a more robust approach with multiple retries
-      let retryCount = 0;
-      const maxRetries = 5;
-      const retryDelay = 200;
-      
-      const attemptGeneration = () => {
-        // Check if we need to generate barcode
-        if (activeTab === 'barcode' || !activeTab) {
-          if (barcodeCanvasRef.current) {
-            generateBarcode();
-          } else if (retryCount < maxRetries) {
-            console.log(`Barcode canvas ref not available yet, retry ${retryCount + 1}/${maxRetries}...`);
-            retryCount++;
-            setTimeout(attemptGeneration, retryDelay);
-            return; // Exit to avoid QR code generation until barcode is done
-          } else {
-            console.warn("Barcode canvas ref still not available after maximum retries");
-          }
-        }
-        
-        // Reset retry count for QR code
-        retryCount = 0;
-        
-        // Check if we need to generate QR code
-        if (activeTab === 'qrcode' || !activeTab) {
-          if (qrCodeCanvasRef.current) {
-            generateQRCode();
-          } else if (retryCount < maxRetries) {
-            console.log(`QR code canvas ref not available yet, retry ${retryCount + 1}/${maxRetries}...`);
-            retryCount++;
-            setTimeout(attemptGeneration, retryDelay);
-          } else {
-            console.warn("QR code canvas ref still not available after maximum retries");
-          }
-        }
-      };
-      
-      // Start the first attempt after a short delay to ensure DOM is ready
-      const initialTimer = setTimeout(attemptGeneration, 100);
-      
-      return () => clearTimeout(initialTimer);
-    }
-  }, [barcode, ticketDisplayId, activeTab]);
-
-  // Regenerate codes when tab changes
+  // Single effect: generate the active tab's code whenever barcode or activeTab changes
   useEffect(() => {
     if (!barcode) return;
-    
-    console.log(`Tab changed to ${activeTab}, regenerating code`);
-    
-    // Use a more robust approach with multiple retries
-    let retryCount = 0;
+
+    let timer: ReturnType<typeof setTimeout>;
+    let retries = 0;
     const maxRetries = 5;
-    const retryDelay = 200;
-    
-    const attemptTabGeneration = () => {
+
+    const attempt = () => {
       if (activeTab === 'barcode') {
         if (barcodeCanvasRef.current) {
           generateBarcode();
-        } else if (retryCount < maxRetries) {
-          console.log(`Barcode canvas ref not available yet after tab change, retry ${retryCount + 1}/${maxRetries}...`);
-          retryCount++;
-          setTimeout(attemptTabGeneration, retryDelay);
-        } else {
-          console.warn("Barcode canvas ref still not available after maximum retries following tab change");
+        } else if (retries < maxRetries) {
+          retries++;
+          timer = setTimeout(attempt, 200);
         }
-      } else if (activeTab === 'qrcode') {
+      } else {
         if (qrCodeCanvasRef.current) {
           generateQRCode();
-        } else if (retryCount < maxRetries) {
-          console.log(`QR code canvas ref not available yet after tab change, retry ${retryCount + 1}/${maxRetries}...`);
-          retryCount++;
-          setTimeout(attemptTabGeneration, retryDelay);
-        } else {
-          console.warn("QR code canvas ref still not available after maximum retries following tab change");
+        } else if (retries < maxRetries) {
+          retries++;
+          timer = setTimeout(attempt, 200);
         }
       }
     };
-    
-    // Start the first attempt after a short delay to ensure DOM is ready
-    const initialTimer = setTimeout(attemptTabGeneration, 100);
-    
-    return () => clearTimeout(initialTimer);
-  }, [activeTab]);
+
+    timer = setTimeout(attempt, 50);
+    return () => clearTimeout(timer);
+  }, [barcode, activeTab]);
 
   const handleDownload = () => {
     const canvasRef = activeTab === 'barcode' ? barcodeCanvasRef : qrCodeCanvasRef;

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -119,142 +119,108 @@ function TicketDetailsContent() {
   const [comment, setComment] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<"details" | "history">("details");
+  const isUpdatingRef = React.useRef(false);
 
-  useEffect(() => {
-    if (id && typeof id === 'string') {
-      fetchTicket(id);
-    }
-  }, [id]);
-  
-  // Set up periodic refresh to ensure ticket data stays up-to-date
+  // Single effect — initial fetch + background polling (no double-fetch)
   useEffect(() => {
     if (!id || typeof id !== 'string') return;
-    
-    // Initial fetch
-    fetchTicket(id as string);
-    
-    // Refresh ticket data more frequently (every 10 seconds)
+
+    fetchTicket(id);
+
+    // Background silent refresh every 60 seconds — does NOT show skeleton
     const refreshInterval = setInterval(() => {
-      if (!isUpdating) { // Don't refresh while an update is in progress
-        fetchTicket(id as string);
+      if (!isUpdatingRef.current) {
+        silentRefresh(id);
       }
-    }, 10000);
-    
-    // Clean up interval on unmount
+    }, 60000);
+
     return () => clearInterval(refreshInterval);
-  }, [id, isUpdating]);
-  
-  // Force refresh when the component becomes visible again (tab focus)
+  }, [id]); // Only re-runs when id changes — NOT when isUpdating changes
+
+  // Refresh on tab focus (silent, no skeleton flash)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && id && typeof id === 'string') {
-        fetchTicket(id);
+        silentRefresh(id as string);
       }
     };
-    
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [id]);
 
+  // Keep ref in sync so interval closure always has latest value
+  useEffect(() => {
+    isUpdatingRef.current = isUpdating;
+  }, [isUpdating]);
+
+  // Full fetch — shows skeleton (only used on initial load)
   const fetchTicket = async (ticketId: string) => {
     setIsLoading(true);
     try {
-      // Add timestamp to URL to prevent browser caching
-      const timestamp = new Date().getTime();
-      const response = await fetch(`/api/tickets/${ticketId}?t=${timestamp}`, {
-        // Add cache control to prevent stale data
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-      
-      // Handle non-OK responses
-      if (!response.ok) {
-        let errorMessage = "Failed to fetch ticket details";
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.error) {
-            errorMessage = errorData.error;
-          }
-        } catch (parseError) {
-          console.error("Error parsing error response:", parseError);
-        }
-        throw new Error(errorMessage);
-      }
-      
-      // Parse the JSON response with error handling
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        console.error("Error parsing ticket data:", parseError);
-        throw new Error("Invalid response format from server");
-      }
-      
-      // Validate the data structure
-      if (!data || typeof data !== 'object') {
-        console.error("Invalid ticket data received:", data);
-        throw new Error("Received invalid ticket data from server");
-      }
-      
-      // Log the received data to check if barcode is included
-      console.log("Received ticket data:", {
-        id: data.id,
-        title: data.title,
-        barcode: data.barcode,
-        hasBarcode: !!data.barcode
-      });
-      
-      // Ensure required fields exist with fallbacks
-      const validatedData = {
-        id: data.id || ticketId,
-        title: data.title || "Untitled Ticket",
-        description: data.description || "",
-        status: data.status || TicketStatus.OPEN,
-        priority: data.priority || TicketPriority.MEDIUM,
-        barcode: data.barcode || null, // Make sure to include barcode
-        assetId: data.assetId || null,
-        asset: data.asset || null,
-        createdAt: data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt || new Date().toISOString()
-      };
-      
-      // Ensure status and priority are valid enum values
-      const validStatus = Object.values(TicketStatus).includes(validatedData.status) 
-        ? validatedData.status 
-        : TicketStatus.OPEN;
-        
-      const validPriority = Object.values(TicketPriority).includes(validatedData.priority)
-        ? validatedData.priority
-        : TicketPriority.MEDIUM;
-      
-      // Update state with validated data
-      setTicket({
-        ...validatedData,
-        status: validStatus,
-        priority: validPriority
-      });
-      setStatus(validStatus);
-      setPriority(validPriority);
+      const data = await loadTicketData(ticketId);
+      applyTicketData(data, ticketId);
     } catch (error) {
       console.error("Error fetching ticket:", error);
       toast({
         title: "Error",
-        description: error instanceof Error 
-          ? error.message 
-          : "An error occurred while fetching ticket details",
+        description: error instanceof Error ? error.message : "An error occurred while fetching ticket details",
         variant: "destructive",
       });
-      // Set ticket to null to show the not found state
       setTicket(null);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Silent refresh — updates data without showing skeleton or flashing
+  const silentRefresh = async (ticketId: string) => {
+    try {
+      const data = await loadTicketData(ticketId);
+      applyTicketData(data, ticketId);
+    } catch {
+      // Silently ignore background refresh errors
+    }
+  };
+
+  // Shared data-fetching logic
+  const loadTicketData = async (ticketId: string) => {
+    const response = await fetch(`/api/tickets/${ticketId}`, {
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to fetch ticket details");
+    }
+    const data = await response.json();
+    if (!data || typeof data !== 'object') throw new Error("Invalid response from server");
+    return data;
+  };
+
+  // Apply fetched data to state
+  const applyTicketData = (data: any, ticketId: string) => {
+    const validatedData = {
+      id: data.id || ticketId,
+      title: data.title || "Untitled Ticket",
+      description: data.description || "",
+      status: data.status || TicketStatus.OPEN,
+      priority: data.priority || TicketPriority.MEDIUM,
+      barcode: data.barcode || null,
+      assetId: data.assetId || null,
+      asset: data.asset || null,
+      assignedToId: data.assignedToId || null,
+      assignedTo: data.assignedTo || null,
+      requesterName: data.requesterName || null,
+      displayId: data.displayId || null,
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: data.updatedAt || new Date().toISOString(),
+    };
+    const validStatus = Object.values(TicketStatus).includes(validatedData.status)
+      ? validatedData.status : TicketStatus.OPEN;
+    const validPriority = Object.values(TicketPriority).includes(validatedData.priority)
+      ? validatedData.priority : TicketPriority.MEDIUM;
+    setTicket({ ...validatedData, status: validStatus, priority: validPriority });
+    setStatus(validStatus);
+    setPriority(validPriority);
   };
 
   const updateTicket = async () => {
@@ -342,16 +308,13 @@ function TicketDetailsContent() {
         title: "Success",
         description: successMessage,
       });
-      
-      // Clear the comment field
+
       setComment("");
-      
-      // Switch to history tab to show the new update
       setActiveTab("history");
-      
-      // Refresh the ticket data to ensure we have the latest state
+
+      // Silent refresh to get latest data after update (no skeleton flash)
       setTimeout(() => {
-        fetchTicket(id);
+        if (typeof id === 'string') silentRefresh(id);
       }, 500);
     } catch (error) {
       console.error("Error updating ticket:", error);
@@ -555,15 +518,13 @@ function TicketDetailsContent() {
               </Card>
 
               {ticket.barcode && (
-                <div className="barcode-container" key={`barcode-container-${ticket.id}-${activeTab}`}>
-                  <TicketBarcodeDisplay 
-                    key={`ticket-barcode-${ticket.id}-${activeTab}`} 
-                    ticketId={ticket.id} 
-                    ticketTitle={ticket.title} 
-                    barcode={ticket.barcode}
-                    displayId={ticket.displayId}
-                  />
-                </div>
+                <TicketBarcodeDisplay
+                  key={`ticket-barcode-${ticket.id}`}
+                  ticketId={ticket.id}
+                  ticketTitle={ticket.title}
+                  barcode={ticket.barcode}
+                  displayId={ticket.displayId}
+                />
               )}
 
               {ticket.asset && (
