@@ -5,6 +5,8 @@ alwaysApply: true
 
 # Deploy After Modification
 
+**User requirement:** Deploy every time you make modifications or changes. Do not skip deployment.
+
 After making any code or config changes to this project, **always** deploy:
 
 1. **Commit and push to GitHub**
