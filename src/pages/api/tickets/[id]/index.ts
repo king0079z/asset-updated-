@@ -54,6 +54,12 @@ export default async function handler(
                 email: true,
               },
             },
+            user: {
+              select: {
+                id: true,
+                email: true,
+              },
+            },
           },
         });
 

@@ -116,9 +116,13 @@ async function ticketsHandler(
               select: {
                 id: true, title: true, description: true, status: true,
                 priority: true, userId: true, assetId: true, source: true,
-                displayId: true, assignedToId: true,
+                displayId: true, assignedToId: true, requesterName: true,
+                ticketType: true, category: true, subcategory: true,
+                location: true, contactDetails: true,
                 createdAt: true, updatedAt: true,
                 asset: { select: { id: true, name: true, assetId: true } },
+                assignedTo: { select: { id: true, email: true } },
+                user: { select: { id: true, email: true } },
               },
               orderBy: { createdAt: 'desc' },
               take: 200,
@@ -135,9 +139,13 @@ async function ticketsHandler(
             select: {
               id: true, title: true, description: true, status: true,
               priority: true, userId: true, assetId: true, source: true,
-              displayId: true, assignedToId: true,
+              displayId: true, assignedToId: true, requesterName: true,
+              ticketType: true, category: true, subcategory: true,
+              location: true, contactDetails: true,
               createdAt: true, updatedAt: true,
               asset: { select: { id: true, name: true, assetId: true } },
+              assignedTo: { select: { id: true, email: true } },
+              user: { select: { id: true, email: true } },
             },
             orderBy: { createdAt: 'desc' },
             take: 200,
@@ -186,7 +194,7 @@ async function ticketsHandler(
         }
         
         // Extract ticket data from request body
-        const { title, description, priority, assetId, assignedToId, requesterName, source } = req.body;
+        const { title, description, priority, assetId, assignedToId, requesterName, source, ticketType, category, subcategory, location, contactDetails } = req.body;
         
         logApiEvent(`Ticket creation request received`, { 
           title, 
@@ -307,7 +315,12 @@ async function ticketsHandler(
             displayId: displayId,
             organizationId: orgId,
             source: ticketSource,
-            ...(requesterName ? { requesterName: requesterName.trim() } : {})
+            ...(requesterName ? { requesterName: requesterName.trim() } : {}),
+            ...(ticketType ? { ticketType } : {}),
+            ...(category ? { category } : {}),
+            ...(subcategory ? { subcategory } : {}),
+            ...(location ? { location: location.trim() } : {}),
+            ...(contactDetails ? { contactDetails: contactDetails.trim() } : {}),
           };
           
           // Only add assetId if it's valid

@@ -4,100 +4,94 @@ import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { formatTicketId } from "@/util/ticketFormat";
-import { 
-  AlertCircle, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  ArrowLeft, 
-  Printer, 
-  Calendar,
-  Tag,
-  Info,
-  Loader2,
-  LayoutGrid,
-  MessageSquare,
-  History
+import {
+  AlertCircle, Clock, CheckCircle2, XCircle, ArrowLeft, Printer,
+  Calendar, Tag, Info, Loader2, MessageSquare, History, Activity,
+  User, MapPin, Phone, Building, Send, RefreshCw, UserPlus,
+  ChevronRight, Zap, AlertTriangle, HelpCircle, Inbox, FileText,
+  CheckCircle, Circle, ArrowUp, Minus, ArrowDown, Eye, Ticket,
+  BarChart3, X, Package, Settings, Star,
 } from "lucide-react";
 import Link from "next/link";
 import TicketBarcodeDisplay from "@/components/TicketBarcodeDisplay";
 import PrintTicketButton from "@/components/PrintTicketButton";
 import TicketHistory from "@/components/TicketHistory";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
 
-// Safely format date with fallback
-const safeFormatDate = (dateString: string | null | undefined, formatStr: string = "MMMM d, yyyy 'at' h:mm a"): string => {
-  if (!dateString) return "Unknown date";
-  try {
-    const date = new Date(dateString);
-    // Check if date is valid
-    if (isNaN(date.getTime())) {
-      return "Invalid date";
-    }
-    
-    // Use Intl.DateTimeFormat for more reliable formatting
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true
-    }).format(date);
-  } catch (error) {
-    console.error("Date formatting error:", error);
-    return "Date format error";
-  }
-};
-
-// Define ticket status and priority enums to match Prisma schema
-enum TicketStatus {
-  OPEN = "OPEN",
-  IN_PROGRESS = "IN_PROGRESS",
-  RESOLVED = "RESOLVED",
-  CLOSED = "CLOSED"
-}
-
-enum TicketPriority {
-  LOW = "LOW",
-  MEDIUM = "MEDIUM",
-  HIGH = "HIGH",
-  CRITICAL = "CRITICAL"
-}
+/* ── Types ── */
+enum TicketStatus { OPEN = "OPEN", IN_PROGRESS = "IN_PROGRESS", RESOLVED = "RESOLVED", CLOSED = "CLOSED" }
+enum TicketPriority { LOW = "LOW", MEDIUM = "MEDIUM", HIGH = "HIGH", CRITICAL = "CRITICAL" }
 
 interface Ticket {
-  id: string;
-  displayId: string | null;
-  title: string;
-  description: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  barcode?: string;
-  assetId: string | null;
-  asset: {
-    id: string;
-    name: string;
-    assetId: string;
-  } | null;
-  assignedToId: string | null;
-  assignedTo: {
-    id: string;
-    email: string;
-  } | null;
-  requesterName: string | null;
-  createdAt: string;
-  updatedAt: string;
+  id: string; displayId: string | null; title: string; description: string;
+  status: TicketStatus; priority: TicketPriority;
+  barcode: string | null; assetId: string | null; source?: string | null;
+  assignedToId: string | null; requesterName?: string | null;
+  ticketType?: string | null; category?: string | null; subcategory?: string | null;
+  location?: string | null; contactDetails?: string | null;
+  asset: { id: string; name: string; assetId: string } | null;
+  assignedTo: { id: string; email: string } | null;
+  user?: { id: string; email: string } | null;
+  createdAt: string; updatedAt: string;
 }
 
+/* ── Config ── */
+const PRIORITY_CFG = {
+  CRITICAL: { label: "Critical", color: "text-red-600",     bg: "bg-red-50",     border: "border-red-200",     dot: "bg-red-500",     barColor: "border-t-red-500",    icon: <ArrowUp className="h-3.5 w-3.5" /> },
+  HIGH:     { label: "High",     color: "text-orange-600",  bg: "bg-orange-50",  border: "border-orange-200",  dot: "bg-orange-500",  barColor: "border-t-orange-500",  icon: <ArrowUp className="h-3.5 w-3.5" /> },
+  MEDIUM:   { label: "Medium",   color: "text-amber-600",   bg: "bg-amber-50",   border: "border-amber-200",   dot: "bg-amber-500",   barColor: "border-t-amber-500",   icon: <Minus className="h-3.5 w-3.5" /> },
+  LOW:      { label: "Low",      color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500", barColor: "border-t-emerald-500", icon: <ArrowDown className="h-3.5 w-3.5" /> },
+};
+const STATUS_CFG = {
+  OPEN:        { label: "Open",        color: "text-blue-700",    bg: "bg-blue-50",    border: "border-blue-200",    dot: "bg-blue-500",    icon: <Circle className="h-4 w-4 text-blue-500" /> },
+  IN_PROGRESS: { label: "In Progress", color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",   dot: "bg-amber-500",   icon: <Clock className="h-4 w-4 text-amber-500" /> },
+  RESOLVED:    { label: "Resolved",    color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500", icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" /> },
+  CLOSED:      { label: "Closed",      color: "text-slate-600",   bg: "bg-slate-100",  border: "border-slate-200",   dot: "bg-slate-400",   icon: <XCircle className="h-4 w-4 text-slate-500" /> },
+};
+const TICKET_TYPE_CFG = {
+  ISSUE:      { label: "Issue",     icon: AlertTriangle, color: "text-red-600",    bg: "bg-red-50",    border: "border-red-200",    headerBg: "from-red-600 to-red-700" },
+  REQUEST:    { label: "Request",   icon: Inbox,         color: "text-blue-600",   bg: "bg-blue-50",   border: "border-blue-200",   headerBg: "from-blue-600 to-blue-700" },
+  INQUIRY:    { label: "Inquiry",   icon: HelpCircle,    color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200", headerBg: "from-purple-600 to-purple-700" },
+  MANAGEMENT: { label: "Mgmt",      icon: FileText,      color: "text-slate-600",  bg: "bg-slate-50",  border: "border-slate-200",  headerBg: "from-slate-700 to-slate-800" },
+};
+
+const ACTIONS_BY_TYPE = {
+  ISSUE:      [{ label: "Start Investigation", to: "IN_PROGRESS", color: "bg-orange-500 hover:bg-orange-600", icon: Activity }, { label: "Mark Resolved",     to: "RESOLVED", color: "bg-emerald-600 hover:bg-emerald-700", icon: CheckCircle2 }, { label: "Close Ticket", to: "CLOSED", color: "bg-slate-600 hover:bg-slate-700", icon: XCircle }],
+  REQUEST:    [{ label: "Start Fulfillment",   to: "IN_PROGRESS", color: "bg-blue-500 hover:bg-blue-600",     icon: Zap },      { label: "Mark Complete",     to: "RESOLVED", color: "bg-emerald-600 hover:bg-emerald-700", icon: CheckCircle2 }, { label: "Close Ticket", to: "CLOSED", color: "bg-slate-600 hover:bg-slate-700", icon: XCircle }],
+  INQUIRY:    [{ label: "Start Response",      to: "IN_PROGRESS", color: "bg-purple-500 hover:bg-purple-600", icon: MessageSquare }, { label: "Mark Answered", to: "RESOLVED", color: "bg-emerald-600 hover:bg-emerald-700", icon: CheckCircle2 }, { label: "Close Ticket", to: "CLOSED", color: "bg-slate-600 hover:bg-slate-700", icon: XCircle }],
+  MANAGEMENT: [{ label: "Start Processing",    to: "IN_PROGRESS", color: "bg-slate-600 hover:bg-slate-700",   icon: Settings }, { label: "Mark Complete",     to: "RESOLVED", color: "bg-emerald-600 hover:bg-emerald-700", icon: CheckCircle2 }, { label: "Close Ticket", to: "CLOSED", color: "bg-slate-600 hover:bg-slate-700", icon: XCircle }],
+};
+
+/* ── Helpers ── */
+function PBadge({ p }: { p: string }) {
+  const c = PRIORITY_CFG[p] || PRIORITY_CFG.MEDIUM;
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${c.color} ${c.bg} ${c.border}`}>{c.icon}{c.label}</span>;
+}
+function SBadge({ s }: { s: string }) {
+  const c = STATUS_CFG[s] || STATUS_CFG.OPEN;
+  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${c.color} ${c.bg} ${c.border}`}><span className={`h-2 w-2 rounded-full ${c.dot}`} />{c.label}</span>;
+}
+const safeFormatDate = (d: string | null | undefined) => {
+  if (!d) return "Unknown";
+  try {
+    return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "numeric" }).format(new Date(d));
+  } catch { return "Invalid date"; }
+};
+function timeAgo(d: string) {
+  const diff = Date.now() - new Date(d).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+/* ── Skeleton ── */
+function Sk({ className = "" }) { return <div className={`animate-pulse rounded-xl bg-slate-100 ${className}`} />; }
+
+/* ── Page wrapper ── */
 export default function TicketDetailsPage() {
   return (
     <ProtectedRoute>
@@ -108,6 +102,7 @@ export default function TicketDetailsPage() {
   );
 }
 
+/* ── Content ── */
 function TicketDetailsContent() {
   const router = useRouter();
   const { id } = router.query;
@@ -118,318 +113,183 @@ function TicketDetailsContent() {
   const [priority, setPriority] = useState<TicketPriority>(TicketPriority.MEDIUM);
   const [comment, setComment] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "history">("details");
+  const [assignedToId, setAssignedToId] = useState<string>("");
+  const [staffMembers, setStaffMembers] = useState<{ id: string; email: string }[]>([]);
+  const [activeTab, setActiveTab] = useState<"details" | "history" | "barcode">("details");
   const isUpdatingRef = React.useRef(false);
 
-  // Single effect — initial fetch + background polling (no double-fetch)
   useEffect(() => {
-    if (!id || typeof id !== 'string') return;
-
+    if (!id || typeof id !== "string") return;
     fetchTicket(id);
-
-    // Background silent refresh every 60 seconds — does NOT show skeleton
-    const refreshInterval = setInterval(() => {
-      if (!isUpdatingRef.current) {
-        silentRefresh(id);
-      }
+    const interval = setInterval(() => {
+      if (!isUpdatingRef.current) silentRefresh(id);
     }, 60000);
-
-    return () => clearInterval(refreshInterval);
-  }, [id]); // Only re-runs when id changes — NOT when isUpdating changes
-
-  // Refresh on tab focus (silent, no skeleton flash)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && id && typeof id === 'string') {
-        silentRefresh(id as string);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    return () => clearInterval(interval);
   }, [id]);
 
-  // Keep ref in sync so interval closure always has latest value
   useEffect(() => {
-    isUpdatingRef.current = isUpdating;
-  }, [isUpdating]);
+    const handle = () => {
+      if (document.visibilityState === "visible" && id && typeof id === "string") silentRefresh(id as string);
+    };
+    document.addEventListener("visibilitychange", handle);
+    return () => document.removeEventListener("visibilitychange", handle);
+  }, [id]);
 
-  // Full fetch — shows skeleton (only used on initial load)
+  useEffect(() => { isUpdatingRef.current = isUpdating; }, [isUpdating]);
+
+  // Fetch staff members
+  useEffect(() => {
+    fetch("/api/planner/users").then(r => r.ok ? r.json() : null).then(data => {
+      const list = (data?.users ?? Array.isArray(data) ? data : [])
+        .map((u: any) => ({ id: u.id || "", email: u.email || "" }))
+        .filter((u: { id: string }) => u.id);
+      setStaffMembers(list);
+    }).catch(() => {});
+  }, []);
+
   const fetchTicket = async (ticketId: string) => {
     setIsLoading(true);
     try {
       const data = await loadTicketData(ticketId);
       applyTicketData(data, ticketId);
     } catch (error) {
-      console.error("Error fetching ticket:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An error occurred while fetching ticket details",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to fetch ticket", variant: "destructive" });
       setTicket(null);
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
-  // Silent refresh — updates data without showing skeleton or flashing
   const silentRefresh = async (ticketId: string) => {
     try {
       const data = await loadTicketData(ticketId);
       applyTicketData(data, ticketId);
-    } catch {
-      // Silently ignore background refresh errors
-    }
+    } catch {}
   };
 
-  // Shared data-fetching logic
   const loadTicketData = async (ticketId: string) => {
-    const response = await fetch(`/api/tickets/${ticketId}`, {
-      headers: { 'Cache-Control': 'no-cache' },
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to fetch ticket details");
+    const r = await fetch(`/api/tickets/${ticketId}`, { headers: { "Cache-Control": "no-cache" } });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to fetch ticket");
     }
-    const data = await response.json();
-    if (!data || typeof data !== 'object') throw new Error("Invalid response from server");
+    const data = await r.json();
+    if (!data || typeof data !== "object") throw new Error("Invalid response");
     return data;
   };
 
-  // Apply fetched data to state
   const applyTicketData = (data: any, ticketId: string) => {
-    const validatedData = {
+    const t = {
       id: data.id || ticketId,
       title: data.title || "Untitled Ticket",
       description: data.description || "",
-      status: data.status || TicketStatus.OPEN,
-      priority: data.priority || TicketPriority.MEDIUM,
+      status: Object.values(TicketStatus).includes(data.status) ? data.status : TicketStatus.OPEN,
+      priority: Object.values(TicketPriority).includes(data.priority) ? data.priority : TicketPriority.MEDIUM,
       barcode: data.barcode || null,
       assetId: data.assetId || null,
-      asset: data.asset || null,
+      source: data.source || null,
       assignedToId: data.assignedToId || null,
       assignedTo: data.assignedTo || null,
       requesterName: data.requesterName || null,
       displayId: data.displayId || null,
+      ticketType: data.ticketType || null,
+      category: data.category || null,
+      subcategory: data.subcategory || null,
+      location: data.location || null,
+      contactDetails: data.contactDetails || null,
+      asset: data.asset || null,
+      user: data.user || null,
       createdAt: data.createdAt || new Date().toISOString(),
       updatedAt: data.updatedAt || new Date().toISOString(),
     };
-    const validStatus = Object.values(TicketStatus).includes(validatedData.status)
-      ? validatedData.status : TicketStatus.OPEN;
-    const validPriority = Object.values(TicketPriority).includes(validatedData.priority)
-      ? validatedData.priority : TicketPriority.MEDIUM;
-    setTicket({ ...validatedData, status: validStatus, priority: validPriority });
-    setStatus(validStatus);
-    setPriority(validPriority);
+    setTicket(t);
+    setStatus(t.status);
+    setPriority(t.priority);
+    setAssignedToId(t.assignedToId || "");
   };
 
   const updateTicket = async () => {
-    if (!ticket || !id || typeof id !== 'string') return;
-    
-    // Check if status or priority has changed and require a comment
+    if (!ticket || !id || typeof id !== "string") return;
     const isStatusChanged = status !== ticket.status;
     const isPriorityChanged = priority !== ticket.priority;
-    
-    if ((isStatusChanged || isPriorityChanged) && (!comment || comment.trim() === '')) {
-      toast({
-        title: "Comment Required",
-        description: "Please provide a comment explaining the changes you're making.",
-        variant: "destructive",
-      });
+    const isAssignChanged = assignedToId !== (ticket.assignedToId || "");
+    if ((isStatusChanged || isPriorityChanged) && !comment.trim()) {
+      toast({ title: "Comment Required", description: "Please add a comment explaining your changes.", variant: "destructive" });
       return;
     }
-    
     setIsUpdating(true);
     try {
-      // Add timestamp to prevent caching
-      const timestamp = new Date().getTime();
-      
-      // Log the update attempt
-      console.log(`Updating ticket ${id} with status: ${status}, priority: ${priority}`);
-      
-      const response = await fetch(`/api/tickets/${id}?t=${timestamp}`, {
+      const body: any = { title: ticket.title, description: ticket.description, status, priority };
+      if (comment.trim()) body.comment = comment.trim();
+      if (isAssignChanged) body.assignedToId = assignedToId || null;
+      const r = await fetch(`/api/tickets/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-          "Expires": "0"
-        },
-        body: JSON.stringify({
-          title: ticket.title,
-          description: ticket.description,
-          status,
-          priority,
-          assetId: ticket.assetId || null,
-          comment: comment.trim()
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-
-      // Handle non-OK responses
-      if (!response.ok) {
-        let errorMessage = "Failed to update ticket";
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.error) {
-            errorMessage = errorData.error;
-          }
-        } catch (parseError) {
-          console.error("Error parsing error response:", parseError);
-        }
-        throw new Error(errorMessage);
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update ticket");
       }
-      
-      // Parse the response to get the updated ticket
-      const updatedTicket = await response.json();
-      
-      // Log the updated ticket status to verify it's correct
-      console.log("Updated ticket status:", updatedTicket.status);
-      
-      // Update the local state with the updated ticket
-      setTicket(updatedTicket);
-      setStatus(updatedTicket.status);
-      setPriority(updatedTicket.priority);
-      
-      // Show appropriate success message based on the status change
-      let successMessage = "Ticket updated successfully";
-      if (isStatusChanged) {
-        if (updatedTicket.status === TicketStatus.RESOLVED) {
-          successMessage = "Ticket resolved successfully";
-        } else if (updatedTicket.status === TicketStatus.IN_PROGRESS) {
-          successMessage = "Ticket marked as in progress";
-        } else if (updatedTicket.status === TicketStatus.OPEN) {
-          successMessage = "Ticket reopened successfully";
-        } else if (updatedTicket.status === TicketStatus.CLOSED) {
-          successMessage = "Ticket closed successfully";
-        }
-      }
-      
-      toast({
-        title: "Success",
-        description: successMessage,
-      });
-
+      const updated = await r.json();
+      applyTicketData(updated, id as string);
+      toast({ title: "Ticket updated successfully" });
       setComment("");
       setActiveTab("history");
-
-      // Silent refresh to get latest data after update (no skeleton flash)
-      setTimeout(() => {
-        if (typeof id === 'string') silentRefresh(id);
-      }, 500);
+      setTimeout(() => { if (typeof id === "string") silentRefresh(id); }, 500);
     } catch (error) {
-      console.error("Error updating ticket:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update ticket",
-        variant: "destructive",
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to update", variant: "destructive" });
+    } finally { setIsUpdating(false); }
+  };
+
+  const quickAction = async (toStatus: TicketStatus, label: string) => {
+    if (!id || typeof id !== "string") return;
+    setIsUpdating(true);
+    try {
+      const r = await fetch(`/api/tickets/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: toStatus, comment: `${label} — updated by support team` }),
       });
-    } finally {
-      setIsUpdating(false);
-    }
+      if (!r.ok) throw new Error();
+      const updated = await r.json();
+      applyTicketData(updated, id as string);
+      toast({ title: `Ticket ${label.toLowerCase()}` });
+      setActiveTab("history");
+    } catch { toast({ variant: "destructive", title: "Failed to update ticket" }); }
+    finally { setIsUpdating(false); }
   };
 
-  const getPriorityColor = (priority: TicketPriority) => {
-    switch (priority) {
-      case TicketPriority.LOW:
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case TicketPriority.MEDIUM:
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case TicketPriority.HIGH:
-        return "bg-orange-100 text-orange-800 border-orange-200";
-      case TicketPriority.CRITICAL:
-        return "bg-red-100 text-red-800 border-red-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
+  const assignTicket = async (uid: string) => {
+    if (!id || typeof id !== "string") return;
+    setIsUpdating(true);
+    try {
+      const r = await fetch(`/api/tickets/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignedToId: uid || null }),
+      });
+      if (!r.ok) throw new Error();
+      const updated = await r.json();
+      applyTicketData(updated, id as string);
+      setAssignedToId(uid);
+      toast({ title: uid ? "Ticket assigned" : "Assignment removed" });
+    } catch { toast({ variant: "destructive", title: "Failed to assign ticket" }); }
+    finally { setIsUpdating(false); }
   };
 
-  const getStatusColor = (status: TicketStatus) => {
-    switch (status) {
-      case TicketStatus.OPEN:
-        return "bg-red-50 text-red-700 border-red-200";
-      case TicketStatus.IN_PROGRESS:
-        return "bg-yellow-50 text-yellow-700 border-yellow-200";
-      case TicketStatus.RESOLVED:
-        return "bg-green-50 text-green-700 border-green-200";
-      case TicketStatus.CLOSED:
-        return "bg-gray-50 text-gray-700 border-gray-200";
-      default:
-        return "bg-gray-50 text-gray-700 border-gray-200";
-    }
-  };
-
-  const getStatusIcon = (status: TicketStatus) => {
-    switch (status) {
-      case TicketStatus.OPEN:
-        return <AlertCircle className="h-5 w-5 text-red-500" />;
-      case TicketStatus.IN_PROGRESS:
-        return <Clock className="h-5 w-5 text-yellow-500" />;
-      case TicketStatus.RESOLVED:
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />;
-      case TicketStatus.CLOSED:
-        return <XCircle className="h-5 w-5 text-gray-500" />;
-      default:
-        return null;
-    }
-  };
-
-  const formatStatusLabel = (status: TicketStatus): string => {
-    return status.replace("_", " ");
-  };
-
-  const formatPriorityLabel = (priority: TicketPriority): string => {
-    return priority.charAt(0) + priority.slice(1).toLowerCase();
-  };
-
+  /* ── Loading skeleton ── */
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Button variant="outline" size="sm" className="mr-4" disabled>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-            <div>
-              <Skeleton className="h-8 w-64 mb-2" />
-              <Skeleton className="h-4 w-40" />
-            </div>
-          </div>
-          <Skeleton className="h-10 w-24" />
+        <div className="flex items-center gap-4">
+          <Sk className="h-9 w-20" />
+          <div className="space-y-2 flex-1"><Sk className="h-8 w-64" /><Sk className="h-4 w-40" /></div>
         </div>
-        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
-              </CardContent>
-            </Card>
+          <div className="lg:col-span-2 space-y-4">
+            {[1,2,3].map(i => <Sk key={i} className="h-40 rounded-2xl" />)}
           </div>
-          
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-6 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-20 w-full" />
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-6 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-20 w-full" />
-              </CardContent>
-            </Card>
+          <div className="space-y-4">
+            {[1,2,3].map(i => <Sk key={i} className="h-32 rounded-2xl" />)}
           </div>
         </div>
       </div>
@@ -438,316 +298,342 @@ function TicketDetailsContent() {
 
   if (!ticket) {
     return (
-      <div className="flex flex-col items-center justify-center py-10 text-center">
-        <div className="bg-muted/30 p-6 rounded-full mb-6">
-          <AlertCircle className="h-12 w-12 text-muted-foreground" />
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-100 bg-white py-20 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+          <AlertCircle className="h-8 w-8 text-slate-400" />
         </div>
-        <h3 className="text-xl font-medium mb-2">Ticket not found</h3>
-        <p className="text-muted-foreground max-w-md mb-6">
-          The ticket you're looking for doesn't exist or has been deleted.
-        </p>
-        <Button variant="default" asChild>
-          <Link href="/tickets">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to tickets
-          </Link>
-        </Button>
+        <div><p className="font-bold text-slate-900">Ticket not found</p><p className="mt-1 text-sm text-slate-500">This ticket doesn't exist or you don't have access.</p></div>
+        <Link href="/tickets" className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition-colors">
+          <ArrowLeft className="h-4 w-4" /> Back to Tickets
+        </Link>
       </div>
     );
   }
 
+  const tc = TICKET_TYPE_CFG[ticket.ticketType as keyof typeof TICKET_TYPE_CFG] || TICKET_TYPE_CFG.ISSUE;
+  const pc = PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.MEDIUM;
+  const sc = STATUS_CFG[ticket.status] || STATUS_CFG.OPEN;
+  const TypeIcon = tc.icon;
+  const availableActions = (ACTIONS_BY_TYPE[ticket.ticketType as keyof typeof ACTIONS_BY_TYPE] || ACTIONS_BY_TYPE.ISSUE)
+    .filter(a => {
+      if (ticket.status === TicketStatus.CLOSED) return false;
+      if (ticket.status === a.to) return false;
+      return true;
+    });
+
+  const STEPS = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+  const stepIdx = STEPS.indexOf(ticket.status);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/tickets" className="flex items-center">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Link>
-          </Button>
-          <div>
+      {/* ── Page Header ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          <Link href="/tickets"
+            className="mt-1 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors shrink-0">
+            <ArrowLeft className="h-4 w-4" /> Back
+          </Link>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{ticket.title}</h1>
-              <div className="font-medium text-foreground bg-background px-3 py-1 rounded-md border border-border font-mono">
-                {formatTicketId(ticket.displayId, ticket.id)}
-              </div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 line-clamp-2">{ticket.title}</h1>
             </div>
-            <div className="flex items-center text-muted-foreground">
-              <Calendar className="h-4 w-4 mr-1" />
-              <span className="text-sm">Created on {safeFormatDate(ticket.createdAt)}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-sm font-bold text-slate-400">{formatTicketId(ticket.displayId, ticket.id)}</span>
+              <SBadge s={ticket.status} />
+              <PBadge p={ticket.priority} />
+              {ticket.source === "PORTAL" && <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-700">Portal</span>}
+              {ticket.ticketType && (
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tc.color} ${tc.bg} ${tc.border}`}>
+                  <TypeIcon className="h-3 w-3" />{tc.label}
+                </span>
+              )}
             </div>
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-400">
+              <Calendar className="h-3.5 w-3.5" /> Created {safeFormatDate(ticket.createdAt)}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <PrintTicketButton 
-            ticket={ticket} 
-            variant="outline" 
-            size="default" 
-          />
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => { if (typeof id === "string") silentRefresh(id); }}
+            className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50 transition-colors">
+            <RefreshCw className="h-4 w-4" />
+          </button>
+          <PrintTicketButton ticket={ticket} variant="outline" size="default" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "details" | "history")} className="w-full">
-            <TabsList className="w-full grid grid-cols-2">
-              <TabsTrigger value="details" className="flex items-center gap-2">
-                <LayoutGrid className="h-4 w-4" />
-                <span>Details</span>
-              </TabsTrigger>
-              <TabsTrigger value="history" className="flex items-center gap-2">
-                <History className="h-4 w-4" />
-                <span>History</span>
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="details" className="space-y-6 pt-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2">
-                    <Info className="h-5 w-5 text-muted-foreground" />
-                    Description
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-muted/30 p-4 rounded-lg">
-                    <p className="whitespace-pre-wrap">{ticket.description}</p>
+      {/* ── Quick Action Buttons (type-specific) ── */}
+      {availableActions.length > 0 && (
+        <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-100 bg-white p-4">
+          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 mr-2">
+            <Zap className="h-3.5 w-3.5" /> Quick Actions
+          </span>
+          {availableActions.map(a => {
+            const Icon = a.icon;
+            return (
+              <button key={a.label} onClick={() => quickAction(a.to as TicketStatus, a.label)} disabled={isUpdating}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-all hover:scale-105 active:scale-100 ${a.color}`}>
+                {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />}
+                {a.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Status Progress ── */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-5">
+        <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Ticket Progress</p>
+        <div className="flex items-start gap-1.5">
+          {STEPS.map((step, i) => {
+            const c = STATUS_CFG[step]; const done = i <= stepIdx; const active = i === stepIdx;
+            return (
+              <div key={step} className="flex flex-1 flex-col items-center gap-1.5">
+                <div className={`relative h-2.5 w-full overflow-hidden rounded-full transition-all duration-700 ${done ? c.dot : "bg-slate-100"}`}>
+                  {active && <div className="absolute inset-0 animate-pulse opacity-60 bg-white" />}
+                </div>
+                <span className={`text-center text-[10px] font-bold leading-tight ${done ? c.color : "text-slate-300"}`}>{c.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Main 2-col layout ── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* ── LEFT: Main content ── */}
+        <div className="lg:col-span-2 space-y-5">
+          {/* Tabs */}
+          <div className="flex gap-1 rounded-2xl border border-slate-100 bg-slate-50 p-1">
+            {[
+              { key: "details",  label: "Details",  icon: Info },
+              { key: "history",  label: "Activity", icon: History },
+              ...(ticket.barcode ? [{ key: "barcode", label: "Barcode", icon: Tag }] : []),
+            ].map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold transition-all ${activeTab === tab.key ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
+                  <Icon className="h-4 w-4" />{tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Details tab */}
+          {activeTab === "details" && (
+            <div className="space-y-4">
+              {/* Description */}
+              <div className="rounded-2xl border border-slate-100 bg-white p-5">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Description</p>
+                <div className="rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+                  {ticket.description}
+                </div>
+              </div>
+
+              {/* Ticket metadata */}
+              {(ticket.location || ticket.contactDetails || ticket.category || ticket.subcategory) && (
+                <div className="rounded-2xl border border-slate-100 bg-white p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Request Details</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {ticket.category && (
+                      <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3">
+                        <Tag className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                        <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Category</p><p className="text-sm font-semibold text-slate-700">{ticket.category.replace("_", " ")}</p></div>
+                      </div>
+                    )}
+                    {ticket.subcategory && (
+                      <div className="flex items-start gap-2.5 rounded-xl bg-blue-50 border border-blue-100 p-3">
+                        <Settings className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+                        <div><p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Service Type</p><p className="text-sm font-semibold text-blue-700">{ticket.subcategory}</p></div>
+                      </div>
+                    )}
+                    {ticket.location && (
+                      <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                        <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Location</p><p className="text-sm font-semibold text-slate-700">{ticket.location}</p></div>
+                      </div>
+                    )}
+                    {ticket.contactDetails && (
+                      <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3">
+                        <Phone className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                        <div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Contact</p><p className="text-sm font-semibold text-slate-700">{ticket.contactDetails}</p></div>
+                      </div>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-
-              {ticket.barcode && (
-                <TicketBarcodeDisplay
-                  key={`ticket-barcode-${ticket.id}`}
-                  ticketId={ticket.id}
-                  ticketTitle={ticket.title}
-                  barcode={ticket.barcode}
-                  displayId={ticket.displayId}
-                />
+                </div>
               )}
 
+              {/* Asset */}
               {ticket.asset && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2">
-                      <Tag className="h-5 w-5 text-muted-foreground" />
-                      Related Asset
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pb-4">
-                    <div className="flex items-center space-x-2 mb-4">
-                      <Badge variant="outline" className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200">
-                        {ticket.asset.assetId}
-                      </Badge>
-                      <span className="font-medium">{ticket.asset.name}</span>
+                <div className="rounded-2xl border border-slate-100 bg-white p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Related Asset</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100">
+                      <Package className="h-5 w-5 text-slate-500" />
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/assets/${ticket.asset.id}`}>
-                        View Asset Details
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-              
-              {ticket.assignedTo && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2">
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        viewBox="0 0 24 24" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        className="h-5 w-5 text-muted-foreground"
-                      >
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                      </svg>
-                      Assigned Staff
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pb-4">
-                    <div className="flex items-center space-x-2 mb-4">
-                      <Badge variant="outline" className="px-2 py-1 bg-purple-50 text-purple-700 border border-purple-200">
-                        Staff
-                      </Badge>
-                      <span className="font-medium">{ticket.assignedTo.email}</span>
+                    <div>
+                      <p className="font-semibold text-slate-900">{ticket.asset.name}</p>
+                      <p className="font-mono text-xs text-slate-400">{ticket.asset.assetId}</p>
                     </div>
-                  </CardContent>
-                </Card>
+                    <Link href={`/assets/${ticket.asset.id}`}
+                      className="ml-auto inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors">
+                      View Asset <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
               )}
-              
-              {ticket.requesterName && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2">
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        viewBox="0 0 24 24" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        strokeWidth="2" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        className="h-5 w-5 text-muted-foreground"
-                      >
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                      Requester
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pb-4">
-                    <div className="flex items-center space-x-2 mb-4">
-                      <Badge variant="outline" className="px-2 py-1 bg-teal-50 text-teal-700 border border-teal-200">
-                        Requester
-                      </Badge>
-                      <span className="font-medium">{ticket.requesterName}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="history" className="pt-4">
-              {ticket && <TicketHistory ticketId={ticket.id} />}
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
+
+          {/* History tab */}
+          {activeTab === "history" && (
+            <div className="rounded-2xl border border-slate-100 bg-white">
+              <TicketHistory ticketId={ticket.id} />
+            </div>
+          )}
+
+          {/* Barcode tab */}
+          {activeTab === "barcode" && ticket.barcode && (
+            <TicketBarcodeDisplay key={`barcode-${ticket.id}`} ticketId={ticket.id} ticketTitle={ticket.title} barcode={ticket.barcode} displayId={ticket.displayId} />
+          )}
+
+          {/* ── Update / Comment form ── */}
+          <div className="rounded-2xl border border-slate-100 bg-white p-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+              {(status !== ticket.status || priority !== ticket.priority) ? "Update Ticket (comment required)" : "Add Comment"}
+            </p>
+            <textarea
+              value={comment}
+              onChange={e => setComment(e.target.value)}
+              rows={4}
+              placeholder={`${status !== ticket.status || priority !== ticket.priority ? "Explain the changes you're making…" : "Add a comment or note…"}`}
+              className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors"
+            />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-400">
+                {status !== ticket.status && <span className="font-semibold text-amber-600">Status: {ticket.status} → {status}</span>}
+                {priority !== ticket.priority && <span className="ml-2 font-semibold text-amber-600">Priority: {ticket.priority} → {priority}</span>}
+              </p>
+              <button onClick={updateTicket}
+                disabled={isUpdating || (status === ticket.status && priority === ticket.priority && !comment.trim() && assignedToId === (ticket.assignedToId || ""))}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">
+                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {isUpdating ? "Updating…" : "Update Ticket"}
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-6">
-          <Card className="border-t-4" style={{ 
-            borderTopColor: 
-              ticket.status === TicketStatus.OPEN ? 'rgb(239, 68, 68)' :
-              ticket.status === TicketStatus.IN_PROGRESS ? 'rgb(234, 179, 8)' :
-              ticket.status === TicketStatus.RESOLVED ? 'rgb(34, 197, 94)' :
-              'rgb(107, 114, 128)'
-          }}>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-muted-foreground" />
-                Status
-              </CardTitle>
-              <CardDescription>
-                Current status: <span className="font-medium">{formatStatusLabel(ticket.status)}</span>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Badge 
-                  variant="outline" 
-                  className={`flex items-center gap-1 px-3 py-1 ${getStatusColor(ticket.status)}`}
-                >
-                  {getStatusIcon(ticket.status)}
-                  <span>{formatStatusLabel(ticket.status)}</span>
-                </Badge>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Update Status</p>
-                <Select 
-                  value={status} 
-                  onValueChange={(value) => setStatus(value as TicketStatus)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={TicketStatus.OPEN}>Open</SelectItem>
-                    <SelectItem value={TicketStatus.IN_PROGRESS}>In Progress</SelectItem>
-                    <SelectItem value={TicketStatus.RESOLVED}>Resolved</SelectItem>
-                    <SelectItem value={TicketStatus.CLOSED}>Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+        {/* ── RIGHT: Sidebar ── */}
+        <div className="space-y-4">
+          {/* Status */}
+          <div className={`rounded-2xl border-t-4 border-slate-100 bg-white p-5 ${pc.barColor}`}>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Status</p>
+            <div className="mb-3 flex items-center gap-2">{sc.icon}<SBadge s={ticket.status} /></div>
+            <select value={status} onChange={e => setStatus(e.target.value as TicketStatus)}
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors">
+              {Object.values(TicketStatus).map(s => <option key={s} value={s}>{STATUS_CFG[s]?.label || s}</option>)}
+            </select>
+          </div>
 
-          <Card className="border-t-4" style={{ 
-            borderTopColor: 
-              ticket.priority === TicketPriority.CRITICAL ? 'rgb(239, 68, 68)' :
-              ticket.priority === TicketPriority.HIGH ? 'rgb(249, 115, 22)' :
-              ticket.priority === TicketPriority.MEDIUM ? 'rgb(234, 179, 8)' :
-              'rgb(59, 130, 246)'
-          }}>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <Tag className="h-5 w-5 text-muted-foreground" />
-                Priority
-              </CardTitle>
-              <CardDescription>
-                Current priority: <span className="font-medium">{formatPriorityLabel(ticket.priority)}</span>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Badge variant="outline" className={`${getPriorityColor(ticket.priority)} px-3 py-1`}>
-                {formatPriorityLabel(ticket.priority)}
-              </Badge>
-              <Separator />
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Update Priority</p>
-                <Select 
-                  value={priority} 
-                  onValueChange={(value) => setPriority(value as TicketPriority)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={TicketPriority.LOW}>Low</SelectItem>
-                    <SelectItem value={TicketPriority.MEDIUM}>Medium</SelectItem>
-                    <SelectItem value={TicketPriority.HIGH}>High</SelectItem>
-                    <SelectItem value={TicketPriority.CRITICAL}>Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Priority */}
+          <div className="rounded-2xl border border-slate-100 bg-white p-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Priority</p>
+            <div className="mb-3"><PBadge p={ticket.priority} /></div>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(PRIORITY_CFG).map(([key, cfg]) => (
+                <button key={key} onClick={() => setPriority(key as TicketPriority)}
+                  className={`flex items-center gap-1.5 rounded-xl border-2 px-2.5 py-2 text-xs font-semibold transition-all ${priority === key ? `${cfg.bg} ${cfg.border} ${cfg.color}` : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200"}`}>
+                  {cfg.icon}{cfg.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-muted-foreground" />
-                Comment
-              </CardTitle>
-              <CardDescription>
-                {(status !== ticket.status || priority !== ticket.priority) 
-                  ? "Please provide a comment explaining the changes you're making." 
-                  : "Add a comment to the ticket history (optional)."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pb-2">
-              <Textarea
-                placeholder="Enter your comment here..."
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                className="min-h-[100px] resize-none"
-              />
-            </CardContent>
-            <CardFooter className="pt-2">
-              <Button 
-                className="w-full" 
-                onClick={updateTicket} 
-                disabled={isUpdating || (status === ticket.status && priority === ticket.priority && !comment.trim())}
-              >
-                {isUpdating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  "Update Ticket"
+          {/* Assign */}
+          <div className="rounded-2xl border border-slate-100 bg-white p-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Assigned To</p>
+            {ticket.assignedTo ? (
+              <div className="mb-3 flex items-center gap-2.5 rounded-xl bg-violet-50 p-3 border border-violet-100">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-700 text-xs font-bold text-white">
+                  {ticket.assignedTo.email[0].toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-violet-700">{ticket.assignedTo.email.split("@")[0]}</p>
+                  <p className="text-[10px] text-violet-400">{ticket.assignedTo.email}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="mb-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-400">Not assigned yet</p>
+            )}
+            <div className="relative">
+              <select
+                value={assignedToId}
+                onChange={e => assignTicket(e.target.value)}
+                disabled={isUpdating}
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors disabled:opacity-50">
+                <option value="">Unassigned</option>
+                {staffMembers.map(s => <option key={s.id} value={s.id}>{s.email}</option>)}
+              </select>
+              {isUpdating && <Loader2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />}
+            </div>
+          </div>
+
+          {/* Requester info */}
+          {(ticket.user || ticket.requesterName) && (
+            <div className="rounded-2xl border border-slate-100 bg-white p-5">
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Submitted By</p>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-sm font-bold text-white">
+                  {(ticket.user?.email || ticket.requesterName || "U")[0].toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900">{ticket.requesterName || ticket.user?.email?.split("@")[0] || "Unknown User"}</p>
+                  <p className="text-xs text-slate-500">{ticket.user?.email}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {ticket.location && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <span className="truncate">{ticket.location}</span>
+                  </div>
                 )}
-              </Button>
-            </CardFooter>
-          </Card>
+                {ticket.contactDetails && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <span className="truncate">{ticket.contactDetails}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Dates & Meta */}
+          <div className="rounded-2xl border border-slate-100 bg-white p-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Timeline</p>
+            <div className="space-y-3 text-sm text-slate-600">
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                  <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Created</p>
+                  <p className="text-sm font-medium text-slate-700">{safeFormatDate(ticket.createdAt)}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                  <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Last Updated</p>
+                  <p className="text-sm font-medium text-slate-700">{timeAgo(ticket.updatedAt)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

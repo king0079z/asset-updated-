@@ -13,6 +13,7 @@ type CacheEntry<T> = {
 
 type CacheOptions = {
   maxAge: number; // Cache expiration time in milliseconds
+  timeoutMs?: number; // Request timeout (default 20s); use higher for slow endpoints e.g. ML
 };
 
 // Module-level cache — persists across Next.js SPA page navigations
@@ -65,12 +66,11 @@ export async function fetchWithCache<T>(
     return pendingRequest as Promise<T>;
   }
   
-  // No valid cache, make the actual fetch request (timeout 20s, credentials for auth)
+  const timeoutMs = cacheOptions.timeoutMs ?? 20000;
   logDebug(`[Cache] Fetching fresh data for ${url}`);
-  const API_TIMEOUT_MS = 20000;
   const requestPromise = (async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(url, {
         credentials: 'same-origin',

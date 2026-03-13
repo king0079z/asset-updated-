@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
-import { createClient } from "@/util/supabase/api";
+import { requireAuth } from '@/util/supabase/require-auth';
 import { 
   generateComprehensiveAnalysis, 
   detectKitchenConsumptionAnomalies,
@@ -29,16 +29,9 @@ export default async function handler(
 
   try {
     console.info('Path: /api/ai-analysis/ml-predictions Starting ML predictions generation');
-    
-    const supabase = createClient(req, res);
-    const { data: { session }, error } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-
-    if (error || !user) {
-      console.error('Auth error in ML predictions:', error);
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    const { user } = auth;
     console.info(`Path: /api/ai-analysis/ml-predictions Processing ML predictions for user: ${user.id}`);
 
     // ── Server-side cache check (per org — avoids recomputing on every request) ──

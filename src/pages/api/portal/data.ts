@@ -49,7 +49,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       select: {
         id: true, displayId: true, title: true, description: true,
         status: true, priority: true, userId: true, assignedToId: true,
-        source: true, createdAt: true, updatedAt: true,
+        source: true, ticketType: true, category: true, subcategory: true,
+        location: true, contactDetails: true,
+        createdAt: true, updatedAt: true,
+        assignedTo: { select: { id: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -81,6 +84,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     role: roleData?.role ?? null,
     pageAccess: roleData?.pageAccess ?? {},
     hasDashboardAccess: !!(roleData?.isAdmin || isAdminOrManager || (roleData?.pageAccess as any)?.['/dashboard']),
+    canAccessDashboard: !!(roleData?.isAdmin || isAdminOrManager || (roleData?.pageAccess as any)?.['/dashboard']),
+    isStaff: !!(roleData?.role === 'STAFF'),
   };
 
   const payload = { tickets, notifications, permissions };

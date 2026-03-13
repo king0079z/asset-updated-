@@ -600,6 +600,12 @@ model Ticket {
   requesterName  String?
   organizationId String?
   source         String?         @default("INTERNAL") // "PORTAL" | "INTERNAL"
+  ticketType     String?         @default("ISSUE")    // "ISSUE" | "REQUEST" | "INQUIRY" | "MANAGEMENT"
+  category       String?                              // e.g. "DEVICES" | "ACCESS" | "SERVICE_DESK"
+  subcategory    String?                              // e.g. "Laptop" | "Desktop Computer"
+  location       String?
+  contactDetails String?
+  attachments    String?                              // JSON array of attachment URLs
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   asset          Asset?          @relation(fields: [assetId], references: [id])

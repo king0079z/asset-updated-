@@ -134,8 +134,8 @@ export function AiAlerts({ className }: AiAlertsProps) {
       setLoading(true);
       setError(null);
 
-      // Use shared in-memory cache (5 min TTL) — deduplicates with AI Analysis page requests.
-      const data = (await fetchWithCache('/api/ai-analysis/ml-predictions', { maxAge: 5 * 60 * 1000 })) as { insights?: {
+      // ML endpoint can be slow (heavy Prisma + model work) — use 90s timeout
+      const data = (await fetchWithCache('/api/ai-analysis/ml-predictions', { maxAge: 5 * 60 * 1000, timeoutMs: 90000 })) as { insights?: {
         summary?: { keyPoints?: string[] };
         anomalies?: { items?: Anomaly[] };
         optimizations?: { items?: Optimization[] };
@@ -219,16 +219,19 @@ export function AiAlerts({ className }: AiAlertsProps) {
 
       setAiData(analysisData);
       setLastUpdated(new Date());
-    } catch (err) {
-      console.error('Error fetching AI analysis:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
-      toast({
-        title: "Error",
-        description: "Failed to load AI analysis. Using fallback data.",
-        variant: "destructive",
-      });
+    } catch (err: any) {
+      // AbortError = request cancelled (redirect/timeout) — show fallback without error toast
+      if (err?.name !== 'AbortError') {
+        console.error('Error fetching AI analysis:', err);
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
+        toast({
+          title: "Error",
+          description: "Failed to load AI analysis. Using fallback data.",
+          variant: "destructive",
+        });
+      }
 
-      // Set fallback data
+      // Set fallback data so insights section still shows something
       setAiData({
         recommendations: [
           {

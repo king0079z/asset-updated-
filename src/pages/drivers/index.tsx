@@ -79,8 +79,8 @@ export default function DriversPage() {
     try {
       const data = await fetchWithCache<any>(DRIVERS_KEY, { maxAge: DRIVERS_TTL });
       setDrivers(data?.drivers ?? []);
-    } catch {
-      if (!background) setError("Failed to fetch drivers");
+    } catch (err: any) {
+      if (!background && err?.name !== 'AbortError') setError("Failed to fetch drivers");
     } finally {
       if (!background) setLoading(false);
     }
