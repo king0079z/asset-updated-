@@ -39,6 +39,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -695,24 +696,35 @@ export default function HandheldHubPage() {
 
       {/* Ticket detail sheet */}
       <Dialog open={!!selectedTicketDetail || ticketDetailLoading} onOpenChange={(open) => { if (!open) setSelectedTicketDetail(null); }}>
-        <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl" aria-describedby={undefined}>
+          <div className="flex items-start justify-between gap-2">
+            <DialogHeader>
+              <DialogTitle>
+                {ticketDetailLoading ? (
+                  'Ticket details'
+                ) : selectedTicketDetail ? (
+                  <span className="text-lg pr-6 block">{selectedTicketDetail.title || 'Ticket'}</span>
+                ) : (
+                  <VisuallyHidden>Ticket details</VisuallyHidden>
+                )}
+              </DialogTitle>
+              {selectedTicketDetail && (
+                <p className="text-xs text-slate-500 mt-1">{selectedTicketDetail.displayId || selectedTicketDetail.id}</p>
+              )}
+            </DialogHeader>
+            {(ticketDetailLoading || selectedTicketDetail) && (
+              <Button variant="ghost" size="icon" className="rounded-xl -mr-2 shrink-0" onClick={() => setSelectedTicketDetail(null)} aria-label="Close">
+                <X className="h-5 w-5" />
+              </Button>
+            )}
+          </div>
           {ticketDetailLoading ? (
             <div className="py-12 flex flex-col items-center gap-3">
               <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
               <p className="text-sm text-slate-500">Loading ticket…</p>
             </div>
           ) : selectedTicketDetail ? (
-            <>
-              <div className="flex items-start justify-between gap-2">
-                <DialogHeader>
-                  <DialogTitle className="text-lg pr-6">{selectedTicketDetail.title || 'Ticket'}</DialogTitle>
-                  <p className="text-xs text-slate-500 mt-1">{selectedTicketDetail.displayId || selectedTicketDetail.id}</p>
-                </DialogHeader>
-                <Button variant="ghost" size="icon" className="rounded-xl -mr-2" onClick={() => setSelectedTicketDetail(null)}>
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-              <div className="space-y-4 pt-2">
+            <div className="space-y-4 pt-2">
                 {selectedTicketDetail.description ? (
                   <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{selectedTicketDetail.description}</p>
                 ) : (
@@ -752,7 +764,6 @@ export default function HandheldHubPage() {
                   </div>
                 </div>
               </div>
-            </>
           ) : null}
         </DialogContent>
       </Dialog>
