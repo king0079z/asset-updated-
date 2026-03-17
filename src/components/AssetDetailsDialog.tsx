@@ -44,7 +44,7 @@ import {
 } from "lucide-react";
 import { EditAssetDialog } from "./EditAssetDialog";
 import { AssignAssetDialog } from "./AssignAssetDialog";
-import { useRef, useState, useEffect, Suspense, lazy } from "react";
+import { useRef, useState, useEffect, useCallback, Suspense, lazy } from "react";
 import dynamic from "next/dynamic";
 import Barcode from "react-barcode";
 import { QRCodeSVG as QRCode } from "qrcode.react";
@@ -163,6 +163,9 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   const { t } = useTranslation();
   const { isButtonVisible } = useButtonVisibility();
   const printRef = useRef<HTMLDivElement>(null);
+  const dialogOpenedAt = useRef<number>(0);
+  useEffect(() => { if (open) dialogOpenedAt.current = Date.now(); }, [open]);
+  const preventRecentOutsideClose = useCallback((e: Event) => { if (Date.now() - dialogOpenedAt.current < 500) e.preventDefault(); }, []);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateTicketDialogOpen, setIsCreateTicketDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
@@ -253,7 +256,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[90dvh] flex flex-col">
+      <DialogContent className="w-[95vw] max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl max-h-[90dvh] flex flex-col" onPointerDownOutside={preventRecentOutsideClose} onInteractOutside={preventRecentOutsideClose}>
         <VisuallyHidden>
           <DialogTitle>{displayAsset.name} — Asset Details</DialogTitle>
           <DialogDescription>View and manage details, RFID tracking, tickets, history and documents for this asset.</DialogDescription>

@@ -4,7 +4,7 @@
  * with large touch targets for warehouse/field use. Use on assets page (Handheld mode)
  * or on dedicated route /assets/handheld for "Add to home screen" use.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
@@ -87,6 +87,19 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
   const [savingStatus, setSavingStatus] = useState(false);
   const [pickedStatus, setPickedStatus] = useState('');
   const [manualCode, setManualCode] = useState('');
+  const dialogOpenedAt = useRef<number>(0);
+
+  useEffect(() => {
+    if (showMove || showStatus || showAssign || showDetails) {
+      dialogOpenedAt.current = Date.now();
+    }
+  }, [showMove, showStatus, showAssign, showDetails]);
+
+  const preventRecentOutsideClose = useCallback((e: Event) => {
+    if (Date.now() - dialogOpenedAt.current < 500) {
+      e.preventDefault();
+    }
+  }, []);
 
   const transferForm = useForm<z.infer<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),
@@ -289,19 +302,19 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Button size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowDetails(true)}>
+              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowDetails(true)}>
                 <Eye className="h-5 w-5" />
                 <span className="text-xs">View details</span>
               </Button>
-              <Button size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowMove(true)}>
+              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowMove(true)}>
                 <ArrowRightLeft className="h-5 w-5" />
                 <span className="text-xs">Move</span>
               </Button>
-              <Button size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowAssign(true)}>
+              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowAssign(true)}>
                 <UserCheck className="h-5 w-5" />
                 <span className="text-xs">Assign</span>
               </Button>
-              <Button size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowStatus(true)}>
+              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowStatus(true)}>
                 <RefreshCw className="h-5 w-5" />
                 <span className="text-xs">Status</span>
               </Button>
@@ -343,7 +356,7 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
 
       {/* Move dialog */}
       <Dialog open={showMove} onOpenChange={setShowMove}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={preventRecentOutsideClose} onInteractOutside={preventRecentOutsideClose}>
           <DialogHeader>
             <DialogTitle>Move asset</DialogTitle>
           </DialogHeader>
@@ -386,7 +399,7 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
 
       {/* Status dialog */}
       <Dialog open={showStatus} onOpenChange={setShowStatus}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={preventRecentOutsideClose} onInteractOutside={preventRecentOutsideClose}>
           <DialogHeader>
             <DialogTitle>Update status</DialogTitle>
           </DialogHeader>

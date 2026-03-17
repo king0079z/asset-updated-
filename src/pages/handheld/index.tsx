@@ -29,7 +29,13 @@ import {
   WifiOff,
   ChevronRight,
   X,
+  MessageSquare,
+  UtensilsCrossed,
+  ScanLine,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
+const EnhancedBarcodeScanner = dynamic(() => import('@/components/EnhancedBarcodeScanner'), { ssr: false });
 import { AssignAssetDialog } from '@/components/AssignAssetDialog';
 import { AssetDetailsDialog } from '@/components/AssetDetailsDialog';
 import {
@@ -41,6 +47,7 @@ import {
 } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Textarea } from '@/components/ui/textarea';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -79,7 +86,7 @@ type Asset = {
   assignedToEmail?: string | null;
 };
 
-type TabId = 'scan' | 'asset' | 'tickets' | 'tasks' | 'audit' | 'more';
+type TabId = 'scan' | 'asset' | 'tickets' | 'tasks' | 'audit' | 'food' | 'more';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'scan', label: 'Scan', icon: <Scan className="h-5 w-5" /> },
@@ -87,6 +94,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'tickets', label: 'Tickets', icon: <Ticket className="h-5 w-5" /> },
   { id: 'tasks', label: 'Tasks', icon: <ListTodo className="h-5 w-5" /> },
   { id: 'audit', label: 'Audit', icon: <ClipboardList className="h-5 w-5" /> },
+  { id: 'food', label: 'Food', icon: <UtensilsCrossed className="h-5 w-5" /> },
   { id: 'more', label: 'More', icon: <MoreHorizontal className="h-5 w-5" /> },
 ];
 
@@ -117,6 +125,10 @@ export default function HandheldHubPage() {
   const [createTicketLoading, setCreateTicketLoading] = useState(false);
   const [selectedTicketDetail, setSelectedTicketDetail] = useState<any | null>(null);
   const [ticketDetailLoading, setTicketDetailLoading] = useState(false);
+  const [ticketHistory, setTicketHistory] = useState<any[]>([]);
+  const [ticketHistoryLoading, setTicketHistoryLoading] = useState(false);
+  const [ticketComment, setTicketComment] = useState('');
+  const [postingComment, setPostingComment] = useState(false);
   const [updatingTicketStatusId, setUpdatingTicketStatusId] = useState<string | null>(null);
   const createTicketForm = useForm<z.infer<typeof createTicketSchema>>({
     resolver: zodResolver(createTicketSchema),
@@ -131,6 +143,12 @@ export default function HandheldHubPage() {
   // Audit state
   const [auditScans, setAuditScans] = useState<string[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+
+  // Food supply state
+  const [kitchens, setKitchens] = useState<{ id: string; name: string }[]>([]);
+  const [foodKitchenId, setFoodKitchenId] = useState<string>('');
+  const [showFoodScanner, setShowFoodScanner] = useState(false);
+  const [foodScannerKey, setFoodScannerKey] = useState(0);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
@@ -177,6 +195,19 @@ export default function HandheldHubPage() {
     }
   }, [tab, currentAsset?.id, fetchAssignedTickets, fetchAssetTickets]);
 
+  useEffect(() => {
+    if (tab === 'food' && kitchens.length === 0) {
+      fetch('/api/kitchens', { credentials: 'include', cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : [])
+        .then((data) => {
+          const list = Array.isArray(data) ? data : [];
+          setKitchens(list);
+          if (list.length > 0 && !foodKitchenId) setFoodKitchenId(list[0].id);
+        })
+        .catch(() => setKitchens([]));
+    }
+  }, [tab, kitchens.length, foodKitchenId]);
+
   // Auto-refresh assigned tickets every 15s when on Tickets tab so new assignments appear quickly
   useEffect(() => {
     if (tab !== 'tickets') return;
@@ -187,6 +218,7 @@ export default function HandheldHubPage() {
   const fetchTicketDetail = useCallback(async (ticketId: string) => {
     setTicketDetailLoading(true);
     setSelectedTicketDetail(null);
+    setTicketHistory([]);
     try {
       const r = await fetch(`/api/tickets/${ticketId}`, { credentials: 'include', cache: 'no-store' });
       if (r.ok) {
@@ -201,6 +233,58 @@ export default function HandheldHubPage() {
       setTicketDetailLoading(false);
     }
   }, [toast]);
+
+  const fetchTicketHistory = useCallback(async (ticketId: string) => {
+    setTicketHistoryLoading(true);
+    try {
+      const r = await fetch(`/api/tickets/${ticketId}/history`, { credentials: 'include', cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        setTicketHistory(Array.isArray(data) ? data : []);
+      } else {
+        setTicketHistory([]);
+      }
+    } catch {
+      setTicketHistory([]);
+    } finally {
+      setTicketHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedTicketDetail?.id) fetchTicketHistory(selectedTicketDetail.id);
+  }, [selectedTicketDetail?.id, fetchTicketHistory]);
+
+  const postTicketComment = useCallback(async () => {
+    const comment = (ticketComment || '').trim();
+    if (!comment || !selectedTicketDetail?.id) return;
+    setPostingComment(true);
+    try {
+      const r = await fetch(`/api/tickets/${selectedTicketDetail.id}/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ comment }),
+      });
+      if (r.ok) {
+        setTicketComment('');
+        fetchTicketHistory(selectedTicketDetail.id);
+        toast({ title: 'Comment added' });
+      } else {
+        const err = await r.json().catch(() => ({}));
+        toast({ title: err?.error || 'Failed to add comment', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Failed to add comment', variant: 'destructive' });
+    } finally {
+      setPostingComment(false);
+    }
+  }, [selectedTicketDetail?.id, ticketComment, fetchTicketHistory, toast]);
+
+  const handleTicketScanned = useCallback((ticket: any) => {
+    setSelectedTicketDetail(ticket);
+    if (ticket?.id) fetchTicketDetail(ticket.id);
+  }, [fetchTicketDetail]);
 
   const updateTicketStatus = useCallback(async (ticketId: string, status: string) => {
     setUpdatingTicketStatusId(ticketId);
@@ -459,9 +543,10 @@ export default function HandheldHubPage() {
 
         {tab === 'tickets' && (
           <div className="max-w-lg mx-auto space-y-4">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <h2 className="text-lg font-semibold">Tickets</h2>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                <TicketBarcodeScanner onScan={handleTicketScanned} />
                 <Button size="sm" variant="outline" onClick={() => fetchAssignedTickets()} disabled={ticketsLoading}>
                   {ticketsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   Refresh
@@ -598,6 +683,57 @@ export default function HandheldHubPage() {
                 <li key={id} className="text-sm text-slate-600 dark:text-slate-300 truncate">#{i + 1} {id}</li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {tab === 'food' && (
+          <div className="max-w-lg mx-auto space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <UtensilsCrossed className="h-5 w-5" /> Food supply
+            </h2>
+            <p className="text-sm text-slate-500">Scan items to look up stock or record consumption.</p>
+            {kitchens.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-6 text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-slate-400 mb-2" />
+                <p className="text-sm text-slate-500">Loading kitchens…</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {kitchens.length > 1 && (
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 block mb-1">Kitchen</label>
+                    <select
+                      value={foodKitchenId}
+                      onChange={(e) => setFoodKitchenId(e.target.value)}
+                      className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {kitchens.map((k) => (
+                        <option key={k.id} value={k.id}>{k.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  size="lg"
+                  className="w-full h-14 gap-2"
+                  onClick={() => { setFoodScannerKey((k) => k + 1); setShowFoodScanner(true); }}
+                  disabled={!foodKitchenId}
+                >
+                  <ScanLine className="h-5 w-5" />
+                  Scan food supply / Record consumption
+                </Button>
+                {foodKitchenId && (
+                  <EnhancedBarcodeScanner
+                    key={foodScannerKey}
+                    kitchenId={foodKitchenId}
+                    open={showFoodScanner}
+                    onOpenChange={setShowFoodScanner}
+                    onScanComplete={() => { setShowFoodScanner(false); }}
+                  />
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -762,6 +898,52 @@ export default function HandheldHubPage() {
                       </Button>
                     ))}
                   </div>
+                </div>
+                {/* Timeline */}
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1">
+                    <MessageSquare className="h-3.5 w-3.5" /> Timeline
+                  </p>
+                  {ticketHistoryLoading ? (
+                    <div className="flex items-center gap-2 py-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+                  ) : ticketHistory.length === 0 ? (
+                    <p className="text-xs text-slate-400 py-2">No updates yet</p>
+                  ) : (
+                    <ul className="space-y-3 max-h-48 overflow-y-auto">
+                      {ticketHistory.map((h) => (
+                        <li key={h.id} className="text-xs border-l-2 border-slate-200 dark:border-slate-600 pl-3 py-1">
+                          {h.comment && <p className="text-slate-700 dark:text-slate-300">{h.comment}</p>}
+                          {(h.status || h.priority) && (
+                            <p className="text-slate-500 mt-0.5">
+                              {[h.status, h.priority].filter(Boolean).map((x) => (x || '').toLowerCase().replace('_', ' ')).join(' · ')}
+                            </p>
+                          )}
+                          <p className="text-slate-400 mt-0.5">{h.user?.email || 'System'} · {h.createdAt ? new Date(h.createdAt).toLocaleString() : ''}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {/* Add comment */}
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-medium text-slate-500 mb-2">Add comment</p>
+                  <Textarea
+                    placeholder="Type your reply…"
+                    value={ticketComment}
+                    onChange={(e) => setTicketComment(e.target.value)}
+                    className="min-h-[80px] resize-none"
+                    disabled={postingComment}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="mt-2"
+                    onClick={postTicketComment}
+                    disabled={!ticketComment.trim() || postingComment}
+                  >
+                    {postingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+                    {postingComment ? ' Posting…' : ' Post comment'}
+                  </Button>
                 </div>
               </div>
           ) : null}

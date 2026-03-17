@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -27,6 +27,9 @@ interface AssignAssetDialogProps {
 
 export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: AssignAssetDialogProps) {
   const { toast } = useToast();
+  const dialogOpenedAt = useRef<number>(0);
+  useEffect(() => { if (open) dialogOpenedAt.current = Date.now(); }, [open]);
+  const preventRecentOutsideClose = useCallback((e: Event) => { if (Date.now() - dialogOpenedAt.current < 500) e.preventDefault(); }, []);
   const [tab, setTab] = useState<"system" | "manual">("system");
   const [searchQuery, setSearchQuery] = useState("");
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
@@ -128,7 +131,7 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg p-0 overflow-hidden border border-slate-700" style={{ background: "#0f172a" }}>
+      <DialogContent className="sm:max-w-lg p-0 overflow-hidden border border-slate-700" style={{ background: "#0f172a" }} onPointerDownOutside={preventRecentOutsideClose} onInteractOutside={preventRecentOutsideClose}>
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate-700/50">
           <DialogHeader>
