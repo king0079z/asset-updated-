@@ -29,7 +29,17 @@ const QuickActionsMenu = lazy(() =>
 /** Renders QuickActionsMenu (FAB) only when NOT on Outlook add-in routes. */
 function QuickActionsMenuGate() {
   const router = useRouter();
-  if (router.pathname.startsWith('/outlook')) return null;
+  const [isOutlookRoute, setIsOutlookRoute] = useState(
+    () => typeof window !== 'undefined' && window.location.pathname.startsWith('/outlook')
+  );
+
+  useEffect(() => {
+    setIsOutlookRoute(window.location.pathname.startsWith('/outlook'));
+  }, [router.pathname]);
+
+  const hideFAB = router.pathname.startsWith('/outlook') || isOutlookRoute;
+  if (hideFAB) return null;
+
   return (
     <Suspense fallback={null}>
       <QuickActionsMenu />
