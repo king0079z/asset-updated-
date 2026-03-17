@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 
@@ -60,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Handle standard roles
     if (role) {
       // Validate standard role
-      if (!['ADMIN', 'MANAGER', 'STAFF'].includes(role)) {
+      if (!['ADMIN', 'MANAGER', 'STAFF', 'HANDHELD'].includes(role)) {
         return res.status(400).json({ error: 'Invalid role value' });
       }
       

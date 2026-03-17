@@ -236,7 +236,7 @@ export default function UserManagementPage() {
 
   const handleRoleChange = async (userId: string, roleName: string) => {
     try {
-      const isStandard = ["ADMIN", "MANAGER", "STAFF"].includes(roleName);
+      const isStandard = ["ADMIN", "MANAGER", "STAFF", "HANDHELD"].includes(roleName);
       let body: any = { userId };
       if (isStandard) {
         body.role = roleName;
@@ -305,9 +305,10 @@ export default function UserManagementPage() {
   const getRoleBadgeClass = (user: User) => {
     if (user.customRoleName) return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300";
     switch (user.role) {
-      case "ADMIN":   return "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300";
-      case "MANAGER": return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300";
-      default:        return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300";
+      case "ADMIN":    return "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300";
+      case "MANAGER":  return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300";
+      case "HANDHELD": return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300";
+      default:         return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300";
     }
   };
 
@@ -492,6 +493,7 @@ export default function UserManagementPage() {
                                         <SelectItem value="ADMIN">Admin</SelectItem>
                                         <SelectItem value="MANAGER">Manager</SelectItem>
                                         <SelectItem value="STAFF">Staff</SelectItem>
+                                        <SelectItem value="HANDHELD">Handheld</SelectItem>
                                         <CustomRoleOptions />
                                       </SelectContent>
                                     </Select>
@@ -585,7 +587,8 @@ export default function UserManagementPage() {
                                   <p className="text-xs text-muted-foreground mt-0.5">
                                     {user.role === "ADMIN" ? "Full system access including admin settings" :
                                       user.role === "MANAGER" ? "All features except admin settings" :
-                                        "Limited access based on page permissions"}
+                                        user.role === "HANDHELD" ? "Handheld app only — scan, tickets, tasks in the field" :
+                                          "Limited access based on page permissions"}
                                   </p>
                                 </div>
                               </div>
@@ -595,6 +598,7 @@ export default function UserManagementPage() {
                                   <SelectItem value="ADMIN">Admin</SelectItem>
                                   <SelectItem value="MANAGER">Manager</SelectItem>
                                   <SelectItem value="STAFF">Staff</SelectItem>
+                                  <SelectItem value="HANDHELD">Handheld</SelectItem>
                                   <CustomRoleOptions />
                                 </SelectContent>
                               </Select>

@@ -881,6 +881,8 @@ function UserRoleDisplay() {
         return t('role_manager');
       case 'STAFF':
         return t('role_staff');
+      case 'HANDHELD':
+        return 'Handheld';
       default:
         // For custom roles, display the role name as is
         return role;

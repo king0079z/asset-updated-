@@ -33,6 +33,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { isSubscriptionExpired, subscription } = useOrganization();
   const router = useRouter();
   const [userStatus, setUserStatus] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>('STAFF');
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isManager, setIsManager] = useState<boolean>(false);
   const [pageAccess, setPageAccess] = useState<any>(null);
@@ -71,6 +72,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
         logDebug(`[ProtectedRoute] User ${user.id} (${data.email}) status: ${data.status}, role: ${data.role}, isAdmin: ${data.isAdmin}`);
         setUserStatus(data.status);
+        setUserRole(data.role || 'STAFF');
         setIsAdmin(data.isAdmin);
         setIsManager(data.role === 'MANAGER');
         setPageAccess(data.pageAccess);
@@ -102,8 +104,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [user, initializing, router]);
 
+  // Handheld-only users: always redirect to handheld app when not on /handheld
+  useEffect(() => {
+    if (initializing || !user || userRole !== 'HANDHELD') return;
+    if (publicRoutes.includes(router.pathname) || isOutlookRoute(router.pathname)) return;
+    if (router.pathname === '/handheld') return;
+    logDebug('[ProtectedRoute] HANDHELD user redirecting to /handheld from:', router.pathname);
+    router.replace('/handheld');
+  }, [user, initializing, userRole, router.pathname]);
+
   // Check if current page is accessible
   const checkPageAccess = () => {
+    // Handheld-only users: only /handheld is allowed
+    if (userRole === 'HANDHELD') {
+      return router.pathname === '/handheld';
+    }
     if (isAdmin) return true; // Admin has access to all pages
     
     // Manager has access to all pages except admin pages
@@ -327,10 +342,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         return null;
       }
       
-      // Special case for staff-activity page - allow access to all users
+      // Special case for staff-activity page - allow access to all users (except HANDHELD)
       if (router.pathname === '/staff-activity' || router.pathname.startsWith('/staff-activity/')) {
         logDebug(`[ProtectedRoute] Allowing access to staff activity page for all users`);
         return <>{children}</>;
+      }
+
+      // HANDHELD users: redirect to handheld app
+      if (userRole === 'HANDHELD') {
+        router.replace('/handheld');
+        return null;
       }
       
       return (

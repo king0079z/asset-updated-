@@ -347,6 +347,8 @@ export default function RoleDefaultPermissionsManager() {
         return <Badge variant="outline">Manager</Badge>;
       case "STAFF":
         return <Badge>Staff</Badge>;
+      case "HANDHELD":
+        return <Badge variant="outline">Handheld</Badge>;
       default:
         return <Badge>{role}</Badge>;
     }
@@ -385,7 +387,7 @@ export default function RoleDefaultPermissionsManager() {
                       <SelectItem value="ADMIN">Admin</SelectItem>
                       <SelectItem value="MANAGER">Manager</SelectItem>
                       <SelectItem value="STAFF">Staff</SelectItem>
-                      
+                      <SelectItem value="HANDHELD">Handheld</SelectItem>
                       {customRoles.length > 0 && (
                         <>
                           <div className="py-2">

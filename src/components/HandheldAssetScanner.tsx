@@ -136,7 +136,8 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
     setAsset(null);
     setNotFound(null);
     setManualCode('');
-  }, []);
+    onAssetSelected?.(null);
+  }, [onAssetSelected]);
 
   const doMove = async (vals: z.infer<typeof transferSchema>) => {
     if (!asset) return;

@@ -985,6 +985,7 @@ enum UserRole {
   ADMIN
   MANAGER
   STAFF
+  HANDHELD
 }
 
 enum VendorType {

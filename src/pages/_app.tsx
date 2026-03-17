@@ -46,7 +46,8 @@ const PUBLIC_ROUTES = [
   '/magic-link-login', '/reset-password',
 ];
 const PORTAL_ROUTES = ['/portal'];
-const ROUTES_WITHOUT_SHELL = [...PUBLIC_ROUTES, ...PORTAL_ROUTES];
+const HANDHELD_ROUTES = ['/handheld'];
+const ROUTES_WITHOUT_SHELL = [...PUBLIC_ROUTES, ...PORTAL_ROUTES, ...HANDHELD_ROUTES];
 const isOutlookRoute = (path: string) => path.startsWith('/outlook');
 
 /**
