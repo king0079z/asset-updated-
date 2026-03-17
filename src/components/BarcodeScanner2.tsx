@@ -146,11 +146,16 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
     }
 
     // Larger scan area (280×220) so codes are easier to fit; 20 fps for quick detection
+    // facingMode: environment forces the rear/back camera on mobile devices
     const scanConfig = {
       fps: 20,
       qrbox: { width: 280, height: 220 },
       disableFlip: false,
-      videoConstraints: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      videoConstraints: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: { ideal: 'environment' }, // always prefer rear camera
+      },
     };
 
     try {
@@ -164,11 +169,18 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
       try {
         const devices = await Html5Qrcode.getCameras();
         if (devices?.length) {
-          const cam = devices.find(d => /back|rear|environment/i.test(d.label || '')) || devices[0];
-          try {
-            await qrRef.current.start(cam.id, scanConfig, onCode, onFrame);
-          } catch {
-            await qrRef.current.start(cam.id, { fps: 18, qrbox: { width: 280, height: 220 } }, onCode, onFrame);
+          // Look for rear camera by label; if not found use facingMode constraint
+          // (never fall back to devices[0] which is usually the front camera)
+          const backCam = devices.find(d => /back|rear|environment/i.test(d.label || ''));
+          if (backCam) {
+            try {
+              await qrRef.current.start(backCam.id, scanConfig, onCode, onFrame);
+            } catch {
+              await qrRef.current.start(backCam.id, { fps: 18, qrbox: { width: 280, height: 220 } }, onCode, onFrame);
+            }
+          } else {
+            // No label match (common on iOS/some Android) — use facingMode instead of guessing
+            await qrRef.current.start({ facingMode: { ideal: 'environment' } }, scanConfig, onCode, onFrame);
           }
           ok = true;
         }
