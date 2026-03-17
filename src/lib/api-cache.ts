@@ -75,7 +75,6 @@ export async function fetchWithCache<T>(
       const response = await fetch(url, {
         credentials: 'include',
         signal: controller.signal,
-        headers: { 'Cache-Control': 'no-cache' },
       });
       clearTimeout(timeoutId);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);

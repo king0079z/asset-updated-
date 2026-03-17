@@ -18,7 +18,7 @@ type Endpoint = { url: string; maxAge: number };
 // Only warm the data that appears on the dashboard's first render.
 // Everything else is fetched on-demand and cached for instant revisits.
 const CRITICAL: Endpoint[] = [
-  { url: '/api/dashboard/stats', maxAge: 2 * 60_000 },
+  { url: '/api/dashboard/full',  maxAge: 2 * 60_000 },
   { url: '/api/assets',          maxAge: 60_000 },
   { url: '/api/vendors',         maxAge: 3 * 60_000 },
 ];

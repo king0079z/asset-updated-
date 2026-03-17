@@ -7,7 +7,9 @@ import { PrismaClient } from '@prisma/client'
 // https://pris.ly/d/help/next-js-best-practices
 
 const prismaClientSingleton = () => {
-  return new PrismaClient()
+  return new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+  })
 }
 
 declare const globalThis: {

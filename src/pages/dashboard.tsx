@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { fetchWithErrorHandling } from '@/util/apiErrorHandler';
 import { fetchWithCache, getFromCache } from '@/lib/api-cache';
 
+const DASH_FULL_KEY   = '/api/dashboard/full';
 const DASH_STATS_KEY  = '/api/dashboard/stats';
 const DASH_STATS_TTL  = 2 * 60_000;
 import { 
@@ -121,8 +122,8 @@ export default function Dashboard() {
   const [driverTripSummaryOpen, setDriverTripSummaryOpen] = useState(false);
   const hasFetchedRef = useRef(false);
 
-  // Initialize from cache for instant display on revisit
-  const cachedStats = getFromCache<any>(DASH_STATS_KEY, DASH_STATS_TTL);
+  // Initialize from cache for instant display on revisit — check both cache keys
+  const cachedStats = getFromCache<any>(DASH_FULL_KEY, DASH_STATS_TTL) ?? getFromCache<any>(DASH_STATS_KEY, DASH_STATS_TTL);
   const [isLoading, setIsLoading] = useState(!cachedStats);
   const [stats, setStats] = useState<DashboardStats>(() => {
     const c = cachedStats;
@@ -239,12 +240,10 @@ export default function Dashboard() {
             disposedValue: parseNumber(dashboardData.assetStats?.disposedValue)
           }
         };
-        setStats(prev => ({ ...prev, ...baseStats }));
-        setIsLoading(false);
-
         setStats(prev => ({
           ...prev,
-          totalVehicleCost: parseNumber(rentalCostsData.monthlyTotal || prev.totalVehicleCost),
+          ...baseStats,
+          totalVehicleCost: parseNumber(rentalCostsData.monthlyTotal || baseStats.totalVehicleCost),
           yearlyVehicleCost: parseNumber(rentalCostsData.yearlyTotal),
           monthlyRentalTotal: parseNumber(rentalCostsData.monthlyRentalTotal),
           yearlyRentalTotal: parseNumber(rentalCostsData.yearlyRentalTotal),
@@ -257,9 +256,10 @@ export default function Dashboard() {
             foodConsumption: parseNumber(totalAmountSpentData.breakdown?.foodConsumption),
             assetsPurchased: parseNumber(totalAmountSpentData.breakdown?.assetsPurchased),
             vehicleRentalCosts: parseNumber(totalAmountSpentData.breakdown?.vehicleRentalCosts),
-            vehicleMaintenanceCosts: parseNumber(totalAmountSpentData.breakdown?.vehicleMaintenanceCosts)
-          }
+            vehicleMaintenanceCosts: parseNumber(totalAmountSpentData.breakdown?.vehicleMaintenanceCosts),
+          },
         }));
+        setIsLoading(false);
       } catch (error) {
         console.error('Dashboard: Error fetching dashboard stats:', error);
         // Show toast notification for error

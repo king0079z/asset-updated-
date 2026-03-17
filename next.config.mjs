@@ -13,10 +13,10 @@ const nextConfig = {
       { protocol: "https", hostname: "**.supabase.co" },
     ],
   },
-  swcMinify: false,
+  swcMinify: true,
   excludeDefaultMomentLocales: true,
   productionBrowserSourceMaps: false,
-  compress: false,
+  compress: true,
   staticPageGenerationTimeout: 60,
 
   // Allow Outlook to frame the add-in task pane pages
