@@ -676,7 +676,7 @@ export default function AssetsPage() {
   const { t } = useTranslation();
 
   const renderAssetsContent = () => (
-      <div>
+      <div className="space-y-6">
         {/* ══════════════════════════════════════
             World-Class Hero Header
         ══════════════════════════════════════ */}
