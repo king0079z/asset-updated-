@@ -639,34 +639,129 @@ export default function PrintReportPage() {
 
     } else if (currentReportType === 'food') {
       const totalVal = dataArray.reduce((s: number, i: any) => s + ((i.quantity || 0) * (i.pricePerUnit || 0)), 0);
-      const rows = dataArray.map((item: any) => `
-        <tr>
+      const lowStockItems = dataArray.filter((i: any) => i.quantity <= 10);
+      const expiredItems = dataArray.filter((i: any) => i.expirationDate && new Date(i.expirationDate) < new Date());
+      const expiringItems = dataArray.filter((i: any) => {
+        if (!i.expirationDate) return false;
+        const days = Math.ceil((new Date(i.expirationDate).getTime() - Date.now()) / 86400000);
+        return days >= 0 && days <= 7;
+      });
+
+      // Category breakdown
+      const catMap: Record<string, { count: number; value: number }> = {};
+      dataArray.forEach((i: any) => {
+        const cat = i.category || 'other';
+        if (!catMap[cat]) catMap[cat] = { count: 0, value: 0 };
+        catMap[cat].count++;
+        catMap[cat].value += (i.quantity || 0) * (i.pricePerUnit || 0);
+      });
+
+      const catColors: Record<string, string> = {
+        dairy: '#3b82f6', meat: '#ef4444', vegetables: '#22c55e', fruits: '#f97316',
+        grains: '#f59e0b', beverages: '#8b5cf6', spices: '#eab308', seafood: '#06b6d4', other: '#64748b',
+      };
+
+      const catRowsHtml = Object.entries(catMap).sort((a, b) => b[1].value - a[1].value).map(([cat, d]) => {
+        const pct = totalVal > 0 ? Math.round((d.value / totalVal) * 100) : 0;
+        const color = catColors[cat] ?? '#64748b';
+        return `<div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+              <span style="font-size:12px;font-weight:600;text-transform:capitalize">${cat}</span>
+              <span style="font-size:10px;color:#94a3b8">(${d.count} items)</span>
+            </div>
+            <div style="text-align:right">
+              <span style="font-size:11px;font-weight:700;color:#1e293b">QAR ${d.value.toFixed(0)}</span>
+              <span style="font-size:10px;color:#94a3b8;margin-left:4px">${pct}%</span>
+            </div>
+          </div>
+          <div style="height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden">
+            <div style="height:5px;background:${color};border-radius:999px;width:${pct}%"></div>
+          </div>
+        </div>`;
+      }).join('');
+
+      const alertsHtml = [
+        ...expiredItems.slice(0, 3).map((i: any) => `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;margin-bottom:4px">
+          <span style="font-size:10px;font-weight:700;color:#991b1b;background:#fee2e2;padding:1px 6px;border-radius:999px">EXPIRED</span>
+          <span style="font-size:12px;font-weight:600;color:#991b1b">${i.name}</span>
+          <span style="font-size:10px;color:#94a3b8;margin-left:auto">${i.quantity} ${i.unit}</span>
+        </div>`),
+        ...expiringItems.slice(0, 3).map((i: any) => {
+          const days = Math.ceil((new Date(i.expirationDate).getTime() - Date.now()) / 86400000);
+          return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fefce8;border:1px solid #fde047;border-radius:6px;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;color:#854d0e;background:#fef9c3;padding:1px 6px;border-radius:999px">EXPIRING</span>
+            <span style="font-size:12px;font-weight:600;color:#854d0e">${i.name}</span>
+            <span style="font-size:10px;color:#94a3b8;margin-left:auto">${days}d left · ${i.quantity} ${i.unit}</span>
+          </div>`;
+        }),
+        ...lowStockItems.slice(0, 3).map((i: any) => `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;margin-bottom:4px">
+          <span style="font-size:10px;font-weight:700;color:#c2410c;background:#ffedd5;padding:1px 6px;border-radius:999px">LOW STOCK</span>
+          <span style="font-size:12px;font-weight:600;color:#c2410c">${i.name}</span>
+          <span style="font-size:10px;color:#94a3b8;margin-left:auto">${i.quantity} ${i.unit} remaining</span>
+        </div>`),
+      ].join('') || `<div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">No active alerts — inventory levels are healthy ✓</div>`;
+
+      const rows = dataArray.map((item: any) => {
+        const val = ((item.quantity || 0) * (item.pricePerUnit || 0));
+        const isLow = item.quantity <= 10;
+        const isExpired = item.expirationDate && new Date(item.expirationDate) < new Date();
+        const daysLeft = item.expirationDate ? Math.ceil((new Date(item.expirationDate).getTime() - Date.now()) / 86400000) : null;
+        const expBadge = isExpired
+          ? `<span style="display:inline-flex;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:700;background:#fee2e2;color:#991b1b">EXPIRED</span>`
+          : (daysLeft !== null && daysLeft <= 7
+            ? `<span style="display:inline-flex;padding:1px 6px;border-radius:999px;font-size:9px;font-weight:700;background:#fef9c3;color:#854d0e">${daysLeft}d</span>`
+            : (daysLeft !== null ? `<span style="font-size:11px;color:#64748b">${daysLeft}d</span>` : '<span style="color:#94a3b8">—</span>'));
+        return `<tr${isExpired ? ' style="background:#fef2f2"' : isLow ? ' style="background:#fff7ed"' : ''}>
           <td style="font-weight:600">${item.name || 'N/A'}</td>
-          <td>${item.quantity ?? 0} ${item.unit || ''}</td>
+          <td style="text-transform:capitalize">${item.category || 'other'}</td>
+          <td>${isLow
+            ? `<span style="font-weight:700;color:#c2410c">${item.quantity} ${item.unit}</span>`
+            : `${item.quantity} ${item.unit || ''}`}</td>
           <td>QAR ${item.pricePerUnit?.toFixed(2) ?? 'N/A'}</td>
-          <td>QAR ${((item.quantity || 0) * (item.pricePerUnit || 0)).toFixed(2)}</td>
+          <td style="font-weight:600">QAR ${val.toFixed(2)}</td>
+          <td>${expBadge}</td>
           <td>${Array.isArray(item.consumption) ? item.consumption.length : 0}</td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
+
       bodyHtml = `
-        <div class="stat-grid">
+        <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
           <div class="stat-card" style="background:#f0fdf4;border-color:#bbf7d0">
-            <div class="stat-label" style="color:#15803d">Items</div>
+            <div class="stat-label" style="color:#15803d">Total Items</div>
             <div class="stat-value" style="color:#14532d">${dataArray.length}</div>
           </div>
-          <div class="stat-card" style="background:#faf5ff;border-color:#e9d5ff">
-            <div class="stat-label" style="color:#7e22ce">Total Value</div>
-            <div class="stat-value" style="color:#581c87;font-size:15px">QAR ${totalVal.toFixed(0)}</div>
+          <div class="stat-card" style="background:#eef2ff;border-color:#c7d2fe">
+            <div class="stat-label" style="color:#4338ca">Total Value</div>
+            <div class="stat-value" style="color:#312e81;font-size:16px">QAR ${totalVal.toFixed(0)}</div>
           </div>
           <div class="stat-card" style="background:#fff7ed;border-color:#fed7aa">
             <div class="stat-label" style="color:#c2410c">Low Stock</div>
-            <div class="stat-value" style="color:#7c2d12">${dataArray.filter((i: any) => i.quantity <= 10).length}</div>
+            <div class="stat-value" style="color:#7c2d12">${lowStockItems.length}</div>
+          </div>
+          <div class="stat-card" style="background:#fef2f2;border-color:#fecaca">
+            <div class="stat-label" style="color:#991b1b">Expiring Soon</div>
+            <div class="stat-value" style="color:#7f1d1d">${expiredItems.length + expiringItems.length}</div>
           </div>
         </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div class="card" style="margin-bottom:0">
+            <div class="card-hdr" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">Category Breakdown</div>
+            <div class="card-body">${catRowsHtml || '<div style="color:#94a3b8;font-size:12px">No data</div>'}</div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div class="card-hdr" style="background:#fef2f2;border-color:#fecaca;color:#991b1b">Stock & Expiry Alerts</div>
+            <div class="card-body">${alertsHtml}</div>
+          </div>
+        </div>
+
         <div class="card">
-          <div class="card-hdr" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">Food Supply Inventory</div>
+          <div class="card-hdr" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">Complete Food Inventory (${dataArray.length} items)</div>
           <div class="card-body" style="padding:0">
             <table>
-              <thead><tr><th>Name</th><th>Quantity</th><th>Price/Unit</th><th>Total Value</th><th>Consumption Records</th></tr></thead>
+              <thead><tr><th>Name</th><th>Category</th><th>Quantity</th><th>Price/Unit</th><th>Total Value</th><th>Expiry</th><th>Uses</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
