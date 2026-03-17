@@ -27,6 +27,8 @@ import {
   CheckCircle2,
   Wifi,
   WifiOff,
+  ChevronRight,
+  X,
 } from 'lucide-react';
 import { AssignAssetDialog } from '@/components/AssignAssetDialog';
 import { AssetDetailsDialog } from '@/components/AssetDetailsDialog';
@@ -112,6 +114,9 @@ export default function HandheldHubPage() {
   const [ticketsLoading, setTicketsLoading] = useState(false);
   const [showCreateTicket, setShowCreateTicket] = useState(false);
   const [createTicketLoading, setCreateTicketLoading] = useState(false);
+  const [selectedTicketDetail, setSelectedTicketDetail] = useState<any | null>(null);
+  const [ticketDetailLoading, setTicketDetailLoading] = useState(false);
+  const [updatingTicketStatusId, setUpdatingTicketStatusId] = useState<string | null>(null);
   const createTicketForm = useForm<z.infer<typeof createTicketSchema>>({
     resolver: zodResolver(createTicketSchema),
     defaultValues: { title: '', description: '', priority: 'medium' },
@@ -132,13 +137,16 @@ export default function HandheldHubPage() {
   const fetchAssignedTickets = useCallback(async () => {
     setTicketsLoading(true);
     try {
-      const r = await fetch('/api/tickets/assigned');
+      const r = await fetch('/api/tickets/assigned', { credentials: 'include', cache: 'no-store' });
       if (r.ok) {
         const data = await r.json();
         setAssignedTickets(Array.isArray(data) ? data : []);
+      } else {
+        setAssignedTickets([]);
       }
     } catch {
       toast({ title: 'Failed to load tickets', variant: 'destructive' });
+      setAssignedTickets([]);
     } finally {
       setTicketsLoading(false);
     }
@@ -150,17 +158,14 @@ export default function HandheldHubPage() {
       setAssetTickets([]);
       return;
     }
-    setTicketsLoading(true);
     try {
-      const r = await fetch(`/api/assets/${currentAsset.id}/tickets`);
+      const r = await fetch(`/api/assets/${currentAsset.id}/tickets`, { credentials: 'include', cache: 'no-store' });
       if (r.ok) {
         const data = await r.json();
         setAssetTickets(Array.isArray(data) ? data : []);
       }
     } catch {
       setAssetTickets([]);
-    } finally {
-      setTicketsLoading(false);
     }
   }, [currentAsset?.id]);
 
@@ -170,6 +175,55 @@ export default function HandheldHubPage() {
       if (currentAsset?.id) fetchAssetTickets();
     }
   }, [tab, currentAsset?.id, fetchAssignedTickets, fetchAssetTickets]);
+
+  // Auto-refresh assigned tickets every 15s when on Tickets tab so new assignments appear quickly
+  useEffect(() => {
+    if (tab !== 'tickets') return;
+    const t = setInterval(() => fetchAssignedTickets(), 15_000);
+    return () => clearInterval(t);
+  }, [tab, fetchAssignedTickets]);
+
+  const fetchTicketDetail = useCallback(async (ticketId: string) => {
+    setTicketDetailLoading(true);
+    setSelectedTicketDetail(null);
+    try {
+      const r = await fetch(`/api/tickets/${ticketId}`, { credentials: 'include', cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        setSelectedTicketDetail(data);
+      } else {
+        toast({ title: 'Could not load ticket', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Failed to load ticket', variant: 'destructive' });
+    } finally {
+      setTicketDetailLoading(false);
+    }
+  }, [toast]);
+
+  const updateTicketStatus = useCallback(async (ticketId: string, status: string) => {
+    setUpdatingTicketStatusId(ticketId);
+    try {
+      const r = await fetch(`/api/tickets/${ticketId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: status.toUpperCase().replace(' ', '_') }),
+      });
+      if (r.ok) {
+        const updated = await r.json();
+        setSelectedTicketDetail((prev: any) => (prev?.id === ticketId ? updated : prev));
+        setAssignedTickets((prev) => prev.map((t) => (t.id === ticketId ? { ...t, status: (updated.status || '').toLowerCase().replace('_', ' ') } : t)));
+        toast({ title: 'Status updated' });
+      } else {
+        toast({ title: 'Update failed', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Update failed', variant: 'destructive' });
+    } finally {
+      setUpdatingTicketStatusId(null);
+    }
+  }, [toast]);
 
   // Fetch assigned tasks
   const fetchAssignedTasks = useCallback(async () => {
@@ -313,10 +367,17 @@ export default function HandheldHubPage() {
     }
   };
 
+  const priorityClass = (p: string) => {
+    const q = (p || '').toLowerCase();
+    if (q === 'high') return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+    if (q === 'medium') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
+    return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+  };
+
   return (
-    <HandheldLayout title="Asset Handheld">
-      {/* Tab content */}
-      <div className="flex-1 overflow-auto p-4 pb-24">
+    <HandheldLayout title="Field Assistant">
+      {/* Tab content — touch-friendly, safe area */}
+      <div className="flex-1 overflow-auto p-4 pb-28 min-h-0">
         {tab === 'scan' && (
           <div className="max-w-lg mx-auto">
             <HandheldAssetScanner standalone onAssetSelected={setCurrentAsset} />
@@ -399,9 +460,15 @@ export default function HandheldHubPage() {
           <div className="max-w-lg mx-auto space-y-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Tickets</h2>
-              <Button size="sm" onClick={() => setShowCreateTicket(true)}>
-                <Plus className="h-4 w-4 mr-1" /> New
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => fetchAssignedTickets()} disabled={ticketsLoading}>
+                  {ticketsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Refresh
+                </Button>
+                <Button size="sm" onClick={() => setShowCreateTicket(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> New
+                </Button>
+              </div>
             </div>
             {currentAsset && (
               <p className="text-sm text-slate-500">Open tickets for current asset: {currentAsset.name}</p>
@@ -414,22 +481,49 @@ export default function HandheldHubPage() {
                   <>
                     <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">This asset</p>
                     {assetTickets.map((t) => (
-                      <div key={t.id} className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                        <p className="font-medium truncate">{t.title}</p>
-                        <p className="text-xs text-slate-500">{t.displayId || t.id} · {t.status}</p>
-                      </div>
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => fetchTicketDetail(t.id)}
+                        className="w-full text-left p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 active:scale-[0.99] transition-all flex items-center justify-between gap-3 min-h-[72px] touch-manipulation"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-slate-900 dark:text-white truncate">{t.title}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="text-xs text-slate-500">{t.displayId || t.id}</span>
+                            <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', priorityClass(t.priority))}>{(t.priority || 'medium').toLowerCase()}</span>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-slate-400 flex-shrink-0" />
+                      </button>
                     ))}
                   </>
                 )}
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mt-4">Assigned to you</p>
                 {assignedTickets.length === 0 ? (
-                  <p className="text-sm text-slate-500 py-4">No tickets assigned to you.</p>
+                  <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-8 text-center">
+                    <Ticket className="h-12 w-12 mx-auto text-slate-400 mb-3" />
+                    <p className="font-medium text-slate-600 dark:text-slate-400">No tickets assigned</p>
+                    <p className="text-sm text-slate-500 mt-1">New assignments will appear here. Pull to refresh.</p>
+                  </div>
                 ) : (
                   assignedTickets.map((t) => (
-                    <div key={t.id} className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                      <p className="font-medium truncate">{t.title}</p>
-                      <p className="text-xs text-slate-500">{t.displayId || t.id} · {t.status}</p>
-                    </div>
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => fetchTicketDetail(t.id)}
+                      className="w-full text-left p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 active:scale-[0.99] transition-all flex items-center justify-between gap-3 min-h-[72px] touch-manipulation"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-slate-900 dark:text-white truncate">{t.title}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-xs text-slate-500">{t.displayId || t.id}</span>
+                          <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', priorityClass(t.priority))}>{(t.priority || 'medium').toLowerCase()}</span>
+                          <span className="text-xs text-slate-400">· {(t.status || '').toLowerCase().replace('_', ' ')}</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-slate-400 flex-shrink-0" />
+                    </button>
                   ))
                 )}
               </div>
@@ -439,22 +533,27 @@ export default function HandheldHubPage() {
 
         {tab === 'tasks' && (
           <div className="max-w-lg mx-auto space-y-4">
-            <h2 className="text-lg font-semibold">My tasks</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">My tasks</h2>
             {tasksLoading ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-slate-400" /></div>
+              <div className="flex justify-center py-12"><Loader2 className="h-10 w-10 animate-spin text-violet-500" /></div>
             ) : assignedTasks.length === 0 ? (
-              <p className="text-sm text-slate-500 py-4">No tasks assigned to you.</p>
+              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-8 text-center">
+                <ListTodo className="h-12 w-12 mx-auto text-slate-400 mb-3" />
+                <p className="font-medium text-slate-600 dark:text-slate-400">No tasks assigned</p>
+                <p className="text-sm text-slate-500 mt-1">Tasks from your planner will appear here.</p>
+              </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {assignedTasks.map((t) => (
-                  <div key={t.id} className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+                  <div key={t.id} className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between gap-3 min-h-[72px]">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate">{t.title}</p>
-                      <p className="text-xs text-slate-500">{t.status} · {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : ''}</p>
+                      <p className="font-semibold text-slate-900 dark:text-white truncate">{t.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{t.status} · {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : ''}</p>
                     </div>
                     {t.status !== 'completed' && (
                       <Button
                         size="sm"
+                        className="min-h-[44px] min-w-[44px] rounded-xl touch-manipulation"
                         disabled={updatingTaskId === t.id}
                         onClick={() => updateTaskStatus(t.id, 'completed')}
                       >
@@ -516,22 +615,22 @@ export default function HandheldHubPage() {
         )}
       </div>
 
-      {/* Bottom tab bar */}
-      <nav className="flex-shrink-0 fixed bottom-0 left-0 right-0 flex items-center justify-around gap-1 py-2 px-2 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 safe-area-pb">
+      {/* Bottom tab bar — 48px min touch target, safe area, world-class */}
+      <nav className="flex-shrink-0 fixed bottom-0 left-0 right-0 flex items-center justify-around gap-1 py-3 px-2 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 safe-area-pb">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={cn(
-              'flex flex-col items-center justify-center gap-1 min-w-[56px] py-2 px-2 rounded-xl transition-colors',
+              'flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[48px] py-2 px-3 rounded-2xl transition-all touch-manipulation',
               tab === t.id
-                ? 'bg-primary text-primary-foreground'
+                ? 'bg-gradient-to-b from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/25'
                 : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
             )}
           >
             {t.icon}
-            <span className="text-[10px] font-medium truncate max-w-full">{t.label}</span>
+            <span className="text-[10px] font-semibold truncate max-w-full">{t.label}</span>
           </button>
         ))}
       </nav>
@@ -591,6 +690,70 @@ export default function HandheldHubPage() {
               <Button onClick={doStatus} disabled={!pickedStatus || savingStatus}>{savingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update'}</Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ticket detail sheet */}
+      <Dialog open={!!selectedTicketDetail || ticketDetailLoading} onOpenChange={(open) => { if (!open) setSelectedTicketDetail(null); }}>
+        <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl">
+          {ticketDetailLoading ? (
+            <div className="py-12 flex flex-col items-center gap-3">
+              <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+              <p className="text-sm text-slate-500">Loading ticket…</p>
+            </div>
+          ) : selectedTicketDetail ? (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <DialogHeader>
+                  <DialogTitle className="text-lg pr-6">{selectedTicketDetail.title || 'Ticket'}</DialogTitle>
+                  <p className="text-xs text-slate-500 mt-1">{selectedTicketDetail.displayId || selectedTicketDetail.id}</p>
+                </DialogHeader>
+                <Button variant="ghost" size="icon" className="rounded-xl -mr-2" onClick={() => setSelectedTicketDetail(null)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              <div className="space-y-4 pt-2">
+                {selectedTicketDetail.description ? (
+                  <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{selectedTicketDetail.description}</p>
+                ) : (
+                  <p className="text-sm text-slate-400 italic">No description</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {(selectedTicketDetail.status || 'open').toLowerCase().replace('_', ' ')}
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
+                    {(selectedTicketDetail.priority || 'medium').toLowerCase()} priority
+                  </span>
+                  {selectedTicketDetail.asset?.name && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+                      <Package className="h-3 w-3" /> {selectedTicketDetail.asset.name}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400">
+                  Created {selectedTicketDetail.createdAt ? new Date(selectedTicketDetail.createdAt).toLocaleString() : '—'}
+                </p>
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-medium text-slate-500 mb-2">Update status</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['OPEN', 'IN_PROGRESS', 'RESOLVED'].map((s) => (
+                      <Button
+                        key={s}
+                        size="sm"
+                        variant={((selectedTicketDetail.status || '').toUpperCase().replace(' ', '_') === s) ? 'default' : 'outline'}
+                        disabled={updatingTicketStatusId === selectedTicketDetail.id}
+                        onClick={() => updateTicketStatus(selectedTicketDetail.id, s)}
+                      >
+                        {updatingTicketStatusId === selectedTicketDetail.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        {s.replace('_', ' ')}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
 

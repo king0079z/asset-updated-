@@ -637,6 +637,16 @@ html[dir="rtl"] .text-sm {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
   }
+
+  /* Safe area for handheld / notched devices (always applied) */
+  .safe-area-padding {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
   
   /* Mobile-specific utilities */
   @media (max-width: 640px) {

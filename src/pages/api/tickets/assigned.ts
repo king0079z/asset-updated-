@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 
@@ -27,20 +27,27 @@ export default async function handler(
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Log the request
-    console.info(`Path: ${req.url} Fetching assigned tickets for user: ${user.email}`);
+    // Resolve DB user to scope by organization (same-org tickets only)
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { organizationId: true },
+    });
+    const orgId = dbUser?.organizationId ?? undefined;
 
-    // Fetch tickets assigned to the user using the assignedToId field
-    // Log the request with more details
-    console.info(`Path: ${req.url} Fetching assigned tickets for user: ${user.email} (${user.id})`);
-    
+    const whereClause: any = {
+      assignedToId: user.id,
+      status: { in: ["OPEN", "IN_PROGRESS"] },
+    };
+    if (orgId) {
+      whereClause.OR = [
+        { organizationId: orgId },
+        { organizationId: null },
+      ];
+      delete whereClause.organizationId;
+    }
+
     const tickets = await prisma.ticket.findMany({
-      where: {
-        assignedToId: user.id, // Using assignedToId to find tickets assigned to this user
-        status: {
-          in: ["OPEN", "IN_PROGRESS"] // Only fetch active tickets - exclude RESOLVED and CLOSED
-        }
-      },
+      where: whereClause,
       orderBy: [
         {
           priority: "desc" // High priority first
@@ -74,9 +81,8 @@ export default async function handler(
     }));
 
     console.info(`Path: ${req.url} Found ${tickets.length} assigned tickets for user: ${user.email}`);
-  res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
 
-    
     return res.status(200).json(formattedTickets);
   } catch (error) {
     console.error("Error fetching assigned tickets:", error);
