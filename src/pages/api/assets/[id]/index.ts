@@ -31,16 +31,19 @@ async function assetHandler(req: NextApiRequest, res: NextApiResponse) {
     currentUser.role === 'MANAGER' ||
     currentUser.isAdmin === true;
 
-  // For admins/managers, match assets that either belong to their org OR have no org yet
-  // (assets created before organizationId was enforced have organizationId = null)
-  const scopedAssetWhere: any = isPrivilegedUser
-    ? {
-        id: String(id),
-        ...(currentUser.organizationId
-          ? { OR: [{ organizationId: currentUser.organizationId }, { organizationId: null }] }
-          : {}),
-      }
-    : { id: String(id), userId: user.id };
+  const isHandheld = currentUser.role === 'HANDHELD';
+
+  // HANDHELD: can load any asset by id (e.g. from audit scan). Others: org scope or ownership.
+  const scopedAssetWhere: any = isHandheld
+    ? { id: String(id) }
+    : isPrivilegedUser
+      ? {
+          id: String(id),
+          ...(currentUser.organizationId
+            ? { OR: [{ organizationId: currentUser.organizationId }, { organizationId: null }] }
+            : {}),
+        }
+      : { id: String(id), userId: user.id };
 
   // Handle GET request
   if (req.method === 'GET') {
