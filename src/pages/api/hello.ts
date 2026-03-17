@@ -1,0 +1,4 @@
+// Simple API endpoint for health checks
+export default function handler(req, res) {
+  res.status(200).json({ status: 'ok', message: 'API is running' });
+}

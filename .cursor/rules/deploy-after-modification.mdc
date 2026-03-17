@@ -1,0 +1,22 @@
+---
+description: Deploy to GitHub and Vercel after any code modification
+alwaysApply: true
+---
+
+# Deploy After Modification
+
+**User requirement:** Deploy every time you make modifications or changes. Do not skip deployment.
+
+After making any code or config changes to this project, **always** deploy:
+
+1. **Commit and push to GitHub**
+   - `git add -A`
+   - `git commit -m "<short descriptive message>"`
+   - `git push origin master`
+
+2. **Deploy to Vercel production**
+   - `npx vercel --prod --yes`
+
+Do this in the **same turn** as the modification when possible. Do not leave deployment for the user to do manually unless they explicitly ask to skip it.
+
+Use a single-line commit message that describes the change (e.g. "fix: asset scanner instructions and scan area", "feat: add X to Y").
