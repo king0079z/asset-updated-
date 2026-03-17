@@ -87,6 +87,7 @@ export default function RFIDPage() {
   const [unresolvedAlerts, setUnresolvedAlerts] = useState(0);
   const [zoneMapMode, setZoneMapMode] = useState<'edit' | 'live' | '3d'>('3d');
   const [seedingDemo, setSeedingDemo] = useState(false);
+  const [seedingMovements, setSeedingMovements] = useState(false);
   const [search,      setSearch]      = useState('');
   const [refreshing,  setRefreshing]  = useState(false);
 
@@ -216,6 +217,26 @@ export default function RFIDPage() {
     } finally { setSavingZone(false); }
   };
 
+  // ── Seed movement demo data ─────────────────────────────────────────────────
+  const handleSeedMovements = async () => {
+    setSeedingMovements(true);
+    try {
+      const res = await fetch('/api/rfid/seed-movements', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+      toast({
+        title: '✅ Movement data generated!',
+        description: data.message ?? `${data.scansCreated} movement scans created across ${data.tagsProcessed} tags.`,
+      });
+      await loadAll(true);
+      setActiveTab('movements');
+    } catch (e: any) {
+      toast({ title: 'Failed to generate movements', description: e.message, variant: 'destructive' });
+    } finally {
+      setSeedingMovements(false);
+    }
+  };
+
   // ── Seed demo data ──────────────────────────────────────────────────────────
   const handleSeedDemo = async (clear = true) => {
     if (!confirm(`This will ${clear ? 'CLEAR existing RFID data and ' : ''}load the Apex Medical Center demo dataset.\n\nContinue?`)) return;
@@ -302,6 +323,16 @@ export default function RFIDPage() {
                   {seedingDemo
                     ? <><RefreshCw className="h-4 w-4 animate-spin" /> Loading Demo…</>
                     : <><Zap className="h-4 w-4" /> Load Demo Data</>
+                  }
+                </Button>
+                <Button
+                  onClick={handleSeedMovements}
+                  disabled={seedingMovements}
+                  className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 gap-2 rounded-xl backdrop-blur"
+                >
+                  {seedingMovements
+                    ? <><RefreshCw className="h-4 w-4 animate-spin" /> Generating…</>
+                    : <><ArrowRight className="h-4 w-4" /> Demo Movements</>
                   }
                 </Button>
                 <Button onClick={handleRefresh} disabled={refreshing} className="bg-white/10 hover:bg-white/20 text-white border border-white/15 gap-2 rounded-xl backdrop-blur">

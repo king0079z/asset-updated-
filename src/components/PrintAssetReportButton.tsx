@@ -94,6 +94,23 @@ export function PrintAssetReportButton({
       });
       setProgress(60);
       
+      // Fetch RFID movement history
+      let rfidMovements: any[] = [];
+      let rfidTag: any = null;
+      try {
+        const mvRes = await fetch(`/api/rfid/movement-history?assetId=${asset.id}&hours=168&limit=30`);
+        if (mvRes.ok) {
+          const mvData = await mvRes.json();
+          rfidMovements = mvData.movements ?? [];
+          // Also try to get current tag info
+          const tagRes = await fetch(`/api/rfid/tags`);
+          if (tagRes.ok) {
+            const tagData = await tagRes.json();
+            rfidTag = (tagData.tags ?? []).find((t: any) => t.assetId === asset.id) ?? null;
+          }
+        }
+      } catch { /* non-critical */ }
+
       // Fetch asset health data
       const healthResponse = await fetch(`/api/assets/${asset.id}/health`);
       if (!healthResponse.ok) {
@@ -168,7 +185,9 @@ export function PrintAssetReportButton({
         tickets: ticketsData,
         history: history,
         healthScore: healthScore,
-        healthFactors: healthFactors
+        healthFactors: healthFactors,
+        rfidMovements,
+        rfidTag,
       };
       
       console.log('Asset with details prepared for report:', {

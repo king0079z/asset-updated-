@@ -39,6 +39,27 @@ type Asset = {
     usage: number;
     condition: number;
   };
+  rfidMovements?: Array<{
+    id: string;
+    eventType: string;
+    fromZoneName?: string;
+    toZoneName?: string;
+    toZoneFloor?: string;
+    toZoneIsExit?: boolean;
+    rssi?: number;
+    battery?: number;
+    durationInPreviousZone?: number;
+    timestamp: string;
+  }>;
+  rfidTag?: {
+    tagId?: string;
+    tagType?: string;
+    status?: string;
+    batteryLevel?: number;
+    lastRssi?: number;
+    lastSeenAt?: string;
+    lastZone?: { name: string; floorNumber?: string };
+  } | null;
 };
 
 type AssetHistory = {
@@ -739,6 +760,77 @@ export const AssetReportDetailed: React.FC<AssetReportDetailedProps> = ({ assets
                   )}
                 </div>
               </div>
+              {/* RFID Movement History Section */}
+              {(asset.rfidMovements && asset.rfidMovements.length > 0) && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8 print:border-gray-300">
+                  <div className="bg-indigo-50 px-6 py-4 border-b border-indigo-200 rounded-t-lg print:bg-indigo-100">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h2 className="text-xl font-semibold text-indigo-800">RFID Movement History</h2>
+                      {asset.rfidTag && (
+                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', background: '#e0e7ff', color: '#3730a3', fontWeight: 600, border: '1px solid #c7d2fe' }}>
+                          {asset.rfidTag.tagId}
+                        </span>
+                      )}
+                    </div>
+                    {asset.rfidTag && (
+                      <p style={{ fontSize: '12px', color: '#6366f1', marginTop: '4px' }}>
+                        Status: {asset.rfidTag.status?.replace('_', ' ')} ·
+                        Battery: {asset.rfidTag.batteryLevel ?? '—'}% ·
+                        Last Zone: {asset.rfidTag.lastZone?.name ?? 'Unknown'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="p-6">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 border border-gray-200 print:border-gray-300">
+                        <thead className="bg-gray-50 print:bg-gray-100">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">Time</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">Event</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">From Zone</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">To Zone</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">Floor</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">RSSI</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {(asset.rfidMovements ?? []).slice(0, 20).map((mv, idx) => {
+                            const isExit = mv.eventType === 'ENTERPRISE_EXIT' || mv.toZoneIsExit;
+                            return (
+                              <tr key={mv.id} style={{ background: isExit ? '#fef2f2' : idx % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                                <td className="px-4 py-2.5 text-xs text-gray-700 border-r border-gray-100 whitespace-nowrap">
+                                  {new Date(mv.timestamp).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}
+                                </td>
+                                <td className="px-4 py-2.5 text-xs border-r border-gray-100">
+                                  <span style={{
+                                    display: 'inline-block', padding: '2px 8px', borderRadius: '999px', fontSize: '10px', fontWeight: 600,
+                                    background: isExit ? '#fee2e2' : mv.eventType === 'ZONE_ENTRY' ? '#d1fae5' : '#dbeafe',
+                                    color: isExit ? '#b91c1c' : mv.eventType === 'ZONE_ENTRY' ? '#065f46' : '#1e40af',
+                                  }}>
+                                    {mv.eventType === 'ENTERPRISE_EXIT' ? 'EXIT' : mv.eventType === 'ZONE_MOVE' ? 'MOVE' : mv.eventType === 'ZONE_ENTRY' ? 'ENTRY' : mv.eventType}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2.5 text-xs text-gray-600 border-r border-gray-100">{mv.fromZoneName || '—'}</td>
+                                <td className="px-4 py-2.5 text-xs border-r border-gray-100" style={{ color: isExit ? '#b91c1c' : '#111827', fontWeight: isExit ? 600 : 400 }}>
+                                  {mv.toZoneName || '—'}{isExit ? ' ⚠' : ''}
+                                </td>
+                                <td className="px-4 py-2.5 text-xs text-gray-600 border-r border-gray-100">{mv.toZoneFloor || '—'}</td>
+                                <td className="px-4 py-2.5 text-xs text-gray-600">{mv.rssi != null ? `${mv.rssi} dBm` : '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {(asset.rfidMovements?.length ?? 0) > 20 && (
+                      <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '8px' }}>
+                        Showing 20 of {asset.rfidMovements!.length} movement events (last 7 days)
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
             </div>
           ))}
         </div>

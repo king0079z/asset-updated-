@@ -44,9 +44,14 @@ import {
 } from "lucide-react";
 import { EditAssetDialog } from "./EditAssetDialog";
 import { AssignAssetDialog } from "./AssignAssetDialog";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, Suspense, lazy } from "react";
+import dynamic from "next/dynamic";
 import Barcode from "react-barcode";
 import { QRCodeSVG as QRCode } from "qrcode.react";
+const RFIDMovementTimeline = dynamic(
+  () => import("@/components/rfid/RFIDMovementTimeline").then(m => ({ default: m.RFIDMovementTimeline })),
+  { ssr: false, loading: () => <div className="h-32 rounded-xl bg-muted animate-pulse" /> }
+);
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateTicketDialog } from "./CreateTicketDialog";
 import PrintBarcodeButton from "./PrintBarcodeButton";
@@ -673,6 +678,28 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                           </div>
                         ))}
                       </div>
+
+                      {/* Movement History */}
+                      {asset?.id && (
+                        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/50 bg-gradient-to-r from-indigo-50/60 to-violet-50/60 dark:from-indigo-950/30 dark:to-violet-950/30">
+                            <div className="h-7 w-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                              <History className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold">Movement History</p>
+                              <p className="text-[10px] text-muted-foreground">Zone-to-zone transitions · Last 24h</p>
+                            </div>
+                            <div className="ml-auto flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                              <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">Live</span>
+                            </div>
+                          </div>
+                          <div className="p-4 max-h-80 overflow-y-auto">
+                            <RFIDMovementTimeline assetId={asset.id} compact hours={24} />
+                          </div>
+                        </div>
+                      )}
 
                       <a href="/rfid" target="_blank" rel="noreferrer"
                         className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-sm font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors">
