@@ -676,53 +676,33 @@ export default function AssetsPage() {
   const { t } = useTranslation();
 
   const renderAssetsContent = () => (
-      <div>
+      <div className="space-y-5">
         {/* ══════════════════════════════════════
-            World-Class Hero Header
+            Clean Hero Header — no duplicate stats
         ══════════════════════════════════════ */}
         <div className="relative rounded-2xl overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_55%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(0,0,0,0.12),transparent_60%)]" />
-          <div className="absolute -top-12 -right-12 w-56 h-56 rounded-full bg-white/5 blur-2xl" />
-          <div className="absolute -bottom-8 -left-8 w-44 h-44 rounded-full bg-white/5 blur-2xl" />
-          <div className="absolute top-8 right-40 w-24 h-24 rounded-full bg-violet-400/20" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_55%)]" />
+          <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/5 blur-3xl" />
+          <div className="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-white/5 blur-2xl" />
 
-          <div className="relative z-10 p-7 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="h-14 w-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg ring-1 ring-white/30 flex-shrink-0">
-                  <Package className="h-7 w-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white tracking-tight">{t('assets_management')}</h1>
-                  <p className="text-violet-100/80 text-sm mt-0.5">{t('track_and_manage_enterprise_assets')}</p>
-                </div>
+          {/* Main row: icon+title LEFT, actions RIGHT */}
+          <div className="relative z-10 px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg ring-1 ring-white/30 flex-shrink-0">
+                <Package className="h-6 w-6 text-white" />
               </div>
-              {/* Inline stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: 'Total Assets', value: assets.length, icon: Box },
-                  { label: 'Active', value: activeAssets, icon: CheckCircle2 },
-                  { label: 'In Transit', value: transitAssets, icon: Truck, warn: transitAssets > 0 },
-                  { label: 'Total Value', value: `QAR ${totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, icon: Tag },
-                ].map(({ label, value, icon: Icon, warn }) => (
-                  <div key={label} className={`rounded-xl px-4 py-3 border ${warn ? 'bg-amber-400/20 border-amber-300/30' : 'bg-white/15 border-white/20'} backdrop-blur-sm`}>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Icon className="h-3 w-3 text-white/70" />
-                      <p className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">{label}</p>
-                    </div>
-                    <p className="text-xl font-bold text-white tabular-nums">{value}</p>
-                  </div>
-                ))}
+              <div>
+                <h1 className="text-2xl font-bold text-white tracking-tight leading-tight">{t('assets_management')}</h1>
+                <p className="text-violet-100/70 text-sm mt-0.5">{t('track_and_manage_enterprise_assets')}</p>
               </div>
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap gap-2">
               <Button
                 onClick={() => setHandheldMode(true)}
-                className="bg-white/15 hover:bg-white/25 text-white border border-white/25 shadow gap-2 font-semibold backdrop-blur-sm"
+                className="bg-white/15 hover:bg-white/25 text-white border border-white/25 shadow gap-2 font-semibold backdrop-blur-sm h-9 text-sm"
                 variant="outline"
               >
                 <Smartphone className="h-4 w-4" />
@@ -731,7 +711,7 @@ export default function AssetsPage() {
               </Button>
               <Button
                 onClick={() => setShowUserAssetsPanel(true)}
-                className="bg-white/15 hover:bg-white/25 text-white border border-white/25 shadow gap-2 font-semibold backdrop-blur-sm"
+                className="bg-white/15 hover:bg-white/25 text-white border border-white/25 shadow gap-2 font-semibold backdrop-blur-sm h-9 text-sm"
                 variant="outline"
               >
                 <Users className="h-4 w-4" />
@@ -750,7 +730,7 @@ export default function AssetsPage() {
               />
               <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 <DialogTrigger asChild>
-                  <Button className="bg-white text-indigo-700 hover:bg-indigo-50 border-0 shadow-lg font-semibold gap-2">
+                  <Button className="bg-white text-indigo-700 hover:bg-indigo-50 border-0 shadow-lg font-semibold gap-2 h-9 text-sm">
                     <PlusCircle className="h-4 w-4" />
                     <span className="hidden sm:inline">{t('register_new_asset')}</span>
                     <span className="sm:hidden">{t('new_asset')}</span>
@@ -983,108 +963,25 @@ export default function AssetsPage() {
             </div>
           </div>
 
-          {/* Bottom strip */}
-          <div className="relative z-10 border-t border-white/20 grid grid-cols-3 divide-x divide-white/20">
+          {/* Bottom KPI strip — inside the hero, no separate card row needed */}
+          <div className="relative z-10 border-t border-white/15 grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/15">
             {[
-              { label: 'Track', icon: MapPin, value: 'Location' },
-              { label: 'Monitor', icon: BarChart3, value: 'Analytics' },
-              { label: 'Secure', icon: ShieldCheck, value: 'Compliance' },
-            ].map(({ label, icon: Icon, value }) => (
-              <div key={label} className="px-5 py-3 flex items-center gap-3">
-                <Icon className="h-4 w-4 text-violet-200" />
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-violet-200/70 font-semibold">{label}</p>
-                  <p className="text-sm font-semibold text-white">{value}</p>
+              { label: t('total_assets'), value: assets.length, icon: Box, sub: `${activeAssets} active · ${transitAssets} transit` },
+              { label: t('total_asset_value'), value: `QAR ${totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, icon: Tag, sub: t('total_value_of_active_assets') },
+              { label: t('active_vendors'), value: vendors.length, icon: Truck, sub: t('connected_suppliers_and_vendors') },
+              { label: t('asset_types'), value: `${assetCounts.FURNITURE}F · ${assetCounts.EQUIPMENT}E · ${assetCounts.ELECTRONICS}El`, icon: Layers, sub: 'Furniture · Equipment · Electronics' },
+            ].map(({ label, value, icon: Icon, sub }) => (
+              <div key={label} className="px-5 py-3.5 flex items-center gap-3">
+                <div className="h-8 w-8 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+                  <Icon className="h-4 w-4 text-white/80" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-widest text-violet-200/60 font-semibold truncate">{label}</p>
+                  <p className="text-sm font-bold text-white leading-tight truncate">{value}</p>
+                  <p className="text-[10px] text-violet-200/50 truncate hidden sm:block">{sub}</p>
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════
-            Premium Stat Cards
-        ══════════════════════════════════════ */}
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
-          {/* Total Assets */}
-          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
-            <div className="relative z-10 p-5">
-              <div className="flex items-start justify-between mb-3">
-                <p className="text-sm font-semibold text-white/90">{t('total_assets')}</p>
-                <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <Box className="h-5 w-5 text-white" />
-                </div>
-              </div>
-              <p className="text-4xl font-bold tabular-nums mb-1">{assets.length}</p>
-              <p className="text-xs text-white/70">{t('registered_assets_in_system')}</p>
-              <div className="mt-4 flex gap-2 text-xs text-white/70">
-                <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-green-400 inline-block" />{activeAssets} active</span>
-                <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />{transitAssets} transit</span>
-              </div>
-            </div>
-          </div>
-          {/* Total Value */}
-          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
-            <div className="relative z-10 p-5">
-              <div className="flex items-start justify-between mb-3">
-                <p className="text-sm font-semibold text-white/90">{t('total_asset_value')}</p>
-                <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <Tag className="h-5 w-5 text-white" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold tabular-nums mb-1 truncate">
-                QAR {totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-              </p>
-              <p className="text-xs text-white/70">{t('total_value_of_active_assets')}</p>
-              <div className="mt-4 h-1 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white/60 rounded-full" style={{ width: '80%' }} />
-              </div>
-            </div>
-          </div>
-          {/* Vendors */}
-          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
-            <div className="relative z-10 p-5">
-              <div className="flex items-start justify-between mb-3">
-                <p className="text-sm font-semibold text-white/90">{t('active_vendors')}</p>
-                <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <Truck className="h-5 w-5 text-white" />
-                </div>
-              </div>
-              <p className="text-4xl font-bold tabular-nums mb-1">{vendors.length}</p>
-              <p className="text-xs text-white/70">{t('connected_suppliers_and_vendors')}</p>
-              <div className="mt-4 h-1 bg-white/20 rounded-full overflow-hidden">
-                <div className="h-full bg-white/60 rounded-full" style={{ width: '65%' }} />
-              </div>
-            </div>
-          </div>
-          {/* Asset Types breakdown */}
-          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.08),transparent_60%)]" />
-            <div className="relative z-10 p-5">
-              <div className="flex items-start justify-between mb-3">
-                <p className="text-sm font-semibold text-white/90">{t('asset_types')}</p>
-                <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center">
-                  <Layers className="h-5 w-5 text-white" />
-                </div>
-              </div>
-              <div className="space-y-2.5">
-                {[
-                  { label: 'Furniture', count: assetCounts.FURNITURE, icon: Sofa, color: 'bg-blue-400' },
-                  { label: 'Equipment', count: assetCounts.EQUIPMENT, icon: Package, color: 'bg-emerald-400' },
-                  { label: 'Electronics', count: assetCounts.ELECTRONICS, icon: Computer, color: 'bg-violet-400' },
-                ].map(({ label, count, icon: Icon, color }) => (
-                  <div key={label} className="flex items-center gap-2">
-                    <Icon className="h-3.5 w-3.5 text-white/60 flex-shrink-0" />
-                    <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div className={`h-full ${color} rounded-full`} style={{ width: assets.length ? `${(count / assets.length) * 100}%` : '0%' }} />
-                    </div>
-                    <span className="text-xs font-bold text-white/90 w-4 text-right tabular-nums">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
 
