@@ -253,10 +253,10 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
         return;
       }
 
-      // World-class config: same pattern as working BarcodeScanner2 — numeric formats, BarCodeDetector, high-res, back camera
+      // Optimized for both QR and 1D barcodes: wider rectangular qrbox helps CODE_128 (horizontal strips), lower fps reduces motion blur
       const scanConfig = {
-        fps: 15,
-        qrbox: { width: 280, height: 220 },
+        fps: 10,
+        qrbox: { width: 400, height: 200 },
         disableFlip: false,
         videoConstraints: {
           width: { ideal: 1280 },
@@ -265,10 +265,11 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
         },
       };
 
+      // useBarCodeDetectorIfSupported: false forces ZXing decoder — more reliable for 1D barcodes (CODE_128) on many devices
       scannerRef.current = new Html5Qrcode(scannerContainerId, {
         verbose: false,
         formatsToSupport: TICKET_SCANNER_FORMATS,
-        useBarCodeDetectorIfSupported: true,
+        useBarCodeDetectorIfSupported: false,
       });
 
       let started = false;
@@ -283,7 +284,7 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
             setActiveCamera(camToUse.id);
             started = true;
           } catch {
-            await scannerRef.current!.start(camToUse.id, { fps: 12, qrbox: { width: 280, height: 220 } }, handleScan, handleScanError);
+            await scannerRef.current!.start(camToUse.id, { fps: 10, qrbox: { width: 400, height: 200 } }, handleScan, handleScanError);
             setActiveCamera(camToUse.id);
             started = true;
           }
@@ -626,13 +627,13 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
                         <div className="relative">
                           <div 
                             id={scannerContainerId} 
-                            className="w-full min-h-[320px] h-[380px] overflow-hidden bg-muted/30"
+                            className="w-full min-h-[320px] h-[420px] overflow-hidden bg-muted/30"
                           ></div>
                           
                           {/* Scanning overlay with animation */}
                           {activeCamera && !isInitializing && cameraPermission === 'granted' && (
                             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                              <div className="border-2 border-primary w-[280px] h-[220px] rounded-lg relative">
+                              <div className="border-2 border-primary w-[400px] h-[200px] rounded-lg relative">
                                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary animate-[scanline_2s_ease-in-out_infinite]"></div>
                                 <div className="absolute top-0 left-0 w-[20px] h-[20px] border-t-2 border-l-2 border-primary"></div>
                                 <div className="absolute top-0 right-0 w-[20px] h-[20px] border-t-2 border-r-2 border-primary"></div>
@@ -656,9 +657,9 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
                             <p className="text-sm font-medium">Scanning Tips</p>
                             <ul className="text-xs text-muted-foreground space-y-1">
                               <li>• Hold the device steady and ensure good lighting</li>
-                              <li>• Position barcode or QR code within the highlighted area</li>
-                              <li>• Make sure the code is clearly visible and not damaged</li>
-                              <li>• If scanning fails, try the manual entry option</li>
+                              <li>• QR codes: center in the frame. Barcodes: hold horizontally so the bars fill the width of the box</li>
+                              <li>• Keep the code flat and clearly visible</li>
+                              <li>• If barcode won&apos;t scan, use manual entry with the number below the barcode</li>
                             </ul>
                           </div>
                         </div>
