@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeError, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Camera, AlertCircle, CheckCircle2, RefreshCw, QrCode, Scan } from "lucide-react";
+import { Loader2, Camera, AlertCircle, CheckCircle2, RefreshCw, QrCode, Scan, ImagePlus } from "lucide-react";
 import { useRouter } from 'next/router';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -91,11 +91,14 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
   const [activeCamera, setActiveCamera] = useState<string | null>(null);
   const [availableCameras, setAvailableCameras] = useState<Array<{id: string, label: string}>>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+  const [isScanningFile, setIsScanningFile] = useState(false);
   const scannedRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerId = 'ticket-reader';
+  const fileScanContainerId = 'ticket-file-scan';
   const router = useRouter();
 
   // Function to check camera permissions
@@ -486,6 +489,38 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
     setSelectedCameraId(cameraId);
   };
 
+  const handleScanFromPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    if (scannedRef.current) return;
+    setIsScanningFile(true);
+    let fileScanner: Html5Qrcode | null = null;
+    try {
+      if (!document.getElementById(fileScanContainerId)) throw new Error('Scan area not ready');
+      fileScanner = new Html5Qrcode(fileScanContainerId, {
+        verbose: false,
+        formatsToSupport: TICKET_SCANNER_FORMATS,
+        useBarCodeDetectorIfSupported: false,
+      });
+      const result = await fileScanner.scanFile(file, false);
+      const code = normalizeScannedCode(result);
+      if (code) await handleScan(code);
+      else toast({ title: 'No code found', description: 'Could not read a barcode or QR code from this image.', variant: 'destructive' });
+    } catch (err) {
+      console.error('Scan from image error:', err);
+      toast({
+        title: 'Could not read code',
+        description: 'Take a clear photo of the barcode or QR code, or use Manual Entry.',
+        variant: 'destructive',
+      });
+    } finally {
+      try { fileScanner?.clear(); } catch {}
+      setIsScanningFile(false);
+      scannedRef.current = false;
+    }
+  };
+
   return (
     <>
       <TooltipProvider>
@@ -509,6 +544,8 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
       {/* Main Scanner Dialog */}
       <Dialog open={showScanner} onOpenChange={handleDialogClose}>
         <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden">
+          {/* Hidden container for file-based scan (required by Html5Qrcode constructor) */}
+          <div id={fileScanContainerId} className="absolute w-px h-px overflow-hidden opacity-0 pointer-events-none -left-[9999px]" aria-hidden />
           <DialogHeader className="p-6 pb-2">
             <DialogTitle className="text-xl flex items-center gap-2">
               <Scan className="h-5 w-5 text-primary" />
@@ -519,10 +556,10 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
             </DialogDescription>
           </DialogHeader>
           
-          {isSearching ? (
+          {(isSearching || isScanningFile) ? (
             <div className="flex flex-col items-center justify-center py-10">
               <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
-              <p className="text-center font-medium">Searching for ticket...</p>
+              <p className="text-center font-medium">{isScanningFile ? 'Reading barcode from photo…' : 'Searching for ticket...'}</p>
             </div>
           ) : (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -644,6 +681,32 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
                       </CardContent>
                     </Card>
                     
+                    {/* Scan from photo — works reliably for 1D barcodes when live camera fails */}
+                    <Card className="border-primary/20 bg-primary/5">
+                      <CardContent className="p-4">
+                        <p className="text-sm font-medium text-foreground mb-2">Barcode not scanning?</p>
+                        <p className="text-xs text-muted-foreground mb-3">Take or upload a clear photo of the barcode — often works when live scan doesn’t.</p>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          onChange={handleScanFromPhoto}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isScanningFile}
+                        >
+                          <ImagePlus className="h-4 w-4 mr-2" />
+                          Scan from photo
+                        </Button>
+                      </CardContent>
+                    </Card>
+
                     {/* Scanning tips */}
                     <Card className="border-primary/10">
                       <CardContent className="p-4">
@@ -656,7 +719,7 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
                             <ul className="text-xs text-muted-foreground space-y-1">
                               <li>• Whole frame is scanned — position QR or barcode anywhere in view</li>
                               <li>• Hold steady with good lighting; keep barcode horizontal and in focus</li>
-                              <li>• Barcode not reading? Enter the number below the barcode in Manual Entry</li>
+                              <li>• Or use &quot;Scan from photo&quot; above, or Manual Entry with the number below the barcode</li>
                             </ul>
                           </div>
                         </div>
@@ -706,7 +769,7 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
               </TabsContent>
             </Tabs>
           )}
-        </DialogContent>
+          </DialogContent>
       </Dialog>
     </>
   );
