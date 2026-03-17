@@ -676,7 +676,7 @@ export default function HandheldHubPage() {
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">Inventory audit</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Scan assets to verify location &amp; assignment. Amazon/Virgin-style.</p>
+                <p className="text-sm text-slate-500 mt-0.5">Scan assets to verify location &amp; assignment.</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 dark:bg-violet-900/30 px-3 py-1.5 text-sm font-semibold text-violet-800 dark:text-violet-200">

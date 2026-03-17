@@ -55,45 +55,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // ── Fast auth: read JWT from cookie, no Supabase network call ──────────────
   let orgId: string | null = null;
   let isAdmin = false;
+  let isHandheld = false;
 
   try {
     const supabase = createClient(req, res);
-    // getSession decodes the cookie locally — no external HTTP request
     const { data: { session } } = await supabase.auth.getSession();
 
     if (session?.user?.id) {
-      // One small indexed lookup to get org + role
       const userData = await prisma.user.findUnique({
         where: { id: session.user.id },
         select: { organizationId: true, role: true, isAdmin: true },
       });
-      orgId   = userData?.organizationId ?? null;
-      isAdmin = !!(userData?.isAdmin || userData?.role === 'ADMIN' || userData?.role === 'MANAGER');
+      orgId      = userData?.organizationId ?? null;
+      isAdmin    = !!(userData?.isAdmin || userData?.role === 'ADMIN' || userData?.role === 'MANAGER');
+      isHandheld = (userData?.role === 'HANDHELD');
     }
   } catch {
     // Auth failure is non-fatal for scan: fall through with no org scope
   }
 
-  // ── Single DB query with all matchers combined ──────────────────────────────
+  // ── Build search: exact then partial (barcode, assetId, name) ──────────────
+  const searchConditions = [
+    { barcode: term },
+    { assetId: term },
+    { barcode: { contains: term, mode: 'insensitive' as const } },
+    { assetId: { contains: term, mode: 'insensitive' as const } },
+    { name:    { contains: term, mode: 'insensitive' as const } },
+  ];
+
   try {
-    // Exact matches first (cheaper, hits index if one exists), then partial
-    const searchConditions = [
-      { barcode: term },
-      { assetId: term },
-      { barcode: { contains: term, mode: 'insensitive' as const } },
-      { assetId: { contains: term, mode: 'insensitive' as const } },
-      { name:    { contains: term, mode: 'insensitive' as const } },
-    ];
+    // 1) Try with org scope when user has an org and is not admin
+    let asset = (orgId && !isAdmin)
+      ? await prisma.asset.findFirst({
+          where: { OR: searchConditions, organizationId: orgId },
+          select: SCAN_SELECT,
+        })
+      : await prisma.asset.findFirst({
+          where: { OR: searchConditions },
+          select: SCAN_SELECT,
+        });
 
-    // Scope to org when known (and user is not admin spanning all orgs)
-    const where = orgId && !isAdmin
-      ? { OR: searchConditions, organizationId: orgId }
-      : { OR: searchConditions };
+    // 2) Fallback: assets with no org (legacy / unassigned)
+    if (!asset && orgId && !isAdmin) {
+      asset = await prisma.asset.findFirst({
+        where: { OR: searchConditions, organizationId: null },
+        select: SCAN_SELECT,
+      });
+    }
 
-    let asset = await prisma.asset.findFirst({ where, select: SCAN_SELECT });
-
-    // Admin fallback: retry without org scope in case asset belongs to no org
+    // 3) Admin fallback: any org
     if (!asset && isAdmin && orgId) {
+      asset = await prisma.asset.findFirst({
+        where: { OR: searchConditions },
+        select: SCAN_SELECT,
+      });
+    }
+
+    // 4) HANDHELD fallback: allow audit scan of any asset (field use)
+    if (!asset && isHandheld) {
       asset = await prisma.asset.findFirst({
         where: { OR: searchConditions },
         select: SCAN_SELECT,
