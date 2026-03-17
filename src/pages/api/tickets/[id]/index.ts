@@ -155,19 +155,19 @@ export default async function handler(
 
         // Only admin/manager (for this ticket) can set or clear assignedToId
         let newAssignedToId: string | null | undefined = undefined; // undefined = do not change
-        let assigneeDetails: { email: string; displayName: string } | null = null;
+        let assigneeDetails: { email: string; displayName: string; phone?: string | null } | null = null;
         if (assignedToId !== undefined && adminOrManagerForTicket) {
           if (assignedToId === null || assignedToId === '') {
             newAssignedToId = null;
           } else {
             const assignee = await prisma.user.findUnique({
               where: { id: assignedToId as string },
-              select: { id: true, email: true },
+              select: { id: true, email: true, phone: true },
             });
             if (assignee) {
               newAssignedToId = assignee.id;
               const displayName = assignee.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-              assigneeDetails = { email: assignee.email, displayName };
+              assigneeDetails = { email: assignee.email, displayName, phone: assignee.phone ?? null };
             } else {
               newAssignedToId = null;
             }
@@ -251,9 +251,13 @@ export default async function handler(
                 ? `Ticket assigned to staff.`
                 : 'Ticket updated.';
 
-            // When ticket is assigned to staff, append assignee details so the requester sees who is handling their ticket in the Activity Timeline
+            // When ticket is assigned or reassigned to staff, append assignee email and mobile so the requester sees who is handling their ticket in the Activity Timeline
             if (isAssignmentChange && assigneeDetails) {
-              historyComment += ` Assigned to: ${assigneeDetails.displayName} (${assigneeDetails.email}). You can contact them for updates on your ticket.`;
+              const contactParts = [`Email: ${assigneeDetails.email}`];
+              if (assigneeDetails.phone && assigneeDetails.phone.trim()) {
+                contactParts.push(`Mobile: ${assigneeDetails.phone.trim()}`);
+              }
+              historyComment += ` Assigned to: ${assigneeDetails.displayName}. Contact — ${contactParts.join('; ')}. You can reach them for updates on your ticket.`;
             }
             
             console.log(`Creating ticket history entry with comment: ${historyComment}`);

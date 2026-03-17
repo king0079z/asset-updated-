@@ -824,80 +824,101 @@ function TicketsContent() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">Ticket Management</h1>
-          <p className="mt-1 text-slate-500 dark:text-slate-400">Manage, assign and action all support tickets</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" asChild><Link href="/tickets/dashboard"><BarChart2 className="mr-2 h-4 w-4" />Analytics</Link></Button>
-          <TicketBarcodeScanner />
-          <PrintTicketsReportButton variant="outline" />
-          <Button onClick={() => setCreateDialogOpen(true)} className="gap-2">
-            <PlusCircle className="h-4 w-4" /> New Ticket
-          </Button>
+      {/* ── Hero header ───────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 p-6 shadow-xl">
+        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-24 w-32 h-32 rounded-full bg-white/5 translate-y-1/2" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center">
+                <Ticket className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">Support & Requests</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white">Ticket Management</h1>
+            <p className="mt-1 text-sm text-white/80">Manage, assign and action all support tickets</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" asChild className="bg-white/15 border-white/20 text-white hover:bg-white/25">
+              <Link href="/tickets/dashboard"><BarChart2 className="mr-2 h-4 w-4" />Analytics</Link>
+            </Button>
+            <TicketBarcodeScanner />
+            <PrintTicketsReportButton variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20" />
+            <Button onClick={() => setCreateDialogOpen(true)} className="gap-2 bg-white text-indigo-700 hover:bg-white/95 shadow-lg">
+              <PlusCircle className="h-4 w-4" /> New Ticket
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* ── Stats cards ───────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: "Total",       value: stats.total,      from: "from-slate-50 dark:from-slate-800",   to: "to-white dark:to-slate-900", text: "text-slate-700 dark:text-slate-200" },
-          { label: "Open",        value: stats.open,       from: "from-blue-50 dark:from-blue-950/50",    to: "to-white dark:to-slate-900", text: "text-blue-700 dark:text-blue-300" },
-          { label: "In Progress", value: stats.inProgress, from: "from-amber-50 dark:from-amber-950/50",   to: "to-white dark:to-slate-900", text: "text-amber-700 dark:text-amber-300" },
-          { label: "Resolved",    value: stats.resolved,   from: "from-emerald-50 dark:from-emerald-950/50", to: "to-white dark:to-slate-900", text: "text-emerald-700 dark:text-emerald-300" },
-          { label: "Critical",    value: stats.critical,   from: "from-red-50 dark:from-red-950/50",     to: "to-white dark:to-slate-900", text: "text-red-700 dark:text-red-300" },
-          { label: "Portal",      value: stats.portal,     from: "from-violet-50 dark:from-violet-950/50",  to: "to-white dark:to-slate-900", text: "text-violet-700 dark:text-violet-300" },
-        ].map(s => (
-          <div key={s.label} className={`rounded-2xl bg-gradient-to-br ${s.from} ${s.to} border border-slate-100 dark:border-slate-700 p-4`}>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{s.label}</p>
-            <p className={`mt-1 text-3xl font-black ${s.text}`}>{s.value}</p>
-          </div>
-        ))}
+          { label: "Total",       value: stats.total,      icon: Inbox,       grad: "from-slate-500 to-slate-600",   bg: "bg-slate-500/10", border: "border-slate-200 dark:border-slate-700", text: "text-slate-700 dark:text-slate-200" },
+          { label: "Open",        value: stats.open,       icon: AlertCircle, grad: "from-blue-500 to-blue-600",   bg: "bg-blue-500/10",  border: "border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" },
+          { label: "In Progress", value: stats.inProgress, icon: Clock,       grad: "from-amber-500 to-amber-600", bg: "bg-amber-500/10", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" },
+          { label: "Resolved",    value: stats.resolved,  icon: CheckCircle2, grad: "from-emerald-500 to-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" },
+          { label: "Critical",    value: stats.critical,   icon: Zap,          grad: "from-red-500 to-red-600",   bg: "bg-red-500/10",  border: "border-red-200 dark:border-red-800", text: "text-red-700 dark:text-red-300" },
+          { label: "Portal",      value: stats.portal,    icon: Users,        grad: "from-violet-500 to-violet-600", bg: "bg-violet-500/10", border: "border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
+        ].map(s => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className={`relative overflow-hidden rounded-2xl border ${s.border} bg-card p-4 shadow-sm hover:shadow-md transition-shadow`}>
+              <div className={`absolute top-2 right-2 h-10 w-10 rounded-xl ${s.bg} flex items-center justify-center opacity-90`}>
+                <Icon className={`h-5 w-5 ${s.text}`} />
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{s.label}</p>
+              <p className={`mt-1 text-2xl font-black tracking-tight ${s.text}`}>{s.value}</p>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Filters */}
+      {/* ── Filters ──────────────────────────────────────────────────────── */}
       {!["staff", "ai"].includes(activeTab) && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-            <Input placeholder="Search tickets…" className="pl-10 rounded-xl" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+        <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Search tickets…" className="pl-10 rounded-xl border-border bg-muted/30 focus:bg-background" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
+            <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}
+              className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+              <option value="">All Priorities</option>
+              {Object.entries(PRIORITY_CFG).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}
+            </select>
+            <select value={sortOrder} onChange={e => setSortOrder(e.target.value as any)}
+              className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="priority">By Priority</option>
+            </select>
+            <div className="flex rounded-xl border border-border overflow-hidden bg-muted/30">
+              <button onClick={() => setViewMode("list")} className={`p-2.5 transition-colors ${viewMode === "list" ? "bg-indigo-600 text-white" : "text-muted-foreground hover:bg-muted"}`} title="List view"><LayoutList className="h-4 w-4" /></button>
+              <button onClick={() => setViewMode("card")} className={`p-2.5 transition-colors ${viewMode === "card" ? "bg-indigo-600 text-white" : "text-muted-foreground hover:bg-muted"}`} title="Card view"><LayoutGrid className="h-4 w-4" /></button>
+            </div>
+            <button onClick={() => fetchTickets(false)} className="rounded-xl border border-border bg-muted/30 p-2.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Refresh">
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </div>
-          <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}
-            className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-600">
-            <option value="">All Priorities</option>
-            {Object.entries(PRIORITY_CFG).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}
-          </select>
-          <select value={sortOrder} onChange={e => setSortOrder(e.target.value as any)}
-            className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-600">
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="priority">By Priority</option>
-          </select>
-          <div className="flex rounded-xl border border-slate-200 dark:border-slate-600 overflow-hidden">
-            <button onClick={() => setViewMode("list")} className={`p-2 transition-colors ${viewMode === "list" ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700"}`}><LayoutList className="h-4 w-4" /></button>
-            <button onClick={() => setViewMode("card")} className={`p-2 transition-colors ${viewMode === "card" ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700"}`}><LayoutGrid className="h-4 w-4" /></button>
-          </div>
-          <button onClick={() => fetchTickets(false)} className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-            <RefreshCw className="h-4 w-4" />
-          </button>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="border-b border-slate-200 dark:border-slate-700">
-        <div className="flex gap-0 overflow-x-auto">
+      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card p-1 shadow-sm">
+        <div className="flex gap-1 overflow-x-auto">
           {tabItems.map(tab => {
             const Icon = tab.icon;
+            const isActive = activeTab === tab.key;
             return (
               <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
-                className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${activeTab === tab.key ? "border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"}`}>
-                {tab.dot && <span className={`h-2 w-2 rounded-full ${tab.dot}`} />}
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${isActive ? "bg-indigo-600 text-white shadow-md" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+                {tab.dot && <span className={`h-2 w-2 rounded-full ${isActive ? "bg-white" : tab.dot}`} />}
                 {Icon && <Icon className="h-4 w-4" />}
                 {tab.label}
                 {tab.count !== undefined && tab.count > 0 && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${activeTab === tab.key ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900" : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${isActive ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
                     {tab.count}
                   </span>
                 )}
@@ -993,15 +1014,24 @@ function TicketsContent() {
         </div>
       )}
 
-      {/* ── OTHER TABS ── */}
+      {/* ── Ticket list / card content ────────────────────────────────────── */}
       {!["portal", "staff", "ai"].includes(activeTab) && (
-        isLoading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-slate-400 dark:text-slate-500" /></div>
-        ) : viewMode === "card" ? (
-          <TicketCardView tickets={filteredTickets as any} isLoading={isLoading} />
-        ) : (
-          <TicketListView tickets={filteredTickets as any} isLoading={isLoading} />
-        )
+        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="h-10 w-10 rounded-full border-2 border-muted border-t-indigo-500 animate-spin mb-4" />
+              <p className="text-sm font-medium text-muted-foreground">Loading tickets…</p>
+            </div>
+          ) : viewMode === "card" ? (
+            <div className="p-4">
+              <TicketCardView tickets={filteredTickets as any} isLoading={false} />
+            </div>
+          ) : (
+            <div className="p-4">
+              <TicketListView tickets={filteredTickets as any} isLoading={false} />
+            </div>
+          )}
+        </div>
       )}
 
       <CreateTicketDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} onTicketCreated={() => fetchTickets()} />

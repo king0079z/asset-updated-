@@ -112,6 +112,7 @@ model UsageMetrics {
 model User {
   id                       String               @id @db.Uuid
   email                    String               @unique
+  phone                    String?              // Optional mobile/phone for ticket assignee contact
   createdAt                DateTime             @default(now())
   status                   UserStatus           @default(PENDING)
   isAdmin                  Boolean              @default(false)
