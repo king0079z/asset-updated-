@@ -29,7 +29,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAdmin = false,
   allowManager = false
 }) => {
-  const { user, initializing } = useContext(AuthContext);
+  const { user, initializing, signOut } = useContext(AuthContext);
   const { isSubscriptionExpired, subscription } = useOrganization();
   const router = useRouter();
   const [userStatus, setUserStatus] = useState<string | null>(null);
@@ -62,11 +62,43 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           setLoading(false);
           return;
         }
-        // No User row for this auth user — treat as pending so they can be provisioned
+        // No User row — provision server-side so admin sees them in Pending, then re-fetch
         if (!data) {
+          try {
+            const prov = await fetch('/api/users/provision', { method: 'POST', credentials: 'include' });
+            if (prov.ok) {
+              const recheck = await supabase.from('User').select('status, isAdmin, role, pageAccess, email').eq('id', user.id).maybeSingle();
+              if (!recheck.error && recheck.data) {
+                const d = recheck.data;
+                if (d.status === 'REJECTED') {
+                  await signOut();
+                  router.replace('/login?rejected=1');
+                  return;
+                }
+                setUserStatus(d.status);
+                setUserRole(d.role || 'STAFF');
+                setIsAdmin(d.isAdmin);
+                setPageAccess(d.pageAccess);
+                setUserEmail(d.email);
+                const hasSeenKeyInput = localStorage.getItem(`subscription_key_shown_${user.id}`);
+                setHasSubscriptionKey(!!hasSeenKeyInput);
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (e) {
+            logDebug('[ProtectedRoute] Provision failed', e);
+          }
           setUserStatus('PENDING');
           setUserEmail(user.email ?? '');
           setLoading(false);
+          return;
+        }
+
+        // Rejected: remove from app and block — sign out and send to login
+        if (data.status === 'REJECTED') {
+          await signOut();
+          router.replace('/login?rejected=1');
           return;
         }
 
@@ -214,29 +246,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
+  // Rejected: ensure they are signed out and redirected (safety net if state was already REJECTED)
+  if (user && userStatus === 'REJECTED') {
+    signOut().then(() => router.replace('/login?rejected=1'));
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <p className="text-muted-foreground">Signing you out…</p>
+      </div>
+    );
+  }
+
   // Only check status for protected routes
   if (user && !publicRoutes.includes(router.pathname) && !isOutlookRoute(router.pathname)) {
-    if (userStatus === 'REJECTED') {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4">
-          <Alert className="max-w-md">
-            <AlertTitle>Access Denied</AlertTitle>
-            <AlertDescription>
-              Your account has been rejected by the administrator. Please contact the system administrator for more information.
-            </AlertDescription>
-          </Alert>
-          <Button 
-            className="mt-4" 
-            onClick={() => {
-              supabase.auth.signOut();
-              router.push('/login');
-            }}
-          >
-            Back to Login
-          </Button>
-        </div>
-      );
-    }
 
     if (userStatus === 'PENDING') {
       // If the user has already been shown the subscription key input

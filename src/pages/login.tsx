@@ -111,7 +111,7 @@ const ALERTS = [
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function LoginPage() {
   const router = useRouter();
-  const { initializing, signIn } = useContext(AuthContext);
+  const { initializing, signIn, signOut } = useContext(AuthContext);
   const { toast } = useToast();
   const supabaseConfigured = isSupabaseConfigured();
 
@@ -154,6 +154,11 @@ export default function LoginPage() {
       }
       const supabase = createClient();
       const { data } = await supabase.from('User').select('status').eq('email', email).single();
+      if (data?.status === 'REJECTED') {
+        await signOut();
+        router.replace('/login?rejected=1');
+        return;
+      }
       if (data?.status === 'PENDING') {
         router.push('/pending-approval');
       } else {
@@ -378,6 +383,19 @@ export default function LoginPage() {
 
             {/* Card container */}
             <div style={{ background: 'white', borderRadius: 28, padding: '40px 40px 36px', boxShadow: '0 2px 4px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06), 0 32px 64px rgba(0,0,0,0.05)' }}>
+
+              {/* Rejected-account message */}
+              {router.query.rejected === '1' && (
+                <div className="su1" style={{ marginBottom: 24, padding: 16, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <AlertTriangle style={{ width: 20, height: 20, color: '#dc2626', flexShrink: 0, marginTop: 1 }}/>
+                    <div>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>Account rejected</p>
+                      <p style={{ fontSize: 13, color: '#b91c1c', lineHeight: 1.45 }}>Your account has been rejected by the administrator. You cannot sign in until an administrator unblocks your account. Contact your administrator to request access.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Heading */}
               <div className="su1" style={{ marginBottom: 32 }}>

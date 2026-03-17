@@ -35,10 +35,11 @@ async function getUsers(req: NextApiRequest, res: NextApiResponse) {
     const { status, userId } = req.query;
     const cacheKey = `users:${status ?? 'all'}:${userId ?? ''}`;
 
-    // Serve from cache for frequent PENDING polling
+    // Shorter cache for PENDING so new signups appear soon
+    const ttl = status === 'PENDING' ? 15_000 : CACHE_TTL;
     const cached = usersCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+    if (cached && Date.now() - cached.ts < ttl) {
+      res.setHeader('Cache-Control', status === 'PENDING' ? 'private, max-age=15' : 'private, max-age=60, stale-while-revalidate=30');
       return res.status(200).json(cached.data);
     }
 

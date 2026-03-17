@@ -678,7 +678,7 @@ export default function UserManagementPage() {
               <div className="rounded-2xl border border-border bg-card overflow-hidden">
                 <div className="px-6 py-5 border-b border-border">
                   <h2 className="text-lg font-bold">Rejected Users</h2>
-                  <p className="text-sm text-muted-foreground">Users denied access — re-approve to grant entry</p>
+                  <p className="text-sm text-muted-foreground">Rejected users are blocked from the app. Unblock to move them to Pending so they can request access again, or Approve to grant access directly.</p>
                 </div>
                 {loading ? <LoadingState /> :
                   filteredRejected.length === 0 ? (
@@ -698,10 +698,16 @@ export default function UserManagementPage() {
                               <p className="text-xs text-muted-foreground">Registered {new Date(user.createdAt).toLocaleDateString()}</p>
                             </div>
                           </div>
-                          <Button size="sm" variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 gap-1.5"
-                            onClick={() => { handleStatusChange(user.id, "APPROVED"); toast({ title: "Access Restored", description: "Default page access granted." }); }}>
-                            <CheckCircle className="h-4 w-4" /> Approve Access
-                          </Button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button size="sm" variant="outline" className="rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 gap-1.5"
+                              onClick={() => { handleStatusChange(user.id, "PENDING"); toast({ title: "Unblocked", description: "User moved to Pending. They can sign in and request access again." }); }}>
+                              Unblock
+                            </Button>
+                            <Button size="sm" variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 gap-1.5"
+                              onClick={() => { handleStatusChange(user.id, "APPROVED"); toast({ title: "Access Restored", description: "Default page access granted." }); }}>
+                              <CheckCircle className="h-4 w-4" /> Approve Access
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
