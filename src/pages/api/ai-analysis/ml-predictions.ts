@@ -12,12 +12,12 @@ import { logError } from '@/lib/errorLogger';
 import { ErrorSeverity } from "@prisma/client";
 
 // ── Server-side result cache ────────────────────────────────────────────────
-// ML computation is extremely expensive (6 full-table Prisma scans + model runs).
-// Cache the result for 5 minutes so repeated page loads / dashboard visits don't
-// recompute from scratch every time.
+// ML computation is expensive (multiple Prisma queries + model runs).
+// Cache per user for 5 minutes; per-user in-flight map deduplicates concurrent
+// requests for the SAME user without leaking data between different users.
 const ML_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const mlCache = new Map<string, { data: any; ts: number }>();
-let mlInFlight: Promise<any> | null = null; // deduplicates concurrent requests
+const mlInFlightMap = new Map<string, Promise<any>>(); // keyed by user cache key
 
 export default async function handler(
   req: NextApiRequest,
@@ -34,7 +34,7 @@ export default async function handler(
     const { user } = auth;
     console.info(`Path: /api/ai-analysis/ml-predictions Processing ML predictions for user: ${user.id}`);
 
-    // ── Server-side cache check (per org — avoids recomputing on every request) ──
+    // ── Server-side cache check (per user — avoids recomputing on every request) ──
     const cacheKey = `ml_${user.id}`;
     const cached = mlCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < ML_CACHE_TTL) {
@@ -43,12 +43,17 @@ export default async function handler(
       return res.status(200).json(cached.data);
     }
 
-    // If another request is already computing, wait for it (deduplicate).
-    if (mlInFlight) {
-      console.info('Path: /api/ai-analysis/ml-predictions Waiting for in-flight ML computation');
-      const data = await mlInFlight;
-      res.setHeader('Cache-Control', 'private, max-age=300');
-      return res.status(200).json(data);
+    // If THIS USER's request is already computing, wait for it (deduplicate per user).
+    const existingFlight = mlInFlightMap.get(cacheKey);
+    if (existingFlight) {
+      console.info('Path: /api/ai-analysis/ml-predictions Waiting for in-flight ML computation (same user)');
+      try {
+        const data = await existingFlight;
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        return res.status(200).json(data);
+      } catch {
+        // In-flight failed — fall through to recompute
+      }
     }
 
     // Get current date and calculate date ranges
@@ -59,17 +64,29 @@ export default async function handler(
     const since = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
     const TAKE = 1000; // Lower limit for faster first load; cache makes repeat loads instant
 
-    // Wrap the whole computation so concurrent requests share one Promise.
-    mlInFlight = (async () => {
+    // Wrap the whole computation so concurrent requests for the SAME user share one Promise.
+    const computation = (async () => {
     try {
       console.info('Path: /api/ai-analysis/ml-predictions Fetching data for ML analysis');
+
+      // Get the user's organization for scoping (safe fallback to null)
+      let organizationId: string | null = null;
+      try {
+        const orgRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { organizationId: true } });
+        organizationId = orgRecord?.organizationId ?? null;
+      } catch { /* non-critical */ }
+
+      const orgFilter = organizationId ? { organizationId } : {};
+      const userFilter = { userId: user.id };
+
       const [foodConsumptions, foodSupplies, vehicleRentals, assets, kitchenConsumptions, assetHistoryRecords] = await Promise.all([
         prisma.foodConsumption.findMany({
-          where: { date: { gte: since } },
+          where: { date: { gte: since }, ...orgFilter },
           include: { foodSupply: true },
           take: TAKE,
         }),
         prisma.foodSupply.findMany({
+          where: { ...orgFilter },
           include: {
             consumption: {
               where: { date: { gte: since } },
@@ -79,19 +96,19 @@ export default async function handler(
           take: TAKE,
         }),
         prisma.vehicleRental.findMany({
-          where: { startDate: { gte: since } },
+          where: { startDate: { gte: since }, ...orgFilter },
           include: { vehicle: true },
           take: 500,
         }),
-        prisma.asset.findMany({ take: TAKE }),
+        prisma.asset.findMany({ where: { ...orgFilter }, take: TAKE }),
         prisma.foodConsumption.findMany({
-          where: { date: { gte: since } },
+          where: { date: { gte: since }, ...orgFilter },
           include: { foodSupply: true, kitchen: true },
           take: TAKE,
         }),
         prisma.assetHistory.findMany({
           where: { action: 'DISPOSED', createdAt: { gte: since } },
-          include: { asset: true },
+          include: { asset: { select: { id: true, name: true, purchaseAmount: true, floorNumber: true, roomNumber: true, organizationId: true } } },
           take: 500,
         })
       ]);
@@ -149,10 +166,10 @@ export default async function handler(
       const result = { mlAnalysis, insights };
       // Store in server-side cache and release in-flight lock
       mlCache.set(cacheKey, { data: result, ts: Date.now() });
-      mlInFlight = null;
+      mlInFlightMap.delete(cacheKey);
       return result;
     } catch (dataError) {
-      mlInFlight = null;
+      mlInFlightMap.delete(cacheKey);
       console.error('Error fetching or processing data for ML predictions:', dataError);
       await logError({
         message: 'Failed to process data for ML predictions',
@@ -162,19 +179,23 @@ export default async function handler(
       });
       throw dataError; // rethrow so the outer catch can respond
     }
-    })(); // end mlInFlight IIFE
+    })(); // end computation IIFE
+
+    mlInFlightMap.set(cacheKey, computation);
 
     const ML_TIMEOUT_MS = 9_000; // Under Vercel 10s limit
     let result: any;
     try {
       result = await Promise.race([
-        mlInFlight,
+        computation,
         new Promise((_, rej) => setTimeout(() => rej(new Error('ML computation timeout')), ML_TIMEOUT_MS))
       ]);
     } catch (timeoutOrError) {
-      mlInFlight = null;
+      mlInFlightMap.delete(cacheKey);
+      // Use the sentinel "computing" marker that AiAlerts.tsx detects for graceful retry
       const fallback = {
         mlAnalysis: { consumptionPredictions: [], optimizationRecommendations: [], budgetPredictions: [], anomalyDetections: [] },
+        _computing: true, // extra flag for client detection
         insights: {
           summary: { title: 'ML Analysis', description: 'Analysis is taking longer than expected.', keyPoints: ['Refresh to try again.'] },
           predictions: { title: 'Predictions', description: '', items: [] },
@@ -186,7 +207,7 @@ export default async function handler(
           locationOverpurchasing: { title: 'Location Overpurchasing', description: '', items: [] }
         }
       };
-      res.setHeader('Cache-Control', 'private, max-age=60');
+      res.setHeader('Cache-Control', 'no-store'); // don't cache timeouts
       return res.status(200).json(fallback);
     }
     res.setHeader('Cache-Control', 'private, max-age=300');
@@ -205,14 +226,10 @@ export default async function handler(
         severity: ErrorSeverity.HIGH
       });
     } catch (_) { /* avoid 500 from logging failure */ }
-    // Return 200 with empty analysis so dashboard does not break
+    // Return 200 with computing sentinel so the client shows a graceful retry state
     const fallback = {
-      mlAnalysis: {
-        consumptionPredictions: [],
-        optimizationRecommendations: [],
-        budgetPredictions: [],
-        anomalyDetections: []
-      },
+      mlAnalysis: { consumptionPredictions: [], optimizationRecommendations: [], budgetPredictions: [], anomalyDetections: [] },
+      _computing: true,
       insights: {
         summary: { title: 'ML Analysis', description: 'Analysis is temporarily unavailable.', keyPoints: ['Try again in a moment.'] },
         predictions: { title: 'Predictions', description: '', items: [] },
@@ -224,7 +241,7 @@ export default async function handler(
         locationOverpurchasing: { title: 'Location Overpurchasing', description: '', items: [] }
       }
     };
-    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json(fallback);
   }
 }

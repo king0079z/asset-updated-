@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchWithCache } from '@/lib/api-cache';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -120,143 +120,158 @@ interface AiAnalysisData {
   };
 }
 
+// Module-level currency formatter so it can be called outside the component
+const formatCurrencyStatic = (amount: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'QAR' }).format(amount);
+
+// Sentinel text that the server returns when ML computation times out
+const TIMEOUT_SENTINELS = ['refresh to try again', 'try again in a moment', 'taking longer than expected'];
+const isTimeoutFallback = (keyPoints: string[] = []) =>
+  keyPoints.some(k => TIMEOUT_SENTINELS.some(s => k.toLowerCase().includes(s)));
+
 export function AiAlerts({ className }: AiAlertsProps) {
   const [aiData, setAiData] = useState<AiAnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isComputing, setIsComputing] = useState(false); // server is still running ML
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const { t, dir } = useTranslation();
 
+  const scheduleRetry = (delayMs: number) => {
+    const seconds = Math.round(delayMs / 1000);
+    setRetryCountdown(seconds);
+    const tick = setInterval(() => {
+      setRetryCountdown(prev => {
+        if (prev <= 1) { clearInterval(tick); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    retryTimerRef.current = setTimeout(() => {
+      clearInterval(tick);
+      fetchAiAnalysis();
+    }, delayMs);
+  };
+
+  const buildAnalysisData = (data: any): AiAnalysisData => {
+    const analysisData: AiAnalysisData = {
+      recommendations: [],
+      anomalies: { items: data.insights?.anomalies?.items || [] },
+      optimizations: { items: data.insights?.optimizations?.items || [] },
+      kitchenAnomalies: { items: data.insights?.kitchenAnomalies?.items || [] },
+      assetDisposals: { items: data.insights?.assetDisposals?.items || [] },
+      locationOverpurchasing: { items: data.insights?.locationOverpurchasing?.items || [] },
+    };
+
+    // Summary key points → info recommendations
+    (data.insights?.summary?.keyPoints ?? []).forEach((point: string) => {
+      analysisData.recommendations.push({ category: 'ai_insight', severity: 'info', message: point });
+    });
+
+    // Consumption anomalies
+    (data.insights?.anomalies?.items ?? []).forEach((anomaly: Anomaly) => {
+      analysisData.recommendations.push({
+        category: 'consumption_anomaly',
+        severity: anomaly.severity,
+        message: `Unusual consumption detected for ${anomaly.name}: ${anomaly.causes?.[0] ?? 'see full analysis'}`,
+      });
+    });
+
+    // Top 3 optimization opportunities
+    (data.insights?.optimizations?.items ?? []).slice(0, 3).forEach((opt: Optimization) => {
+      analysisData.recommendations.push({
+        category: 'cost_optimization',
+        severity: opt.yearlySavings > 1000 ? 'medium' : 'low',
+        message: `Potential savings of ${formatCurrencyStatic(Number(opt.yearlySavings))}/year by optimizing ${opt.name} usage. ${opt.reason}`,
+      });
+    });
+
+    // Kitchen consumption anomalies
+    (data.insights?.kitchenAnomalies?.items ?? []).forEach((anomaly: KitchenAnomaly) => {
+      const top = anomaly.details?.[0];
+      analysisData.recommendations.push({
+        category: 'kitchen_consumption',
+        severity: anomaly.severity,
+        message: top
+          ? `Kitchen "${anomaly.name}" (Floor ${anomaly.floorNumber}) is consuming ${top.percentageAboveAvg} more ${top.foodName} than average.`
+          : `Kitchen "${anomaly.name}" (Floor ${anomaly.floorNumber}) has unusual consumption patterns.`,
+      });
+    });
+
+    // Asset disposals
+    (data.insights?.assetDisposals?.items ?? []).forEach((disposal: AssetDisposal) => {
+      analysisData.recommendations.push({
+        category: 'asset_disposal',
+        severity: disposal.severity,
+        message: `Asset "${disposal.name}" worth ${formatCurrencyStatic(Number(disposal.purchaseAmount))} was disposed from Floor ${disposal.floorNumber}, Room ${disposal.roomNumber}.`,
+      });
+    });
+
+    // Location overpurchasing
+    (data.insights?.locationOverpurchasing?.items ?? []).forEach((location: LocationOverpurchasing) => {
+      analysisData.recommendations.push({
+        category: 'asset_overpurchasing',
+        severity: location.severity,
+        message: `${location.location} acquired ${location.recentPurchases} new assets recently, totaling ${formatCurrencyStatic(Number(location.totalValue))}.`,
+      });
+    });
+
+    return analysisData;
+  };
+
   const fetchAiAnalysis = async () => {
+    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
+    setLoading(true);
+    setError(null);
+    setIsComputing(false);
+    setRetryCountdown(0);
+
     try {
-      setLoading(true);
-      setError(null);
+      const data = (await fetchWithCache('/api/ai-analysis/ml-predictions', {
+        maxAge: 5 * 60 * 1000,
+        timeoutMs: 30000,
+      })) as any;
 
-      // ML endpoint can be slow (heavy Prisma + model work) — use 90s timeout
-      const data = (await fetchWithCache('/api/ai-analysis/ml-predictions', { maxAge: 5 * 60 * 1000, timeoutMs: 90000 })) as { insights?: {
-        summary?: { keyPoints?: string[] };
-        anomalies?: { items?: Anomaly[] };
-        optimizations?: { items?: Optimization[] };
-        kitchenAnomalies?: { items?: KitchenAnomaly[] };
-        assetDisposals?: { items?: AssetDisposal[] };
-        locationOverpurchasing?: { items?: LocationOverpurchasing[] };
-      } };
+      const keyPoints: string[] = data?.insights?.summary?.keyPoints ?? [];
 
-      // Extract the relevant data from the response
-      const analysisData: AiAnalysisData = {
-        recommendations: data.insights?.summary?.keyPoints?.map((point: string) => ({
-          category: 'ai_insight',
-          severity: 'info',
-          message: point
-        })) || [],
-        anomalies: {
-          items: data.insights?.anomalies?.items || []
-        },
-        optimizations: {
-          items: data.insights?.optimizations?.items || []
-        },
-        kitchenAnomalies: {
-          items: data.insights?.kitchenAnomalies?.items || []
-        },
-        assetDisposals: {
-          items: data.insights?.assetDisposals?.items || []
-        },
-        locationOverpurchasing: {
-          items: data.insights?.locationOverpurchasing?.items || []
-        }
-      };
-
-      // Avoid additional N+1 maintenance API fan-out here; those checks are already part
-      // of backend AI insights and this keeps the dashboard responsive on first paint.
-
-      // Add anomalies as high-severity recommendations
-      data.insights?.anomalies?.items?.forEach((anomaly: Anomaly) => {
-        analysisData.recommendations.push({
-          category: 'consumption_anomaly',
-          severity: anomaly.severity === 'high' ? 'high' : (anomaly.severity === 'medium' ? 'medium' : 'low'),
-          message: `Unusual consumption detected for ${anomaly.name}: ${anomaly.causes[0]}`
-        });
-      });
-
-      // Add top optimization recommendations
-      data.insights?.optimizations?.items?.slice(0, 3).forEach((opt: Optimization) => {
-        analysisData.recommendations.push({
-          category: 'cost_optimization',
-          severity: opt.yearlySavings > 1000 ? 'medium' : 'low',
-          message: `Potential savings of ${formatCurrency(opt.yearlySavings)}/year by optimizing ${opt.name} usage. ${opt.reason}`
-        });
-      });
-
-      // Add kitchen consumption anomalies
-      data.insights?.kitchenAnomalies?.items?.forEach((anomaly: KitchenAnomaly) => {
-        const topFoodItem = anomaly.details[0]; // Get the first food item with anomaly
-        analysisData.recommendations.push({
-          category: 'kitchen_consumption',
-          severity: anomaly.severity,
-          message: `Kitchen "${anomaly.name}" on Floor ${anomaly.floorNumber} is consuming ${topFoodItem?.percentageAboveAvg} more ${topFoodItem?.foodName} than average.`
-        });
-      });
-
-      // Add asset disposal alerts
-      data.insights?.assetDisposals?.items?.forEach((disposal: AssetDisposal) => {
-        analysisData.recommendations.push({
-          category: 'asset_disposal',
-          severity: disposal.severity,
-          message: `Asset "${disposal.name}" worth ${formatCurrency(disposal.purchaseAmount)} was disposed from Floor ${disposal.floorNumber}, Room ${disposal.roomNumber}.`
-        });
-      });
-
-      // Add location overpurchasing alerts
-      data.insights?.locationOverpurchasing?.items?.forEach((location: LocationOverpurchasing) => {
-        analysisData.recommendations.push({
-          category: 'asset_overpurchasing',
-          severity: location.severity,
-          message: `${location.location} has acquired ${location.recentPurchases} new assets recently, totaling ${formatCurrency(location.totalValue)}.`
-        });
-      });
-
-      setAiData(analysisData);
-      setLastUpdated(new Date());
-    } catch (err: any) {
-      // AbortError = request cancelled (redirect/timeout) — show fallback without error toast
-      if (err?.name !== 'AbortError') {
-        console.error('Error fetching AI analysis:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error occurred');
-        toast({
-          title: "Error",
-          description: "Failed to load AI analysis. Using fallback data.",
-          variant: "destructive",
-        });
+      // Server returned a timeout/fallback sentinel — ML is still computing.
+      // Show a "computing" state and auto-retry after 12 seconds.
+      if (data?._computing || isTimeoutFallback(keyPoints)) {
+        setLoading(false);
+        setIsComputing(true);
+        scheduleRetry(12000);
+        return;
       }
 
-      // Set fallback data so insights section still shows something
+      // Happy path — build rich analysis data
+      const analysisData = buildAnalysisData(data);
+      setAiData(analysisData);
+      setLastUpdated(new Date());
+      setIsComputing(false);
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        // Request was cancelled — don't change state
+        setLoading(false);
+        return;
+      }
+      console.error('Error fetching AI analysis:', err);
+      // Show meaningful fallback data (no error state, so the card stays useful)
       setAiData({
         recommendations: [
-          {
-            category: 'food_supply',
-            severity: 'medium',
-            message: 'Food consumption costs have increased by 12% compared to last month. Consider reviewing kitchen usage patterns.'
-          },
-          {
-            category: 'vehicle_rentals',
-            severity: 'high',
-            message: 'Vehicle rental costs are 15% above projected budget. Consider optimizing vehicle usage schedules.'
-          },
-          {
-            category: 'budget_planning',
-            severity: 'info',
-            message: 'Based on current trends, prepare for a 5% increase in monthly expenses for the next quarter.'
-          }
+          { category: 'ai_insight', severity: 'info', message: 'AI analysis is warming up. Your insights will appear shortly — check back in a moment.' },
+          { category: 'budget_planning', severity: 'info', message: 'Track your asset spending trends in the Full Analysis page for detailed predictions.' },
         ],
         anomalies: { items: [] },
         optimizations: { items: [] },
         kitchenAnomalies: { items: [] },
         assetDisposals: { items: [] },
-        locationOverpurchasing: { items: [] }
+        locationOverpurchasing: { items: [] },
       });
       setLastUpdated(new Date());
+      setIsComputing(false);
     } finally {
       setLoading(false);
     }
@@ -264,6 +279,7 @@ export function AiAlerts({ className }: AiAlertsProps) {
 
   useEffect(() => {
     fetchAiAnalysis();
+    return () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); };
   }, []);
 
   const getSeverityIcon = (severity: string, size = 5) => {
@@ -340,12 +356,7 @@ export function AiAlerts({ className }: AiAlertsProps) {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'QAR'
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatCurrencyStatic(amount);
 
   const formatLastUpdated = () => {
     if (!lastUpdated) return '';
@@ -417,20 +428,31 @@ export function AiAlerts({ className }: AiAlertsProps) {
   const alertCounts = getAlertCounts();
   const filteredRecommendations = getFilteredRecommendations(activeTab);
 
+  const AiCardHeader = ({ showRefresh = true }: { showRefresh?: boolean }) => (
+    <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 pb-3 pt-4">
+      <div className="flex justify-between items-center">
+        <CardTitle className="text-white text-lg flex items-center">
+          <Sparkles className={`${dir === 'rtl' ? 'ml-2' : 'mr-2'} h-4 w-4`} />
+          {t('ai_insights_alerts')}
+        </CardTitle>
+        {showRefresh && (
+          <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10" onClick={fetchAiAnalysis}>
+            <RefreshCcw className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+    </CardHeader>
+  );
+
   if (loading) {
     return (
       <Card className={`border border-slate-200 dark:border-slate-700 shadow-sm ${className}`}>
-        <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 pb-2">
-          <CardTitle className="text-white text-lg flex items-center">
-            <Lightbulb className={`${dir === 'rtl' ? 'ml-2' : 'mr-2'} h-4 w-4`} />
-            {t('ai_insights_alerts')}
-          </CardTitle>
-        </CardHeader>
+        <AiCardHeader showRefresh={false} />
         <CardContent className="p-5">
           <div className="flex flex-col items-center justify-center h-[300px] space-y-4">
             <div className="relative w-16 h-16">
-              <div className="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-800 border-opacity-50"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-t-indigo-500 animate-spin"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-800 border-opacity-50" />
+              <div className="absolute inset-0 rounded-full border-4 border-t-indigo-500 animate-spin" />
               <Sparkles className="absolute inset-0 m-auto h-6 w-6 text-indigo-500 animate-pulse" />
             </div>
             <div className="text-center">
@@ -444,30 +466,47 @@ export function AiAlerts({ className }: AiAlertsProps) {
     );
   }
 
-  if (error || !aiData) {
+  // Server-side ML computation in progress — show a polished "computing" state with countdown
+  if (isComputing) {
     return (
       <Card className={`border border-slate-200 dark:border-slate-700 shadow-sm ${className}`}>
-        <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 pb-2">
-          <CardTitle className="text-white text-lg flex items-center">
-            <Lightbulb className={`${dir === 'rtl' ? 'ml-2' : 'mr-2'} h-4 w-4`} />
-            {t('ai_insights_alerts')}
-          </CardTitle>
-        </CardHeader>
+        <AiCardHeader />
         <CardContent className="p-5">
-          <div className="flex flex-col items-center justify-center h-[250px] text-center">
-            <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
-            <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200 mb-2">{t('error_loading_insights')}</h3>
-            <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md">{t('ai_analysis_error_message')}</p>
-            <Button 
-              variant="outline" 
-              onClick={fetchAiAnalysis}
-              className="flex items-center gap-2"
-            >
-              <RefreshCcw className="h-4 w-4" />
-              {t('retry')}
-            </Button>
+          <div className="flex flex-col items-center justify-center h-[300px] space-y-5 text-center">
+            <div className="relative w-20 h-20">
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-800/60" />
+              <div className="absolute inset-0 rounded-full border-4 border-t-indigo-500 border-r-violet-500 animate-spin" />
+              <Brain className="absolute inset-0 m-auto h-8 w-8 text-indigo-500 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-indigo-700 dark:text-indigo-300">AI is analyzing your data</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Machine learning models are processing your enterprise data.
+              </p>
+              {retryCountdown > 0 && (
+                <p className="text-xs text-indigo-400 dark:text-indigo-500 mt-2 font-medium">
+                  Auto-refreshing in {retryCountdown}s…
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={fetchAiAnalysis} className="flex items-center gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:text-indigo-300">
+                <RefreshCcw className="h-3.5 w-3.5" />
+                Refresh now
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/ai-analysis')} className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 dark:text-indigo-400">
+                Full Analysis
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </CardContent>
+        <CardFooter className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 border-t border-indigo-100 dark:border-indigo-800/50 p-3">
+          <p className="text-xs text-slate-400 flex items-center gap-1.5">
+            <Brain className="h-3.5 w-3.5 text-indigo-400" />
+            {t('powered_by_ml')}
+          </p>
+        </CardFooter>
       </Card>
     );
   }
@@ -483,18 +522,11 @@ export function AiAlerts({ className }: AiAlertsProps) {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="text-white/80 hover:text-white hover:bg-white/10"
-                  onClick={fetchAiAnalysis}
-                >
+                <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10" onClick={fetchAiAnalysis}>
                   <RefreshCcw className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>
-                <p>{t('refresh_insights')}</p>
-              </TooltipContent>
+              <TooltipContent><p>{t('refresh_insights')}</p></TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
