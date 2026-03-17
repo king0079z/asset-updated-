@@ -29,6 +29,12 @@ const SCAN_SELECT = {
   assignedToName: true,
   assignedToEmail: true,
   vendor: { select: { id: true, name: true } },
+  rfidTag: {
+    select: {
+      id: true,
+      lastZone: { select: { name: true, floorNumber: true, roomNumber: true } },
+    },
+  },
 } as const;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

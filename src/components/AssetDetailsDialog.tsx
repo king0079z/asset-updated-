@@ -165,7 +165,7 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   const printRef = useRef<HTMLDivElement>(null);
   const dialogOpenedAt = useRef<number>(0);
   useEffect(() => { if (open) dialogOpenedAt.current = Date.now(); }, [open]);
-  const preventRecentOutsideClose = useCallback((e: Event) => { if (Date.now() - dialogOpenedAt.current < 500) e.preventDefault(); }, []);
+  const preventRecentOutsideClose = useCallback((e: Event) => { if (Date.now() - dialogOpenedAt.current < 900) e.preventDefault(); }, []);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateTicketDialogOpen, setIsCreateTicketDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);

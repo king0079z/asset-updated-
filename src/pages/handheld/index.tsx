@@ -3,7 +3,7 @@
  * Handheld hub: single entry point for HANDHELD-role users.
  * Full-screen, no dashboard shell. Tabs: Scan | Asset | Tickets | Tasks | Audit | More.
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { HandheldLayout } from '@/components/HandheldLayout';
 import { HandheldAssetScanner } from '@/components/HandheldAssetScanner';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,8 @@ import {
   MessageSquare,
   UtensilsCrossed,
   ScanLine,
+  User,
+  Radio,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
@@ -88,14 +90,14 @@ type Asset = {
 
 type TabId = 'scan' | 'asset' | 'tickets' | 'tasks' | 'audit' | 'food' | 'more';
 
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'scan', label: 'Scan', icon: <Scan className="h-5 w-5" /> },
-  { id: 'asset', label: 'Asset', icon: <Package className="h-5 w-5" /> },
-  { id: 'tickets', label: 'Tickets', icon: <Ticket className="h-5 w-5" /> },
-  { id: 'tasks', label: 'Tasks', icon: <ListTodo className="h-5 w-5" /> },
-  { id: 'audit', label: 'Audit', icon: <ClipboardList className="h-5 w-5" /> },
-  { id: 'food', label: 'Food', icon: <UtensilsCrossed className="h-5 w-5" /> },
-  { id: 'more', label: 'More', icon: <MoreHorizontal className="h-5 w-5" /> },
+const TABS: { id: TabId; label: string; icon: React.ReactNode; shortLabel?: string }[] = [
+  { id: 'scan', label: 'Scan', shortLabel: 'Scan', icon: <Scan className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'asset', label: 'Asset', shortLabel: 'Asset', icon: <Package className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'tickets', label: 'Tickets', shortLabel: 'Tickets', icon: <Ticket className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'tasks', label: 'Tasks', shortLabel: 'Tasks', icon: <ListTodo className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'audit', label: 'Audit', shortLabel: 'Audit', icon: <ClipboardList className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'food', label: 'Food supply', shortLabel: 'Food', icon: <UtensilsCrossed className="h-[22px] w-[22px] shrink-0" aria-hidden="false" /> },
+  { id: 'more', label: 'More', shortLabel: 'More', icon: <MoreHorizontal className="h-[22px] w-[22px] shrink-0" /> },
 ];
 
 export default function HandheldHubPage() {
@@ -140,8 +142,8 @@ export default function HandheldHubPage() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
-  // Audit state
-  const [auditScans, setAuditScans] = useState<string[]>([]);
+  // Audit state — store full asset for world-class cards (image, location, assignee, RFID)
+  const [auditScans, setAuditScans] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
   // Food supply state
@@ -151,6 +153,16 @@ export default function HandheldHubPage() {
   const [foodScannerKey, setFoodScannerKey] = useState(0);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  const handheldDialogOpenedAt = useRef(0);
+  const preventHandheldDialogOutsideClose = useCallback((e: Event) => {
+    if (Date.now() - handheldDialogOpenedAt.current < 900) e.preventDefault();
+  }, []);
+  const openHandheldDialogAfterTap = useCallback((open: () => void) => {
+    requestAnimationFrame(() => setTimeout(open, 120));
+  }, []);
+  useEffect(() => {
+    if (showMove || showDetails || showAssign || showStatus) handheldDialogOpenedAt.current = Date.now();
+  }, [showMove, showDetails, showAssign, showStatus]);
 
   // Fetch assigned tickets
   const fetchAssignedTickets = useCallback(async () => {
@@ -339,8 +351,13 @@ export default function HandheldHubPage() {
       if (res.ok) {
         const data = await res.json();
         if (data?.asset?.id) {
-          setAuditScans((prev) => (prev.includes(data.asset.id) ? prev : [...prev, data.asset.id]));
-          toast({ title: 'Scanned', description: data.asset.name });
+          const asset = data.asset;
+          setAuditScans((prev) => {
+            const exists = prev.some((a) => (typeof a === 'string' ? a === asset.id : a?.id === asset.id));
+            if (exists) return prev;
+            return [...prev, asset];
+          });
+          toast({ title: 'Scanned', description: asset.name });
         } else {
           toast({ title: 'Not found', description: q, variant: 'destructive' });
         }
@@ -507,19 +524,19 @@ export default function HandheldHubPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Button size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowDetails(true)}>
+                  <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openHandheldDialogAfterTap(() => setShowDetails(true))}>
                     <Eye className="h-5 w-5" />
                     <span className="text-xs">View details</span>
                   </Button>
-                  <Button size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowMove(true)}>
+                  <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openHandheldDialogAfterTap(() => setShowMove(true))}>
                     <ArrowRightLeft className="h-5 w-5" />
                     <span className="text-xs">Move</span>
                   </Button>
-                  <Button size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowAssign(true)}>
+                  <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openHandheldDialogAfterTap(() => setShowAssign(true))}>
                     <UserCheck className="h-5 w-5" />
                     <span className="text-xs">Assign</span>
                   </Button>
-                  <Button size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowStatus(true)}>
+                  <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openHandheldDialogAfterTap(() => setShowStatus(true))}>
                     <RefreshCw className="h-5 w-5" />
                     <span className="text-xs">Status</span>
                   </Button>
@@ -656,12 +673,24 @@ export default function HandheldHubPage() {
 
         {tab === 'audit' && (
           <div className="max-w-lg mx-auto space-y-4">
-            <h2 className="text-lg font-semibold">Inventory audit</h2>
-            <p className="text-sm text-slate-500">Scan assets to build a list. Use manual entry or go to Scan tab for camera.</p>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Inventory audit</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Scan assets to verify location &amp; assignment. Amazon/Virgin-style.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 dark:bg-violet-900/30 px-3 py-1.5 text-sm font-semibold text-violet-800 dark:text-violet-200">
+                  <ClipboardList className="h-4 w-4" /> {auditScans.length} item{auditScans.length !== 1 ? 's' : ''}
+                </span>
+                {auditScans.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => setAuditScans([])}>Clear all</Button>
+                )}
+              </div>
+            </div>
             <div className="flex gap-2">
               <Input
                 placeholder="Barcode or Asset ID"
-                className="flex-1 h-12"
+                className="flex-1 h-12 rounded-xl"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const v = (e.target as HTMLInputElement).value.trim();
@@ -670,19 +699,71 @@ export default function HandheldHubPage() {
                   }
                 }}
               />
-              <Button size="lg" className="h-12" disabled={auditLoading} onClick={() => { const el = document.querySelector('input[placeholder="Barcode or Asset ID"]') as HTMLInputElement; if (el?.value) { lookupAsset(el.value); el.value = ''; } }}>
-                {auditLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Add'}
+              <Button size="lg" className="h-12 rounded-xl min-w-[52px]" disabled={auditLoading} onClick={() => { const el = document.querySelector('input[placeholder="Barcode or Asset ID"]') as HTMLInputElement; if (el?.value) { lookupAsset(el.value); el.value = ''; } }}>
+                {auditLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Scan className="h-5 w-5" />}
               </Button>
             </div>
-            <p className="text-sm font-medium">Count: {auditScans.length}</p>
-            {auditScans.length > 0 && (
-              <Button variant="outline" size="sm" onClick={() => setAuditScans([])}>Clear list</Button>
-            )}
-            <ul className="space-y-1 max-h-48 overflow-auto">
-              {auditScans.map((id, i) => (
-                <li key={id} className="text-sm text-slate-600 dark:text-slate-300 truncate">#{i + 1} {id}</li>
-              ))}
-            </ul>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pb-2">
+              {auditScans.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-600 p-8 text-center">
+                  <ClipboardList className="h-12 w-12 mx-auto text-slate-300 dark:text-slate-500 mb-3" />
+                  <p className="font-medium text-slate-600 dark:text-slate-400">No items scanned yet</p>
+                  <p className="text-sm text-slate-500 mt-1">Scan or enter a barcode above to add items to this audit.</p>
+                </div>
+              ) : (
+                auditScans.map((item, i) => {
+                  const asset = typeof item === 'string' ? null : item;
+                  if (!asset?.id) return null;
+                  const loc = [asset.floorNumber, asset.roomNumber].filter(Boolean).join(', ') || '—';
+                  const rfidZone = asset.rfidTag?.lastZone;
+                  const rfidLoc = rfidZone ? [rfidZone.name, rfidZone.floorNumber, rfidZone.roomNumber].filter(Boolean).join(', ') : null;
+                  return (
+                    <div
+                      key={`${asset.id}-${i}`}
+                      className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
+                    >
+                      <div className="flex gap-4 p-4">
+                        <div className="h-20 w-20 rounded-xl bg-slate-100 dark:bg-slate-700 flex-shrink-0 overflow-hidden">
+                          {asset.imageUrl ? (
+                            <img src={asset.imageUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center"><Package className="h-8 w-8 text-slate-400" /></div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-slate-900 dark:text-white truncate">{asset.name}</p>
+                            <span className="rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 px-2 py-0.5 shrink-0">Qty 1</span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{asset.assetId || asset.barcode || asset.id}</p>
+                          {asset.description && (
+                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 line-clamp-2">{asset.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="px-4 pb-4 grid gap-2">
+                        <div className="flex items-center gap-2 text-xs">
+                          <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span className="text-slate-600 dark:text-slate-300">Location: {loc}</span>
+                        </div>
+                        {asset.assignedToName && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="text-slate-600 dark:text-slate-300">Assigned to: {asset.assignedToName}</span>
+                          </div>
+                        )}
+                        {rfidLoc && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <Radio className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                            <span className="text-slate-600 dark:text-slate-300">RFID: {rfidLoc}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
 
@@ -752,24 +833,36 @@ export default function HandheldHubPage() {
         )}
       </div>
 
-      {/* Bottom tab bar — 48px min touch target, safe area, world-class */}
-      <nav className="flex-shrink-0 fixed bottom-0 left-0 right-0 flex items-center justify-around gap-1 py-3 px-2 bg-white/95 dark:bg-slate-800/95 backdrop-blur border-t border-slate-200 dark:border-slate-700 safe-area-pb">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              'flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[48px] py-2 px-3 rounded-2xl transition-all touch-manipulation',
-              tab === t.id
-                ? 'bg-gradient-to-b from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/25'
-                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
-            )}
-          >
-            {t.icon}
-            <span className="text-[10px] font-semibold truncate max-w-full">{t.label}</span>
-          </button>
-        ))}
+      {/* Bottom tab bar — world-class: pill active state, safe area, equal touch targets */}
+      <nav className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around gap-0 min-h-[64px] pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] px-1 bg-white/98 dark:bg-slate-900/98 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-700/80 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.3)]">
+        {TABS.map((t) => {
+          const isActive = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={cn(
+                'flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 min-h-[52px] py-1.5 px-1 rounded-xl transition-all duration-200 touch-manipulation select-none',
+                isActive
+                  ? 'bg-gradient-to-b from-violet-600 to-indigo-600 text-white shadow-md'
+                  : 'text-slate-500 dark:text-slate-400 active:bg-slate-100 dark:active:bg-slate-800'
+              )}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={t.label}
+            >
+              <span className={cn('flex items-center justify-center', isActive ? 'text-white' : '')}>
+                {t.icon}
+              </span>
+              <span className={cn(
+                'text-[10px] font-semibold truncate w-full text-center leading-tight',
+                isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'
+              )}>
+                {t.shortLabel ?? t.label}
+              </span>
+            </button>
+          );
+        })}
       </nav>
 
       {/* Dialogs */}
@@ -794,7 +887,7 @@ export default function HandheldHubPage() {
       )}
 
       <Dialog open={showMove} onOpenChange={setShowMove}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
           <DialogHeader><DialogTitle>Move asset</DialogTitle></DialogHeader>
           <Form {...transferForm}>
             <form onSubmit={transferForm.handleSubmit(doMove)} className="space-y-4">
@@ -814,7 +907,7 @@ export default function HandheldHubPage() {
       </Dialog>
 
       <Dialog open={showStatus} onOpenChange={setShowStatus}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
           <DialogHeader><DialogTitle>Update status</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2">

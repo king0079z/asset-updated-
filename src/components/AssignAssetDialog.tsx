@@ -29,7 +29,7 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
   const { toast } = useToast();
   const dialogOpenedAt = useRef<number>(0);
   useEffect(() => { if (open) dialogOpenedAt.current = Date.now(); }, [open]);
-  const preventRecentOutsideClose = useCallback((e: Event) => { if (Date.now() - dialogOpenedAt.current < 500) e.preventDefault(); }, []);
+  const preventRecentOutsideClose = useCallback((e: Event) => { if (Date.now() - dialogOpenedAt.current < 900) e.preventDefault(); }, []);
   const [tab, setTab] = useState<"system" | "manual">("system");
   const [searchQuery, setSearchQuery] = useState("");
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);

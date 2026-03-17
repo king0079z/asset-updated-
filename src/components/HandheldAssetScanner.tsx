@@ -96,9 +96,15 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
   }, [showMove, showStatus, showAssign, showDetails]);
 
   const preventRecentOutsideClose = useCallback((e: Event) => {
-    if (Date.now() - dialogOpenedAt.current < 500) {
+    if (Date.now() - dialogOpenedAt.current < 900) {
       e.preventDefault();
     }
+  }, []);
+
+  const openAfterTap = useCallback((open: () => void) => {
+    requestAnimationFrame(() => {
+      setTimeout(open, 120);
+    });
   }, []);
 
   const transferForm = useForm<z.infer<typeof transferSchema>>({
@@ -302,19 +308,19 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowDetails(true)}>
+              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openAfterTap(() => setShowDetails(true))}>
                 <Eye className="h-5 w-5" />
                 <span className="text-xs">View details</span>
               </Button>
-              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowMove(true)}>
+              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openAfterTap(() => setShowMove(true))}>
                 <ArrowRightLeft className="h-5 w-5" />
                 <span className="text-xs">Move</span>
               </Button>
-              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowAssign(true)}>
+              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openAfterTap(() => setShowAssign(true))}>
                 <UserCheck className="h-5 w-5" />
                 <span className="text-xs">Assign</span>
               </Button>
-              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => setShowStatus(true)}>
+              <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openAfterTap(() => setShowStatus(true))}>
                 <RefreshCw className="h-5 w-5" />
                 <span className="text-xs">Status</span>
               </Button>
