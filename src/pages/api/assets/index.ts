@@ -9,7 +9,18 @@ const ASSETS_CACHE_TTL = 60 * 1000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    const { user } = await getSessionSafe(req, res);
+    let user: { id: string } | null = null;
+    try {
+      const session = await getSessionSafe(req, res);
+      user = session?.user ?? null;
+    } catch (e) {
+      console.error("Assets API getSessionSafe error:", e instanceof Error ? e.message : e);
+      if (req.method === "GET") {
+        res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=30');
+        return res.status(200).json([]);
+      }
+      return res.status(401).json({ error: "Unauthorized" });
+    }
     if (req.method !== "GET" && !user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -24,7 +35,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let organizationId: string | null = null;
         
         if (user) {
-        roleData = await getUserRoleData(user.id);
+        try {
+          roleData = await getUserRoleData(user.id);
+        } catch (_) {
+          roleData = null;
+        }
         if (roleData) {
           isAdminOrManagerUser = roleData.role === 'ADMIN' || roleData.role === 'MANAGER' || roleData.isAdmin === true;
           organizationId = roleData.organizationId;

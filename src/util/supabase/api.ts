@@ -10,7 +10,8 @@ export function createClient(req: NextApiRequest, res: NextApiResponse) {
     {
       cookies: {
         getAll() {
-          return Object.keys(req.cookies).map((name) => ({ name, value: req.cookies[name] || '' }))
+          const cookies = req.cookies ?? {};
+          return Object.keys(cookies).map((name) => ({ name, value: cookies[name] || '' }))
         },
         setAll(cookiesToSet) {
           res.setHeader(

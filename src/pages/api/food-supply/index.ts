@@ -13,9 +13,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const supabase = createClient(req, res);
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
+    let user: { id: string } | null = null;
+    try {
+      const supabase = createClient(req, res);
+      const { data: { session } } = await supabase.auth.getSession();
+      user = session?.user ?? null;
+    } catch (e) {
+      console.error("Food-supply API auth error:", e instanceof Error ? e.message : e);
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
     if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -246,7 +252,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Single cached DB query for role + pageAccess
-    const roleData = await getUserRoleData(user.id);
+    let roleData: Awaited<ReturnType<typeof getUserRoleData>> = null;
+    try {
+      roleData = await getUserRoleData(user.id);
+    } catch (e) {
+      console.error("[Food Supplies API] getUserRoleData error:", e instanceof Error ? e.message : e);
+    }
     const userIsAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
     const hasFoodSupplyAccess = roleData?.pageAccess?.['/food-supply'] === true;
 

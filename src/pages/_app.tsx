@@ -26,6 +26,17 @@ const QuickActionsMenu = lazy(() =>
   }))
 );
 
+/** Renders QuickActionsMenu (FAB) only when NOT on Outlook add-in routes. */
+function QuickActionsMenuGate() {
+  const router = useRouter();
+  if (router.pathname.startsWith('/outlook')) return null;
+  return (
+    <Suspense fallback={null}>
+      <QuickActionsMenu />
+    </Suspense>
+  );
+}
+
 // Routes that skip the persistent dashboard shell (no sidebar)
 const PUBLIC_ROUTES = [
   '/', '/login', '/signup', '/forgot-password',
@@ -240,9 +251,7 @@ export default function App({ Component, pageProps }: AppProps) {
                     <ProtectedRoute>
                       <SubscriptionExpirationBar />
                       <Component {...pageProps} />
-                      <Suspense fallback={null}>
-                        <QuickActionsMenu />
-                      </Suspense>
+                      <QuickActionsMenuGate />
                     </ProtectedRoute>
                   </AppShellWrapper>
                   <Toaster />
