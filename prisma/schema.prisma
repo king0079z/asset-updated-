@@ -9,6 +9,10 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// Connection pool is managed via pgbouncer (?pgbouncer=true in DATABASE_URL).
+// Prisma's own pool defaults to 5 connections per instance, which is fine for
+// serverless where each function invocation reuses the global PrismaClient.
+
 model Organization {
   id                  String               @id @default(cuid())
   name                String

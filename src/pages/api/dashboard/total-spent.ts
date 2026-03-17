@@ -65,9 +65,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // For the dashboard page, we always show all information without any data filtering
     logApiEvent(`Dashboard total-spent: Showing all information without any data filtering for user: ${user.id}`);
     
-    // Run all database queries in parallel for better performance
+    // Run all database queries in parallel with bounded take limits
     const [foodConsumption, assetsPurchased, vehicles, vehicleMaintenances] = await Promise.all([
-      // 1. Get food consumption within the current year
       prisma.foodConsumption.findMany({
         where: {
           date: { 
@@ -75,6 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             lte: today
           }
         },
+        take: 500,
         include: {
           foodSupply: {
             select: {
@@ -109,38 +109,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return [];
       }),
 
-      // 3. Get vehicle rentals for the current year
       prisma.vehicleRental.findMany({
-        where: {
-          startDate: { 
-            gte: startOfYear,
-            lte: today
-          }
-        },
-        include: {
-          vehicle: {
-            select: {
-              rentalAmount: true
-            }
-          }
-        }
+        where: { startDate: { gte: startOfYear, lte: today } },
+        include: { vehicle: { select: { rentalAmount: true } } },
+        take: 200,
       }).catch(error => {
         logApiEvent('Error fetching vehicle rentals', error);
         return [];
       }),
 
-      // 4. Get vehicle maintenance for the current year
       prisma.vehicleMaintenance.findMany({
-        where: {
-          maintenanceDate: {
-            gte: startOfYear,
-            lte: today
-          }
-        },
-        select: {
-          cost: true,
-          maintenanceDate: true
-        }
+        where: { maintenanceDate: { gte: startOfYear, lte: today } },
+        select: { cost: true, maintenanceDate: true },
+        take: 200,
       }).catch(error => {
         logApiEvent('Error fetching vehicle maintenance', error);
         return [];

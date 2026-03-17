@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const startOfYear = new Date(today.getFullYear(), 0, 1);
 
-    // Single batch of parallel DB work (no internal fetch)
+    // ── Batch 1: lightweight counts + aggregates (8 queries) ──────────
     const [
       totalAssets,
       totalFoodItems,
@@ -43,95 +43,72 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       assetStatsGroup,
       totalAssetCosts,
       disposedAssetCosts,
+    ] = await Promise.all([
+      prisma.asset.count({ where: { status: { not: 'DISPOSED' } } }),
+      prisma.foodSupply.count(),
+      prisma.vehicleRental.count({ where: { status: 'RENTED', endDate: { gte: today } } }),
+      prisma.foodSupply.count({ where: { quantity: { lte: 10 } } }),
+      prisma.vehicle.groupBy({ by: ['status'], _count: true }),
+      prisma.asset.groupBy({ by: ['status'], _count: true }),
+      prisma.asset.aggregate({ _sum: { purchaseAmount: true }, where: { status: { not: 'DISPOSED' }, purchaseAmount: { not: null } } }),
+      prisma.asset.aggregate({ _sum: { purchaseAmount: true }, where: { status: 'DISPOSED', purchaseAmount: { not: null } } }),
+    ]);
+
+    // ── Batch 2: heavier queries (after connections freed from batch 1) ──
+    const [
       foodConsumptionMonth,
       vehicleRentalsRecent,
-      totalConsumedRow,
-      totalValueRow,
       vehicleSum,
       maintenanceMonth,
       maintenanceYear,
       foodConsumptionYearAgg,
       assetsPurchasedYearAgg,
-      vehicleRentalsYear,
-      vehicleMaintenancesYear,
-      assetsPurchasedYearList,
     ] = await Promise.all([
-      prisma.asset.count({ where: { status: { not: 'DISPOSED' } } }),
-      prisma.foodSupply.count(),
-      prisma.vehicleRental.count({
-        where: { status: 'RENTED', endDate: { gte: today } },
-      }),
-      prisma.foodSupply.count({ where: { quantity: { lte: 10 } } }),
-      prisma.vehicle.groupBy({ by: ['status'], _count: true }),
-      prisma.asset.groupBy({ by: ['status'], _count: true }),
-      prisma.asset.aggregate({
-        _sum: { purchaseAmount: true },
-        where: { status: { not: 'DISPOSED' }, purchaseAmount: { not: null } },
-      }),
-      prisma.asset.aggregate({
-        _sum: { purchaseAmount: true },
-        where: { status: 'DISPOSED', purchaseAmount: { not: null } },
-      }),
       prisma.foodConsumption.findMany({
         where: { date: { gte: startOfMonth } },
         select: { date: true, quantity: true, foodSupply: { select: { pricePerUnit: true } } },
         take: 200,
       }),
       prisma.vehicleRental.findMany({
-        where: {
-          OR: [
-            { startDate: { gte: startOfYear } },
-            { status: 'RENTED', endDate: { gte: today } },
-          ],
-        },
+        where: { OR: [{ startDate: { gte: startOfYear } }, { status: 'RENTED', endDate: { gte: today } }] },
         include: { vehicle: { select: { make: true, model: true, status: true, rentalAmount: true } } },
         orderBy: { startDate: 'desc' },
         take: 20,
       }),
+      prisma.vehicle.aggregate({ _sum: { rentalAmount: true } }),
+      prisma.vehicleMaintenance.aggregate({ _sum: { cost: true }, where: { maintenanceDate: { gte: startOfMonth, lte: today } } }),
+      prisma.vehicleMaintenance.aggregate({ _sum: { cost: true }, where: { maintenanceDate: { gte: startOfYear, lte: today } } }),
       prisma.$queryRaw<[{ total: number }]>`
         SELECT COALESCE(SUM(fc.quantity * fs."pricePerUnit"), 0) AS total
-        FROM "FoodConsumption" fc
-        JOIN "FoodSupply" fs ON fc."foodSupplyId" = fs.id
+        FROM "FoodConsumption" fc JOIN "FoodSupply" fs ON fc."foodSupplyId" = fs.id
+        WHERE fc.date >= ${startOfYear} AND fc.date <= ${today}
+      `.then((r) => r[0]?.total ?? 0),
+      prisma.asset.aggregate({ _sum: { purchaseAmount: true }, where: { createdAt: { gte: startOfYear, lte: today }, purchaseAmount: { not: null } } }),
+    ]);
+
+    // ── Batch 3: findMany + raw aggregates for totals ──────────────────
+    const [totalConsumedRow, totalValueRow, vehicleRentalsYear, vehicleMaintenancesYear, assetsPurchasedYearList] = await Promise.all([
+      prisma.$queryRaw<[{ total: number }]>`
+        SELECT COALESCE(SUM(fc.quantity * fs."pricePerUnit"), 0) AS total
+        FROM "FoodConsumption" fc JOIN "FoodSupply" fs ON fc."foodSupplyId" = fs.id
       `.then((r) => r[0]?.total ?? 0),
       prisma.$queryRaw<[{ total: number }]>`
         SELECT COALESCE(SUM(quantity * "pricePerUnit"), 0) AS total FROM "FoodSupply"
       `.then((r) => r[0]?.total ?? 0),
-      prisma.vehicle.aggregate({ _sum: { rentalAmount: true } }),
-      prisma.vehicleMaintenance.aggregate({
-        _sum: { cost: true },
-        where: { maintenanceDate: { gte: startOfMonth, lte: today } },
-      }),
-      prisma.vehicleMaintenance.aggregate({
-        _sum: { cost: true },
-        where: { maintenanceDate: { gte: startOfYear, lte: today } },
-      }),
-      prisma.$queryRaw<[{ total: number }]>`
-        SELECT COALESCE(SUM(fc.quantity * fs."pricePerUnit"), 0) AS total
-        FROM "FoodConsumption" fc
-        JOIN "FoodSupply" fs ON fc."foodSupplyId" = fs.id
-        WHERE fc.date >= ${startOfYear} AND fc.date <= ${today}
-      `.then((r) => r[0]?.total ?? 0),
-      prisma.asset.aggregate({
-        _sum: { purchaseAmount: true },
-        where: {
-          createdAt: { gte: startOfYear, lte: today },
-          purchaseAmount: { not: null },
-        },
-      }),
       prisma.vehicleRental.findMany({
         where: { startDate: { gte: startOfYear, lte: today } },
         include: { vehicle: { select: { rentalAmount: true } } },
-        take: 500,
+        take: 200,
       }),
       prisma.vehicleMaintenance.findMany({
         where: { maintenanceDate: { gte: startOfYear, lte: today } },
         select: { cost: true, maintenanceDate: true },
-        take: 500,
+        take: 200,
       }),
       prisma.asset.findMany({
         where: { createdAt: { gte: startOfYear, lte: today }, purchaseAmount: { not: null } },
         select: { purchaseAmount: true, createdAt: true },
-        take: 500,
+        take: 200,
       }),
     ]);
 

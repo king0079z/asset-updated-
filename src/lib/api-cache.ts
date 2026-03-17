@@ -23,6 +23,7 @@ const pendingRequests = new Map<string, Promise<any>>();
 // Default cache options
 const defaultOptions: CacheOptions = {
   maxAge: 5 * 60 * 1000, // 5 minutes default cache time
+  timeoutMs: 40000, // 40s — DB is cross-region (ap-south-1); cold starts are slow
 };
 
 /**
