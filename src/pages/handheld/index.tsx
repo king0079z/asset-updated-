@@ -34,10 +34,12 @@ import {
   ScanLine,
   User,
   Radio,
+  Download,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
 const EnhancedBarcodeScanner = dynamic(() => import('@/components/EnhancedBarcodeScanner'), { ssr: false });
+const AuditRfidMapDialog = dynamic(() => import('@/components/AuditRfidMapDialog'), { ssr: false });
 import { AssignAssetDialog } from '@/components/AssignAssetDialog';
 import { AssetDetailsDialog } from '@/components/AssetDetailsDialog';
 import {
@@ -145,6 +147,10 @@ export default function HandheldHubPage() {
   // Audit state — store full asset for world-class cards (image, location, assignee, RFID)
   const [auditScans, setAuditScans] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [selectedAuditAssetForDetails, setSelectedAuditAssetForDetails] = useState<any | null>(null);
+  const [auditDetailsLoading, setAuditDetailsLoading] = useState(false);
+  const [auditRfidMapAsset, setAuditRfidMapAsset] = useState<any | null>(null);
+  const [auditSort, setAuditSort] = useState<'scan' | 'name' | 'location'>('scan');
 
   // Food supply state
   const [kitchens, setKitchens] = useState<{ id: string; name: string }[]>([]);
@@ -476,6 +482,48 @@ export default function HandheldHubPage() {
     return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
   };
 
+  const exportAuditList = useCallback(() => {
+    if (auditScans.length === 0) {
+      toast({ title: 'No items to export', variant: 'destructive' });
+      return;
+    }
+    const rows = auditScans.map((item, i) => {
+      const a = typeof item === 'string' ? null : item;
+      if (!a) return [];
+      const loc = [a.floorNumber, a.roomNumber].filter(Boolean).join(', ') || '—';
+      const rfid = a.rfidTag?.lastZone ? [a.rfidTag.lastZone.name, a.rfidTag.lastZone.floorNumber, a.rfidTag.lastZone.roomNumber].filter(Boolean).join(', ') : '—';
+      return [i + 1, a.name, a.assetId || a.barcode || '', loc, a.assignedToName || '—', rfid];
+    });
+    const header = ['#', 'Name', 'ID/Barcode', 'Location', 'Assigned to', 'RFID location'];
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Audit exported' });
+  }, [auditScans, toast]);
+
+  const openAuditAssetDetails = useCallback(async (assetId: string) => {
+    setAuditDetailsLoading(true);
+    setSelectedAuditAssetForDetails(null);
+    try {
+      const r = await fetch(`/api/assets/${assetId}`, { credentials: 'include', cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        setSelectedAuditAssetForDetails(data?.asset ?? data);
+      } else {
+        toast({ title: 'Could not load asset details', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Failed to load asset', variant: 'destructive' });
+    } finally {
+      setAuditDetailsLoading(false);
+    }
+  }, [toast]);
+
   return (
     <HandheldLayout title="Field Assistant">
       {/* Tab content — touch-friendly, safe area */}
@@ -678,12 +726,26 @@ export default function HandheldHubPage() {
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">Inventory audit</h2>
                 <p className="text-sm text-slate-500 mt-0.5">Scan assets to verify location &amp; assignment.</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 dark:bg-violet-900/30 px-3 py-1.5 text-sm font-semibold text-violet-800 dark:text-violet-200">
                   <ClipboardList className="h-4 w-4" /> {auditScans.length} item{auditScans.length !== 1 ? 's' : ''}
                 </span>
                 {auditScans.length > 0 && (
-                  <Button variant="outline" size="sm" onClick={() => setAuditScans([])}>Clear all</Button>
+                  <>
+                    <select
+                      value={auditSort}
+                      onChange={(e) => setAuditSort(e.target.value as 'scan' | 'name' | 'location')}
+                      className="h-9 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-2"
+                    >
+                      <option value="scan">Scan order</option>
+                      <option value="name">Name A–Z</option>
+                      <option value="location">Location</option>
+                    </select>
+                    <Button variant="outline" size="sm" onClick={exportAuditList} className="gap-1">
+                      <Download className="h-3.5 w-3.5" /> Export
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setAuditScans([])}>Clear all</Button>
+                  </>
                 )}
               </div>
             </div>
@@ -711,7 +773,20 @@ export default function HandheldHubPage() {
                   <p className="text-sm text-slate-500 mt-1">Scan or enter a barcode above to add items to this audit.</p>
                 </div>
               ) : (
-                auditScans.map((item, i) => {
+                [...auditScans]
+                  .sort((a, b) => {
+                    const ax = typeof a === 'string' ? null : a;
+                    const bx = typeof b === 'string' ? null : b;
+                    if (!ax || !bx) return 0;
+                    if (auditSort === 'name') return (ax.name || '').localeCompare(bx.name || '');
+                    if (auditSort === 'location') {
+                      const locA = [ax.floorNumber, ax.roomNumber].filter(Boolean).join(' ');
+                      const locB = [bx.floorNumber, bx.roomNumber].filter(Boolean).join(' ');
+                      return locA.localeCompare(locB);
+                    }
+                    return 0;
+                  })
+                  .map((item, i) => {
                   const asset = typeof item === 'string' ? null : item;
                   if (!asset?.id) return null;
                   const loc = [asset.floorNumber, asset.roomNumber].filter(Boolean).join(', ') || '—';
@@ -720,7 +795,11 @@ export default function HandheldHubPage() {
                   return (
                     <div
                       key={`${asset.id}-${i}`}
-                      className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => !auditDetailsLoading && openAuditAssetDetails(asset.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditAssetDetails(asset.id); } }}
+                      className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md"
                     >
                       <div className="flex gap-4 p-4">
                         <div className="h-20 w-20 rounded-xl bg-slate-100 dark:bg-slate-700 flex-shrink-0 overflow-hidden">
@@ -739,6 +818,7 @@ export default function HandheldHubPage() {
                           {asset.description && (
                             <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 line-clamp-2">{asset.description}</p>
                           )}
+                          <p className="text-[10px] text-violet-600 dark:text-violet-400 mt-2 font-medium">Tap for full details</p>
                         </div>
                       </div>
                       <div className="px-4 pb-4 grid gap-2">
@@ -752,10 +832,20 @@ export default function HandheldHubPage() {
                             <span className="text-slate-600 dark:text-slate-300">Assigned to: {asset.assignedToName}</span>
                           </div>
                         )}
-                        {rfidLoc && (
-                          <div className="flex items-center gap-2 text-xs">
+                        {rfidLoc ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setAuditRfidMapAsset(asset); }}
+                            className="flex items-center gap-2 text-xs text-left w-full rounded-lg py-2 px-3 -mx-1 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30 active:scale-[0.98] transition-transform touch-manipulation"
+                          >
                             <Radio className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                            <span className="text-slate-600 dark:text-slate-300">RFID: {rfidLoc}</span>
+                            <span>RFID: {rfidLoc}</span>
+                            <span className="ml-auto text-[10px] font-semibold">View on map →</span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                            <Radio className="h-3.5 w-3.5 shrink-0" />
+                            <span>No RFID location</span>
                           </div>
                         )}
                       </div>
@@ -885,6 +975,31 @@ export default function HandheldHubPage() {
           />
         </>
       )}
+
+      {/* Audit: full asset details (all tabs) when clicking an audit card */}
+      {selectedAuditAssetForDetails && (
+        <AssetDetailsDialog
+          asset={selectedAuditAssetForDetails}
+          open={!!selectedAuditAssetForDetails}
+          onOpenChange={(open) => { if (!open) setSelectedAuditAssetForDetails(null); }}
+          onAssetUpdated={() => {}}
+        />
+      )}
+      {auditDetailsLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 flex flex-col items-center gap-3 shadow-xl">
+            <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Loading asset details…</p>
+          </div>
+        </div>
+      )}
+
+      {/* Audit: RFID map (2D / 3D) when clicking RFID on an audit card */}
+      <AuditRfidMapDialog
+        open={!!auditRfidMapAsset}
+        onOpenChange={(open) => { if (!open) setAuditRfidMapAsset(null); }}
+        asset={auditRfidMapAsset}
+      />
 
       <Dialog open={showMove} onOpenChange={setShowMove}>
         <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>

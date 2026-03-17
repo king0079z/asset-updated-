@@ -102,7 +102,7 @@ export default function PrintReportPage() {
   const router = useRouter();
   const { toast } = useToast();
   const printFrameRef = useRef<HTMLIFrameElement>(null);
-
+  
   const [reportHistory, setReportHistory] = useState<ReportHistoryItem[]>(
     () => getFromCache<ReportHistoryItem[]>(REPORTS_HISTORY_KEY, REPORTS_TTL) ?? []
   );
@@ -156,7 +156,7 @@ export default function PrintReportPage() {
         setIsPrinting(false);
         return;
       }
-
+      
       let data;
       try {
         data = await response.json();
@@ -165,13 +165,13 @@ export default function PrintReportPage() {
         setIsPrinting(false);
         return;
       }
-
+      
       if (!data || (Array.isArray(data) && data.length === 0)) {
         toast({ title: "No data available", description: "No data found for the selected report criteria.", variant: "destructive" });
         setIsPrinting(false);
         return;
       }
-
+      
       setReportData(data);
 
       // Refresh history (non-blocking)
@@ -182,10 +182,10 @@ export default function PrintReportPage() {
 
       const reportTitle = getReportTypeName(reportOptions.reportType);
       const reportContent = formatReportContent(data, reportOptions);
-
+      
       if (reportContent) {
         try {
-          await printContentWithIframe(reportContent, reportTitle);
+            await printContentWithIframe(reportContent, reportTitle);
           toast({ title: t("report_generated"), description: format(new Date(), "PPP p") });
         } catch (printError) {
           toast({ title: "Error printing report", description: "There was a problem printing the report.", variant: "destructive" });
@@ -375,11 +375,11 @@ export default function PrintReportPage() {
       const isSingle = opts?.itemScope === 'specific' && dataArray.length === 1;
 
       if (isSingle) {
-        const asset = dataArray[0];
-
+          const asset = dataArray[0];
+          
         // History timeline
-        let historyHtml = '';
-        if (asset.history && asset.history.length > 0) {
+          let historyHtml = '';
+          if (asset.history && asset.history.length > 0) {
           const actionMap: Record<string, { dot: string; label: string; icon: string }> = {
             CREATED:        { dot: 'border-color:#86efac;color:#166534', label: 'ASSET CREATED',  icon: '✚' },
             UPDATED:        { dot: 'border-color:#93c5fd;color:#1e40af', label: 'ASSET UPDATED',  icon: '✎' },
@@ -416,17 +416,17 @@ export default function PrintReportPage() {
               details = rec.details;
             }
 
-            return `
+                    return `
               <div class="tl-item">
                 <div class="tl-dot" style="${a.dot}">${a.icon}</div>
                 <div class="tl-card">
                   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
                     <span class="tl-action" style="${bg}">${a.label}</span>
                     <span class="tl-date">${fmtDate(rec.createdAt)}</span>
-                  </div>
+                        </div>
                   <div class="tl-details">${details}</div>
                   ${rec.user?.email ? `<div class="tl-by">By: ${rec.user.email}</div>` : ''}
-                </div>
+                            </div>
               </div>`;
           }).join('');
           historyHtml = `
@@ -434,10 +434,10 @@ export default function PrintReportPage() {
               <div class="card-hdr" style="background:#f0f9ff;border-color:#bae6fd;color:#0369a1">Asset History</div>
               <div class="card-body">
                 <div class="timeline">${rows}</div>
-              </div>
+                            </div>
             </div>`;
-        } else {
-          historyHtml = `
+          } else {
+            historyHtml = `
             <div class="card">
               <div class="card-hdr" style="background:#f0f9ff;border-color:#bae6fd;color:#0369a1">Asset History</div>
               <div class="card-body"><div class="empty">No history records for this asset.</div></div>
@@ -445,8 +445,8 @@ export default function PrintReportPage() {
         }
 
         // Tickets
-        let ticketsHtml = '';
-        if (asset.tickets && asset.tickets.length > 0) {
+          let ticketsHtml = '';
+          if (asset.tickets && asset.tickets.length > 0) {
           const trows = asset.tickets.map((t: any, i: number) => `
             <tr>
               <td style="font-weight:600">${t.title || 'N/A'}</td>
@@ -455,18 +455,18 @@ export default function PrintReportPage() {
               <td>${fmtDate(t.createdAt)}</td>
               <td>${t.user?.email || 'Unassigned'}</td>
             </tr>`).join('');
-          ticketsHtml = `
+            ticketsHtml = `
             <div class="card">
               <div class="card-hdr" style="background:#faf5ff;border-color:#e9d5ff;color:#6b21a8">Asset Tickets (${asset.tickets.length})</div>
               <div class="card-body" style="padding:0">
                 <table>
                   <thead><tr><th>Title</th><th>Status</th><th>Priority</th><th>Created</th><th>Raised By</th></tr></thead>
                   <tbody>${trows}</tbody>
-                </table>
+              </table>
               </div>
             </div>`;
-        } else {
-          ticketsHtml = `
+          } else {
+            ticketsHtml = `
             <div class="card">
               <div class="card-hdr" style="background:#faf5ff;border-color:#e9d5ff;color:#6b21a8">Asset Tickets</div>
               <div class="card-body"><div class="empty">No tickets for this asset.</div></div>
@@ -539,10 +539,10 @@ export default function PrintReportPage() {
                 <div class="health-row">
                   <h3>Overall Health</h3>
                   <span class="health-score-badge" style="${hBadgeBg}">${hs}% — ${hLabel}</span>
-                </div>
+                  </div>
                 <div class="hbar-bg"><div class="hbar-fill" style="width:${hs}%;background:${hColor}"></div></div>
                 ${factorsHtml}
-              </div>
+                  </div>
             </div>`;
         }
 
@@ -567,11 +567,11 @@ export default function PrintReportPage() {
                   <div class="info-item"><div class="lbl">Vendor</div><div class="val">${asset.vendor?.name || 'N/A'}</div></div>
                   <div class="info-item"><div class="lbl">Purchase Amount</div><div class="val">QAR ${asset.purchaseAmount ? Number(asset.purchaseAmount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : 'N/A'}</div></div>
                   <div class="info-item"><div class="lbl">Purchase Date</div><div class="val">${fmtDate(asset.purchaseDate)}</div></div>
-                </div>
+                  </div>
                 ${asset.description ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f1f5f9"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:2px">Description</div><div style="font-size:12px;color:#334155">${asset.description}</div></div>` : ''}
-              </div>
-            </div>
-          </div>
+                  </div>
+                  </div>
+                  </div>
 
           <!-- Assignment -->
           <div class="assign-box ${asset.assignedToName ? 'assign-assigned' : 'assign-none'}">
@@ -581,15 +581,15 @@ export default function PrintReportPage() {
                  ${asset.assignedToEmail ? `<div class="assign-email">${asset.assignedToEmail}</div>` : ''}
                  ${asset.assignedAt ? `<div class="assign-since">Since ${fmtDate(asset.assignedAt)}</div>` : ''}`
               : `<div class="assign-none-text">Not assigned to anyone</div>`}
-          </div>
-
+              </div>
+              
           ${healthHtml}
-          ${historyHtml}
-          ${ticketsHtml}
+              ${historyHtml}
+              ${ticketsHtml}
           ${rfidHtml}
-        `;
+          `;
 
-      } else {
+        } else {
         /* ── Full inventory ────────────────────────────────────────────── */
         const totalVal = dataArray.reduce((s: number, a: any) => s + (a.purchaseAmount || 0), 0);
         const activeCount = dataArray.filter((a: any) => a.status?.toUpperCase() === 'ACTIVE').length;
@@ -633,9 +633,9 @@ export default function PrintReportPage() {
                 <tbody>${rows}</tbody>
               </table>
             </div>
-          </div>
-        `;
-      }
+            </div>
+          `;
+        }
 
     } else if (currentReportType === 'food') {
       const totalVal = dataArray.reduce((s: number, i: any) => s + ((i.quantity || 0) * (i.pricePerUnit || 0)), 0);
@@ -670,11 +670,11 @@ export default function PrintReportPage() {
               <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
               <span style="font-size:12px;font-weight:600;text-transform:capitalize">${cat}</span>
               <span style="font-size:10px;color:#94a3b8">(${d.count} items)</span>
-            </div>
+                </div>
             <div style="text-align:right">
               <span style="font-size:11px;font-weight:700;color:#1e293b">QAR ${d.value.toFixed(0)}</span>
               <span style="font-size:10px;color:#94a3b8;margin-left:4px">${pct}%</span>
-            </div>
+              </div>
           </div>
           <div style="height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden">
             <div style="height:5px;background:${color};border-radius:999px;width:${pct}%"></div>
@@ -744,13 +744,13 @@ export default function PrintReportPage() {
             <div class="stat-label" style="color:#991b1b">Expiring Soon</div>
             <div class="stat-value" style="color:#7f1d1d">${expiredItems.length + expiringItems.length}</div>
           </div>
-        </div>
-
+              </div>
+              
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
           <div class="card" style="margin-bottom:0">
             <div class="card-hdr" style="background:#f0fdf4;border-color:#bbf7d0;color:#15803d">Category Breakdown</div>
             <div class="card-body">${catRowsHtml || '<div style="color:#94a3b8;font-size:12px">No data</div>'}</div>
-          </div>
+            </div>
           <div class="card" style="margin-bottom:0">
             <div class="card-hdr" style="background:#fef2f2;border-color:#fecaca;color:#991b1b">Stock & Expiry Alerts</div>
             <div class="card-body">${alertsHtml}</div>
@@ -823,14 +823,14 @@ export default function PrintReportPage() {
       <div class="hero-label">${currentReportType.toUpperCase()} REPORT</div>
       <div class="hero-title">${reportTitle}</div>
       <div class="hero-meta">Generated: ${dateStr} &nbsp;·&nbsp; By: ${user?.email || 'System'}</div>
-    </div>
+          </div>
     <div class="hero-right">
       <div class="hero-badge">
         <span style="width:6px;height:6px;border-radius:50%;background:#a5f3fc;display:inline-block"></span>
-        Enterprise Asset Management
-      </div>
+            Enterprise Asset Management
+          </div>
       <div class="hero-id">Report ID: ${reportId}</div>
-    </div>
+      </div>
   </div>
 
   <!-- Body content -->
@@ -921,15 +921,15 @@ export default function PrintReportPage() {
             <div className="flex items-center gap-2 mb-1">
               <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-400" />
               <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Reports Center</p>
-            </div>
+                </div>
             <h1 className="text-2xl font-black tracking-tight">{t("print_reports")}</h1>
             <p className="text-sm text-muted-foreground mt-1">Generate, preview and print enterprise-grade reports</p>
-          </div>
+              </div>
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
             <Shield className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
             <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">ISO 27001 Compliant</span>
-          </div>
-        </div>
+                </div>
+              </div>
 
         {/* ── Report type cards ────────────────────────────────────────── */}
         <div>
@@ -948,8 +948,8 @@ export default function PrintReportPage() {
                 isPrinting={isPrinting && activeType === card.type}
               />
             ))}
-          </div>
-        </div>
+                </div>
+              </div>
 
         {/* ── Consumption Summary ──────────────────────────────────────── */}
         <div>
@@ -958,16 +958,16 @@ export default function PrintReportPage() {
             <button
               disabled={isPrinting && activeType === 'consumption'}
               onClick={() => {
-                setIsPrinting(true);
+            setIsPrinting(true);
                 setActiveType('consumption');
-                fetch("/api/reports/consumption-summary")
+            fetch("/api/reports/consumption-summary")
                   .then(r => { if (!r.ok) throw new Error("Failed"); return r.json(); })
-                  .then(async (data) => {
-                    setReportData(data);
-                    const bodyHtml = `<div id="consumption-report">${renderConsumptionSummaryReport(data)}</div>`;
+              .then(async (data) => {
+                setReportData(data);
+                const bodyHtml = `<div id="consumption-report">${renderConsumptionSummaryReport(data)}</div>`;
                     const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${t("consumption_summary")}</title><style>body{font-family:system-ui,sans-serif;margin:1rem;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #e5e7eb;padding:8px;text-align:left;}th{background:#f9fafb;}</style></head><body>${bodyHtml}</body></html>`;
-                    await printContentWithIframe(fullHtml, t("consumption_summary"));
-                    toast({ title: t("report_generated"), description: format(new Date(), "PPP p") });
+                  await printContentWithIframe(fullHtml, t("consumption_summary"));
+                  toast({ title: t("report_generated"), description: format(new Date(), "PPP p") });
                   })
                   .catch(() => toast({ title: "Error", description: "Failed to fetch consumption data.", variant: "destructive" }))
                   .finally(() => { setIsPrinting(false); setActiveType(null); });
@@ -977,9 +977,9 @@ export default function PrintReportPage() {
               <Printer className="h-3.5 w-3.5" />
               {isPrinting && activeType === 'consumption' ? 'Generating…' : 'Print Summary'}
             </button>
-          </div>
+                </div>
           <ConsumptionSummaryCard />
-        </div>
+              </div>
 
         {/* ── Report History ───────────────────────────────────────────── */}
         <div>
@@ -990,8 +990,8 @@ export default function PrintReportPage() {
                 {reportHistory.length} reports
               </span>
             )}
-          </div>
-
+        </div>
+        
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
             {loading ? (
               <div className="flex items-center justify-center h-32">
@@ -1007,17 +1007,17 @@ export default function PrintReportPage() {
                 <p className="text-xs opacity-60 mt-1">Generate a report above to see it here</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
+                <Table>
+                  <TableHeader>
                   <TableRow className="border-b border-border/60 bg-muted/30">
                     <TableHead className="text-[10px] font-bold uppercase tracking-wider">{t("report_type")}</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase tracking-wider">{t("report_details")}</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase tracking-wider">{t("report_date")}</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase tracking-wider">{t("report_user")}</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase tracking-wider text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                   {reportHistory.map((report) => {
                     const colors = getHistoryTypeColors(report.reportType);
                     return (
@@ -1073,8 +1073,8 @@ export default function PrintReportPage() {
                       </TableRow>
                     );
                   })}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
             )}
           </div>
         </div>

@@ -32,7 +32,20 @@ const SCAN_SELECT = {
   rfidTag: {
     select: {
       id: true,
-      lastZone: { select: { name: true, floorNumber: true, roomNumber: true } },
+      lastZone: {
+        select: {
+          id: true,
+          name: true,
+          floorNumber: true,
+          roomNumber: true,
+          building: true,
+          mapX: true,
+          mapY: true,
+          mapWidth: true,
+          mapHeight: true,
+          floorPlanId: true,
+        },
+      },
     },
   },
 } as const;
