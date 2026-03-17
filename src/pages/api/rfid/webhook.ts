@@ -41,6 +41,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const zone = apMac
         ? await prisma.rFIDZone.findFirst({
             where: { apMacAddress: apMac.toUpperCase() },
+            select: {
+              id: true, name: true, isRestricted: true, isExitZone: true,
+              floorNumber: true, building: true,
+            },
           })
         : null;
 
@@ -126,6 +130,32 @@ async function checkAlertRules(tag: any, zone: any) {
         await createAlertIfNew(rule, tag, zone, 'INFO',
           `Asset "${tag.asset?.name ?? tag.tagId}" has low battery: ${battery}%`);
       }
+    }
+  }
+
+  // ── Enterprise exit detection (rule-independent) ──────────────────────────
+  if (zone?.isExitZone) {
+    // Find or create a sentinel exit-detection rule
+    const orgId = tag.organizationId ?? null;
+    let exitRule = await prisma.rFIDAlertRule.findFirst({
+      where: { type: 'ENTERPRISE_EXIT', ...(orgId ? { organizationId: orgId } : {}) },
+    });
+    if (!exitRule) {
+      exitRule = await prisma.rFIDAlertRule.create({
+        data: {
+          type: 'ENTERPRISE_EXIT',
+          name: 'Enterprise Exit Detection',
+          enabled: true,
+          config: {},
+          organizationId: orgId,
+        },
+      });
+    }
+    if (exitRule.enabled) {
+      await createAlertIfNew(
+        exitRule, tag, zone, 'CRITICAL',
+        `Asset "${tag.asset?.name ?? tag.tagId}" detected at exit zone "${zone.name}". Possible enterprise exit — verify authorization.`,
+      );
     }
   }
 }

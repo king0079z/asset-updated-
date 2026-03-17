@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
         },
         lastZone: {
-          select: { id: true, name: true, floorNumber: true, roomNumber: true },
+          select: { id: true, name: true, floorNumber: true, roomNumber: true, isExitZone: true },
         },
       },
       orderBy: { updatedAt: 'desc' },
@@ -77,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       select: {
         id: true, name: true, description: true,
         apMacAddress: true, apIpAddress: true, apSerialNumber: true,
-        floorNumber: true, roomNumber: true, building: true, isRestricted: true,
+        floorNumber: true, roomNumber: true, building: true, isRestricted: true, isExitZone: true,
         floorPlanId: true,
         floorPlan: { select: { id: true, name: true, imageUrl: true } },
         _count: { select: { tags: true, scans: true } },

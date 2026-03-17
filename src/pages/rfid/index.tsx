@@ -17,13 +17,15 @@ import {
   Battery, BatteryLow, BatteryCharging, AlertTriangle, CheckCircle2,
   Settings, Copy, X, Search, Zap, Activity, Eye, ChevronDown, ChevronUp,
   Signal, Clock, Package, Link, Unlink, Info, ExternalLink, Layers, Bell,
+  ArrowRight, LogOut, History, Shield,
 } from 'lucide-react';
 
-const ZoneMapEditor   = dynamic(() => import('@/components/rfid/ZoneMapEditor'),   { ssr: false });
-const LiveTrackingMap = dynamic(() => import('@/components/rfid/LiveTrackingMap'), { ssr: false });
-const AlertRulesPanel = dynamic(() => import('@/components/rfid/AlertRulesPanel'), { ssr: false });
-const AlertsLog       = dynamic(() => import('@/components/rfid/AlertsLog'),       { ssr: false });
-const FloorMap3D      = dynamic(() => import('@/components/rfid/FloorMap3D'),      { ssr: false });
+const ZoneMapEditor        = dynamic(() => import('@/components/rfid/ZoneMapEditor'),        { ssr: false });
+const LiveTrackingMap      = dynamic(() => import('@/components/rfid/LiveTrackingMap'),      { ssr: false });
+const AlertRulesPanel      = dynamic(() => import('@/components/rfid/AlertRulesPanel'),      { ssr: false });
+const AlertsLog            = dynamic(() => import('@/components/rfid/AlertsLog'),            { ssr: false });
+const FloorMap3D           = dynamic(() => import('@/components/rfid/FloorMap3D'),           { ssr: false });
+const RFIDMovementTimeline = dynamic(() => import('@/components/rfid/RFIDMovementTimeline').then(m => ({ default: m.RFIDMovementTimeline })), { ssr: false });
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface RFIDTag {
@@ -81,7 +83,7 @@ export default function RFIDPage() {
   const [zones,       setZones]       = useState<RFIDZone[]>(cachedRfid?.zones ?? []);
   const [stats,       setStats]       = useState<Stats | null>(cachedRfid?.stats ?? null);
   const [loading,     setLoading]     = useState(!cachedRfid);
-  const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'zone-map' | 'alerts' | 'setup'>('overview');
+  const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'zone-map' | 'movements' | 'alerts' | 'setup'>('overview');
   const [unresolvedAlerts, setUnresolvedAlerts] = useState(0);
   const [zoneMapMode, setZoneMapMode] = useState<'edit' | 'live' | '3d'>('3d');
   const [seedingDemo, setSeedingDemo] = useState(false);
@@ -97,7 +99,7 @@ export default function RFIDPage() {
 
   // Zone form
   const [showZoneForm,  setShowZoneForm]  = useState(false);
-  const [zoneFormData,  setZoneFormData]  = useState({ name: '', description: '', apMacAddress: '', apIpAddress: '', apSerialNumber: '', floorNumber: '', roomNumber: '', building: '' });
+  const [zoneFormData,  setZoneFormData]  = useState({ name: '', description: '', apMacAddress: '', apIpAddress: '', apSerialNumber: '', floorNumber: '', roomNumber: '', building: '', isExitZone: false, isRestricted: false });
   const [savingZone,    setSavingZone]    = useState(false);
 
   const [expandedTagId, setExpandedTagId] = useState<string | null>(null);
@@ -207,7 +209,7 @@ export default function RFIDPage() {
       if (!res.ok) throw new Error(data.error);
       toast({ title: 'Zone created', description: `${zoneFormData.name} is ready to receive tag scans.` });
       setShowZoneForm(false);
-      setZoneFormData({ name: '', description: '', apMacAddress: '', apIpAddress: '', apSerialNumber: '', floorNumber: '', roomNumber: '', building: '' });
+      setZoneFormData({ name: '', description: '', apMacAddress: '', apIpAddress: '', apSerialNumber: '', floorNumber: '', roomNumber: '', building: '', isExitZone: false, isRestricted: false });
       loadAll();
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -337,12 +339,13 @@ export default function RFIDPage() {
           {/* ── Tabs ──────────────────────────────────────────────────────── */}
           <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-xl flex-wrap">
             {([
-              { id: 'overview',  label: 'Live Overview', icon: Activity },
-              { id: 'tags',      label: 'Tags',          icon: Tag },
-              { id: 'zones',     label: 'Zones / APs',   icon: Building2 },
-              { id: 'zone-map',  label: 'Zone Map',      icon: Layers },
-              { id: 'alerts',    label: 'Alerts',        icon: Bell },
-              { id: 'setup',     label: 'Integration',   icon: Settings },
+              { id: 'overview',   label: 'Live Overview',      icon: Activity },
+              { id: 'movements',  label: 'Movement History',   icon: History },
+              { id: 'tags',       label: 'Tags',               icon: Tag },
+              { id: 'zones',      label: 'Zones / APs',        icon: Building2 },
+              { id: 'zone-map',   label: 'Zone Map',           icon: Layers },
+              { id: 'alerts',     label: 'Alerts',             icon: Bell },
+              { id: 'setup',      label: 'Integration',        icon: Settings },
             ] as const).map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
@@ -448,6 +451,41 @@ export default function RFIDPage() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ══ MOVEMENTS TAB ════════════════════════════════════════════ */}
+          {activeTab === 'movements' && (
+            <div className="space-y-6">
+              {/* Hero banner */}
+              <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 p-6">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(255,255,255,0.08),transparent_60%)]" />
+                <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 blur-3xl -translate-y-1/3 translate-x-1/3" />
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
+                      <History className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-white">Asset Movement History</h2>
+                      <p className="text-indigo-200 text-sm mt-0.5">
+                        Real-time zone-to-zone tracking · Enterprise exit alerts · AI anomaly detection
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 bg-white/10 border border-white/20 px-3 py-1.5 rounded-lg">
+                      <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-xs font-semibold text-white">Live Tracking</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Movement Timeline */}
+              <div className="rounded-2xl border border-border bg-card p-6">
+                <RFIDMovementTimeline hours={24} />
+              </div>
             </div>
           )}
 
@@ -697,6 +735,38 @@ export default function RFIDPage() {
                       <Input placeholder="Optional description…" className="rounded-xl"
                         value={zoneFormData.description} onChange={e => setZoneFormData(p => ({ ...p, description: e.target.value }))} />
                     </div>
+                  </div>
+
+                  {/* Zone flags */}
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2.5 cursor-pointer group">
+                      <div
+                        className={`relative w-10 h-5.5 h-[22px] rounded-full transition-colors cursor-pointer border-2 ${zoneFormData.isExitZone ? 'bg-orange-500 border-orange-500' : 'bg-muted border-border'}`}
+                        onClick={() => setZoneFormData(p => ({ ...p, isExitZone: !p.isExitZone }))}
+                      >
+                        <div className={`absolute top-0.5 w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${zoneFormData.isExitZone ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold flex items-center gap-1.5">
+                          <LogOut className="h-3.5 w-3.5 text-orange-500" /> Exit Zone
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">Near building exits · triggers enterprise exit alerts</p>
+                      </div>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer group">
+                      <div
+                        className={`relative w-10 h-[22px] rounded-full transition-colors cursor-pointer border-2 ${zoneFormData.isRestricted ? 'bg-red-500 border-red-500' : 'bg-muted border-border'}`}
+                        onClick={() => setZoneFormData(p => ({ ...p, isRestricted: !p.isRestricted }))}
+                      >
+                        <div className={`absolute top-0.5 w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${zoneFormData.isRestricted ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold flex items-center gap-1.5">
+                          <Shield className="h-3.5 w-3.5 text-red-500" /> Restricted Zone
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">Unauthorized access triggers CRITICAL alert</p>
+                      </div>
+                    </label>
                   </div>
 
                   <div className="flex gap-2 justify-end">

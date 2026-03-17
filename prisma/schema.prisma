@@ -1148,6 +1148,7 @@ model RFIDZone {
   roomNumber     String?
   building       String?
   isRestricted   Boolean     @default(false)
+  isExitZone     Boolean     @default(false) // Zone at building exits/entrances — triggers exit alerts
   floorPlanId    String?
   floorPlan      FloorPlan?  @relation(fields: [floorPlanId], references: [id])
   mapX           Float?

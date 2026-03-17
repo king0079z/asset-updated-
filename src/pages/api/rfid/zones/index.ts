@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id: true, name: true, description: true,
           apMacAddress: true, apIpAddress: true, apSerialNumber: true,
           floorNumber: true, roomNumber: true, building: true,
-          isRestricted: true, mapX: true, mapY: true, mapWidth: true, mapHeight: true,
+          isRestricted: true, isExitZone: true, mapX: true, mapY: true, mapWidth: true, mapHeight: true,
           organizationId: true, createdAt: true,
           _count: { select: { tags: true, scans: true } },
           floorPlan: { select: { id: true, name: true, imageUrl: true } },
@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const {
       name, description, apMacAddress, apIpAddress, apSerialNumber,
       floorNumber, roomNumber, building,
-      isRestricted, floorPlanId, mapX, mapY, mapWidth, mapHeight,
+      isRestricted, isExitZone, floorPlanId, mapX, mapY, mapWidth, mapHeight,
     } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
 
@@ -81,6 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           roomNumber:     roomNumber  || null,
           building:       building   || null,
           isRestricted:   isRestricted === true || isRestricted === 'true' || false,
+          isExitZone:     isExitZone  === true || isExitZone  === 'true' || false,
           organizationId: orgId,
           ...(floorPlanId ? { floorPlanId } : {}),
           ...(mapX      != null ? { mapX: Number(mapX) }      : {}),

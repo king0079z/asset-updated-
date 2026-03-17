@@ -64,6 +64,7 @@ import { KitchenConsumptionSummaryDialog } from "@/components/KitchenConsumption
 import { DriverTripSummaryDialog } from "@/components/DriverTripSummaryDialog";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 import { EnhancedVendorPerformanceCard } from "@/components/EnhancedVendorPerformanceCard";
+import { RFIDDashboardCard } from "@/components/RFIDDashboardCard";
 import { logDebug } from "@/lib/client-logger";
 
 interface DashboardStats {
@@ -859,6 +860,22 @@ export default function Dashboard() {
             </div>
             <EnhancedVendorPerformanceCard />
           </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════
+            RFID MOVEMENT TRACKING — Live asset tracking card
+        ══════════════════════════════════════════════════════ */}
+        <div>
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="h-5 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-400" />
+            <h2 className="text-xs font-black uppercase tracking-[0.15em] text-muted-foreground">
+              RFID Asset Movement & Security
+            </h2>
+            <span className="ml-1 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
+              <span className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse" /> Live
+            </span>
+          </div>
+          <RFIDDashboardCard />
         </div>
       </div>
       
