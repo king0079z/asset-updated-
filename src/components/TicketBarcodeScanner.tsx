@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
-import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeError } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeError, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Camera, AlertCircle, CheckCircle2, RefreshCw, QrCode, Scan } from "lucide-react";
 import { useRouter } from 'next/router';
@@ -49,6 +49,24 @@ interface TicketBarcodeScannerProps {
   onScan?: (ticket: Ticket) => void;
 }
 
+// Same format support as working asset scanner (QR + common 1D/2D barcodes including CODE_128 used for tickets)
+const TICKET_SCANNER_FORMATS = [
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+  Html5QrcodeSupportedFormats.PDF_417,
+];
+
+function normalizeScannedCode(raw: string): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\s+/g, ' ').replace(/[\x00-\x1F\x7F]/g, '').trim();
+}
+
 // Camera permission status type
 type CameraPermissionStatus = 'prompt' | 'granted' | 'denied' | 'unsupported' | 'error';
 
@@ -73,13 +91,8 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
   const [activeCamera, setActiveCamera] = useState<string | null>(null);
   const [availableCameras, setAvailableCameras] = useState<Array<{id: string, label: string}>>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
-  const [scannerConfig, setScannerConfig] = useState({
-    fps: 5,
-    qrbox: { width: 250, height: 250 },
-    aspectRatio: 1.0,
-    formatsToSupport: ['CODE_128', 'CODE_39', 'EAN', 'QR_CODE', 'AZTEC', 'DATA_MATRIX'],
-  });
-  
+  const scannedRef = useRef(false);
+
   const { toast } = useToast();
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerId = 'ticket-reader';
@@ -158,13 +171,17 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
     }
   }, []);
 
-  // Initialize scanner when dialog opens
+  // Initialize scanner when dialog opens — delay so #ticket-reader is in DOM
   useEffect(() => {
-    if (showScanner && activeTab === 'camera') {
-      initializeScanner();
+    if (!showScanner || activeTab !== 'camera') {
+      clearScanner();
+      return;
     }
-    
+    const t = setTimeout(() => {
+      if (document.getElementById(scannerContainerId)) initializeScanner();
+    }, 350);
     return () => {
+      clearTimeout(t);
       clearScanner();
     };
   }, [showScanner, activeTab]);
@@ -188,23 +205,20 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
   }, [selectedCameraId]);
 
   const initializeScanner = async () => {
-    // Clear any previous scanner
     await clearScanner();
-    
-    // Reset error state
     setScannerError(null);
     setIsInitializing(true);
-    
+    scannedRef.current = false;
+
     try {
-      // Check if we're in a browser environment
-      if (typeof window === 'undefined') {
-        throw new Error('Scanner can only be initialized in browser environment');
+      if (typeof window === 'undefined' || !document.getElementById(scannerContainerId)) {
+        setIsInitializing(false);
+        return;
       }
-      
-      // Check camera permission
+
       const permissionStatus = await checkCameraPermission();
       setCameraPermission(permissionStatus);
-      
+
       if (permissionStatus === 'denied') {
         setScannerError({
           message: 'Camera access denied. Please grant camera permission and try again.',
@@ -214,75 +228,81 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
         setIsInitializing(false);
         return;
       }
-      
-      if (permissionStatus === 'unsupported') {
+      if (permissionStatus === 'unsupported' || permissionStatus === 'error') {
         setScannerError({
-          message: 'No camera detected on your device. Please use manual entry.',
-          code: 'NO_CAMERA_DETECTED',
-          isDeviceError: true
-        });
-        setIsInitializing(false);
-        return;
-      }
-      
-      if (permissionStatus === 'error') {
-        setScannerError({
-          message: 'Error accessing camera. Please try again or use manual entry.',
+          message: permissionStatus === 'unsupported' ? 'No camera detected. Please use manual entry.' : 'Error accessing camera. Please try again or use manual entry.',
           code: 'CAMERA_ACCESS_ERROR',
           isDeviceError: true
         });
         setIsInitializing(false);
         return;
       }
-      
-      // Get available cameras
+
+      let devices = await Html5Qrcode.getCameras();
+      if (devices?.length) setAvailableCameras(devices);
       let cameraId = selectedCameraId;
+      if (!cameraId && devices?.length) {
+        const backCam = devices.find(d => /back|rear|environment/i.test(d.label || ''));
+        const first = backCam || devices[0];
+        setSelectedCameraId(first.id);
+        cameraId = first.id;
+      }
       if (!cameraId) {
-        cameraId = await getAvailableCameras();
-        if (!cameraId) {
-          setIsInitializing(false);
-          return;
-        }
+        setScannerError({ message: 'No cameras found.', code: 'NO_CAMERAS', isDeviceError: true });
+        setIsInitializing(false);
+        return;
       }
-      
-      // Create scanner instance
-      if (!scannerRef.current) {
-        console.log('Creating new Html5Qrcode instance');
-        scannerRef.current = new Html5Qrcode(scannerContainerId);
-      }
-      
-      // Start scanner with selected camera
+
+      // World-class config: same pattern as working BarcodeScanner2 — numeric formats, BarCodeDetector, high-res, back camera
+      const scanConfig = {
+        fps: 15,
+        qrbox: { width: 280, height: 220 },
+        disableFlip: false,
+        videoConstraints: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: { ideal: 'environment' as const },
+        },
+      };
+
+      scannerRef.current = new Html5Qrcode(scannerContainerId, {
+        verbose: false,
+        formatsToSupport: TICKET_SCANNER_FORMATS,
+        useBarCodeDetectorIfSupported: true,
+      });
+
+      let started = false;
       try {
-        await scannerRef.current.start(
-          cameraId,
-          {
-            fps: scannerConfig.fps,
-            qrbox: scannerConfig.qrbox,
-            aspectRatio: scannerConfig.aspectRatio,
-            formatsToSupport: scannerConfig.formatsToSupport,
-            rememberLastUsedCamera: true,
-            showTorchButtonIfSupported: true,
-            showZoomSliderIfSupported: true,
-          },
-          handleScan,
-          handleScanError
-        );
-        
-        setActiveCamera(cameraId);
-        console.log('Scanner started successfully with camera:', cameraId);
-      } catch (startError) {
-        console.error('Error starting scanner:', startError);
-        setScannerError({
-          message: 'Failed to start the scanner. Please try again or use manual entry.',
-          code: 'SCANNER_START_ERROR',
-          isInitializationError: true,
-          originalError: startError
-        });
+        if (devices?.length) {
+          const backCam = devices.find(d => /back|rear|environment/i.test(d.label || ''));
+          const camToUse = selectedCameraId && devices.some(d => d.id === selectedCameraId)
+            ? devices.find(d => d.id === selectedCameraId)!
+            : backCam || devices[0];
+          try {
+            await scannerRef.current!.start(camToUse.id, scanConfig, handleScan, handleScanError);
+            setActiveCamera(camToUse.id);
+            started = true;
+          } catch {
+            await scannerRef.current!.start(camToUse.id, { fps: 12, qrbox: { width: 280, height: 220 } }, handleScan, handleScanError);
+            setActiveCamera(camToUse.id);
+            started = true;
+          }
+        }
+        if (!started) {
+          await scannerRef.current!.start({ facingMode: { ideal: 'environment' } }, scanConfig, handleScan, handleScanError);
+          setActiveCamera('environment');
+          started = true;
+        }
+      } catch (e) {
+        if (!started && scannerRef.current) {
+          await scannerRef.current.start({ facingMode: { ideal: 'environment' } }, scanConfig, handleScan, handleScanError);
+          setActiveCamera('environment');
+        }
       }
     } catch (error) {
       console.error('Error initializing scanner:', error);
       setScannerError({
-        message: 'Failed to initialize the barcode scanner. Please try again or use manual entry.',
+        message: 'Failed to initialize the scanner. Please try again or use manual entry.',
         code: 'INITIALIZATION_ERROR',
         isInitializationError: true,
         originalError: error
@@ -318,24 +338,22 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
   };
 
   const handleScan = async (result: string) => {
+    const code = normalizeScannedCode(result);
+    if (!code || scannedRef.current) return;
+    scannedRef.current = true;
+
     try {
-      console.log('Barcode scanned:', result);
       setIsSearching(true);
-      
-      // Play success sound if available
       try {
         const audio = new Audio('/success-beep.mp3');
-        audio.play().catch(e => console.log('Could not play audio', e));
-      } catch (e) {
-        // Ignore audio errors
-      }
-      
-      // Pause scanner while processing
+        audio.play().catch(() => {});
+      } catch {}
+
       if (scannerRef.current && scannerRef.current.getState() === Html5QrcodeScannerState.SCANNING) {
         await scannerRef.current.pause();
       }
-      
-      const response = await fetch(`/api/tickets/barcode?barcode=${encodeURIComponent(result)}`);
+
+      const response = await fetch(`/api/tickets/barcode?barcode=${encodeURIComponent(code)}`);
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -353,27 +371,20 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
           });
         }
         
-        // Resume scanner if no ticket found or error
         if (scannerRef.current) {
-          await scannerRef.current.resume();
+          try { await scannerRef.current.resume(); } catch {}
         }
-        
         setIsSearching(false);
+        setTimeout(() => { scannedRef.current = false; }, 1500);
         return;
       }
-      
+
       const ticket = await response.json();
-      
-      // If onScan prop is provided, call it with the ticket data
       if (onScan) {
         onScan(ticket);
         handleDialogClose(false);
       } else {
-        // Otherwise, navigate to the ticket details page
-        toast({
-          title: "Ticket Found",
-          description: `Found ticket: ${ticket.title}`,
-        });
+        toast({ title: "Ticket Found", description: `Found ticket: ${ticket.title}` });
         router.push(`/tickets/${ticket.id}`);
         handleDialogClose(false);
       }
@@ -384,15 +395,10 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
         description: "Failed to process the scanned barcode",
         variant: "destructive",
       });
-      
-      // Resume scanner on error
       if (scannerRef.current) {
-        try {
-          await scannerRef.current.resume();
-        } catch (resumeError) {
-          console.error("Error resuming scanner:", resumeError);
-        }
+        try { await scannerRef.current.resume(); } catch {}
       }
+      setTimeout(() => { scannedRef.current = false; }, 1500);
     } finally {
       setIsSearching(false);
     }
@@ -620,13 +626,13 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
                         <div className="relative">
                           <div 
                             id={scannerContainerId} 
-                            className="w-full h-[350px] overflow-hidden"
+                            className="w-full min-h-[320px] h-[380px] overflow-hidden bg-muted/30"
                           ></div>
                           
                           {/* Scanning overlay with animation */}
                           {activeCamera && !isInitializing && cameraPermission === 'granted' && (
                             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                              <div className="border-2 border-primary w-[250px] h-[250px] rounded-lg relative">
+                              <div className="border-2 border-primary w-[280px] h-[220px] rounded-lg relative">
                                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary animate-[scanline_2s_ease-in-out_infinite]"></div>
                                 <div className="absolute top-0 left-0 w-[20px] h-[20px] border-t-2 border-l-2 border-primary"></div>
                                 <div className="absolute top-0 right-0 w-[20px] h-[20px] border-t-2 border-r-2 border-primary"></div>
@@ -676,13 +682,13 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
                         <div className="space-y-2">
                           <Input
                             type="text"
-                            placeholder="Enter ticket code value"
+                            placeholder="e.g. barcode value or TKT-20260316-0001"
                             value={manualCode}
                             onChange={(e) => setManualCode(e.target.value)}
                             className="font-mono text-center text-lg"
                           />
                           <p className="text-xs text-muted-foreground">
-                            Enter the ticket barcode or QR code value exactly as it appears on the ticket
+                            Enter the barcode value or ticket ID (e.g. TKT-YYYYMMDD-NNNN) from the ticket
                           </p>
                         </div>
                       </CardContent>

@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
 
@@ -74,27 +74,33 @@ export default async function handler(
           return res.status(400).json({ error: 'Barcode parameter is required' });
         }
         
-        logApiEvent(`Searching for ticket with barcode: ${barcode}`);
-        
-        // Find ticket by barcode
-        const ticket = await prisma.ticket.findUnique({
-          where: {
-            barcode: barcode
-          },
+        const code = (barcode as string).trim();
+        logApiEvent(`Searching for ticket with code: ${code}`);
+
+        // Find ticket by barcode first, then by displayId (printed tickets may use either)
+        let ticket = await prisma.ticket.findUnique({
+          where: { barcode: code },
           include: {
             asset: {
-              select: {
-                id: true,
-                name: true,
-                assetId: true,
-              },
+              select: { id: true, name: true, assetId: true },
             },
           },
         });
-        
+
         if (!ticket) {
-          logApiEvent(`No ticket found with barcode: ${barcode}`);
-          return res.status(404).json({ error: 'No ticket found with this barcode' });
+          ticket = await prisma.ticket.findUnique({
+            where: { displayId: code },
+            include: {
+              asset: {
+                select: { id: true, name: true, assetId: true },
+              },
+            },
+          });
+        }
+
+        if (!ticket) {
+          logApiEvent(`No ticket found with barcode or displayId: ${code}`);
+          return res.status(404).json({ error: 'No ticket found with this barcode or ticket ID' });
         }
         
         // Format dates to ISO strings to ensure proper serialization
@@ -104,7 +110,7 @@ export default async function handler(
           updatedAt: ticket.updatedAt.toISOString()
         };
         
-        logApiEvent(`Found ticket with barcode ${barcode}`, { ticketId: ticket.id });
+        logApiEvent(`Found ticket with code ${code}`, { ticketId: ticket.id });
         return res.status(200).json(formattedTicket);
       } catch (error) {
         logApiEvent('Error searching for ticket by barcode', error);
