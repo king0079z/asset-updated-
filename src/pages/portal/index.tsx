@@ -797,13 +797,15 @@ export default function PortalPage() {
   };
 
   const loadMyAssets = useCallback(async () => {
+    if (!user?.id) return;
     setAssetsLoading(true);
     try {
-      const r = await fetch("/api/assets/by-user", { credentials: "same-origin" });
+      const r = await fetch(`/api/assets/by-user?userId=${encodeURIComponent(user.id)}`, { credentials: "same-origin" });
       if (r.ok) { const d = await r.json(); setMyAssets(d.assets || []); }
+      else { toast({ variant: "destructive", title: "Failed to load assets" }); }
     } catch { toast({ variant: "destructive", title: "Failed to load assets" }); }
     finally { setAssetsLoading(false); }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => { if (view === "my-assets") loadMyAssets(); }, [view, loadMyAssets]);
 
