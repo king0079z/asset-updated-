@@ -74,7 +74,7 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
   const [availableCameras, setAvailableCameras] = useState<Array<{id: string, label: string}>>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [scannerConfig, setScannerConfig] = useState({
-    fps: 10,
+    fps: 5,
     qrbox: { width: 250, height: 250 },
     aspectRatio: 1.0,
     formatsToSupport: ['CODE_128', 'CODE_39', 'EAN', 'QR_CODE', 'AZTEC', 'DATA_MATRIX'],
@@ -399,13 +399,24 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
   };
 
   const handleScanError = (err: Html5QrcodeError) => {
-    // Don't show UI errors for normal scanning failures (no barcode in frame)
+    // Don't show UI or log for "no code in frame" — library fires this every frame when nothing is detected
     if (err.type === 'NotFoundException') {
       return;
     }
-    
-    console.warn('Scanner error:', err);
-    
+    const errMsg =
+      typeof err === 'string'
+        ? err
+        : (err && typeof err === 'object'
+          ? (err as { message?: string }).message ?? (err as { errorMessage?: string }).errorMessage ?? JSON.stringify(err)
+          : String(err ?? ''));
+    if (
+      /No MultiFormat Readers were able to detect the code/i.test(errMsg) ||
+      /QR code parse error/i.test(errMsg) ||
+      /No barcode or QR code found/i.test(errMsg)
+    ) {
+      return;
+    }
+
     // Handle specific error types
     if (err.type === 'NotAllowedError') {
       setCameraPermission('denied');
