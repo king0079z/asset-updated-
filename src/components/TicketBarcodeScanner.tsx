@@ -253,10 +253,9 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
         return;
       }
 
-      // Optimized for both QR and 1D barcodes: wider rectangular qrbox helps CODE_128 (horizontal strips), lower fps reduces motion blur
+      // Full-frame scan (no qrbox): 1D barcodes are detected much better when the whole frame is decoded instead of a cropped region
       const scanConfig = {
-        fps: 10,
-        qrbox: { width: 400, height: 200 },
+        fps: 8,
         disableFlip: false,
         videoConstraints: {
           width: { ideal: 1280 },
@@ -265,7 +264,6 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
         },
       };
 
-      // useBarCodeDetectorIfSupported: false forces ZXing decoder — more reliable for 1D barcodes (CODE_128) on many devices
       scannerRef.current = new Html5Qrcode(scannerContainerId, {
         verbose: false,
         formatsToSupport: TICKET_SCANNER_FORMATS,
@@ -284,9 +282,15 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
             setActiveCamera(camToUse.id);
             started = true;
           } catch {
-            await scannerRef.current!.start(camToUse.id, { fps: 10, qrbox: { width: 400, height: 200 } }, handleScan, handleScanError);
-            setActiveCamera(camToUse.id);
-            started = true;
+            try {
+              await scannerRef.current!.start(camToUse.id, { fps: 8, qrbox: { width: 400, height: 200 } }, handleScan, handleScanError);
+              setActiveCamera(camToUse.id);
+              started = true;
+            } catch {
+              await scannerRef.current!.start(camToUse.id, { fps: 8 }, handleScan, handleScanError);
+              setActiveCamera(camToUse.id);
+              started = true;
+            }
           }
         }
         if (!started) {
@@ -632,14 +636,8 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
                           
                           {/* Scanning overlay with animation */}
                           {activeCamera && !isInitializing && cameraPermission === 'granted' && (
-                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                              <div className="border-2 border-primary w-[400px] h-[200px] rounded-lg relative">
-                                <div className="absolute top-0 left-0 right-0 h-[2px] bg-primary animate-[scanline_2s_ease-in-out_infinite]"></div>
-                                <div className="absolute top-0 left-0 w-[20px] h-[20px] border-t-2 border-l-2 border-primary"></div>
-                                <div className="absolute top-0 right-0 w-[20px] h-[20px] border-t-2 border-r-2 border-primary"></div>
-                                <div className="absolute bottom-0 left-0 w-[20px] h-[20px] border-b-2 border-l-2 border-primary"></div>
-                                <div className="absolute bottom-0 right-0 w-[20px] h-[20px] border-b-2 border-r-2 border-primary"></div>
-                              </div>
+                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center border-2 border-dashed border-primary/50 rounded-lg">
+                              <p className="text-xs font-medium text-primary/80 bg-background/80 px-2 py-1 rounded">Position QR or barcode anywhere in frame</p>
                             </div>
                           )}
                         </div>
@@ -656,10 +654,9 @@ export default function TicketBarcodeScanner({ onScan }: TicketBarcodeScannerPro
                           <div className="space-y-1">
                             <p className="text-sm font-medium">Scanning Tips</p>
                             <ul className="text-xs text-muted-foreground space-y-1">
-                              <li>• Hold the device steady and ensure good lighting</li>
-                              <li>• QR codes: center in the frame. Barcodes: hold horizontally so the bars fill the width of the box</li>
-                              <li>• Keep the code flat and clearly visible</li>
-                              <li>• If barcode won&apos;t scan, use manual entry with the number below the barcode</li>
+                              <li>• Whole frame is scanned — position QR or barcode anywhere in view</li>
+                              <li>• Hold steady with good lighting; keep barcode horizontal and in focus</li>
+                              <li>• Barcode not reading? Enter the number below the barcode in Manual Entry</li>
                             </ul>
                           </div>
                         </div>
