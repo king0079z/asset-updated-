@@ -155,12 +155,22 @@ export default async function handler(
 
         // Only admin/manager (for this ticket) can set or clear assignedToId
         let newAssignedToId: string | null | undefined = undefined; // undefined = do not change
+        let assigneeDetails: { email: string; displayName: string } | null = null;
         if (assignedToId !== undefined && adminOrManagerForTicket) {
           if (assignedToId === null || assignedToId === '') {
             newAssignedToId = null;
           } else {
-            const assignee = await prisma.user.findUnique({ where: { id: assignedToId as string }, select: { id: true } });
-            newAssignedToId = assignee ? assignee.id : null;
+            const assignee = await prisma.user.findUnique({
+              where: { id: assignedToId as string },
+              select: { id: true, email: true },
+            });
+            if (assignee) {
+              newAssignedToId = assignee.id;
+              const displayName = assignee.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+              assigneeDetails = { email: assignee.email, displayName };
+            } else {
+              newAssignedToId = null;
+            }
           }
         }
 
@@ -224,15 +234,27 @@ export default async function handler(
             },
           });
 
-          // Create history entry for status or priority changes, with or without comment
+          // Create history entry for status or priority changes, assignment, or comment
+          const isAssignmentChange = newAssignedToId !== undefined && (newAssignedToId !== existingTicket.assignedToId);
+          const shouldCreateHistory = isStatusChanged || isPriorityChanged || (comment && comment.trim() !== '') || isAssignmentChange;
+
           let ticketHistoryEntry = null;
-          if (isStatusChanged || isPriorityChanged || (comment && comment.trim() !== '')) {
+          if (shouldCreateHistory) {
             // Generate the initial comment
             let historyComment = comment && comment.trim() !== '' 
               ? comment.trim() 
               : isStatusChanged 
                 ? `Status changed from ${existingTicket.status} to ${validStatus}` 
-                : `Priority changed from ${existingTicket.priority} to ${validPriority}`;
+                : isPriorityChanged
+                ? `Priority changed from ${existingTicket.priority} to ${validPriority}`
+                : isAssignmentChange && assigneeDetails
+                ? `Ticket assigned to staff.`
+                : 'Ticket updated.';
+
+            // When ticket is assigned to staff, append assignee details so the requester sees who is handling their ticket in the Activity Timeline
+            if (isAssignmentChange && assigneeDetails) {
+              historyComment += ` Assigned to: ${assigneeDetails.displayName} (${assigneeDetails.email}). You can contact them for updates on your ticket.`;
+            }
             
             console.log(`Creating ticket history entry with comment: ${historyComment}`);
             
