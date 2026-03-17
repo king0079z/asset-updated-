@@ -26,18 +26,21 @@ const QuickActionsMenu = lazy(() =>
   }))
 );
 
-/** Renders QuickActionsMenu (FAB) only when NOT on Outlook add-in routes. */
+/** Renders QuickActionsMenu (FAB) only when NOT on Outlook add-in or Service Portal. */
 function QuickActionsMenuGate() {
   const router = useRouter();
-  const [isOutlookRoute, setIsOutlookRoute] = useState(
-    () => typeof window !== 'undefined' && window.location.pathname.startsWith('/outlook')
-  );
+  const [hideFABState, setHideFABState] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const p = window.location.pathname;
+    return p.startsWith('/outlook') || p.startsWith('/portal');
+  });
 
   useEffect(() => {
-    setIsOutlookRoute(window.location.pathname.startsWith('/outlook'));
+    const p = window.location.pathname;
+    setHideFABState(p.startsWith('/outlook') || p.startsWith('/portal'));
   }, [router.pathname]);
 
-  const hideFAB = router.pathname.startsWith('/outlook') || isOutlookRoute;
+  const hideFAB = router.pathname.startsWith('/outlook') || router.pathname.startsWith('/portal') || hideFABState;
   if (hideFAB) return null;
 
   return (
