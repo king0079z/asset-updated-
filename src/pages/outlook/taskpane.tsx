@@ -300,7 +300,8 @@ export default function OutlookTaskPane() {
   const fetchMyAssets = useCallback(async () => {
     setMyAssetsLoading(true);
     try {
-      const res = await fetch('/api/assets/by-user', { credentials: 'include', headers: getAuthHeaders() });
+      // /api/assets/mine uses requireAuth which supports Bearer tokens (add-in auth)
+      const res = await fetch('/api/assets/mine', { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setMyAssets(data.assets ?? []);
