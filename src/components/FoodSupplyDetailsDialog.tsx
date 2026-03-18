@@ -19,6 +19,7 @@ import {
   Tag,
   Truck,
   BarChart3,
+  Barcode,
 } from 'lucide-react';
 
 interface FoodSupplyDetailsDialogProps {
@@ -36,6 +37,20 @@ export function FoodSupplyDetailsDialog({
 }: FoodSupplyDetailsDialogProps) {
   const [consumptionHistory, setConsumptionHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [displaySupply, setDisplaySupply] = useState<any | null>(null);
+
+  // Fetch full supply when dialog opens so we always have barcode (avoids stale list cache)
+  useEffect(() => {
+    if (!open || !supply?.id) {
+      setDisplaySupply(supply ?? null);
+      return;
+    }
+    setDisplaySupply(supply);
+    fetch(`/api/food-supply/${encodeURIComponent(supply.id)}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setDisplaySupply(data))
+      .catch(() => {});
+  }, [open, supply?.id, supply]);
 
   useEffect(() => {
     if (!open || !supply?.id) return;
@@ -50,14 +65,15 @@ export function FoodSupplyDetailsDialog({
       .finally(() => setLoadingHistory(false));
   }, [open, supply?.id]);
 
+  const s = displaySupply ?? supply;
   if (!supply) return null;
 
   const totalConsumed = consumptionHistory.reduce((sum, r) => sum + (r.quantity || 0), 0);
   const totalConsumedValue = consumptionHistory.reduce(
-    (sum, r) => sum + (r.quantity || 0) * (r.foodSupply?.pricePerUnit ?? supply.pricePerUnit ?? 0),
+    (sum, r) => sum + (r.quantity || 0) * (r.foodSupply?.pricePerUnit ?? s?.pricePerUnit ?? 0),
     0
   );
-  const expDate = supply.expirationDate ? new Date(supply.expirationDate) : null;
+  const expDate = s?.expirationDate ? new Date(s.expirationDate) : null;
   const daysLeft = expDate ? Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
   const isExpired = daysLeft !== null && daysLeft < 0;
 
@@ -70,13 +86,13 @@ export function FoodSupplyDetailsDialog({
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center shadow-sm">
                 <UtensilsCrossed className="h-5 w-5 text-white" />
               </div>
-              {supply.name}
+              {s?.name ?? supply.name}
             </DialogTitle>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              {supply.category && <span className="capitalize">{supply.category}</span>}
-              {supply.barcode && (
+              {s?.category && <span className="capitalize">{s.category}</span>}
+              {s?.barcode && (
                 <span className="ml-2 font-mono text-xs bg-slate-200/80 dark:bg-slate-700 px-2 py-0.5 rounded">
-                  {supply.barcode}
+                  {s.barcode}
                 </span>
               )}
             </p>
@@ -102,7 +118,7 @@ export function FoodSupplyDetailsDialog({
               <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-4 border border-emerald-100 dark:border-emerald-800/40">
                 <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">Remaining</p>
                 <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
-                  {supply.quantity} <span className="text-sm font-medium">{supply.unit}</span>
+                  {s?.quantity ?? supply.quantity} <span className="text-sm font-medium">{s?.unit ?? supply.unit}</span>
                 </p>
               </div>
               <div className={`rounded-xl p-4 border ${
@@ -123,39 +139,48 @@ export function FoodSupplyDetailsDialog({
               <div className="rounded-xl bg-purple-50 dark:bg-purple-900/20 p-4 border border-purple-100 dark:border-purple-800/40">
                 <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide">Unit price</p>
                 <p className="text-lg font-bold text-purple-700 dark:text-purple-300 mt-0.5">
-                  QAR {Number(supply.pricePerUnit ?? 0).toFixed(2)}
+                  QAR {Number(s?.pricePerUnit ?? supply.pricePerUnit ?? 0).toFixed(2)}
                 </p>
               </div>
               <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-200 dark:border-slate-700">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total value</p>
                 <p className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                  QAR {((supply.quantity ?? 0) * (supply.pricePerUnit ?? 0)).toFixed(2)}
+                  QAR {((s?.quantity ?? supply.quantity ?? 0) * (s?.pricePerUnit ?? supply.pricePerUnit ?? 0)).toFixed(2)}
                 </p>
               </div>
             </div>
-            {supply.vendor && (
+            {s?.barcode && (
+              <div className="flex items-center gap-2 text-sm">
+                <Barcode className="h-4 w-4 text-slate-400 shrink-0" />
+                <span className="text-slate-600 dark:text-slate-300">Barcode</span>
+                <span className="font-mono font-semibold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                  {s.barcode}
+                </span>
+              </div>
+            )}
+            {s?.vendor && (
               <div className="flex items-center gap-2 text-sm">
                 <Truck className="h-4 w-4 text-slate-400 shrink-0" />
                 <span className="text-slate-600 dark:text-slate-300">Vendor</span>
-                <span className="font-medium text-slate-900 dark:text-white">{supply.vendor.name}</span>
+                <span className="font-medium text-slate-900 dark:text-white">{s.vendor.name}</span>
               </div>
             )}
-            {(supply.kitchenSupplies?.length > 0 || supply.kitchen?.name) && (
+            {((s?.kitchenSupplies?.length ?? 0) > 0 || s?.kitchen?.name) && (
               <div className="flex items-start gap-2 text-sm">
                 <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="text-slate-600 dark:text-slate-300">Kitchens: </span>
                   <span className="font-medium text-slate-900 dark:text-white">
-                    {supply.kitchenSupplies?.length > 0
-                      ? supply.kitchenSupplies.map((ks: any) => ks.kitchen?.name).filter(Boolean).join(', ')
-                      : supply.kitchen?.name ?? '—'}
+                    {(s?.kitchenSupplies?.length ?? 0) > 0
+                      ? (s?.kitchenSupplies ?? []).map((ks: any) => ks.kitchen?.name).filter(Boolean).join(', ')
+                      : s?.kitchen?.name ?? '—'}
                   </span>
                 </div>
               </div>
             )}
-            {supply.notes && (
+            {(s?.notes ?? supply.notes) && (
               <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-slate-600 dark:text-slate-300">
-                {supply.notes}
+                {s?.notes ?? supply.notes}
               </div>
             )}
           </section>
@@ -169,7 +194,7 @@ export function FoodSupplyDetailsDialog({
               <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-4 border border-amber-100 dark:border-amber-800/40">
                 <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">Quantity consumed</p>
                 <p className="text-xl font-bold text-amber-700 dark:text-amber-300 mt-0.5">
-                  {totalConsumed.toFixed(1)} <span className="text-sm font-medium">{supply.unit}</span>
+                  {totalConsumed.toFixed(1)} <span className="text-sm font-medium">{s?.unit ?? supply.unit}</span>
                 </p>
               </div>
               <div className="rounded-xl bg-indigo-50 dark:bg-indigo-900/20 p-4 border border-indigo-100 dark:border-indigo-800/40">
@@ -204,7 +229,7 @@ export function FoodSupplyDetailsDialog({
                   >
                     <div className="min-w-0">
                       <span className="font-semibold text-slate-900 dark:text-white">
-                        {r.quantity} {r.foodSupply?.unit ?? supply.unit}
+                        {r.quantity} {r.foodSupply?.unit ?? s?.unit ?? supply.unit}
                       </span>
                       <span className={`ml-2 text-xs font-medium px-2 py-0.5 rounded-full ${
                         r.isWaste ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : r.source === 'recipe' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
