@@ -41,6 +41,7 @@ import {
   Printer,
   ZoomIn,
   X,
+  MessageSquare,
 } from "lucide-react";
 import { EditAssetDialog } from "./EditAssetDialog";
 import { AssignAssetDialog } from "./AssignAssetDialog";
@@ -143,6 +144,7 @@ const HISTORY_CONFIG: Record<string, { color: string; bg: string; border: string
   TASK_CREATED:   { color: "text-amber-600",  bg: "bg-amber-50 dark:bg-amber-950/30",   border: "border-amber-200 dark:border-amber-800", icon: Calendar },
   UPDATED:        { color: "text-emerald-600",bg: "bg-emerald-50 dark:bg-emerald-950/30",border: "border-emerald-200 dark:border-emerald-800",icon: Edit },
   REGISTERED:     { color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950/30", border: "border-indigo-200 dark:border-indigo-800",icon: Package },
+  AUDIT_COMMENT:  { color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950/30", border: "border-indigo-200 dark:border-indigo-800",icon: MessageSquare },
 };
 
 function InfoRow({ icon: Icon, label, value, mono = false }: { icon: any; label: string; value: React.ReactNode; mono?: boolean }) {
@@ -859,6 +861,18 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                   {record.details.type && <p><span className="font-semibold">Type:</span> {record.details.type}</p>}
                                   {record.details.floorNumber && <p><span className="font-semibold">Floor:</span> {record.details.floorNumber}</p>}
                                   {record.details.purchaseAmount && <p><span className="font-semibold">Amount:</span> QAR {record.details.purchaseAmount.toLocaleString()}</p>}
+                                </div>
+                              )}
+                              {record.action === "AUDIT_COMMENT" && record.details && (
+                                <div className="text-xs space-y-2">
+                                  {(record.details.comment || "").trim() && (
+                                    <p className="text-foreground whitespace-pre-wrap">{record.details.comment}</p>
+                                  )}
+                                  {record.details.imageUrl && (
+                                    <div className="mt-2 rounded-lg overflow-hidden border border-border max-w-full max-h-48">
+                                      <img src={record.details.imageUrl} alt="Audit" className="max-w-full max-h-48 object-contain" />
+                                    </div>
+                                  )}
                                 </div>
                               )}
                               {record.action === "DISPOSED" && record.details && (() => {

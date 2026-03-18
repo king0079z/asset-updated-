@@ -211,6 +211,7 @@ export const AssetReportDetailed: React.FC<AssetReportDetailedProps> = ({ assets
       DISPOSED: { color: 'bg-red-100 text-red-800 border-red-300', icon: '✕', label: 'ASSET DISPOSED' },
       MAINTENANCE: { color: 'bg-violet-100 text-violet-800 border-violet-300', icon: '⚙', label: 'MAINTENANCE' },
       TICKET_CREATED: { color: 'bg-indigo-100 text-indigo-800 border-indigo-300', icon: '🎫', label: 'TICKET CREATED' },
+      AUDIT_COMMENT: { color: 'bg-indigo-100 text-indigo-800 border-indigo-300', icon: '💬', label: 'AUDIT COMMENT' },
     };
     return map[action] ?? { color: 'bg-slate-100 text-slate-800 border-slate-300', icon: '●', label: action };
   };
@@ -228,6 +229,11 @@ export const AssetReportDetailed: React.FC<AssetReportDetailedProps> = ({ assets
     }
     if (record.action === 'MAINTENANCE' && record.details) {
       return record.details.notes ?? 'Not specified';
+    }
+    if (record.action === 'AUDIT_COMMENT' && record.details) {
+      const d = record.details as { comment?: string; imageUrl?: string };
+      const text = (d.comment || '').trim() || 'No comment text';
+      return d.imageUrl ? `${text} [Photo attached]` : text;
     }
     if (record.action === 'UPDATED' && record.details && typeof record.details === 'object') {
       return `Updated: ${Object.keys(record.details).join(', ')}`;
@@ -480,6 +486,11 @@ export const AssetReportDetailed: React.FC<AssetReportDetailedProps> = ({ assets
                                   <span className="text-[10px] text-slate-500">{formatDate(record.createdAt)}</span>
                                 </div>
                                 <p className="text-xs text-slate-600 mt-1">{formatActionDetails(record)}</p>
+                                {record.action === 'AUDIT_COMMENT' && record.details?.imageUrl && (
+                                  <div className="mt-2 rounded-lg overflow-hidden border border-slate-200 max-w-full max-h-40">
+                                    <img src={record.details.imageUrl} alt="Audit" className="max-w-full max-h-40 object-contain" />
+                                  </div>
+                                )}
                                 {record.user?.email && <p className="text-[10px] text-slate-400 mt-0.5">By: {record.user.email}</p>}
                               </div>
                             </div>

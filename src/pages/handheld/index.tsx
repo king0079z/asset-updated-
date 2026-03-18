@@ -193,6 +193,11 @@ export default function HandheldHubPage() {
   const [auditDetailsLoading, setAuditDetailsLoading] = useState(false);
   const [auditRfidMapAsset, setAuditRfidMapAsset] = useState<any | null>(null);
   const [auditSort, setAuditSort] = useState<'scan' | 'name' | 'location'>('scan');
+  const [auditCommentAsset, setAuditCommentAsset] = useState<{ id: string; name: string } | null>(null);
+  const [auditCommentText, setAuditCommentText] = useState('');
+  const [auditCommentImagePreview, setAuditCommentImagePreview] = useState<string | null>(null);
+  const [auditCommentSubmitting, setAuditCommentSubmitting] = useState(false);
+  const auditCommentImageInputRef = useRef<HTMLInputElement>(null);
   const [selectedAuditFoodSupply, setSelectedAuditFoodSupply] = useState<any | null>(null);
   const [auditFoodConsumption, setAuditFoodConsumption] = useState<any[]>([]);
   const [auditFoodConsumptionLoading, setAuditFoodConsumptionLoading] = useState(false);
@@ -1000,6 +1005,45 @@ export default function HandheldHubPage() {
     if (ticket?.id) fetchTicketDetail(ticket.id);
   }, [fetchTicketDetail]);
 
+  const submitAuditComment = useCallback(async () => {
+    if (!auditCommentAsset || !auditCommentText.trim()) {
+      toast({ title: 'Comment required', variant: 'destructive' });
+      return;
+    }
+    setAuditCommentSubmitting(true);
+    try {
+      let imageUrl: string | null = null;
+      const file = auditCommentImageInputRef.current?.files?.[0];
+      if (file) {
+        const formData = new FormData();
+        formData.append('image', file);
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (uploadRes.ok) {
+          const up = await uploadRes.json();
+          imageUrl = up?.url ?? null;
+        }
+      }
+      const r = await fetch(`/api/assets/${auditCommentAsset.id}/audit-comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment: auditCommentText.trim(), imageUrl: imageUrl ?? undefined }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || err.error || 'Failed to add comment');
+      }
+      toast({ title: 'Comment added', description: 'Saved to asset history and reports.' });
+      setAuditCommentAsset(null);
+      setAuditCommentText('');
+      setAuditCommentImagePreview(null);
+      if (auditCommentImageInputRef.current) auditCommentImageInputRef.current.value = '';
+    } catch (err) {
+      toast({ title: 'Failed to add comment', variant: 'destructive', description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setAuditCommentSubmitting(false);
+    }
+  }, [auditCommentAsset, auditCommentText, toast]);
+
   const processOfflineQueue = useCallback(async () => {
     const q = getQueue();
     if (q.length === 0) return;
@@ -1645,6 +1689,14 @@ export default function HandheldHubPage() {
                         </div>
                       </div>
                       <div className="px-4 pb-4 grid gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setAuditCommentAsset({ id: asset.id, name: asset.name }); setAuditCommentText(''); setAuditCommentImagePreview(null); if (auditCommentImageInputRef.current) auditCommentImageInputRef.current.value = ''; }}
+                          className="flex items-center gap-2 text-xs text-left w-full rounded-lg py-2 px-3 -mx-1 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 active:scale-[0.98] transition-transform touch-manipulation"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                          <span>Add comment / photo</span>
+                        </button>
                         <div className="flex items-center gap-2 text-xs">
                           <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span className="text-slate-600 dark:text-slate-300">Location: {loc}</span>
@@ -2440,6 +2492,55 @@ export default function HandheldHubPage() {
         onOpenChange={(open) => { if (!open) setAuditRfidMapAsset(null); }}
         asset={auditRfidMapAsset}
       />
+
+      {/* Audit: Add comment + photo (saved to asset history and reports) */}
+      <Dialog open={!!auditCommentAsset} onOpenChange={(open) => { if (!open) { setAuditCommentAsset(null); setAuditCommentText(''); setAuditCommentImagePreview(null); if (auditCommentImageInputRef.current) auditCommentImageInputRef.current.value = ''; } }}>
+        <DialogContent className="max-w-md rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><MessageSquare className="h-5 w-5 text-indigo-500" /> Add audit comment</DialogTitle>
+            <DialogDescription>{auditCommentAsset ? `Comment and photo will be saved to ${auditCommentAsset.name} history and appear in asset reports.` : ''}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">Comment</label>
+              <Textarea
+                placeholder="e.g. Condition noted, damage, location verified..."
+                value={auditCommentText}
+                onChange={(e) => setAuditCommentText(e.target.value)}
+                className="min-h-[100px] rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">Photo (optional)</label>
+              <Input
+                ref={auditCommentImageInputRef}
+                type="file"
+                accept="image/*"
+                className="rounded-xl"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setAuditCommentImagePreview(reader.result as string);
+                    reader.readAsDataURL(file);
+                  } else setAuditCommentImagePreview(null);
+                }}
+              />
+              {auditCommentImagePreview && (
+                <div className="mt-2 relative h-32 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                  <img src={auditCommentImagePreview} alt="Preview" className="h-full w-full object-contain" />
+                </div>
+              )}
+            </div>
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setAuditCommentAsset(null); setAuditCommentText(''); setAuditCommentImagePreview(null); }}>Cancel</Button>
+              <Button type="button" className="rounded-xl" disabled={!auditCommentText.trim() || auditCommentSubmitting} onClick={submitAuditComment}>
+                {auditCommentSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save comment'}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Food Supply Details Dialog (from audit) */}
       <Dialog open={!!selectedAuditFoodSupply} onOpenChange={(open) => { if (!open) setSelectedAuditFoodSupply(null); }}>

@@ -93,9 +93,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
       }
     } else {
-      // Only include valid AssetHistoryAction enum values
+      // Include all history types including audit comments
       assetHistoryWhere.action = {
-        in: ['REGISTERED', 'MOVED', 'DISPOSED', 'UPDATED'],
+        in: ['REGISTERED', 'MOVED', 'DISPOSED', 'UPDATED', 'AUDIT_COMMENT', 'STATUS_CHANGED', 'ASSIGNED', 'UNASSIGNED', 'LOCATION_SHARED', 'CLEARANCE'],
       };
     }
 

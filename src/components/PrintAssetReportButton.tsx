@@ -270,6 +270,7 @@ function generateReportHTML(asset: any, opts: {
     DISPOSED:       { dot: 'border-color:#fca5a5;color:#991b1b', action: 'background:#fee2e2;color:#991b1b', icon: '✕' },
     MAINTENANCE:    { dot: 'border-color:#d8b4fe;color:#6b21a8', action: 'background:#f3e8ff;color:#6b21a8', icon: '⚙' },
     TICKET_CREATED: { dot: 'border-color:#a5b4fc;color:#3730a3', action: 'background:#e0e7ff;color:#3730a3', icon: '🎫' },
+    AUDIT_COMMENT:  { dot: 'border-color:#818cf8;color:#3730a3', action: 'background:#e0e7ff;color:#3730a3', icon: '💬' },
   };
 
   let historyHTML = '';
@@ -287,21 +288,28 @@ function generateReportHTML(asset: any, opts: {
         details = `Reason: ${rec.details.reason}`;
       } else if (rec.action === 'MAINTENANCE' && rec.details?.notes) {
         details = rec.details.notes;
+      } else if (rec.action === 'AUDIT_COMMENT' && rec.details) {
+        const d = rec.details;
+        details = (d.comment || '').trim();
+        if (d.imageUrl) details += ` [Photo attached]`;
       } else if (rec.action === 'UPDATED' && rec.details && typeof rec.details === 'object') {
         details = `Updated: ${Object.keys(rec.details).join(', ')}`;
       } else if (rec.details && typeof rec.details === 'string') {
         details = rec.details;
       }
 
+      const labelText = rec.action === 'AUDIT_COMMENT' ? 'AUDIT COMMENT' : (rec.action === 'TICKET_CREATED' ? 'TICKET CREATED' : rec.action?.replace(/_/g, ' ') ?? 'EVENT');
+
       return `
         <div class="tl-item">
           <div class="tl-dot" style="${a.dot}">${a.icon}</div>
           <div class="tl-card">
             <div class="tl-top">
-              <span class="tl-action" style="${a.action}">${label}</span>
+              <span class="tl-action" style="${a.action}">${labelText}</span>
               <span class="tl-date">${fmtDate(rec.createdAt)}</span>
             </div>
             ${details ? `<div class="tl-details">${details}</div>` : ''}
+            ${rec.details?.imageUrl ? `<div class="tl-details" style="margin-top:6px"><img src="${rec.details.imageUrl}" alt="Audit photo" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>` : ''}
             ${rec.user?.email ? `<div class="tl-by">By: ${rec.user.email}</div>` : ''}
           </div>
         </div>`;
