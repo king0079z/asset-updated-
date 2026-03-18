@@ -42,12 +42,14 @@ interface FoodSupplyMobileCardProps {
   supply: FoodSupply;
   categories: Array<{ value: string; label: string; color: string }>;
   onUpdate: () => void;
+  onOpenDetails?: (supply: FoodSupply) => void;
 }
 
 export function FoodSupplyMobileCard({ 
   supply, 
   categories,
-  onUpdate
+  onUpdate,
+  onOpenDetails
 }: FoodSupplyMobileCardProps) {
   const { t } = useTranslation();
   const category = categories.find(c => c.value === supply.category);
@@ -76,7 +78,13 @@ export function FoodSupplyMobileCard({
   const expirationStatus = getExpirationStatus();
 
   return (
-    <Card className="overflow-hidden shadow-sm border-slate-200 dark:border-slate-800">
+    <Card
+      className={`overflow-hidden shadow-sm border-slate-200 dark:border-slate-800 ${onOpenDetails ? "cursor-pointer hover:shadow-md transition-shadow active:scale-[0.99]" : ""}`}
+      role={onOpenDetails ? "button" : undefined}
+      tabIndex={onOpenDetails ? 0 : undefined}
+      onClick={onOpenDetails ? () => onOpenDetails(supply) : undefined}
+      onKeyDown={onOpenDetails ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenDetails(supply); } } : undefined}
+    >
       <CardHeader className="pb-2 space-y-1">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
@@ -132,7 +140,7 @@ export function FoodSupplyMobileCard({
         )}
       </CardContent>
       
-      <CardFooter className="flex flex-wrap justify-between gap-2 p-2 bg-muted/10">
+      <CardFooter className="flex flex-wrap justify-between gap-2 p-2 bg-muted/10" onClick={(e) => e.stopPropagation()}>
         <ConsumptionHistoryDialog 
           foodSupplyId={supply.id} 
           foodSupplyName={supply.name}

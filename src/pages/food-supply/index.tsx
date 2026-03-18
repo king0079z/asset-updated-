@@ -14,6 +14,7 @@ import { FoodSupplyNotifications } from "@/components/FoodSupplyNotifications";
 import { CategoryDetailsDialog } from "@/components/CategoryDetailsDialog";
 import PrintFoodSupplyReportButton from "@/components/PrintFoodSupplyReportButton";
 import { RefillFoodSupplyDialog } from "@/components/RefillFoodSupplyDialog";
+import { FoodSupplyDetailsDialog } from "@/components/FoodSupplyDetailsDialog";
 import { AssetReport } from "@/components/AssetReport";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -37,7 +38,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+import { fetchWithCache, getFromCache, invalidateCache } from "@/lib/api-cache";
 
 const FS_KEY   = "/api/food-supply";
 const STATS_KEY = "/api/food-supply/stats";
@@ -102,7 +103,7 @@ const getExpiryStatus = (days: number) => {
 };
 
 /* ─── Supply Card ─────────────────────────────────────────────────────────────── */
-function SupplyCard({ supply, kitchens, onUpdate }: { supply: any; kitchens: any[]; onUpdate: () => void }) {
+function SupplyCard({ supply, kitchens, onUpdate, onOpenDetails }: { supply: any; kitchens: any[]; onUpdate: () => void; onOpenDetails?: (s: any) => void }) {
   const cat = getCat(supply.category);
   const days = getDaysUntil(supply.expirationDate);
   const exp = getExpiryStatus(days);
@@ -111,7 +112,12 @@ function SupplyCard({ supply, kitchens, onUpdate }: { supply: any; kitchens: any
   const kitchenName = supply.kitchenSupplies?.[0]?.kitchen?.name || supply.kitchen?.name || kitchens[0]?.name || "Kitchen";
 
   return (
-    <div className={`group relative rounded-2xl border overflow-hidden transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 bg-card ${
+    <div
+      role={onOpenDetails ? "button" : undefined}
+      tabIndex={onOpenDetails ? 0 : undefined}
+      onClick={onOpenDetails ? () => onOpenDetails(supply) : undefined}
+      onKeyDown={onOpenDetails ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenDetails(supply); } } : undefined}
+      className={`group relative rounded-2xl border overflow-hidden transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 bg-card ${onOpenDetails ? "cursor-pointer" : ""} ${
       days < 0 ? "border-red-200 dark:border-red-800/40" : days <= 7 ? "border-red-200/70 dark:border-red-800/30" : days <= 30 ? "border-amber-200/70 dark:border-amber-800/30" : "border-border hover:border-orange-200 dark:hover:border-orange-800/30"
     }`}>
       {/* Status accent bar */}
@@ -141,7 +147,7 @@ function SupplyCard({ supply, kitchens, onUpdate }: { supply: any; kitchens: any
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-muted transition-all">
+              <button className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-muted transition-all" onClick={(e) => e.stopPropagation()}>
                 <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
@@ -221,7 +227,7 @@ function SupplyCard({ supply, kitchens, onUpdate }: { supply: any; kitchens: any
         )}
 
         {/* Action row */}
-        <div className="flex gap-1.5 pt-1 border-t border-border/40">
+        <div className="flex gap-1.5 pt-1 border-t border-border/40" onClick={(e) => e.stopPropagation()}>
           {kitchenId && (
             <KitchenConsumptionDialog
               kitchenId={kitchenId} kitchenName={kitchenName}
@@ -239,7 +245,7 @@ function SupplyCard({ supply, kitchens, onUpdate }: { supply: any; kitchens: any
 }
 
 /* ─── Supply Table Row ────────────────────────────────────────────────────────── */
-function SupplyTableRow({ supply, kitchens, onUpdate }: { supply: any; kitchens: any[]; onUpdate: () => void }) {
+function SupplyTableRow({ supply, kitchens, onUpdate, onOpenDetails }: { supply: any; kitchens: any[]; onUpdate: () => void; onOpenDetails?: (s: any) => void }) {
   const cat = getCat(supply.category);
   const days = getDaysUntil(supply.expirationDate);
   const exp = getExpiryStatus(days);
@@ -247,7 +253,11 @@ function SupplyTableRow({ supply, kitchens, onUpdate }: { supply: any; kitchens:
   const kitchenName = supply.kitchenSupplies?.[0]?.kitchen?.name || supply.kitchen?.name || kitchens[0]?.name || "Kitchen";
 
   return (
-    <tr className="border-b border-border/40 hover:bg-muted/30 transition-colors group">
+    <tr
+      className={`border-b border-border/40 hover:bg-muted/30 transition-colors group ${onOpenDetails ? "cursor-pointer" : ""}`}
+      onClick={onOpenDetails ? () => onOpenDetails(supply) : undefined}
+      role={onOpenDetails ? "button" : undefined}
+    >
       <td className="py-3 px-4">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center flex-shrink-0 shadow-sm text-base">
@@ -276,7 +286,7 @@ function SupplyTableRow({ supply, kitchens, onUpdate }: { supply: any; kitchens:
           {days < 0 ? `Expired ${Math.abs(days)}d` : days === 0 ? "Today" : `${days}d`}
         </span>
       </td>
-      <td className="py-3 px-4">
+      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {kitchenId && (
             <KitchenConsumptionDialog
@@ -489,6 +499,7 @@ export default function FoodSupplyPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [activeTab, setActiveTab] = useState("inventory");
+  const [selectedSupplyForDetails, setSelectedSupplyForDetails] = useState<any | null>(null);
   const { toast } = useToast();
   const { t } = useTranslation();
   const isMobile = useMediaQuery("(max-width: 768px)");
@@ -620,13 +631,20 @@ export default function FoodSupplyPage() {
               body: JSON.stringify({ foodSupplyId: id, quantity: newQuantity, expirationDate: newExpirationDate, disposedQuantity }),
             });
             if (!res.ok) throw new Error("Failed");
+            invalidateCache(FS_KEY);
             await loadFoodSupplies(true);
             setRefillDialogState({ open: false, item: null });
             toast({ title: "Refilled", description: "Food supply updated successfully." });
           } catch { toast({ title: "Error", description: "Failed to refill", variant: "destructive" }); }
         }}
       />
-      <AddSupplyDialog open={addOpen} onOpenChange={setAddOpen} vendors={vendors} onSuccess={() => { loadFoodSupplies(true); loadStats(); }} />
+      <AddSupplyDialog open={addOpen} onOpenChange={setAddOpen} vendors={vendors} onSuccess={() => { invalidateCache(FS_KEY); loadFoodSupplies(true); loadStats(); }} />
+      <FoodSupplyDetailsDialog
+        supply={selectedSupplyForDetails}
+        open={!!selectedSupplyForDetails}
+        onOpenChange={(open) => !open && setSelectedSupplyForDetails(null)}
+        onUpdate={() => loadFoodSupplies(true)}
+      />
       <EnhancedBarcodeScanner
         kitchenId={scannerKitchenId || kitchens[0]?.id || ""}
         open={showConsumptionScanner} onOpenChange={setShowConsumptionScanner} onScanComplete={() => loadFoodSupplies(true)}
@@ -958,13 +976,13 @@ export default function FoodSupplyPage() {
                     ) : isMobile ? (
                       <div className="grid gap-4">
                         {filteredAndSorted.map(supply => (
-                          <FoodSupplyMobileCard key={supply.id} supply={supply} categories={CATEGORIES} onUpdate={() => loadFoodSupplies(true)} />
+                          <FoodSupplyMobileCard key={supply.id} supply={supply} categories={CATEGORIES} onUpdate={() => loadFoodSupplies(true)} onOpenDetails={setSelectedSupplyForDetails} />
                         ))}
                       </div>
                     ) : viewMode === "grid" ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         {filteredAndSorted.map(supply => (
-                          <SupplyCard key={supply.id} supply={supply} kitchens={kitchens} onUpdate={() => { loadFoodSupplies(true); loadStats(); }} />
+                          <SupplyCard key={supply.id} supply={supply} kitchens={kitchens} onUpdate={() => { loadFoodSupplies(true); loadStats(); }} onOpenDetails={setSelectedSupplyForDetails} />
                         ))}
                       </div>
                     ) : (
@@ -996,7 +1014,7 @@ export default function FoodSupplyPage() {
                           </thead>
                           <tbody>
                             {filteredAndSorted.map(supply => (
-                              <SupplyTableRow key={supply.id} supply={supply} kitchens={kitchens} onUpdate={() => { loadFoodSupplies(true); loadStats(); }} />
+                              <SupplyTableRow key={supply.id} supply={supply} kitchens={kitchens} onUpdate={() => { loadFoodSupplies(true); loadStats(); }} onOpenDetails={setSelectedSupplyForDetails} />
                             ))}
                           </tbody>
                         </table>
