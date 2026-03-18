@@ -45,6 +45,11 @@ import {
   Layers,
   Briefcase,
   Printer,
+  Camera,
+  BarChart3,
+  AlertCircle,
+  ListChecks,
+  Type,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
@@ -183,7 +188,18 @@ export default function HandheldHubPage() {
     missing: { id: string; name: string; barcode?: string }[];
     extra: { id: string; name: string; barcode?: string }[];
     submittedForReview: boolean;
+    reasonCode?: string;
+    note?: string;
+    submittedAt?: number;
   } | null>(null);
+  const COUNT_REVIEW_REASONS = [
+    { value: '', label: 'Select reason (optional)' },
+    { value: 'NOT_FOUND', label: 'Not found at location' },
+    { value: 'DAMAGED', label: 'Damaged' },
+    { value: 'WRONG_LOCATION', label: 'Wrong location' },
+    { value: 'MISSING', label: 'Missing / unaccounted' },
+    { value: 'OTHER', label: 'Other' },
+  ];
   const [reconciliationLoading, setReconciliationLoading] = useState(false);
 
   // Locate state
@@ -204,7 +220,101 @@ export default function HandheldHubPage() {
   const [showPrintTagDialog, setShowPrintTagDialog] = useState(false);
   const [printTagAsset, setPrintTagAsset] = useState<Asset | null>(null);
 
+  // Session stats (world-class ops) — state so UI updates
+  const [sessionScansCount, setSessionScansCount] = useState(0);
+  const [sessionTasksCount, setSessionTasksCount] = useState(0);
+  const [sessionStart] = useState(() => Date.now());
+  const resetSessionStats = useCallback(() => {
+    setSessionScansCount(0);
+    setSessionTasksCount(0);
+    toast({ title: 'Session reset', description: 'Scans and tasks counters cleared.' });
+  }, [toast]);
+
+  // Exception/reason codes for count review
+  const [countReviewReason, setCountReviewReason] = useState('');
+  const [countReviewNote, setCountReviewNote] = useState('');
+
+  // Recent actions (audit trail)
+  const [recentActions, setRecentActions] = useState<{ type: string; label: string; at: number }[]>([]);
+  const pushRecentAction = useCallback((type: string, label: string) => {
+    setRecentActions((prev) => [{ type, label, at: Date.now() }, ...prev].slice(0, 30));
+  }, []);
+
+  // Accessibility: large text
+  const [largeTextMode, setLargeTextMode] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('handheld_large_text');
+      setLargeTextMode(stored === '1');
+    } catch {}
+  }, []);
+  const toggleLargeText = useCallback(() => {
+    setLargeTextMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('handheld_large_text', next ? '1' : '0');
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  // Offline queue (persist and replay on sync)
+  const OFFLINE_QUEUE_KEY = 'handheld_offline_queue';
+  const [offlineQueueLength, setOfflineQueueLength] = useState(0);
+  const getQueue = useCallback((): { type: string; payload: any }[] => {
+    try {
+      const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+  const setQueue = useCallback((q: { type: string; payload: any }[]) => {
+    try {
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+      setOfflineQueueLength(q.length);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    setOfflineQueueLength(getQueue().length);
+  }, [getQueue]);
+
+  // Batch move
+  const [batchMoveIds, setBatchMoveIds] = useState<string[]>([]);
+  const [showBatchMoveDialog, setShowBatchMoveDialog] = useState(false);
+  const [batchMoveLoading, setBatchMoveLoading] = useState(false);
+  const batchMoveForm = useForm<z.infer<typeof transferSchema>>({
+    resolver: zodResolver(transferSchema),
+    defaultValues: { floorNumber: '', roomNumber: '' },
+  });
+  const doBatchMove = useCallback(async (vals: z.infer<typeof transferSchema>) => {
+    if (batchMoveIds.length === 0) return;
+    setBatchMoveLoading(true);
+    let done = 0;
+    for (const id of batchMoveIds) {
+      try {
+        const r = await fetch(`/api/assets/${id}/move`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(vals),
+        });
+        if (r.ok) done++;
+      } catch {}
+    }
+    setBatchMoveLoading(false);
+    setShowBatchMoveDialog(false);
+    setBatchMoveIds([]);
+    batchMoveForm.reset();
+    pushRecentAction('move', `Batch move: ${done}/${batchMoveIds.length} assets to ${vals.floorNumber}, ${vals.roomNumber}`);
+    toast({ title: 'Batch move done', description: `${done} of ${batchMoveIds.length} moved to ${vals.floorNumber}, ${vals.roomNumber}.` });
+  }, [batchMoveIds, pushRecentAction, toast]);
+
+  // Photo upload
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
   const handheldDialogOpenedAt = useRef(0);
   const preventHandheldDialogOutsideClose = useCallback((e: Event) => {
     if (Date.now() - handheldDialogOpenedAt.current < 900) e.preventDefault();
@@ -466,6 +576,14 @@ export default function HandheldHubPage() {
 
   const doMove = async (vals: z.infer<typeof transferSchema>) => {
     if (!currentAsset) return;
+    const payload = { assetId: currentAsset.id, assetName: currentAsset.name, floorNumber: vals.floorNumber, roomNumber: vals.roomNumber };
+    if (!isOnline) {
+      setQueue([...getQueue(), { type: 'move', payload }]);
+      setShowMove(false);
+      transferForm.reset();
+      toast({ title: 'Queued for sync', description: 'Move will sync when back online.' });
+      return;
+    }
     setMoving(true);
     try {
       const r = await fetch(`/api/assets/${currentAsset.id}/move`, {
@@ -478,6 +596,7 @@ export default function HandheldHubPage() {
       setCurrentAsset((prev) => (prev ? { ...prev, ...d.asset, floorNumber: vals.floorNumber, roomNumber: vals.roomNumber } : prev));
       setShowMove(false);
       transferForm.reset();
+      pushRecentAction('move', `Moved ${currentAsset.name} to ${vals.floorNumber}, ${vals.roomNumber}`);
       toast({ title: 'Asset moved', description: `Floor ${vals.floorNumber}, Room ${vals.roomNumber}` });
     } catch {
       toast({ title: 'Move failed', variant: 'destructive' });
@@ -555,6 +674,10 @@ export default function HandheldHubPage() {
       });
       if (r.ok) {
         setAssignedTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
+        if (status === 'completed') {
+          setSessionTasksCount((s) => s + 1);
+          pushRecentAction('task', 'Task completed');
+        }
         toast({ title: 'Task updated' });
       }
     } catch {
@@ -642,15 +765,44 @@ export default function HandheldHubPage() {
     if (ticket?.id) fetchTicketDetail(ticket.id);
   }, [fetchTicketDetail]);
 
+  const processOfflineQueue = useCallback(async () => {
+    const q = getQueue();
+    if (q.length === 0) return;
+    const remaining: { type: string; payload: any }[] = [];
+    for (const item of q) {
+      if (item.type === 'move' && item.payload?.assetId) {
+        try {
+          const r = await fetch(`/api/assets/${item.payload.assetId}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ floorNumber: item.payload.floorNumber, roomNumber: item.payload.roomNumber }),
+          });
+          if (r.ok) {
+            pushRecentAction('move', `Synced: moved to ${item.payload.floorNumber}, ${item.payload.roomNumber}`);
+          } else {
+            remaining.push(item);
+          }
+        } catch {
+          remaining.push(item);
+        }
+      } else {
+        remaining.push(item);
+      }
+    }
+    setQueue(remaining);
+    if (remaining.length < q.length) toast({ title: 'Offline queue synced', description: `${q.length - remaining.length} action(s) applied.` });
+  }, [getQueue, setQueue, pushRecentAction, toast]);
+
   const handleSyncNow = useCallback(async () => {
     setLastSyncTime(Date.now());
     try {
+      if (isOnline) await processOfflineQueue();
       await Promise.all([fetchAssignedTickets(), fetchAssignedTasks()]);
-      toast({ title: 'Synced', description: 'Tickets and tasks refreshed.' });
+      toast({ title: 'Synced', description: offlineQueueLength > 0 ? 'Queue replayed, tickets and tasks refreshed.' : 'Tickets and tasks refreshed.' });
     } catch {
       toast({ title: 'Sync failed', variant: 'destructive' });
     }
-  }, [fetchAssignedTickets, fetchAssignedTasks, toast]);
+  }, [fetchAssignedTickets, fetchAssignedTasks, toast, isOnline, processOfflineQueue, offlineQueueLength]);
 
   const startCountSession = useCallback(() => {
     setCountSessionActive(true);
@@ -693,15 +845,20 @@ export default function HandheldHubPage() {
   }, [countScans, toast]);
 
   const submitCountForReview = useCallback(() => {
-    setReconciliationResult((prev) => (prev ? { ...prev, submittedForReview: true } : null));
+    setReconciliationResult((prev) =>
+      prev ? { ...prev, submittedForReview: true, reasonCode: countReviewReason, note: countReviewNote, submittedAt: Date.now() } : null
+    );
+    setCountReviewReason('');
+    setCountReviewNote('');
     toast({ title: 'Submitted for review', description: 'A manager or admin can review the count and discrepancies.' });
-  }, [toast]);
+  }, [toast, countReviewReason, countReviewNote]);
 
   const endCountSession = useCallback(() => {
-    setCountSessionActive(false);
     const total = countScans.length;
+    pushRecentAction('count', `Count session: ${total} item${total !== 1 ? 's' : ''} (${countLocationLabel.trim() || 'All'})`);
+    setCountSessionActive(false);
     toast({ title: 'Count ended', description: `${total} item${total !== 1 ? 's' : ''} counted.` });
-  }, [countScans.length, toast]);
+  }, [countScans.length, countLocationLabel, pushRecentAction, toast]);
 
   const exportCountReport = useCallback(() => {
     if (countScans.length === 0) {
@@ -725,6 +882,7 @@ export default function HandheldHubPage() {
   const addToCount = useCallback(async (code: string) => {
     const q = code.trim();
     if (!q) return;
+    setSessionScansCount((s) => s + 1);
     try {
       const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(q)}`);
       if (res.ok) {
@@ -739,6 +897,7 @@ export default function HandheldHubPage() {
       setCountScans((prev) => [...prev, { id: `raw-${Date.now()}`, barcode: q, name: q }]);
       toast({ title: 'Added to count', description: q });
     } catch {
+      setSessionScansCount((s) => Math.max(0, s - 1));
       toast({ title: 'Lookup failed', variant: 'destructive' });
     }
   }, [toast]);
@@ -816,8 +975,8 @@ export default function HandheldHubPage() {
 
   return (
     <HandheldLayout title="Field Assistant" lastSyncTime={lastSyncTime} onSyncNow={handleSyncNow}>
-      {/* Tab content — touch-friendly, safe area */}
-      <div className="flex-1 overflow-auto p-4 pb-28 min-h-0">
+      {/* Tab content — touch-friendly, safe area; optional large text for accessibility */}
+      <div className={cn('flex-1 overflow-auto p-4 pb-28 min-h-0', largeTextMode && 'text-base [&_input]:text-base [&_button]:text-base')}>
         {tab === 'scan' && (
           <div className="max-w-lg mx-auto">
             <HandheldAssetScanner standalone onAssetSelected={setCurrentAsset} />
@@ -1356,12 +1515,45 @@ export default function HandheldHubPage() {
                         </div>
                       )}
                       {!reconciliationResult.submittedForReview ? (
-                        <Button className="w-full rounded-xl gap-2" onClick={submitCountForReview}>
-                          <User className="h-4 w-4" /> Submit for manager review
-                        </Button>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1">Variance reason (optional)</label>
+                            <select
+                              value={countReviewReason}
+                              onChange={(e) => setCountReviewReason(e.target.value)}
+                              className="w-full h-10 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-3"
+                            >
+                              {COUNT_REVIEW_REASONS.map((r) => (
+                                <option key={r.value || 'opt'} value={r.value}>{r.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1">Note for reviewer (optional)</label>
+                            <Textarea
+                              placeholder="e.g. Aisle 3 was blocked during count"
+                              value={countReviewNote}
+                              onChange={(e) => setCountReviewNote(e.target.value)}
+                              className="min-h-[80px] rounded-xl resize-none"
+                            />
+                          </div>
+                          <Button className="w-full rounded-xl gap-2" onClick={submitCountForReview}>
+                            <User className="h-4 w-4" /> Submit for manager review
+                          </Button>
+                        </div>
                       ) : (
-                        <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-3 flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-sm">
-                          <CheckCircle2 className="h-4 w-4 shrink-0" /> Submitted for review
+                        <div className="space-y-2">
+                          <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-3 flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-sm">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" /> Submitted for review
+                          </div>
+                          {(reconciliationResult.reasonCode || reconciliationResult.note) && (
+                            <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                              {reconciliationResult.reasonCode && (
+                                <p>Reason: {COUNT_REVIEW_REASONS.find((r) => r.value === reconciliationResult.reasonCode)?.label || reconciliationResult.reasonCode}</p>
+                              )}
+                              {reconciliationResult.note && <p>Note: {reconciliationResult.note}</p>}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1497,11 +1689,72 @@ export default function HandheldHubPage() {
                 {lastSyncTime != null && (
                   <p className="text-xs text-slate-400 mt-1">Last sync: {Math.round((Date.now() - lastSyncTime) / 60000)}m ago</p>
                 )}
+                {offlineQueueLength > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 font-medium">{offlineQueueLength} action(s) queued for sync</p>
+                )}
               </div>
               <Button variant="outline" size="sm" className="rounded-xl shrink-0" onClick={handleSyncNow}>
                 <RefreshCw className="h-4 w-4 mr-1" /> Sync now
               </Button>
             </div>
+
+            <section className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20 p-4">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2 mb-3">
+                <BarChart3 className="h-4 w-4 text-violet-500" /> This session
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-white/80 dark:bg-slate-800/80 p-3 text-center">
+                  <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{countSessionActive ? countScans.length : sessionScansCount}</p>
+                  <p className="text-xs text-slate-500">Scans (count)</p>
+                </div>
+                <div className="rounded-xl bg-white/80 dark:bg-slate-800/80 p-3 text-center">
+                  <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{sessionTasksCount}</p>
+                  <p className="text-xs text-slate-500">Tasks completed</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="w-full rounded-xl text-slate-500" onClick={resetSessionStats}>
+                New session (reset counters)
+              </Button>
+            </section>
+
+            {recentActions.length > 0 && (
+              <section className="space-y-2">
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                  <History className="h-4 w-4" /> Recent actions
+                </p>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 max-h-40 overflow-y-auto divide-y divide-slate-200 dark:divide-slate-700">
+                  {recentActions.slice(0, 10).map((a, i) => (
+                    <div key={`${a.at}-${i}`} className="px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <ListChecks className="h-4 w-4 text-slate-400 shrink-0" />
+                      <span className="truncate flex-1">{a.label}</span>
+                      <span className="text-xs text-slate-400 shrink-0">{new Date(a.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+              <div className="flex items-center gap-2">
+                <Type className="h-5 w-5 text-slate-500" />
+                <div>
+                  <p className="font-medium text-slate-900 dark:text-white">Large text</p>
+                  <p className="text-xs text-slate-500">Easier to read in the field</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={largeTextMode}
+                onClick={toggleLargeText}
+                className={cn(
+                  'relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2',
+                  largeTextMode ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'
+                )}
+              >
+                <span className={cn('pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition', largeTextMode ? 'translate-x-5' : 'translate-x-1')} />
+              </button>
+            </section>
 
             <section className="space-y-3">
               <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Food supply</p>
@@ -1559,6 +1812,80 @@ export default function HandheldHubPage() {
                 </Button>
               </div>
             </section>
+
+            <section className="space-y-3">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Batch move</p>
+              <div className="grid gap-2">
+                {currentAsset && (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2 rounded-xl h-12"
+                    onClick={() => {
+                      if (currentAsset && !batchMoveIds.includes(currentAsset.id)) {
+                        setBatchMoveIds((prev) => [...prev, currentAsset.id]);
+                        toast({ title: 'Added to batch', description: currentAsset.name });
+                      }
+                    }}
+                    disabled={batchMoveIds.includes(currentAsset.id)}
+                  >
+                    <Package className="h-4 w-4" />
+                    Add current asset to batch {batchMoveIds.length > 0 && `(${batchMoveIds.length})`}
+                  </Button>
+                )}
+                {batchMoveIds.length > 0 && (
+                  <>
+                    <p className="text-xs text-slate-500">{batchMoveIds.length} asset(s) selected</p>
+                    <Button className="w-full rounded-xl gap-2 h-12" onClick={() => setShowBatchMoveDialog(true)}>
+                      <MapPin className="h-4 w-4" /> Move all to location
+                    </Button>
+                    <Button variant="ghost" size="sm" className="w-full rounded-xl" onClick={() => setBatchMoveIds([])}>Clear batch</Button>
+                  </>
+                )}
+              </div>
+            </section>
+
+            {currentAsset && (
+              <section className="space-y-2">
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Current asset</p>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 rounded-xl h-12"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoUploading}
+                >
+                  {photoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  {photoUploading ? 'Uploading…' : 'Add photo / document'}
+                </Button>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !currentAsset) return;
+                    e.target.value = '';
+                    setPhotoUploading(true);
+                    try {
+                      const form = new FormData();
+                      form.append('assetId', currentAsset.id);
+                      form.append('document', file);
+                      const r = await fetch('/api/assets/documents/upload', { method: 'POST', body: form, credentials: 'include' });
+                      if (!r.ok) {
+                        const err = await r.json().catch(() => ({}));
+                        throw new Error(err.message || 'Upload failed');
+                      }
+                      toast({ title: 'Photo added', description: 'Document attached to asset.' });
+                      pushRecentAction('photo', `Added photo to ${currentAsset.name}`);
+                    } catch (err) {
+                      toast({ title: 'Upload failed', variant: 'destructive', description: err instanceof Error ? err.message : undefined });
+                    } finally {
+                      setPhotoUploading(false);
+                    }
+                  }}
+                />
+              </section>
+            )}
 
             <section className="space-y-3">
               <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Shortcuts</p>
@@ -1686,6 +2013,43 @@ export default function HandheldHubPage() {
               Add to print queue
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch move dialog */}
+      <Dialog open={showBatchMoveDialog} onOpenChange={setShowBatchMoveDialog}>
+        <DialogContent className="max-w-lg rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-violet-500" />
+              Move {batchMoveIds.length} asset(s) to location
+            </DialogTitle>
+          </DialogHeader>
+          <Form {...batchMoveForm}>
+            <form onSubmit={batchMoveForm.handleSubmit(doBatchMove)} className="space-y-4 py-2">
+              <FormField control={batchMoveForm.control} name="floorNumber" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Floor</FormLabel>
+                  <FormControl><Input className="rounded-xl" placeholder="e.g. 1" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={batchMoveForm.control} name="roomNumber" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Room / Aisle</FormLabel>
+                  <FormControl><Input className="rounded-xl" placeholder="e.g. A-12" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowBatchMoveDialog(false)}>Cancel</Button>
+                <Button type="submit" disabled={batchMoveLoading}>
+                  {batchMoveLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Move all
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
