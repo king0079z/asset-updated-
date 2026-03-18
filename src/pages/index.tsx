@@ -202,7 +202,7 @@ export default function Home() {
                     {user ? (
                       <>
                         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
-                          <Link href={landingCtaMode === 'handheld' ? '/handheld' : '/tickets'} className="w-full sm:w-auto">
+                          <Link href={landingCtaMode === 'handheld' ? '/handheld' : '/portal'} className="w-full sm:w-auto">
                             <Button size="lg" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300">
                               {landingCtaMode === 'handheld' ? t('handheld_access') : t('support_ticket_access')}
                               {t('language') === 'العربية' ? <ArrowLeft className="mr-2 h-5 w-5 rtl:rotate-180" /> : <ArrowRight className="ml-2 h-5 w-5" />}

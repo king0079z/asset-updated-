@@ -164,7 +164,7 @@ const Header = () => {
       signOut();
       router.push('/');
     } else if (user && router.pathname === '/') {
-      router.push(landingCtaMode === 'handheld' ? '/handheld' : '/tickets');
+      router.push(landingCtaMode === 'handheld' ? '/handheld' : '/portal');
     } else {
       router.push(user ? '/dashboard' : '/login');
     }
