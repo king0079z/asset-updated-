@@ -78,7 +78,8 @@ Uses [EAS Build](https://docs.expo.dev/build/introduction/).
    eas build --platform all --profile production
    ```
 
-See **[STORE_DEPLOYMENT.md](./STORE_DEPLOYMENT.md)** for step-by-step Google Play and App Store submission.
+- **Finalize configuration**: See **[CONFIGURATION.md](./CONFIGURATION.md)** for every value to set (API URL, Supabase, Apple ID, Team ID, store listing URLs, icons).
+- **Push to stores**: See **[STORE_DEPLOYMENT.md](./STORE_DEPLOYMENT.md)** for step-by-step Google Play and App Store build and submission.
 
 ## Project structure
 

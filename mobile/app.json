@@ -17,6 +17,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.assetxai.app",
       "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "AssetXAI uses the camera to scan barcodes and QR codes for asset tracking.",
         "NSPhotoLibraryUsageDescription": "AssetXAI can attach photos to audit comments and assets."
@@ -33,6 +36,9 @@
         "android.permission.CAMERA",
         "android.permission.INTERNET"
       ]
+    },
+    "extra": {
+      "privacyPolicyUrl": "https://assetxai.live/privacy"
     },
     "web": {
       "bundler": "metro",

@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets (do not commit)
+.env
+.env.local
+.env.*.local
+google-service-account.json
+*.jks
+*.keystore
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+*.apk
+*.aab
+*.ipa
