@@ -21,9 +21,9 @@ export function HandheldLayout({ title = 'Field Assistant', children, headerRigh
   const { signOut } = useAuth();
   const router = useRouter();
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  const syncLabel = lastSyncTime
+  const syncLabel = lastSyncTime != null
     ? `${Math.round((Date.now() - lastSyncTime) / 60000)}m ago`
-    : 'Never';
+    : null;
 
   const handleLogout = async () => {
     await signOut();
@@ -46,7 +46,7 @@ export function HandheldLayout({ title = 'Field Assistant', children, headerRigh
             <div className="flex items-center gap-2 text-xs mt-0.5">
               <span className={isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
                 {isOnline ? <Wifi className="h-3.5 w-3.5 inline mr-1" /> : <WifiOff className="h-3.5 w-3.5 inline mr-1" />}
-                {isOnline ? 'Synced' : 'Offline'}
+                {isOnline ? (syncLabel ? `Synced ${syncLabel}` : 'Online') : 'Offline'}
               </span>
             </div>
           </div>

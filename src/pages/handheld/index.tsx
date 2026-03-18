@@ -63,10 +63,13 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { Textarea } from '@/components/ui/textarea';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -87,10 +90,18 @@ const createTicketSchema = z.object({
 const addAssetSchema = z.object({
   name: z.string().min(1, 'Name required'),
   type: z.string().min(1, 'Type required'),
-  description: z.string(),
-  floorNumber: z.string(),
-  roomNumber: z.string(),
+  description: z.string().optional(),
+  vendorId: z.string().optional(),
+  floorNumber: z.string().optional(),
+  roomNumber: z.string().optional(),
+  purchaseAmount: z.string().optional(),
+  purchaseDate: z.string().optional(),
 });
+const ASSET_TYPES_MAIN = [
+  { value: 'FURNITURE', label: 'Furniture' },
+  { value: 'EQUIPMENT', label: 'Equipment' },
+  { value: 'ELECTRONICS', label: 'Electronics' },
+];
 const ASSET_TYPES = [
   { value: 'EQUIPMENT', label: 'Equipment' },
   { value: 'FURNITURE', label: 'Furniture' },
@@ -239,12 +250,25 @@ export default function HandheldHubPage() {
     defaultValues: { floorNumber: '', roomNumber: '' },
   });
 
-  // Add new asset from handheld
+  // Add new asset from handheld (full form as main app)
   const [showAddAssetDialog, setShowAddAssetDialog] = useState(false);
   const [addAssetLoading, setAddAssetLoading] = useState(false);
+  const [addAssetVendors, setAddAssetVendors] = useState<{ id: string; name: string }[]>([]);
+  const [addAssetImagePreview, setAddAssetImagePreview] = useState<string | null>(null);
+  const addAssetImageInputRef = useRef<HTMLInputElement>(null);
+  const { latitude: geoLat, longitude: geoLng } = useGeolocation();
   const addAssetForm = useForm<z.infer<typeof addAssetSchema>>({
     resolver: zodResolver(addAssetSchema),
-    defaultValues: { name: '', type: 'EQUIPMENT', description: '', floorNumber: '', roomNumber: '' },
+    defaultValues: {
+      name: '',
+      type: 'FURNITURE',
+      description: '',
+      vendorId: '',
+      floorNumber: '',
+      roomNumber: '',
+      purchaseAmount: '',
+      purchaseDate: '',
+    },
   });
 
   // Locate state
@@ -359,6 +383,27 @@ export default function HandheldHubPage() {
   // Photo upload
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+
+  useEffect(() => {
+    if (showAddAssetDialog) {
+      fetch('/api/vendors', { credentials: 'include' })
+        .then((r) => r.ok ? r.json() : [])
+        .then((data) => setAddAssetVendors(Array.isArray(data) ? data : []))
+        .catch(() => setAddAssetVendors([]));
+    } else {
+      setAddAssetImagePreview(null);
+      addAssetForm.reset({
+        name: '',
+        type: 'FURNITURE',
+        description: '',
+        vendorId: '',
+        floorNumber: '',
+        roomNumber: '',
+        purchaseAmount: '',
+        purchaseDate: '',
+      });
+    }
+  }, [showAddAssetDialog]);
 
   const handheldDialogOpenedAt = useRef(0);
   const preventHandheldDialogOutsideClose = useCallback((e: Event) => {
@@ -754,26 +799,57 @@ export default function HandheldHubPage() {
   const submitAddAsset = useCallback(async (vals: z.infer<typeof addAssetSchema>) => {
     setAddAssetLoading(true);
     try {
+      let imageUrl: string | null = null;
+      const file = addAssetImageInputRef.current?.files?.[0];
+      if (file) {
+        const formData = new FormData();
+        formData.append('image', file);
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (uploadRes.ok) {
+          const up = await uploadRes.json();
+          imageUrl = up?.url ?? null;
+        }
+      }
+      const body: Record<string, unknown> = {
+        name: vals.name,
+        type: vals.type,
+        description: vals.description || undefined,
+        vendorId: vals.vendorId || undefined,
+        floorNumber: vals.floorNumber || undefined,
+        roomNumber: vals.roomNumber || undefined,
+        purchaseAmount: vals.purchaseAmount || undefined,
+        purchaseDate: vals.purchaseDate || undefined,
+        imageUrl: imageUrl ?? undefined,
+      };
+      if (geoLat != null && geoLng != null) {
+        body.latitude = geoLat;
+        body.longitude = geoLng;
+      }
       const r = await fetch('/api/assets/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: vals.name,
-          type: vals.type,
-          description: vals.description || undefined,
-          floorNumber: vals.floorNumber || undefined,
-          roomNumber: vals.roomNumber || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
-        throw new Error(err.message || 'Create failed');
+        throw new Error(err.message || err.error || 'Create failed');
       }
       const data = await r.json();
       const created = data?.asset ?? data;
       setCurrentAsset(created);
       setShowAddAssetDialog(false);
-      addAssetForm.reset();
+      setAddAssetImagePreview(null);
+      addAssetForm.reset({
+        name: '',
+        type: 'FURNITURE',
+        description: '',
+        vendorId: '',
+        floorNumber: '',
+        roomNumber: '',
+        purchaseAmount: '',
+        purchaseDate: '',
+      });
+      if (addAssetImageInputRef.current) addAssetImageInputRef.current.value = '';
       pushRecentAction('create', `Created asset: ${created.name}`);
       toast({ title: 'Asset created', description: created.assetId || created.name });
     } catch (err) {
@@ -781,7 +857,7 @@ export default function HandheldHubPage() {
     } finally {
       setAddAssetLoading(false);
     }
-  }, [addAssetForm, pushRecentAction, toast]);
+  }, [addAssetForm, geoLat, geoLng, pushRecentAction, toast]);
 
   const doDispose = async () => {
     if (!currentAsset) return;
@@ -1145,7 +1221,20 @@ export default function HandheldHubPage() {
       {/* Tab content — touch-friendly, safe area; optional large text for accessibility */}
       <div className={cn('flex-1 overflow-auto p-4 pb-28 min-h-0', largeTextMode && 'text-base [&_input]:text-base [&_button]:text-base')}>
         {tab === 'scan' && (
-          <div className="max-w-lg mx-auto">
+          <div className="max-w-lg mx-auto space-y-4">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">This session</p>
+              <div className="flex gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-violet-600 dark:text-violet-400">{sessionScansCount}</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">scans</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{sessionTasksCount}</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">tasks</span>
+                </div>
+              </div>
+            </div>
             <HandheldAssetScanner standalone onAssetSelected={setCurrentAsset} />
           </div>
         )}
@@ -1153,16 +1242,18 @@ export default function HandheldHubPage() {
         {tab === 'asset' && (
           <div className="max-w-lg mx-auto space-y-4">
             {!currentAsset ? (
-              <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-8 text-center text-slate-500 dark:text-slate-400">
-                <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p className="font-medium">No asset selected</p>
-                <p className="text-sm mt-1">Scan an asset or add a new one.</p>
-                <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
-                  <Button size="lg" onClick={() => setTab('scan')}>
+              <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/50 p-8 text-center shadow-sm">
+                <div className="h-16 w-16 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center mx-auto mb-4">
+                  <Package className="h-8 w-8 text-slate-500 dark:text-slate-400" />
+                </div>
+                <p className="font-semibold text-slate-800 dark:text-slate-200">No asset selected</p>
+                <p className="text-sm mt-1 text-slate-500 dark:text-slate-400">Scan an asset or register a new one.</p>
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button size="lg" className="rounded-xl h-12" onClick={() => setTab('scan')}>
                     <Scan className="h-4 w-4 mr-2" />
                     Scan asset
                   </Button>
-                  <Button size="lg" variant="outline" onClick={() => setShowAddAssetDialog(true)}>
+                  <Button size="lg" variant="outline" className="rounded-xl h-12" onClick={() => setShowAddAssetDialog(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add new asset
                   </Button>
@@ -2507,35 +2598,96 @@ export default function HandheldHubPage() {
       </Dialog>
 
       <Dialog open={showAddAssetDialog} onOpenChange={setShowAddAssetDialog}>
-        <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5" /> Add new asset</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl"><Plus className="h-5 w-5 text-violet-500" /> Register new asset</DialogTitle>
+            <DialogDescription>Enter asset details below. Barcode and QR code are generated automatically after creation.</DialogDescription>
+          </DialogHeader>
           <Form {...addAssetForm}>
-            <form onSubmit={addAssetForm.handleSubmit(submitAddAsset)} className="space-y-4">
+            <form onSubmit={addAssetForm.handleSubmit(submitAddAsset)} className="space-y-5 pt-2">
               <FormField control={addAssetForm.control} name="name" render={({ field }) => (
-                <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="e.g. Laptop A1" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Name</FormLabel><FormControl><Input className="rounded-xl" placeholder="e.g. Laptop A1, Desk 3B" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={addAssetForm.control} name="type" render={({ field }) => (
                 <FormItem><FormLabel>Type</FormLabel>
-                  <FormControl>
-                    <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...field}>
-                      {ASSET_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </FormControl>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select type" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {ASSET_TYPES_MAIN.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )} />
+              <FormField control={addAssetForm.control} name="vendorId" render={({ field }) => (
+                <FormItem><FormLabel>Vendor <span className="text-muted-foreground font-normal text-xs">(optional)</span></FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
+                    <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder={addAssetVendors.length ? 'Select vendor' : 'No vendors — skip if none'} /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {addAssetVendors.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={addAssetForm.control} name="floorNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Floor</FormLabel><FormControl><Input className="rounded-xl" placeholder="e.g. 2" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={addAssetForm.control} name="roomNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Room</FormLabel><FormControl><Input className="rounded-xl" placeholder="e.g. 205" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
               <FormField control={addAssetForm.control} name="description" render={({ field }) => (
-                <FormItem><FormLabel>Description (optional)</FormLabel><FormControl><Textarea placeholder="Notes" className="min-h-[80px]" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Description <span className="text-muted-foreground font-normal text-xs">(optional)</span></FormLabel><FormControl><Textarea className="rounded-xl min-h-[80px]" placeholder="Notes, serial number, etc." {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={addAssetForm.control} name="floorNumber" render={({ field }) => (
-                <FormItem><FormLabel>Floor (optional)</FormLabel><FormControl><Input placeholder="e.g. 2" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={addAssetForm.control} name="roomNumber" render={({ field }) => (
-                <FormItem><FormLabel>Room (optional)</FormLabel><FormControl><Input placeholder="e.g. 205" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowAddAssetDialog(false)}>Cancel</Button>
-                <Button type="submit" disabled={addAssetLoading}>{addAssetLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create asset'}</Button>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={addAssetForm.control} name="purchaseAmount" render={({ field }) => (
+                  <FormItem><FormLabel>Purchase amount (QAR)</FormLabel><FormControl><Input type="number" step="0.01" min={0} className="rounded-xl" placeholder="0.00" {...field} /></FormControl><FormDescription className="text-xs">Enter amount in QAR</FormDescription><FormMessage /></FormItem>
+                )} />
+                <FormField control={addAssetForm.control} name="purchaseDate" render={({ field }) => (
+                  <FormItem><FormLabel>Purchase date</FormLabel><FormControl><Input type="date" className="rounded-xl" {...field} /></FormControl><FormDescription className="text-xs">When the asset was purchased</FormDescription><FormMessage /></FormItem>
+                )} />
+              </div>
+              <FormItem>
+                <FormLabel>Location</FormLabel>
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  {geoLat != null && geoLng != null ? (
+                    <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Location detected ({geoLat.toFixed(5)}, {geoLng.toFixed(5)}) — will be saved with asset</span>
+                  ) : (
+                    <span className="text-sm text-slate-500">Detecting location… (optional)</span>
+                  )}
+                  <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                </div>
+                <FormDescription className="text-xs">Current GPS location is attached when available. You can also set Floor/Room above.</FormDescription>
+              </FormItem>
+              <FormItem>
+                <FormLabel>Image <span className="text-muted-foreground font-normal text-xs">(optional)</span></FormLabel>
+                <FormControl>
+                  <Input
+                    ref={addAssetImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="rounded-xl"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => setAddAssetImagePreview(reader.result as string);
+                        reader.readAsDataURL(file);
+                      } else setAddAssetImagePreview(null);
+                    }}
+                  />
+                </FormControl>
+                {addAssetImagePreview && (
+                  <div className="mt-2 relative h-40 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                    <img src={addAssetImagePreview} alt="Preview" className="h-full w-full object-contain" />
+                  </div>
+                )}
+              </FormItem>
+              <DialogFooter className="gap-2 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => setShowAddAssetDialog(false)}>Cancel</Button>
+                <Button type="submit" className="rounded-xl min-w-[120px]" disabled={addAssetLoading}>{addAssetLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create asset'}</Button>
               </DialogFooter>
             </form>
           </Form>
