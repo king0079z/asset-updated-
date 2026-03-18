@@ -116,7 +116,9 @@ class ConnectivityManager {
 
   // Update GPS status
   public updateGPSStatus(hasGPS: boolean): void {
-    console.log(`Updating GPS status: ${hasGPS ? 'available' : 'unavailable'}`);
+    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log(`Updating GPS status: ${hasGPS ? 'available' : 'unavailable'}`);
+    }
     if (this.hasGPS !== hasGPS) {
       this.hasGPS = hasGPS;
       this.lastGPSTimestamp = hasGPS ? new Date() : this.lastGPSTimestamp;

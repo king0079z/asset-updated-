@@ -16,10 +16,8 @@ if (typeof window !== 'undefined') {
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
     mapboxgl.accessToken = token;
     
-    if (!token) {
+    if (!token && process.env.NODE_ENV === 'development') {
       console.error('Mapbox token is not set in environment variables');
-    } else {
-      console.log('Mapbox token is configured correctly');
     }
   } catch (error) {
     console.error('Error initializing mapbox-gl:', error);
@@ -70,18 +68,21 @@ interface VehicleMapProps {
   isUsingNetworkLocation?: boolean; // Flag to indicate if we're using IP-based location
 }
 
+const isDev = typeof process !== 'undefined' && process.env.NODE_ENV === 'development';
+
 export default function VehicleMap({ vehicles, userLocation, isLoading = false, onVehicleSelect, isUsingNetworkLocation = false }: VehicleMapProps) {
-  console.log('VehicleMap rendering with isUsingNetworkLocation:', isUsingNetworkLocation);
   const { t } = useTranslation();
   const [map, setMap] = useState<mapboxgl.Map | null>(null);
   const [markers, setMarkers] = useState<{ [key: string]: mapboxgl.Marker }>({});
   const mapContainer = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
-  // Initialize map
+  // Initialize map (container must stay empty for Mapbox)
   useEffect(() => {
+    mountedRef.current = true;
     if (!mapboxgl || !mapboxgl.accessToken) {
-      console.error('Mapbox token is not set');
+      if (isDev) console.error('Mapbox token is not set');
       return;
     }
 
@@ -95,11 +96,13 @@ export default function VehicleMap({ vehicles, userLocation, isLoading = false, 
       attributionControl: false
     });
 
-    // Store map instance in ref for cleanup
     const mapRef = mapInstance;
 
-    // Wait for map to load before adding controls and setting state
     mapInstance.on('load', () => {
+      if (!mountedRef.current) {
+        try { mapRef.remove(); } catch (_) {}
+        return;
+      }
       // Add custom controls with better styling
       const navControl = new mapboxgl.NavigationControl({
         showCompass: true,
@@ -133,8 +136,12 @@ export default function VehicleMap({ vehicles, userLocation, isLoading = false, 
     });
 
     return () => {
-      // Clean up map on unmount
-      mapRef.remove();
+      mountedRef.current = false;
+      try {
+        mapRef.remove();
+      } catch (_) {
+        // ignore if already removed or in bad state
+      }
     };
   }, []);
 
@@ -166,13 +173,6 @@ export default function VehicleMap({ vehicles, userLocation, isLoading = false, 
   useEffect(() => {
     if (!map || isLoading) return;
     
-    // Log current state for debugging
-    console.log('Updating map with:', {
-      vehiclesCount: vehicles.length,
-      userLocation: userLocation ? `${userLocation.coords.latitude}, ${userLocation.coords.longitude}` : 'none',
-      isUsingNetworkLocation: isUsingNetworkLocation
-    });
-
     // Remove old markers
     Object.values(markers).forEach(marker => marker.remove());
     const newMarkers: { [key: string]: mapboxgl.Marker } = {};
@@ -728,10 +728,11 @@ export default function VehicleMap({ vehicles, userLocation, isLoading = false, 
         )}
       </div>
       
-      {/* Map container */}
-      <div ref={mapContainer} className="w-full h-full rounded-lg overflow-hidden">
+      {/* Map container must be empty for Mapbox; overlay is a sibling */}
+      <div className="relative w-full h-full rounded-lg overflow-hidden">
+        <div ref={mapContainer} className="absolute inset-0 w-full h-full" />
         {isLoading && (
-          <div className="absolute inset-0 bg-white dark:bg-slate-900 bg-opacity-70 dark:bg-opacity-70 flex items-center justify-center z-10">
+          <div className="absolute inset-0 bg-white dark:bg-slate-900 bg-opacity-70 dark:bg-opacity-70 flex items-center justify-center z-10 rounded-lg">
             <div className="flex flex-col items-center bg-white dark:bg-slate-800 p-4 rounded-lg shadow-lg">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-3"></div>
               <p className="text-sm text-gray-600 dark:text-gray-300">{t('loading_vehicle_data')}</p>

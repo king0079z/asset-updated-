@@ -201,8 +201,10 @@ export const useBackgroundGeolocation = (options: GeolocationOptions = {}): Back
       clearTimeout(gpsTimeoutRef.current);
     }
     
-    console.log('Attempting to get current position with timeout:', timeout);
-    
+    if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('Attempting to get current position with timeout:', timeout);
+    }
+
     // Safety timeout to prevent hanging if geolocation API fails silently
     gpsTimeoutRef.current = setTimeout(async () => {
       try {
