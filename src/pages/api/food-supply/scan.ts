@@ -100,10 +100,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Return first match in priority order ─────────────────────────────────
 
+  // Helper: get all kitchens that have this supply (KitchenBarcode + KitchenFoodSupply)
+  async function getKitchensWithSupply(supplyId: string) {
+    const [byBarcode, byKitchenSupply] = await Promise.all([
+      prisma.kitchenBarcode.findMany({
+        where: { foodSupplyId: supplyId },
+        include: { kitchen: { select: { id: true, name: true } } },
+      }),
+      prisma.kitchenFoodSupply.findMany({
+        where: { foodSupplyId: supplyId },
+        include: { kitchen: { select: { id: true, name: true } } },
+      }),
+    ]);
+    const seen = new Set<string>();
+    const list: { id: string; name: string }[] = [];
+    for (const x of [...byBarcode, ...byKitchenSupply]) {
+      const k = x.kitchen;
+      if (k && !seen.has(k.id)) {
+        seen.add(k.id);
+        list.push({ id: k.id, name: k.name });
+      }
+    }
+    return list;
+  }
+
   // Priority 1 — kitchen-specific KitchenBarcode (most precise)
   const bestKitchenBarcode = kitchenSpecificBarcode || crossKitchenBarcode || prefixBarcode;
   if (bestKitchenBarcode?.foodSupply) {
     const kb = bestKitchenBarcode;
+    const kitchensWithSupply = await getKitchensWithSupply(kb.foodSupply.id);
     return res.status(200).json({
       supply: {
         id:             kb.foodSupply.id,
@@ -115,6 +140,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         pricePerUnit:   kb.foodSupply.pricePerUnit,
         kitchenId:      kb.kitchenId,
         kitchenName:    kb.kitchen?.name ?? 'Kitchen',
+        kitchensWithSupply,
       },
     });
   }
@@ -123,6 +149,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (directSupply) {
     // If it has a matching kitchen or no kitchen requirement, return it
     if (!kitchenId || directSupply.kitchenId === kitchenId || !directSupply.kitchenId) {
+      const kitchensWithSupply = await getKitchensWithSupply(directSupply.id);
       return res.status(200).json({
         supply: {
           id:             directSupply.id,
@@ -134,6 +161,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           pricePerUnit:   directSupply.pricePerUnit,
           kitchenId:      directSupply.kitchenId ?? kitchenId ?? '',
           kitchenName:    directSupply.kitchen?.name ?? 'Kitchen',
+          kitchensWithSupply,
         },
       });
     }

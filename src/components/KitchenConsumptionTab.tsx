@@ -876,7 +876,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                                 </div>
                                 <Progress 
                                   value={item.value} 
-                                  max={getTopConsumedItems()[0]?.value || 0}
+                                  max={Math.max(1, getTopConsumedItems()[0]?.value ?? 0)}
                                   className="h-2" 
                                 />
                                 <div className="flex justify-between mt-1 text-xs text-muted-foreground">
@@ -920,7 +920,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['direct']?.quantity || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                                 className="h-2 bg-blue-200" 
                               />
                             </div>
@@ -931,7 +931,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['direct']?.value || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                                 className="h-2 bg-blue-200" 
                               />
                             </div>
@@ -957,7 +957,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['recipe']?.quantity || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                                 className="h-2 bg-purple-200" 
                               />
                             </div>
@@ -968,7 +968,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['recipe']?.value || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                                 className="h-2 bg-purple-200" 
                               />
                             </div>
@@ -994,7 +994,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['waste']?.quantity || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                                 className="h-2 bg-red-200" 
                               />
                             </div>
@@ -1005,7 +1005,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['waste']?.value || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                                 className="h-2 bg-red-200" 
                               />
                             </div>
@@ -1042,7 +1042,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                                 </div>
                                 <Progress 
                                   value={category.value} 
-                                  max={getConsumptionByFoodCategory()[0]?.value || 0}
+                                  max={Math.max(1, getConsumptionByFoodCategory()[0]?.value ?? 0)}
                                   className="h-2" 
                                 />
                                 <div className="flex justify-between mt-1 text-xs text-muted-foreground">
@@ -1577,7 +1577,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['direct']?.quantity || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                                 className="h-2 bg-blue-200" 
                               />
                             </div>
@@ -1588,7 +1588,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['direct']?.value || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                                 className="h-2 bg-blue-200" 
                               />
                             </div>
@@ -1614,7 +1614,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['recipe']?.quantity || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                                 className="h-2 bg-purple-200" 
                               />
                             </div>
@@ -1625,7 +1625,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['recipe']?.value || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                                 className="h-2 bg-purple-200" 
                               />
                             </div>
@@ -1651,7 +1651,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['waste']?.quantity || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                                 className="h-2 bg-red-200" 
                               />
                             </div>
@@ -1662,7 +1662,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={consumptionByCategory['waste']?.value || 0} 
-                                max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                                max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                                 className="h-2 bg-red-200" 
                               />
                             </div>
@@ -1700,7 +1700,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                                   </div>
                                   <Progress 
                                     value={item.value} 
-                                    max={getTopConsumedItems()[0]?.value || 0}
+                                    max={Math.max(1, getTopConsumedItems()[0]?.value ?? 0)}
                                     className="h-2" 
                                   />
                                   <div className="flex justify-between mt-1 text-xs text-muted-foreground">
@@ -1741,7 +1741,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                                   </div>
                                   <Progress 
                                     value={category.value} 
-                                    max={getConsumptionByFoodCategory()[0]?.value || 0}
+                                    max={Math.max(1, getConsumptionByFoodCategory()[0]?.value ?? 0)}
                                     className="h-2" 
                                   />
                                   <div className="flex justify-between mt-1 text-xs text-muted-foreground">
@@ -2062,7 +2062,7 @@ export function KitchenConsumptionTab({ kitchenId, kitchenName }: KitchenConsump
                               </div>
                               <Progress 
                                 value={reason.value} 
-                                max={getWasteReasons()[0]?.value || 0}
+                                max={Math.max(1, getWasteReasons()[0]?.value ?? 0)}
                                 className="h-2 bg-red-100" 
                               />
                             </div>

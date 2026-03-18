@@ -659,7 +659,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                           </div>
                           <Progress 
                             value={consumptionByCategory['direct']?.quantity || 0} 
-                            max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                            max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                             className="h-2 bg-blue-200" 
                             indicatorClassName="bg-blue-500" 
                           />
@@ -671,7 +671,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                           </div>
                           <Progress 
                             value={consumptionByCategory['direct']?.value || 0} 
-                            max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                            max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                             className="h-2 bg-blue-200" 
                             indicatorClassName="bg-blue-500" 
                           />
@@ -698,7 +698,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                           </div>
                           <Progress 
                             value={consumptionByCategory['recipe']?.quantity || 0} 
-                            max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                            max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                             className="h-2 bg-purple-200" 
                             indicatorClassName="bg-purple-500" 
                           />
@@ -710,7 +710,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                           </div>
                           <Progress 
                             value={consumptionByCategory['recipe']?.value || 0} 
-                            max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                            max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                             className="h-2 bg-purple-200" 
                             indicatorClassName="bg-purple-500" 
                           />
@@ -737,7 +737,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                           </div>
                           <Progress 
                             value={consumptionByCategory['waste']?.quantity || 0} 
-                            max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0)}
+                            max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.quantity, 0))}
                             className="h-2 bg-red-200" 
                             indicatorClassName="bg-red-500" 
                           />
@@ -749,7 +749,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                           </div>
                           <Progress 
                             value={consumptionByCategory['waste']?.value || 0} 
-                            max={Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0)}
+                            max={Math.max(1, Object.values(consumptionByCategory).reduce((sum, cat) => sum + cat.value, 0))}
                             className="h-2 bg-red-200" 
                             indicatorClassName="bg-red-500" 
                           />
@@ -786,7 +786,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                           </div>
                           <Progress 
                             value={item.value} 
-                            max={getTopConsumedItems()[0].value}
+                            max={Math.max(1, getTopConsumedItems()[0]?.value ?? 0)}
                             className="h-2 bg-gray-100" 
                             indicatorClassName="bg-gradient-to-r from-blue-500 to-green-500" 
                           />
@@ -1341,7 +1341,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                             </div>
                             <Progress 
                               value={user.value} 
-                              max={getConsumptionByUser()[0].value}
+                              max={Math.max(1, getConsumptionByUser()[0]?.value ?? 0)}
                               className="h-2 bg-gray-100" 
                               indicatorClassName="bg-gradient-to-r from-blue-500 to-green-500" 
                             />
@@ -1401,7 +1401,7 @@ export function KitchenConsumptionHistoryDetails({ kitchenId, kitchenName }: Kit
                               </div>
                               <Progress 
                                 value={item.value} 
-                                max={getTopConsumedItems()[0].value}
+                                max={Math.max(1, getTopConsumedItems()[0]?.value ?? 0)}
                                 className="h-2 bg-gray-100" 
                                 indicatorClassName="bg-gradient-to-r from-blue-500 to-green-500" 
                               />

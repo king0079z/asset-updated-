@@ -353,21 +353,43 @@ export default function HandheldHubPage() {
     if (!q) return;
     setAuditLoading(true);
     try {
+      // 1) Try asset scan first
       const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(q)}`);
       if (res.ok) {
         const data = await res.json();
         if (data?.asset?.id) {
           const asset = data.asset;
           setAuditScans((prev) => {
-            const exists = prev.some((a) => (typeof a === 'string' ? a === asset.id : a?.id === asset.id));
+            const exists = prev.some((a) => (a && typeof a === 'object' && (a as any).type === 'food')
+              ? false
+              : (typeof a === 'string' ? a === asset.id : (a as any)?.id === asset.id));
             if (exists) return prev;
             return [...prev, asset];
           });
           toast({ title: 'Scanned', description: asset.name });
-        } else {
-          toast({ title: 'Not found', description: q, variant: 'destructive' });
+          return;
         }
       }
+      // 2) If not an asset, try food supply barcode (e.g. KIT...SUP...)
+      const scanRes = await fetch('/api/food-supply/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode: q }),
+      });
+      if (scanRes.ok) {
+        const scanData = await scanRes.json();
+        if (scanData?.supply?.id) {
+          const supply = scanData.supply;
+          setAuditScans((prev) => {
+            const exists = prev.some((a) => a && typeof a === 'object' && (a as any).type === 'food' && (a as any).supply?.id === supply.id);
+            if (exists) return prev;
+            return [...prev, { type: 'food', supply }];
+          });
+          toast({ title: 'Food supply scanned', description: `${supply.name} — ${supply.quantity} ${supply.unit} left` });
+          return;
+        }
+      }
+      toast({ title: 'Not found', description: q, variant: 'destructive' });
     } catch {
       toast({ title: 'Lookup failed', variant: 'destructive' });
     } finally {
@@ -488,13 +510,20 @@ export default function HandheldHubPage() {
       return;
     }
     const rows = auditScans.map((item, i) => {
-      const a = typeof item === 'string' ? null : item;
-      if (!a) return [];
-      const loc = [a.floorNumber, a.roomNumber].filter(Boolean).join(', ') || '—';
-      const rfid = a.rfidTag?.lastZone ? [a.rfidTag.lastZone.name, a.rfidTag.lastZone.floorNumber, a.rfidTag.lastZone.roomNumber].filter(Boolean).join(', ') : '—';
-      return [i + 1, a.name, a.assetId || a.barcode || '', loc, a.assignedToName || '—', rfid];
+      const food = item && typeof item === 'object' && (item as any).type === 'food' ? (item as any).supply : null;
+      const asset = !food && typeof item === 'object' && item ? (item as any) : null;
+      if (food) {
+        const kitchens = (food.kitchensWithSupply && food.kitchensWithSupply.length)
+          ? food.kitchensWithSupply.map((k: { name: string }) => k.name).join('; ')
+          : (food.kitchenName || '—');
+        return [i + 1, food.name, 'Food supply', food.id, `${food.quantity} ${food.unit}`, kitchens, '—', '—'];
+      }
+      if (!asset?.id) return [];
+      const loc = [asset.floorNumber, asset.roomNumber].filter(Boolean).join(', ') || '—';
+      const rfid = asset.rfidTag?.lastZone ? [asset.rfidTag.lastZone.name, asset.rfidTag.lastZone.floorNumber, asset.rfidTag.lastZone.roomNumber].filter(Boolean).join(', ') : '—';
+      return [i + 1, asset.name, 'Asset', asset.assetId || asset.barcode || '', 'Qty 1', loc, asset.assignedToName || '—', rfid];
     });
-    const header = ['#', 'Name', 'ID/Barcode', 'Location', 'Assigned to', 'RFID location'];
+    const header = ['#', 'Name', 'Type', 'ID/Barcode', 'Qty/Location', 'Kitchens/Location', 'Assigned to', 'RFID location'];
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -775,19 +804,64 @@ export default function HandheldHubPage() {
               ) : (
                 [...auditScans]
                   .sort((a, b) => {
-                    const ax = typeof a === 'string' ? null : a;
-                    const bx = typeof b === 'string' ? null : b;
+                    const foodA = a && typeof a === 'object' && (a as any).type === 'food' ? (a as any).supply : null;
+                    const foodB = b && typeof b === 'object' && (b as any).type === 'food' ? (b as any).supply : null;
+                    const ax = foodA || (typeof a === 'string' ? null : (a as any));
+                    const bx = foodB || (typeof b === 'string' ? null : (b as any));
                     if (!ax || !bx) return 0;
-                    if (auditSort === 'name') return (ax.name || '').localeCompare(bx.name || '');
+                    const nameA = foodA ? foodA.name : (ax.name || '');
+                    const nameB = foodB ? foodB.name : (bx.name || '');
+                    if (auditSort === 'name') return nameA.localeCompare(nameB);
                     if (auditSort === 'location') {
-                      const locA = [ax.floorNumber, ax.roomNumber].filter(Boolean).join(' ');
-                      const locB = [bx.floorNumber, bx.roomNumber].filter(Boolean).join(' ');
+                      const locA = foodA
+                        ? ((foodA.kitchensWithSupply && foodA.kitchensWithSupply.length) ? foodA.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ') : foodA.kitchenName || '')
+                        : [ax.floorNumber, ax.roomNumber].filter(Boolean).join(' ');
+                      const locB = foodB
+                        ? ((foodB.kitchensWithSupply && foodB.kitchensWithSupply.length) ? foodB.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ') : foodB.kitchenName || '')
+                        : [bx.floorNumber, bx.roomNumber].filter(Boolean).join(' ');
                       return locA.localeCompare(locB);
                     }
                     return 0;
                   })
                   .map((item, i) => {
-                  const asset = typeof item === 'string' ? null : item;
+                  const isFood = item && typeof item === 'object' && (item as any).type === 'food';
+                  const supply = isFood ? (item as any).supply : null;
+                  const asset = !isFood && typeof item === 'string' ? null : !isFood ? (item as any) : null;
+
+                  if (supply?.id) {
+                    const kitchensList = (supply.kitchensWithSupply && supply.kitchensWithSupply.length)
+                      ? supply.kitchensWithSupply.map((k: { name: string }) => k.name).join(', ')
+                      : supply.kitchenName || '—';
+                    return (
+                      <div
+                        key={`food-${supply.id}-${i}`}
+                        className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 shadow-sm overflow-hidden"
+                      >
+                        <div className="flex gap-4 p-4">
+                          <div className="h-20 w-20 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex-shrink-0 flex items-center justify-center">
+                            <UtensilsCrossed className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-semibold text-slate-900 dark:text-white truncate">{supply.name}</p>
+                              <span className="rounded-lg bg-amber-200/80 dark:bg-amber-800/50 text-xs font-bold text-amber-800 dark:text-amber-200 px-2 py-0.5 shrink-0">
+                                {supply.quantity} {supply.unit}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Food supply</p>
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2 font-medium">Remaining</p>
+                          </div>
+                        </div>
+                        <div className="px-4 pb-4 grid gap-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            <span className="text-slate-600 dark:text-slate-300">Kitchens: {kitchensList}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   if (!asset?.id) return null;
                   const loc = [asset.floorNumber, asset.roomNumber].filter(Boolean).join(', ') || '—';
                   const rfidZone = asset.rfidTag?.lastZone;

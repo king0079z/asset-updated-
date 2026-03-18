@@ -317,7 +317,7 @@ function AddSupplyDialog({ open, onOpenChange, vendors, onSuccess }: {
     try {
       const res = await fetch("/api/food-supply/create", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, vendorId: values.vendorId || undefined }),
+        body: JSON.stringify({ ...values, vendorId: values.vendorId && values.vendorId !== 'none' ? values.vendorId : undefined }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Failed to create");
       toast({ title: "Supply registered", description: `${values.name} added to inventory.` });
@@ -433,7 +433,7 @@ function AddSupplyDialog({ open, onOpenChange, vendors, onSuccess }: {
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger className="rounded-xl"><SelectValue placeholder="Select vendor" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        <SelectItem value="">No vendor</SelectItem>
+                        <SelectItem value="none">No vendor</SelectItem>
                         {vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
                       </SelectContent>
                     </Select>

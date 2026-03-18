@@ -1,8 +1,8 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
-import { logDataModification } from "@/lib/audit";
+import { logDataModification, logUserActivity } from "@/lib/audit";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -20,6 +20,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { name, quantity, unit, category, expirationDate, notes, vendorId, pricePerUnit } = req.body;
 
+    // Generate main barcode: SUP + first 8 chars of a unique suffix (cuid-like + timestamp)
+    const ts = Date.now().toString(36).toUpperCase();
+    const uniqueBarcode = `SUP${ts}${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+
     const foodSupply = await prisma.foodSupply.create({
       data: {
         name,
@@ -29,8 +33,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         expirationDate: new Date(expirationDate),
         notes: notes || "",
         userId: user.id,
-        vendorId,
+        vendorId: vendorId || undefined,
         pricePerUnit: parseFloat(pricePerUnit || 0),
+        barcode: uniqueBarcode,
       },
       include: {
         vendor: {
