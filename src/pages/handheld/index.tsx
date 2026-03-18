@@ -38,11 +38,15 @@ import {
   History,
   Calendar,
   DollarSign,
+  Hash,
+  Crosshair,
+  Search,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
 const EnhancedBarcodeScanner = dynamic(() => import('@/components/EnhancedBarcodeScanner'), { ssr: false });
 const AuditRfidMapDialog = dynamic(() => import('@/components/AuditRfidMapDialog'), { ssr: false });
+const BarcodeScannerCount = dynamic(() => import('@/components/BarcodeScanner2'), { ssr: false });
 import { AssignAssetDialog } from '@/components/AssignAssetDialog';
 import { AssetDetailsDialog } from '@/components/AssetDetailsDialog';
 import {
@@ -93,7 +97,7 @@ type Asset = {
   assignedToEmail?: string | null;
 };
 
-type TabId = 'scan' | 'asset' | 'tickets' | 'tasks' | 'audit' | 'food' | 'more';
+type TabId = 'scan' | 'asset' | 'tickets' | 'tasks' | 'audit' | 'count' | 'locate' | 'food' | 'more';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; shortLabel?: string }[] = [
   { id: 'scan', label: 'Scan', shortLabel: 'Scan', icon: <Scan className="h-[22px] w-[22px] shrink-0" /> },
@@ -101,6 +105,8 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; shortLabel?: stri
   { id: 'tickets', label: 'Tickets', shortLabel: 'Tickets', icon: <Ticket className="h-[22px] w-[22px] shrink-0" /> },
   { id: 'tasks', label: 'Tasks', shortLabel: 'Tasks', icon: <ListTodo className="h-[22px] w-[22px] shrink-0" /> },
   { id: 'audit', label: 'Audit', shortLabel: 'Audit', icon: <ClipboardList className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'count', label: 'Count', shortLabel: 'Count', icon: <Hash className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'locate', label: 'Locate', shortLabel: 'Locate', icon: <Crosshair className="h-[22px] w-[22px] shrink-0" /> },
   { id: 'food', label: 'Food supply', shortLabel: 'Food', icon: <UtensilsCrossed className="h-[22px] w-[22px] shrink-0" aria-hidden="false" /> },
   { id: 'more', label: 'More', shortLabel: 'More', icon: <MoreHorizontal className="h-[22px] w-[22px] shrink-0" /> },
 ];
@@ -163,6 +169,24 @@ export default function HandheldHubPage() {
   const [foodKitchenId, setFoodKitchenId] = useState<string>('');
   const [showFoodScanner, setShowFoodScanner] = useState(false);
   const [foodScannerKey, setFoodScannerKey] = useState(0);
+
+  // Count/Inventory state
+  const [countSessionActive, setCountSessionActive] = useState(false);
+  const [countStartTime, setCountStartTime] = useState<number>(0);
+  const [countScans, setCountScans] = useState<{ id: string; barcode?: string; name: string }[]>([]);
+  const [showCountScanner, setShowCountScanner] = useState(false);
+
+  // Locate state
+  const [locateQuery, setLocateQuery] = useState('');
+  const [locateResults, setLocateResults] = useState<Asset[]>([]);
+  const [locateSearching, setLocateSearching] = useState(false);
+  const [locateTarget, setLocateTarget] = useState<Asset | null>(null);
+  const [locateActive, setLocateActive] = useState(false);
+  const [locateProximity, setLocateProximity] = useState(0); // 0 = far, 100 = found
+  const locateAudioContextRef = useRef<AudioContext | null>(null);
+
+  // Sync state (for header and More tab)
+  const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
   const handheldDialogOpenedAt = useRef(0);
@@ -602,8 +626,115 @@ export default function HandheldHubPage() {
     if (ticket?.id) fetchTicketDetail(ticket.id);
   }, [fetchTicketDetail]);
 
+  const handleSyncNow = useCallback(async () => {
+    setLastSyncTime(Date.now());
+    try {
+      await Promise.all([fetchAssignedTickets(), fetchAssignedTasks()]);
+      toast({ title: 'Synced', description: 'Tickets and tasks refreshed.' });
+    } catch {
+      toast({ title: 'Sync failed', variant: 'destructive' });
+    }
+  }, [fetchAssignedTickets, fetchAssignedTasks, toast]);
+
+  const startCountSession = useCallback(() => {
+    setCountSessionActive(true);
+    setCountStartTime(Date.now());
+    setCountScans([]);
+  }, []);
+
+  const endCountSession = useCallback(() => {
+    setCountSessionActive(false);
+    const total = countScans.length;
+    toast({ title: 'Count ended', description: `${total} item${total !== 1 ? 's' : ''} counted.` });
+  }, [countScans.length, toast]);
+
+  const addToCount = useCallback(async (code: string) => {
+    const q = code.trim();
+    if (!q) return;
+    try {
+      const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.asset?.id) {
+          const a = data.asset;
+          setCountScans((prev) => [...prev, { id: a.id, barcode: a.barcode || q, name: a.name || a.assetId || 'Unknown' }]);
+          toast({ title: 'Added to count', description: a.name });
+          return;
+        }
+      }
+      setCountScans((prev) => [...prev, { id: `raw-${Date.now()}`, barcode: q, name: q }]);
+      toast({ title: 'Added to count', description: q });
+    } catch {
+      toast({ title: 'Lookup failed', variant: 'destructive' });
+    }
+  }, [toast]);
+
+  const searchLocateAssets = useCallback(async () => {
+    const q = locateQuery.trim();
+    if (!q) {
+      setLocateResults([]);
+      return;
+    }
+    setLocateSearching(true);
+    try {
+      const res = await fetch(`/api/assets?search=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.asset) {
+          setLocateResults([data.asset]);
+        } else {
+          const list = Array.isArray(data) ? data : data?.assets ?? [];
+          setLocateResults(list.slice(0, 20));
+        }
+      } else {
+        setLocateResults([]);
+      }
+    } catch {
+      setLocateResults([]);
+      toast({ title: 'Search failed', variant: 'destructive' });
+    } finally {
+      setLocateSearching(false);
+    }
+  }, [locateQuery, toast]);
+
+  const startLocate = useCallback(() => {
+    if (!locateTarget) return;
+    setLocateActive(true);
+    setLocateProximity(0);
+  }, [locateTarget]);
+
+  const stopLocate = useCallback(() => {
+    setLocateActive(false);
+  }, []);
+
+  // Locate beep: faster beep as proximity increases (0–100)
+  useEffect(() => {
+    if (!locateActive || locateProximity >= 100) return;
+    let intervalId: ReturnType<typeof setInterval>;
+    const beep = () => {
+      try {
+        const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!Ctx) return;
+        if (!locateAudioContextRef.current) locateAudioContextRef.current = new Ctx();
+        const ctx = locateAudioContextRef.current;
+        if (ctx.state === 'suspended') ctx.resume();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.value = 0.12;
+        osc.frequency.value = 600 + locateProximity * 6;
+        osc.start(0);
+        osc.stop(ctx.currentTime + 0.08);
+      } catch { /* no audio */ }
+    };
+    const intervalMs = Math.max(100, 900 - locateProximity * 8);
+    intervalId = setInterval(beep, intervalMs);
+    return () => clearInterval(intervalId);
+  }, [locateActive, locateProximity]);
+
   return (
-    <HandheldLayout title="Field Assistant">
+    <HandheldLayout title="Field Assistant" lastSyncTime={lastSyncTime} onSyncNow={handleSyncNow}>
       {/* Tab content — touch-friendly, safe area */}
       <div className="flex-1 overflow-auto p-4 pb-28 min-h-0">
         {tab === 'scan' && (
@@ -1020,6 +1151,168 @@ export default function HandheldHubPage() {
           </div>
         )}
 
+        {tab === 'count' && (
+          <div className="max-w-lg mx-auto space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Hash className="h-5 w-5" /> Inventory count
+            </h2>
+            {!countSessionActive ? (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm">
+                <p className="text-sm text-slate-600 dark:text-slate-300">Start a count session to scan assets and see running total and scan rate.</p>
+                <Button size="lg" className="w-full mt-4 h-12 rounded-xl" onClick={startCountSession}>
+                  <Hash className="h-5 w-5 mr-2" /> Start count
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20 p-5 shadow-sm">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-3xl font-bold text-violet-700 dark:text-violet-200">{countScans.length}</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">items counted</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-semibold text-slate-800 dark:text-slate-200">
+                        {countStartTime ? Math.round(countScans.length / ((Date.now() - countStartTime) / 60000)) : 0}
+                      </p>
+                      <p className="text-xs text-slate-500">per minute</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1 flex gap-2">
+                    <Input
+                      placeholder="Barcode or Asset ID"
+                      className="rounded-xl flex-1"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = (e.target as HTMLInputElement).value?.trim();
+                          if (v) { addToCount(v); (e.target as HTMLInputElement).value = ''; }
+                        }
+                      }}
+                    />
+                    <Button size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => { const el = document.querySelector('input[placeholder="Barcode or Asset ID"]') as HTMLInputElement; if (el?.value?.trim()) { addToCount(el.value.trim()); el.value = ''; } }}>
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </div>
+                  <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => setShowCountScanner(true)} aria-label="Open scanner">
+                    <Scan className="h-5 w-5" />
+                  </Button>
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 max-h-48 overflow-y-auto">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Last scans</p>
+                  {countScans.length === 0 ? (
+                    <p className="text-sm text-slate-400">Scan or enter barcode to add.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {countScans.slice(-10).reverse().map((s, i) => (
+                        <li key={`${s.id}-${i}`} className="text-sm text-slate-700 dark:text-slate-200 truncate flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                          {s.name}
+                          {s.barcode && s.barcode !== s.name && <span className="text-slate-400 text-xs">({s.barcode})</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <Button variant="outline" className="w-full rounded-xl" onClick={endCountSession}>
+                  End count session
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'locate' && (
+          <div className="max-w-lg mx-auto space-y-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Crosshair className="h-5 w-5" /> Locate asset
+            </h2>
+            {!locateActive ? (
+              <>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Search by name or barcode, then start locate for audio/visual feedback as you get closer.</p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search by name or barcode"
+                    value={locateQuery}
+                    onChange={(e) => setLocateQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') searchLocateAssets(); }}
+                    className="rounded-xl flex-1"
+                  />
+                  <Button size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={searchLocateAssets} disabled={locateSearching}>
+                    {locateSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                  </Button>
+                </div>
+                {locateResults.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700 max-h-64 overflow-y-auto">
+                    {locateResults.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => { setLocateTarget(a); setLocateResults([]); setLocateQuery(''); }}
+                        className="w-full flex items-center gap-3 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 active:bg-slate-100 dark:active:bg-slate-700 transition-colors"
+                      >
+                        <div className="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
+                          {a.imageUrl ? <img src={a.imageUrl} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 text-slate-400" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-slate-900 dark:text-white truncate">{a.name}</p>
+                          <p className="text-xs text-slate-500">{a.assetId || a.barcode || a.id}</p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {locateTarget && (
+                  <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10 p-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-12 w-12 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
+                        {locateTarget.imageUrl ? <img src={locateTarget.imageUrl} alt="" className="h-full w-full object-cover" /> : <Package className="h-6 w-6 text-violet-500" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-white truncate">{locateTarget.name}</p>
+                        <p className="text-xs text-slate-500">{locateTarget.assetId || locateTarget.barcode}</p>
+                      </div>
+                    </div>
+                    <Button size="lg" className="rounded-xl shrink-0" onClick={startLocate}>
+                      <Crosshair className="h-5 w-5 mr-2" /> Locate
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-slate-900 text-white p-6 space-y-6">
+                <p className="text-center font-medium">Locating: {locateTarget?.name}</p>
+                <p className="text-center text-sm text-slate-300">Beep speeds up as you get closer. Simulate proximity below.</p>
+                <div className="flex justify-center">
+                  <div
+                    className={cn(
+                      'rounded-full border-4 border-violet-400 transition-all duration-300',
+                      locateProximity >= 100 ? 'bg-emerald-500 border-emerald-400 scale-110' : 'bg-violet-600/50'
+                    )}
+                    style={{ width: 120 + locateProximity * 1.5, height: 120 + locateProximity * 1.5 }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs text-slate-400 block">Proximity (simulated)</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={locateProximity}
+                    onChange={(e) => setLocateProximity(Number(e.target.value))}
+                    className="w-full h-3 rounded-full accent-violet-500"
+                  />
+                </div>
+                <Button variant="secondary" className="w-full rounded-xl" onClick={stopLocate}>
+                  Stop locate
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === 'food' && (
           <div className="max-w-lg mx-auto space-y-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -1076,12 +1369,49 @@ export default function HandheldHubPage() {
             <h2 className="text-lg font-semibold">More</h2>
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3">
               {isOnline ? <Wifi className="h-8 w-8 text-emerald-500" /> : <WifiOff className="h-8 w-8 text-amber-500" />}
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="font-medium">{isOnline ? 'You are online' : 'You are offline'}</p>
                 <p className="text-sm text-slate-500">{isOnline ? 'Data syncs automatically.' : 'Changes will sync when back online.'}</p>
+                {lastSyncTime != null && (
+                  <p className="text-xs text-slate-400 mt-1">Last sync: {Math.round((Date.now() - lastSyncTime) / 60000)}m ago</p>
+                )}
               </div>
+              <Button variant="outline" size="sm" className="rounded-xl shrink-0" onClick={handleSyncNow}>
+                <RefreshCw className="h-4 w-4 mr-1" /> Sync now
+              </Button>
             </div>
-            <p className="text-xs text-slate-500">Handheld account — scan, manage assets, tickets & tasks in the field.</p>
+            <div className="grid gap-3">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Shortcuts</p>
+              <button
+                type="button"
+                onClick={() => setTab('count')}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.99] transition-all"
+              >
+                <div className="h-11 w-11 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                  <Hash className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900 dark:text-white">Inventory count</p>
+                  <p className="text-xs text-slate-500">Fast count with running total & scan rate</p>
+                </div>
+                <ChevronRight className="h-5 w-5 text-slate-400 ml-auto shrink-0" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab('locate')}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.99] transition-all"
+              >
+                <div className="h-11 w-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                  <Crosshair className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900 dark:text-white">Locate asset</p>
+                  <p className="text-xs text-slate-500">Search then get audio/visual feedback</p>
+                </div>
+                <ChevronRight className="h-5 w-5 text-slate-400 ml-auto shrink-0" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">Handheld — scan, count, locate, manage assets, tickets & tasks in the field.</p>
           </div>
         )}
       </div>
@@ -1138,6 +1468,16 @@ export default function HandheldHubPage() {
           />
         </>
       )}
+
+      {/* Count tab: barcode scanner to add to count (stays in session) */}
+      <BarcodeScannerCount
+        open={showCountScanner}
+        onOpenChange={setShowCountScanner}
+        onScan={(payload) => {
+          const b = 'barcode' in payload ? payload.barcode : (payload as Asset).barcode ?? (payload as Asset).assetId ?? '';
+          if (b) addToCount(b);
+        }}
+      />
 
       {/* Audit: full asset details (all tabs) when clicking an audit card */}
       {selectedAuditAssetForDetails && (

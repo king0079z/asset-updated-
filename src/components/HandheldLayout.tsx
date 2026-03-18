@@ -7,18 +7,23 @@ import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
-import { Scan, Wifi, WifiOff, LogOut } from 'lucide-react';
+import { Scan, Wifi, WifiOff, LogOut, RefreshCw } from 'lucide-react';
 
 interface HandheldLayoutProps {
   title?: string;
   children: React.ReactNode;
   headerRight?: React.ReactNode;
+  lastSyncTime?: number | null;
+  onSyncNow?: () => void | Promise<void>;
 }
 
-export function HandheldLayout({ title = 'Field Assistant', children, headerRight }: HandheldLayoutProps) {
+export function HandheldLayout({ title = 'Field Assistant', children, headerRight, lastSyncTime, onSyncNow }: HandheldLayoutProps) {
   const { signOut } = useAuth();
   const router = useRouter();
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  const syncLabel = lastSyncTime
+    ? `${Math.round((Date.now() - lastSyncTime) / 60000)}m ago`
+    : 'Never';
 
   const handleLogout = async () => {
     await signOut();
@@ -47,6 +52,17 @@ export function HandheldLayout({ title = 'Field Assistant', children, headerRigh
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {onSyncNow && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+              onClick={() => onSyncNow()}
+              aria-label="Sync now"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
           {headerRight}
           <Button
             variant="ghost"
