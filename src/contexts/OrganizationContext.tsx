@@ -102,7 +102,18 @@ export const OrganizationProvider: React.FC<{ children: ReactNode }> = ({ childr
         .eq('inviteAccepted', true);
 
       if (memberError) {
-        console.error('Error fetching organizations:', memberError);
+        const msg = memberError?.message ?? '';
+        const isNetworkError = typeof msg === 'string' && (msg.includes('fetch') || msg.includes('Failed to fetch'));
+        if (isNetworkError) {
+          // Log at debug level only; keep empty state so UI doesn't break
+          if (typeof console !== 'undefined' && (console as any).debug) {
+            (console as any).debug('[OrganizationContext] Network error fetching organizations', msg);
+          }
+        } else {
+          console.error('Error fetching organizations:', memberError);
+        }
+        setUserOrganizations([]);
+        setLoading(false);
         return;
       }
 
@@ -128,12 +139,22 @@ export const OrganizationProvider: React.FC<{ children: ReactNode }> = ({ childr
         await loadSubscription(targetOrg.organizationId);
       }
     } catch (error) {
-      console.error('Error refreshing organizations:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to load organizations",
-      });
+      const msg = error && typeof (error as any).message === 'string' ? (error as any).message : '';
+      const isNetworkError = msg.includes('fetch') || msg.includes('Failed to fetch') || (error as any)?.name === 'TypeError';
+      if (isNetworkError && typeof console !== 'undefined' && (console as any).debug) {
+        (console as any).debug('[OrganizationContext] Network error refreshing organizations', msg);
+      } else {
+        console.error('Error refreshing organizations:', error);
+      }
+      setUserOrganizations([]);
+      setCurrentOrganization(null);
+      if (!isNetworkError) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load organizations",
+        });
+      }
     } finally {
       setLoading(false);
     }

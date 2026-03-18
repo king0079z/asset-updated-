@@ -58,7 +58,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           .maybeSingle();
 
         if (error) {
-          console.error('Error fetching user status:', error);
+          const isNetworkError = (e: any) => !e || typeof e.message === 'string' && (e.message.includes('fetch') || e.message.includes('Failed to fetch') || e.message === 'TypeError: Failed to fetch');
+          if (isNetworkError(error)) {
+            logDebug('[ProtectedRoute] Network error fetching user status, using safe defaults', error?.message);
+            setUserStatus('PENDING');
+            setUserEmail(user?.email ?? '');
+          } else {
+            console.error('Error fetching user status:', error);
+          }
           setLoading(false);
           return;
         }
@@ -116,7 +123,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         
         setLoading(false);
       } catch (error) {
-        console.error('Error:', error);
+        const msg = error && typeof (error as any).message === 'string' ? (error as any).message : '';
+        const isNetworkError = msg.includes('fetch') || msg.includes('Failed to fetch') || (error as any)?.name === 'TypeError';
+        if (isNetworkError) {
+          logDebug('[ProtectedRoute] Network error in checkUserStatus', msg);
+          setUserStatus('PENDING');
+          setUserEmail(user?.email ?? '');
+        } else {
+          console.error('Error:', error);
+        }
         setLoading(false);
       }
     };

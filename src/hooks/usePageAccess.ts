@@ -34,7 +34,16 @@ export function usePageAccess() {
           .maybeSingle();
         
         if (error) {
-          console.error('Error fetching user access:', error);
+          const msg = error?.message ?? '';
+          const isNetworkError = typeof msg === 'string' && (msg.includes('fetch') || msg.includes('Failed to fetch'));
+          if (isNetworkError) {
+            logDebug('[usePageAccess] Network error fetching user access, using defaults', msg);
+            setIsAdmin(false);
+            setRole('STAFF');
+            setPageAccess({});
+          } else {
+            console.error('Error fetching user access:', error);
+          }
           setLoading(false);
           return;
         }
@@ -79,7 +88,16 @@ export function usePageAccess() {
           warnDebug(`[usePageAccess] Warning: User ${user.id} has status ${data.status} which may prevent access`);
         }
       } catch (error) {
-        console.error('Error in usePageAccess:', error);
+        const msg = error && typeof (error as any).message === 'string' ? (error as any).message : '';
+        const isNetworkError = msg.includes('fetch') || msg.includes('Failed to fetch') || (error as any)?.name === 'TypeError';
+        if (isNetworkError) {
+          logDebug('[usePageAccess] Network error, using defaults', msg);
+          setIsAdmin(false);
+          setRole('STAFF');
+          setPageAccess({});
+        } else {
+          console.error('Error in usePageAccess:', error);
+        }
         setLoading(false);
       }
     };
