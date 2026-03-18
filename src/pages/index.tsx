@@ -209,13 +209,15 @@ export default function Home() {
                             </Button>
                           </Link>
                         </motion.div>
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
-                          <Link href="/dashboard" className="w-full sm:w-auto">
-                            <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full border-primary/20 hover:bg-primary/5 transition-all duration-300">
-                              {t('dashboard')} <ArrowUpRight className="mx-2 h-5 w-5" />
-                            </Button>
-                          </Link>
-                        </motion.div>
+                        {landingCtaMode !== 'handheld' && (
+                          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
+                            <Link href="/dashboard" className="w-full sm:w-auto">
+                              <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full border-primary/20 hover:bg-primary/5 transition-all duration-300">
+                                {t('dashboard')} <ArrowUpRight className="mx-2 h-5 w-5" />
+                              </Button>
+                            </Link>
+                          </motion.div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -624,12 +626,13 @@ export default function Home() {
             </div>
           </section>
 
-          {/* RFID & Real-Time Location Section - World-class showcase */}
-          <section id="rfid-tracking" className="py-24 bg-gradient-to-br from-rose-500/10 via-background to-rose-600/5 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_800px_at_80%_20%,var(--rose-500)/8,transparent)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_600px_at_20%_80%,var(--rose-600)/6,transparent)]" />
+          {/* RFID & Real-Time Location Section - World-class showcase with map representation */}
+          <section id="rfid-tracking" className="py-28 bg-gradient-to-br from-rose-500/10 via-background to-rose-600/5 relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_800px_at_80%_20%,var(--rose-500)/10,transparent_50%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_600px_at_20%_80%,var(--rose-600)/8,transparent_50%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_50%_at_50%_50%,var(--rose-500)/5,transparent_70%)]" />
             <div className="container mx-auto px-4 relative z-10">
-              <motion.div className="text-center mb-16" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+              <motion.div className="text-center mb-20" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
                 <Badge className="mb-4 px-4 py-1.5 bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 rounded-full">
                   Real-time visibility
                 </Badge>
@@ -640,47 +643,116 @@ export default function Home() {
                   {t('rfid_tracking_description')}
                 </p>
               </motion.div>
-              <div className="grid md:grid-cols-3 gap-8">
-                <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl">
-                    <div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6">
-                      <Layers className="w-7 h-7 text-rose-500" />
+
+              {/* Animated RFID map representation */}
+              <motion.div
+                className="relative max-w-4xl mx-auto mb-20 rounded-3xl overflow-hidden border border-rose-500/20 bg-card/80 backdrop-blur shadow-2xl"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 1, delay: 0.2 }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent pointer-events-none" />
+                <div className="relative p-6 md:p-10">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                      <span className="text-sm font-medium text-rose-600 dark:text-rose-400">Live map</span>
                     </div>
+                    <span className="text-xs text-muted-foreground font-mono">RFID zones • Floor 1</span>
+                  </div>
+                  {/* Stylized floor plan / zone map */}
+                  <div className="relative aspect-[16/9] min-h-[220px] rounded-2xl bg-slate-900/50 dark:bg-slate-950/80 border border-rose-500/20 overflow-hidden">
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 225" preserveAspectRatio="xMidYMid slice">
+                      <defs>
+                        <linearGradient id="rfidZoneGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="rgb(244, 63, 94)" stopOpacity="0.15" />
+                          <stop offset="100%" stopColor="rgb(244, 63, 94)" stopOpacity="0.05" />
+                        </linearGradient>
+                        <filter id="rfidGlow">
+                          <feGaussianBlur stdDeviation="2" result="blur" />
+                          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                        </filter>
+                      </defs>
+                      {/* Zone rectangles - staggered appearance */}
+                      <motion.rect x="20" y="20" width="110" height="85" rx="8" fill="url(#rfidZoneGrad)" stroke="rgba(244,63,94,0.4)" strokeWidth="1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.5 }} />
+                      <motion.rect x="145" y="20" width="110" height="85" rx="8" fill="url(#rfidZoneGrad)" stroke="rgba(244,63,94,0.4)" strokeWidth="1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.65 }} />
+                      <motion.rect x="270" y="20" width="110" height="85" rx="8" fill="url(#rfidZoneGrad)" stroke="rgba(244,63,94,0.4)" strokeWidth="1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.8 }} />
+                      <motion.rect x="20" y="120" width="170" height="85" rx="8" fill="url(#rfidZoneGrad)" stroke="rgba(244,63,94,0.4)" strokeWidth="1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.95 }} />
+                      <motion.rect x="205" y="120" width="175" height="85" rx="8" fill="url(#rfidZoneGrad)" stroke="rgba(244,63,94,0.4)" strokeWidth="1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 1.1 }} />
+                    </svg>
+                    {/* Animated RFID tag dots */}
+                    {[
+                      { cx: 75, cy: 62, delay: 0.3 },
+                      { cx: 200, cy: 62, delay: 0.5 },
+                      { cx: 325, cy: 62, delay: 0.4 },
+                      { cx: 105, cy: 162, delay: 0.6 },
+                      { cx: 290, cy: 162, delay: 0.45 },
+                    ].map((dot, i) => (
+                      <motion.div
+                        key={i}
+                        className="absolute w-3 h-3 rounded-full bg-rose-500 shadow-lg shadow-rose-500/50 border-2 border-white dark:border-slate-800"
+                        style={{ left: `${(dot.cx / 400) * 100}%`, top: `${(dot.cy / 225) * 100}%`, transform: 'translate(-50%, -50%)' }}
+                        animate={{ scale: [1, 1.3, 1], opacity: [1, 0.8, 1] }}
+                        transition={{ duration: 2, repeat: Infinity, delay: dot.delay }}
+                      />
+                    ))}
+                    {/* Scan line effect */}
+                    <motion.div
+                      className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-rose-400 to-transparent opacity-70"
+                      initial={{ top: '0%' }}
+                      animate={{ top: '100%' }}
+                      transition={{ duration: 3, repeat: Infinity, repeatDelay: 0.5 }}
+                    />
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500" /> Tag</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-rose-500/60 rounded" /> Zone</span>
+                    <span className="flex items-center gap-1.5"><Radio className="w-3.5 h-3.5 text-rose-500" /> Real-time</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              <div className="grid md:grid-cols-3 gap-8">
+                <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }} className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+                  <motion.div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl" whileHover={{ y: -4, transition: { duration: 0.2 } }}>
+                    <motion.div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6" whileHover={{ rotate: 5, scale: 1.05 }}>
+                      <Layers className="w-7 h-7 text-rose-500" />
+                    </motion.div>
                     <h3 className="text-xl font-semibold mb-3">{t('rfid_zones_floors')}</h3>
                     <p className="text-muted-foreground text-sm leading-relaxed">
                       Define zones and upload floor plans. See every RFID-tagged asset on interactive 2D/3D maps with live position updates.
                     </p>
-                  </div>
+                  </motion.div>
                 </motion.div>
-                <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl">
-                    <div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6">
+                <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.35 }} className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+                  <motion.div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl" whileHover={{ y: -4, transition: { duration: 0.2 } }}>
+                    <motion.div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6" whileHover={{ rotate: -5, scale: 1.05 }}>
                       <Activity className="w-7 h-7 text-rose-500" />
-                    </div>
+                    </motion.div>
                     <h3 className="text-xl font-semibold mb-3">{t('rfid_movement_history')}</h3>
                     <p className="text-muted-foreground text-sm leading-relaxed">
                       Full movement timeline per asset: zone transitions, dwell time, and audit trail for compliance and investigations.
                     </p>
-                  </div>
+                  </motion.div>
                 </motion.div>
-                <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl">
-                    <div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6">
+                <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.5 }} className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+                  <motion.div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl" whileHover={{ y: -4, transition: { duration: 0.2 } }}>
+                    <motion.div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6" whileHover={{ rotate: 5, scale: 1.05 }}>
                       <Zap className="w-7 h-7 text-rose-500" />
-                    </div>
+                    </motion.div>
                     <h3 className="text-xl font-semibold mb-3">{t('rfid_alerts')}</h3>
                     <p className="text-muted-foreground text-sm leading-relaxed">
                       Configurable alert rules: unauthorized movement, low battery, missing assets, zone breaches. Notifications in-app and by email.
                     </p>
-                  </div>
+                  </motion.div>
                 </motion.div>
               </div>
-              <motion.div className="mt-12 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+              <motion.div className="mt-14 text-center" initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.6 }}>
                 <Link href="/rfid">
-                  <Button size="lg" variant="outline" className="rounded-full border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 px-8 py-6">
+                  <Button size="lg" variant="outline" className="rounded-full border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 px-8 py-6 hover:scale-105 transition-transform">
                     Explore RFID dashboard <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>

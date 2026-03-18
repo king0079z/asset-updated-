@@ -61,16 +61,16 @@ const Header = () => {
     };
   }, [router]);
   
-  // When on landing and user is logged in: show Support tickets or Handheld based on sessionStorage (set by /handheld)
+  // When user is logged in: show Service Portal or Handheld based on sessionStorage (set by /handheld)
   useEffect(() => {
-    if (typeof window === 'undefined' || !user || router.pathname !== '/') return;
+    if (typeof window === 'undefined' || !user) return;
     try {
       const mode = sessionStorage.getItem('landing_cta');
       setLandingCtaMode(mode === 'handheld' ? 'handheld' : 'tickets');
     } catch (_) {
       setLandingCtaMode('tickets');
     }
-  }, [user, router.pathname]);
+  }, [user]);
 
   // Close mobile menu when clicking outside
   useEffect(() => {
@@ -163,10 +163,10 @@ const Header = () => {
     if (user && router.pathname === '/dashboard') {
       signOut();
       router.push('/');
-    } else if (user && router.pathname === '/') {
+    } else if (user) {
       router.push(landingCtaMode === 'handheld' ? '/handheld' : '/portal');
     } else {
-      router.push(user ? '/dashboard' : '/login');
+      router.push('/login');
     }
   };
 
@@ -174,10 +174,10 @@ const Header = () => {
     if (user && router.pathname === '/dashboard') {
       return t('sign_out');
     }
-    if (user && router.pathname === '/') {
+    if (user) {
       return landingCtaMode === 'handheld' ? t('handheld_access') : t('support_ticket_access');
     }
-    return user ? t('dashboard') : t('log_in');
+    return t('log_in');
   };
 
   // Updated navItems to match the actual section IDs in the landing page
@@ -290,9 +290,7 @@ const Header = () => {
                   className="rounded-full h-9 px-4 flex items-center gap-1.5 text-sm font-medium shadow-md shadow-primary/20"
                 >
                     <div className="bg-white/10 rounded-full p-0.5">
-                    {user && router.pathname === '/' ? (landingCtaMode === 'handheld' ? <Smartphone className="h-3.5 w-3.5 mr-1" /> : <Ticket className="h-3.5 w-3.5 mr-1" />) : user ? (
-                      <User className="h-3.5 w-3.5 mr-1" />
-                    ) : (
+                    {user ? (landingCtaMode === 'handheld' ? <Smartphone className="h-3.5 w-3.5 mr-1" /> : <Ticket className="h-3.5 w-3.5 mr-1" />) : (
                       <LogIn className="h-3.5 w-3.5 mr-1" />
                     )}
                   </div>
@@ -350,9 +348,7 @@ const Header = () => {
             >
               <div className="relative">
                 <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/15 transition-colors">
-                  {user && router.pathname === '/' ? (landingCtaMode === 'handheld' ? <Smartphone className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" /> : <Ticket className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />) : user ? (
-                    <User className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
-                  ) : (
+                  {user ? (landingCtaMode === 'handheld' ? <Smartphone className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" /> : <Ticket className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />) : (
                     <LogIn className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
                   )}
                 </div>
@@ -368,7 +364,7 @@ const Header = () => {
                 ></motion.div>
               </div>
               <span className={`text-xs mt-1.5 font-medium ${(router.pathname === '/dashboard' || router.pathname === '/login') ? 'text-primary' : 'text-foreground/80'} group-hover:text-primary transition-colors`}>
-                {user ? t('dashboard') : t('log_in')}
+                {buttonText()}
               </span>
             </motion.button>
             
@@ -495,9 +491,7 @@ const Header = () => {
                     size="default"
                     className="rounded-full px-5 py-2 flex items-center gap-2 shadow-md shadow-primary/20"
                   >
-                    {user && router.pathname === '/' ? (landingCtaMode === 'handheld' ? <Smartphone className="h-4 w-4 mr-1" /> : <Ticket className="h-4 w-4 mr-1" />) : user ? (
-                      <User className="h-4 w-4 mr-1" />
-                    ) : (
+                    {user ? (landingCtaMode === 'handheld' ? <Smartphone className="h-4 w-4 mr-1" /> : <Ticket className="h-4 w-4 mr-1" />) : (
                       <LogIn className="h-4 w-4 mr-1" />
                     )}
                     <span className="font-medium">{buttonText()}</span>
@@ -870,9 +864,7 @@ const Header = () => {
                           setMobileMenuOpen(false);
                         }}
                       >
-                        {user && router.pathname === '/' ? (landingCtaMode === 'handheld' ? <Smartphone className="h-5 w-5 mr-2" /> : <Ticket className="h-5 w-5 mr-2" />) : user ? (
-                          <User className="h-5 w-5 mr-2" />
-                        ) : (
+                        {user ? (landingCtaMode === 'handheld' ? <Smartphone className="h-5 w-5 mr-2" /> : <Ticket className="h-5 w-5 mr-2" />) : (
                           <LogIn className="h-5 w-5 mr-2" />
                         )}
                         <span className="font-medium">{buttonText()}</span>
