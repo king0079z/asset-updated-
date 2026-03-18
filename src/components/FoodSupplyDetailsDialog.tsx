@@ -19,8 +19,9 @@ import {
   Tag,
   Truck,
   BarChart3,
-  Barcode,
+  Barcode as BarcodeIcon,
 } from 'lucide-react';
+import Barcode from 'react-barcode';
 
 interface FoodSupplyDetailsDialogProps {
   supply: any | null;
@@ -150,12 +151,25 @@ export function FoodSupplyDetailsDialog({
               </div>
             </div>
             {s?.barcode && (
-              <div className="flex items-center gap-2 text-sm">
-                <Barcode className="h-4 w-4 text-slate-400 shrink-0" />
-                <span className="text-slate-600 dark:text-slate-300">Barcode</span>
-                <span className="font-mono font-semibold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
-                  {s.barcode}
-                </span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <BarcodeIcon className="h-4 w-4 text-slate-400 shrink-0" />
+                  <span className="text-slate-600 dark:text-slate-300">Barcode</span>
+                  <span className="font-mono font-semibold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                    {s.barcode}
+                  </span>
+                </div>
+                <div className="flex justify-center rounded-lg bg-white dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-700">
+                  <Barcode
+                    value={s.barcode}
+                    width={1.2}
+                    height={40}
+                    format="CODE128"
+                    displayValue={true}
+                    margin={0}
+                    fontSize={12}
+                  />
+                </div>
               </div>
             )}
             {s?.vendor && (
