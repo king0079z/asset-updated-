@@ -35,6 +35,9 @@ import {
   User,
   Radio,
   Download,
+  History,
+  Calendar,
+  DollarSign,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
@@ -151,6 +154,9 @@ export default function HandheldHubPage() {
   const [auditDetailsLoading, setAuditDetailsLoading] = useState(false);
   const [auditRfidMapAsset, setAuditRfidMapAsset] = useState<any | null>(null);
   const [auditSort, setAuditSort] = useState<'scan' | 'name' | 'location'>('scan');
+  const [selectedAuditFoodSupply, setSelectedAuditFoodSupply] = useState<any | null>(null);
+  const [auditFoodConsumption, setAuditFoodConsumption] = useState<any[]>([]);
+  const [auditFoodConsumptionLoading, setAuditFoodConsumptionLoading] = useState(false);
 
   // Food supply state
   const [kitchens, setKitchens] = useState<{ id: string; name: string }[]>([]);
@@ -389,6 +395,20 @@ export default function HandheldHubPage() {
           return;
         }
       }
+      // 3) Try ticket barcode
+      const ticketRes = await fetch(`/api/tickets/barcode?barcode=${encodeURIComponent(q)}`, { credentials: 'include' });
+      if (ticketRes.ok) {
+        const ticketData = await ticketRes.json();
+        if (ticketData?.id) {
+          setAuditScans((prev) => {
+            const exists = prev.some((a) => a && typeof a === 'object' && (a as any).type === 'ticket' && (a as any).ticket?.id === ticketData.id);
+            if (exists) return prev;
+            return [...prev, { type: 'ticket', ticket: ticketData }];
+          });
+          toast({ title: 'Ticket scanned', description: ticketData.title || ticketData.displayId || 'Ticket' });
+          return;
+        }
+      }
       toast({ title: 'Not found', description: q, variant: 'destructive' });
     } catch {
       toast({ title: 'Lookup failed', variant: 'destructive' });
@@ -511,12 +531,16 @@ export default function HandheldHubPage() {
     }
     const rows = auditScans.map((item, i) => {
       const food = item && typeof item === 'object' && (item as any).type === 'food' ? (item as any).supply : null;
-      const asset = !food && typeof item === 'object' && item ? (item as any) : null;
+      const ticket = item && typeof item === 'object' && (item as any).type === 'ticket' ? (item as any).ticket : null;
+      const asset = !food && !ticket && typeof item === 'object' && item ? (item as any) : null;
       if (food) {
         const kitchens = (food.kitchensWithSupply && food.kitchensWithSupply.length)
           ? food.kitchensWithSupply.map((k: { name: string }) => k.name).join('; ')
           : (food.kitchenName || '—');
         return [i + 1, food.name, 'Food supply', food.id, `${food.quantity} ${food.unit}`, kitchens, '—', '—'];
+      }
+      if (ticket) {
+        return [i + 1, ticket.title || 'Ticket', 'Ticket', ticket.displayId || ticket.id, (ticket.status || '').toLowerCase(), '—', '—', '—'];
       }
       if (!asset?.id) return [];
       const loc = [asset.floorNumber, asset.roomNumber].filter(Boolean).join(', ') || '—';
@@ -552,6 +576,24 @@ export default function HandheldHubPage() {
       setAuditDetailsLoading(false);
     }
   }, [toast]);
+
+  const openAuditFoodDetails = useCallback((supply: any) => {
+    setSelectedAuditFoodSupply(supply);
+    setAuditFoodConsumption([]);
+    if (supply?.id) {
+      setAuditFoodConsumptionLoading(true);
+      fetch(`/api/food-supply/consumption-history?foodSupplyId=${encodeURIComponent(supply.id)}`, { credentials: 'include' })
+        .then((r) => r.ok ? r.json() : [])
+        .then((data) => setAuditFoodConsumption(Array.isArray(data) ? data : []))
+        .catch(() => setAuditFoodConsumption([]))
+        .finally(() => setAuditFoodConsumptionLoading(false));
+    }
+  }, []);
+
+  const openAuditTicketDetails = useCallback((ticket: any) => {
+    setSelectedTicketDetail(ticket);
+    if (ticket?.id) fetchTicketDetail(ticket.id);
+  }, [fetchTicketDetail]);
 
   return (
     <HandheldLayout title="Field Assistant">
@@ -806,36 +848,45 @@ export default function HandheldHubPage() {
                   .sort((a, b) => {
                     const foodA = a && typeof a === 'object' && (a as any).type === 'food' ? (a as any).supply : null;
                     const foodB = b && typeof b === 'object' && (b as any).type === 'food' ? (b as any).supply : null;
-                    const ax = foodA || (typeof a === 'string' ? null : (a as any));
-                    const bx = foodB || (typeof b === 'string' ? null : (b as any));
+                    const ticketA = a && typeof a === 'object' && (a as any).type === 'ticket' ? (a as any).ticket : null;
+                    const ticketB = b && typeof b === 'object' && (b as any).type === 'ticket' ? (b as any).ticket : null;
+                    const ax = foodA || ticketA || (typeof a === 'string' ? null : (a as any));
+                    const bx = foodB || ticketB || (typeof b === 'string' ? null : (b as any));
                     if (!ax || !bx) return 0;
-                    const nameA = foodA ? foodA.name : (ax.name || '');
-                    const nameB = foodB ? foodB.name : (bx.name || '');
+                    const nameA = foodA ? foodA.name : (ticketA ? (ticketA.title || ticketA.displayId || '') : (ax.name || ''));
+                    const nameB = foodB ? foodB.name : (ticketB ? (ticketB.title || ticketB.displayId || '') : (bx.name || ''));
                     if (auditSort === 'name') return nameA.localeCompare(nameB);
                     if (auditSort === 'location') {
                       const locA = foodA
                         ? ((foodA.kitchensWithSupply && foodA.kitchensWithSupply.length) ? foodA.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ') : foodA.kitchenName || '')
-                        : [ax.floorNumber, ax.roomNumber].filter(Boolean).join(' ');
+                        : ticketA ? (ticketA.status || '') : [ax.floorNumber, ax.roomNumber].filter(Boolean).join(' ');
                       const locB = foodB
                         ? ((foodB.kitchensWithSupply && foodB.kitchensWithSupply.length) ? foodB.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ') : foodB.kitchenName || '')
-                        : [bx.floorNumber, bx.roomNumber].filter(Boolean).join(' ');
+                        : ticketB ? (ticketB.status || '') : [bx.floorNumber, bx.roomNumber].filter(Boolean).join(' ');
                       return locA.localeCompare(locB);
                     }
                     return 0;
                   })
                   .map((item, i) => {
                   const isFood = item && typeof item === 'object' && (item as any).type === 'food';
+                  const isTicket = item && typeof item === 'object' && (item as any).type === 'ticket';
                   const supply = isFood ? (item as any).supply : null;
-                  const asset = !isFood && typeof item === 'string' ? null : !isFood ? (item as any) : null;
+                  const ticket = isTicket ? (item as any).ticket : null;
+                  const asset = !isFood && !isTicket && typeof item === 'string' ? null : !isFood && !isTicket ? (item as any) : null;
 
                   if (supply?.id) {
                     const kitchensList = (supply.kitchensWithSupply && supply.kitchensWithSupply.length)
                       ? supply.kitchensWithSupply.map((k: { name: string }) => k.name).join(', ')
                       : supply.kitchenName || '—';
+                    const expDate = supply.expirationDate ? new Date(supply.expirationDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
                     return (
                       <div
                         key={`food-${supply.id}-${i}`}
-                        className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 shadow-sm overflow-hidden"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openAuditFoodDetails(supply)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditFoodDetails(supply); } }}
+                        className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-md"
                       >
                         <div className="flex gap-4 p-4">
                           <div className="h-20 w-20 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex-shrink-0 flex items-center justify-center">
@@ -849,13 +900,44 @@ export default function HandheldHubPage() {
                               </span>
                             </div>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Food supply</p>
-                            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2 font-medium">Remaining</p>
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2 font-medium">Expires: {expDate}</p>
                           </div>
                         </div>
                         <div className="px-4 pb-4 grid gap-2">
                           <div className="flex items-center gap-2 text-xs">
                             <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                             <span className="text-slate-600 dark:text-slate-300">Kitchens: {kitchensList}</span>
+                          </div>
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Tap for full details</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (ticket?.id) {
+                    const status = (ticket.status || 'open').toLowerCase().replace('_', ' ');
+                    return (
+                      <div
+                        key={`ticket-${ticket.id}-${i}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openAuditTicketDetails(ticket)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditTicketDetails(ticket); } }}
+                        className="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-900/10 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-sky-400 dark:hover:border-sky-600 hover:shadow-md"
+                      >
+                        <div className="flex gap-4 p-4">
+                          <div className="h-20 w-20 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex-shrink-0 flex items-center justify-center">
+                            <Ticket className="h-8 w-8 text-sky-600 dark:text-sky-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-semibold text-slate-900 dark:text-white truncate">{ticket.title || 'Ticket'}</p>
+                              <span className="rounded-lg bg-sky-200/80 dark:bg-sky-800/50 text-xs font-bold text-sky-800 dark:text-sky-200 px-2 py-0.5 shrink-0 capitalize">
+                                {status}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{ticket.displayId || ticket.id}</p>
+                            <p className="text-[10px] text-sky-600 dark:text-sky-400 mt-2 font-medium">Tap for full details</p>
                           </div>
                         </div>
                       </div>
@@ -1075,6 +1157,103 @@ export default function HandheldHubPage() {
         asset={auditRfidMapAsset}
       />
 
+      {/* Food Supply Details Dialog (from audit) */}
+      <Dialog open={!!selectedAuditFoodSupply} onOpenChange={(open) => { if (!open) setSelectedAuditFoodSupply(null); }}>
+        <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-hidden flex flex-col rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <div className="flex items-start justify-between gap-2 flex-shrink-0">
+            <DialogHeader>
+              <DialogTitle className="text-lg flex items-center gap-2">
+                <UtensilsCrossed className="h-5 w-5 text-amber-600" />
+                Food supply details
+              </DialogTitle>
+              <p className="text-sm text-slate-500 mt-0.5">{selectedAuditFoodSupply?.name}</p>
+            </DialogHeader>
+            <Button variant="ghost" size="icon" className="rounded-xl -mr-2 shrink-0" onClick={() => setSelectedAuditFoodSupply(null)} aria-label="Close">
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          {selectedAuditFoodSupply && (
+            <div className="flex-1 overflow-y-auto space-y-6 py-2 -mx-1 px-1">
+              <section className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Overview</h3>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span className="text-slate-600 dark:text-slate-300">Remaining</span>
+                    <span className="font-semibold text-slate-900 dark:text-white ml-auto">{selectedAuditFoodSupply.quantity} {selectedAuditFoodSupply.unit}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span className="text-slate-600 dark:text-slate-300">Expires</span>
+                    <span className="font-medium text-slate-900 dark:text-white ml-auto">
+                      {selectedAuditFoodSupply.expirationDate ? new Date(selectedAuditFoodSupply.expirationDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                    </span>
+                  </div>
+                  {(selectedAuditFoodSupply.category || selectedAuditFoodSupply.pricePerUnit != null) && (
+                    <>
+                      {selectedAuditFoodSupply.category && (
+                        <div className="col-span-2 flex items-center gap-2">
+                          <span className="text-slate-600 dark:text-slate-300">Category</span>
+                          <span className="font-medium capitalize">{selectedAuditFoodSupply.category}</span>
+                        </div>
+                      )}
+                      {selectedAuditFoodSupply.pricePerUnit != null && selectedAuditFoodSupply.pricePerUnit > 0 && (
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-emerald-500 shrink-0" />
+                          <span className="text-slate-600 dark:text-slate-300">Price/unit</span>
+                          <span className="font-medium">QAR {Number(selectedAuditFoodSupply.pricePerUnit).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span className="text-slate-600 dark:text-slate-300">Kitchens</span>
+                  </div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white mt-1">
+                    {(selectedAuditFoodSupply.kitchensWithSupply && selectedAuditFoodSupply.kitchensWithSupply.length)
+                      ? selectedAuditFoodSupply.kitchensWithSupply.map((k: { name: string }) => k.name).join(', ')
+                      : selectedAuditFoodSupply.kitchenName || '—'}
+                  </p>
+                </div>
+              </section>
+              <section className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <History className="h-4 w-4" /> Consumption history
+                </h3>
+                {auditFoodConsumptionLoading ? (
+                  <div className="flex items-center justify-center py-8 gap-2 text-slate-500">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm">Loading…</span>
+                  </div>
+                ) : auditFoodConsumption.length === 0 ? (
+                  <p className="text-sm text-slate-500 py-4 text-center">No consumption records yet</p>
+                ) : (
+                  <ul className="space-y-2 max-h-56 overflow-y-auto">
+                    {auditFoodConsumption.slice(0, 50).map((r: any) => (
+                      <li key={r.id} className="flex items-center justify-between gap-2 text-xs py-2 px-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                        <div>
+                          <span className="font-medium text-slate-900 dark:text-white">{r.quantity} {r.foodSupply?.unit || selectedAuditFoodSupply.unit}</span>
+                          <span className={r.isWaste ? ' text-red-600 dark:text-red-400 ml-2' : ' text-slate-500 ml-2'}>
+                            {r.isWaste ? 'Waste' : (r.source === 'recipe' ? 'Recipe' : 'Direct')}
+                          </span>
+                        </div>
+                        <div className="text-right text-slate-500">
+                          <div>{r.kitchen?.name || '—'}</div>
+                          <div>{r.date ? new Date(r.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showMove} onOpenChange={setShowMove}>
         <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
           <DialogHeader><DialogTitle>Move asset</DialogTitle></DialogHeader>
@@ -1164,6 +1343,18 @@ export default function HandheldHubPage() {
                 <p className="text-xs text-slate-400">
                   Created {selectedTicketDetail.createdAt ? new Date(selectedTicketDetail.createdAt).toLocaleString() : '—'}
                 </p>
+                <div className="flex flex-wrap gap-3 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5 text-slate-400" />
+                    <span className="text-slate-500">Raised by</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{selectedTicketDetail.user?.email ?? '—'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <UserCheck className="h-3.5 w-3.5 text-slate-400" />
+                    <span className="text-slate-500">Assigned to</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{selectedTicketDetail.assignedTo?.email ?? 'Unassigned'}</span>
+                  </div>
+                </div>
                 <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
                   <p className="text-xs font-medium text-slate-500 mb-2">Update status</p>
                   <div className="flex flex-wrap gap-2">
