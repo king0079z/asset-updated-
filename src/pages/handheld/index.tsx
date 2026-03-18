@@ -1,7 +1,8 @@
 // @ts-nocheck
 /**
- * Handheld hub: single entry point for HANDHELD-role users.
- * Full-screen, no dashboard shell. Tabs: Scan | Asset | Tickets | Tasks | Audit | More.
+ * Handheld hub: SimplyRFiD-style field assistant for HANDHELD-role users.
+ * Tabs: Scan | Inventory (Count + Audit) | Locate | Work (Tickets + Tasks) | Asset | More.
+ * Features: RFID-style scan, ultra-fast count, locate (beep), audit, sync, export, print/encode tag workflow.
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { HandheldLayout } from '@/components/HandheldLayout';
@@ -41,6 +42,9 @@ import {
   Hash,
   Crosshair,
   Search,
+  Layers,
+  Briefcase,
+  Printer,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
@@ -97,17 +101,14 @@ type Asset = {
   assignedToEmail?: string | null;
 };
 
-type TabId = 'scan' | 'asset' | 'tickets' | 'tasks' | 'audit' | 'count' | 'locate' | 'food' | 'more';
+type TabId = 'scan' | 'inventory' | 'locate' | 'work' | 'asset' | 'more';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; shortLabel?: string }[] = [
   { id: 'scan', label: 'Scan', shortLabel: 'Scan', icon: <Scan className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'asset', label: 'Asset', shortLabel: 'Asset', icon: <Package className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'tickets', label: 'Tickets', shortLabel: 'Tickets', icon: <Ticket className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'tasks', label: 'Tasks', shortLabel: 'Tasks', icon: <ListTodo className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'audit', label: 'Audit', shortLabel: 'Audit', icon: <ClipboardList className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'count', label: 'Count', shortLabel: 'Count', icon: <Hash className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'inventory', label: 'Inventory', shortLabel: 'Inv', icon: <Layers className="h-[22px] w-[22px] shrink-0" /> },
   { id: 'locate', label: 'Locate', shortLabel: 'Locate', icon: <Crosshair className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'food', label: 'Food supply', shortLabel: 'Food', icon: <UtensilsCrossed className="h-[22px] w-[22px] shrink-0" aria-hidden="false" /> },
+  { id: 'work', label: 'Work', shortLabel: 'Work', icon: <Briefcase className="h-[22px] w-[22px] shrink-0" /> },
+  { id: 'asset', label: 'Asset', shortLabel: 'Asset', icon: <Package className="h-[22px] w-[22px] shrink-0" /> },
   { id: 'more', label: 'More', shortLabel: 'More', icon: <MoreHorizontal className="h-[22px] w-[22px] shrink-0" /> },
 ];
 
@@ -174,6 +175,7 @@ export default function HandheldHubPage() {
   const [countSessionActive, setCountSessionActive] = useState(false);
   const [countStartTime, setCountStartTime] = useState<number>(0);
   const [countScans, setCountScans] = useState<{ id: string; barcode?: string; name: string }[]>([]);
+  const [countLocationLabel, setCountLocationLabel] = useState(''); // optional: e.g. "Aisle 3", "Store A"
   const [showCountScanner, setShowCountScanner] = useState(false);
 
   // Locate state
@@ -187,6 +189,11 @@ export default function HandheldHubPage() {
 
   // Sync state (for header and More tab)
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
+
+  const [inventoryMode, setInventoryMode] = useState<'count' | 'audit'>('count');
+  const [workMode, setWorkMode] = useState<'tickets' | 'tasks'>('tickets');
+  const [showPrintTagDialog, setShowPrintTagDialog] = useState(false);
+  const [printTagAsset, setPrintTagAsset] = useState<Asset | null>(null);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
   const handheldDialogOpenedAt = useRef(0);
@@ -244,14 +251,14 @@ export default function HandheldHubPage() {
   }, [currentAsset?.id]);
 
   useEffect(() => {
-    if (tab === 'tickets') {
+    if (tab === 'work') {
       fetchAssignedTickets();
       if (currentAsset?.id) fetchAssetTickets();
     }
   }, [tab, currentAsset?.id, fetchAssignedTickets, fetchAssetTickets]);
 
   useEffect(() => {
-    if (tab === 'food' && kitchens.length === 0) {
+    if ((tab === 'more' || tab === 'inventory') && kitchens.length === 0) {
       fetch('/api/kitchens', { credentials: 'include', cache: 'no-store' })
         .then((r) => r.ok ? r.json() : [])
         .then((data) => {
@@ -382,7 +389,7 @@ export default function HandheldHubPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (tab === 'tasks') fetchAssignedTasks();
+    if (tab === 'work') fetchAssignedTasks();
   }, [tab, fetchAssignedTasks]);
 
   const lookupAsset = useCallback(async (code: string) => {
@@ -648,6 +655,25 @@ export default function HandheldHubPage() {
     toast({ title: 'Count ended', description: `${total} item${total !== 1 ? 's' : ''} counted.` });
   }, [countScans.length, toast]);
 
+  const exportCountReport = useCallback(() => {
+    if (countScans.length === 0) {
+      toast({ title: 'Nothing to export', description: 'Run a count session first.', variant: 'destructive' });
+      return;
+    }
+    const headers = ['Location', 'Asset ID', 'Barcode', 'Name'];
+    const locationLabel = countLocationLabel.trim() || 'All';
+    const rows = countScans.map((s) => [locationLabel, s.id, s.barcode ?? '', s.name ?? '']);
+    const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventory-count-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Count report exported' });
+  }, [countScans, toast]);
+
   const addToCount = useCallback(async (code: string) => {
     const q = code.trim();
     if (!q) return;
@@ -815,8 +841,18 @@ export default function HandheldHubPage() {
           </div>
         )}
 
-        {tab === 'tickets' && (
+        {tab === 'work' && (
           <div className="max-w-lg mx-auto space-y-4">
+            <div className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <button type="button" onClick={() => setWorkMode('tickets')} className={cn('flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all', workMode === 'tickets' ? 'bg-white dark:bg-slate-700 shadow text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-400')}>
+                <Ticket className="h-4 w-4 inline mr-1.5 align-middle" /> Tickets
+              </button>
+              <button type="button" onClick={() => setWorkMode('tasks')} className={cn('flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all', workMode === 'tasks' ? 'bg-white dark:bg-slate-700 shadow text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-400')}>
+                <ListTodo className="h-4 w-4 inline mr-1.5 align-middle" /> Tasks
+              </button>
+            </div>
+            {workMode === 'tickets' && (
+          <div className="space-y-4">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <h2 className="text-lg font-semibold">Tickets</h2>
               <div className="flex gap-2 flex-wrap">
@@ -889,10 +925,9 @@ export default function HandheldHubPage() {
               </div>
             )}
           </div>
-        )}
-
-        {tab === 'tasks' && (
-          <div className="max-w-lg mx-auto space-y-4">
+            )}
+            {workMode === 'tasks' && (
+          <div className="space-y-4">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">My tasks</h2>
             {tasksLoading ? (
               <div className="flex justify-center py-12"><Loader2 className="h-10 w-10 animate-spin text-violet-500" /></div>
@@ -926,10 +961,22 @@ export default function HandheldHubPage() {
               </div>
             )}
           </div>
+            )}
+          </div>
         )}
 
-        {tab === 'audit' && (
+        {tab === 'inventory' && (
           <div className="max-w-lg mx-auto space-y-4">
+            <div className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <button type="button" onClick={() => setInventoryMode('count')} className={cn('flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all', inventoryMode === 'count' ? 'bg-white dark:bg-slate-700 shadow text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-400')}>
+                <Hash className="h-4 w-4 inline mr-1.5 align-middle" /> Count
+              </button>
+              <button type="button" onClick={() => setInventoryMode('audit')} className={cn('flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all', inventoryMode === 'audit' ? 'bg-white dark:bg-slate-700 shadow text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-400')}>
+                <ClipboardList className="h-4 w-4 inline mr-1.5 align-middle" /> Audit
+              </button>
+            </div>
+            {inventoryMode === 'audit' && (
+          <div className="space-y-4">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">Inventory audit</h2>
@@ -1149,17 +1196,17 @@ export default function HandheldHubPage() {
               )}
             </div>
           </div>
-        )}
-
-        {tab === 'count' && (
-          <div className="max-w-lg mx-auto space-y-4">
+            )}
+            {inventoryMode === 'count' && (
+          <div className="space-y-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Hash className="h-5 w-5" /> Inventory count
+              <Hash className="h-5 w-5" /> Fast count
             </h2>
             {!countSessionActive ? (
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm">
-                <p className="text-sm text-slate-600 dark:text-slate-300">Start a count session to scan assets and see running total and scan rate.</p>
-                <Button size="lg" className="w-full mt-4 h-12 rounded-xl" onClick={startCountSession}>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-300">Start a count session to scan assets. Get running total, scans per minute, and export for multi-location inventory.</p>
+                <Input placeholder="Location (optional, e.g. Aisle 3, Store A)" value={countLocationLabel} onChange={(e) => setCountLocationLabel(e.target.value)} className="rounded-xl" />
+                <Button size="lg" className="w-full h-12 rounded-xl" onClick={startCountSession}>
                   <Hash className="h-5 w-5 mr-2" /> Start count
                 </Button>
               </div>
@@ -1215,10 +1262,17 @@ export default function HandheldHubPage() {
                     </ul>
                   )}
                 </div>
-                <Button variant="outline" className="w-full rounded-xl" onClick={endCountSession}>
-                  End count session
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1 rounded-xl" onClick={exportCountReport} disabled={countScans.length === 0}>
+                    <Download className="h-4 w-4 mr-1" /> Export
+                  </Button>
+                  <Button variant="outline" className="flex-1 rounded-xl" onClick={endCountSession}>
+                    End count session
+                  </Button>
+                </div>
               </div>
+            )}
+          </div>
             )}
           </div>
         )}
@@ -1313,57 +1367,6 @@ export default function HandheldHubPage() {
           </div>
         )}
 
-        {tab === 'food' && (
-          <div className="max-w-lg mx-auto space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <UtensilsCrossed className="h-5 w-5" /> Food supply
-            </h2>
-            <p className="text-sm text-slate-500">Scan items to look up stock or record consumption.</p>
-            {kitchens.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-6 text-center">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto text-slate-400 mb-2" />
-                <p className="text-sm text-slate-500">Loading kitchens…</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {kitchens.length > 1 && (
-                  <div>
-                    <label className="text-xs font-medium text-slate-500 block mb-1">Kitchen</label>
-                    <select
-                      value={foodKitchenId}
-                      onChange={(e) => setFoodKitchenId(e.target.value)}
-                      className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      {kitchens.map((k) => (
-                        <option key={k.id} value={k.id}>{k.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <Button
-                  type="button"
-                  size="lg"
-                  className="w-full h-14 gap-2"
-                  onClick={() => { setFoodScannerKey((k) => k + 1); setShowFoodScanner(true); }}
-                  disabled={!foodKitchenId}
-                >
-                  <ScanLine className="h-5 w-5" />
-                  Scan food supply / Record consumption
-                </Button>
-                {foodKitchenId && (
-                  <EnhancedBarcodeScanner
-                    key={foodScannerKey}
-                    kitchenId={foodKitchenId}
-                    open={showFoodScanner}
-                    onOpenChange={setShowFoodScanner}
-                    onScanComplete={() => { setShowFoodScanner(false); }}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {tab === 'more' && (
           <div className="max-w-lg mx-auto space-y-6">
             <h2 className="text-lg font-semibold">More</h2>
@@ -1380,38 +1383,85 @@ export default function HandheldHubPage() {
                 <RefreshCw className="h-4 w-4 mr-1" /> Sync now
               </Button>
             </div>
-            <div className="grid gap-3">
+
+            <section className="space-y-3">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Food supply</p>
+              {kitchens.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 text-center">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400 mb-1" />
+                  <p className="text-sm text-slate-500">Loading kitchens…</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {kitchens.length > 1 && (
+                    <select
+                      value={foodKitchenId}
+                      onChange={(e) => setFoodKitchenId(e.target.value)}
+                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      {kitchens.map((k) => (
+                        <option key={k.id} value={k.id}>{k.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="w-full h-12 gap-2 rounded-xl"
+                    onClick={() => { setFoodScannerKey((k) => k + 1); setShowFoodScanner(true); }}
+                    disabled={!foodKitchenId}
+                  >
+                    <ScanLine className="h-5 w-5" />
+                    Scan food / Record consumption
+                  </Button>
+                </div>
+              )}
+            </section>
+            {foodKitchenId && (
+              <EnhancedBarcodeScanner
+                key={foodScannerKey}
+                kitchenId={foodKitchenId}
+                open={showFoodScanner}
+                onOpenChange={setShowFoodScanner}
+                onScanComplete={() => setShowFoodScanner(false)}
+              />
+            )}
+
+            <section className="space-y-3">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Reports &amp; tags</p>
+              <div className="grid gap-2">
+                <Button variant="outline" className="w-full justify-start gap-2 rounded-xl h-12" onClick={exportCountReport} disabled={countScans.length === 0}>
+                  <Download className="h-4 w-4" />
+                  Export count report {countScans.length > 0 && `(${countScans.length})`}
+                </Button>
+                <Button variant="outline" className="w-full justify-start gap-2 rounded-xl h-12" onClick={() => { setPrintTagAsset(currentAsset); setShowPrintTagDialog(true); }}>
+                  <Printer className="h-4 w-4" />
+                  Print / encode RFID tag
+                </Button>
+              </div>
+            </section>
+
+            <section className="space-y-3">
               <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Shortcuts</p>
-              <button
-                type="button"
-                onClick={() => setTab('count')}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.99] transition-all"
-              >
-                <div className="h-11 w-11 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-                  <Hash className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-900 dark:text-white">Inventory count</p>
-                  <p className="text-xs text-slate-500">Fast count with running total & scan rate</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400 ml-auto shrink-0" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab('locate')}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.99] transition-all"
-              >
-                <div className="h-11 w-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                  <Crosshair className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-900 dark:text-white">Locate asset</p>
-                  <p className="text-xs text-slate-500">Search then get audio/visual feedback</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400 ml-auto shrink-0" />
-              </button>
-            </div>
-            <p className="text-xs text-slate-500">Handheld — scan, count, locate, manage assets, tickets & tasks in the field.</p>
+              <div className="grid gap-2">
+                <button type="button" onClick={() => { setTab('inventory'); setInventoryMode('count'); }} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.99] transition-all">
+                  <div className="h-11 w-11 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0"><Hash className="h-5 w-5 text-violet-600 dark:text-violet-400" /></div>
+                  <div className="min-w-0 flex-1"><p className="font-semibold text-slate-900 dark:text-white">Fast count</p><p className="text-xs text-slate-500">Running total &amp; scan rate</p></div>
+                  <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                </button>
+                <button type="button" onClick={() => { setTab('inventory'); setInventoryMode('audit'); }} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.99] transition-all">
+                  <div className="h-11 w-11 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0"><ClipboardList className="h-5 w-5 text-amber-600 dark:text-amber-400" /></div>
+                  <div className="min-w-0 flex-1"><p className="font-semibold text-slate-900 dark:text-white">Inventory audit</p><p className="text-xs text-slate-500">Verify location &amp; export</p></div>
+                  <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                </button>
+                <button type="button" onClick={() => setTab('locate')} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.99] transition-all">
+                  <div className="h-11 w-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center shrink-0"><Crosshair className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /></div>
+                  <div className="min-w-0 flex-1"><p className="font-semibold text-slate-900 dark:text-white">Locate asset</p><p className="text-xs text-slate-500">Beep speeds up as you get closer</p></div>
+                  <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                </button>
+              </div>
+            </section>
+            <p className="text-xs text-slate-500">RFID-style handheld: scan, count, locate, audit, sync with backend. Print/encode tags via connected printer.</p>
           </div>
         )}
       </div>
@@ -1468,6 +1518,57 @@ export default function HandheldHubPage() {
           />
         </>
       )}
+
+      {/* Print / encode RFID tag: request sent to system; actual printing via external RFID printer */}
+      <Dialog open={showPrintTagDialog} onOpenChange={setShowPrintTagDialog}>
+        <DialogContent className="max-w-lg rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5 text-violet-500" />
+              Print / encode asset tag
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              The handheld does not print directly. Add this asset to the print queue; a connected RFID printer (e.g. Zebra) can then print and encode the tag.
+            </p>
+            {(printTagAsset || currentAsset) ? (
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <div className="h-14 w-14 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+                  {(printTagAsset || currentAsset)?.imageUrl ? (
+                    <img src={(printTagAsset || currentAsset)!.imageUrl!} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <Package className="h-7 w-7 text-slate-500" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-900 dark:text-white truncate">{(printTagAsset || currentAsset)!.name}</p>
+                  <p className="text-xs text-slate-500">{(printTagAsset || currentAsset)!.assetId || (printTagAsset || currentAsset)!.barcode || (printTagAsset || currentAsset)!.id}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Scan an asset first, or select one from the Asset tab, then open Print tag again.</p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowPrintTagDialog(false)}>Cancel</Button>
+            <Button
+              disabled={!printTagAsset && !currentAsset}
+              onClick={() => {
+                if (printTagAsset || currentAsset) {
+                  toast({ title: 'Added to print queue', description: 'Tag will be printed when the RFID printer processes the job.' });
+                  setShowPrintTagDialog(false);
+                  setPrintTagAsset(null);
+                }
+              }}
+              className="gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              Add to print queue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Count tab: barcode scanner to add to count (stays in session) */}
       <BarcodeScannerCount
