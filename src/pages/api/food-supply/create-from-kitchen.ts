@@ -1,4 +1,4 @@
-﻿import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 import { logDataModification } from "@/lib/audit";
@@ -126,18 +126,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       foodSupply = existingFoodSupply;
     } else {
-      // Create a new food supply if it doesn't exist
+      // Create a new food supply if it doesn't exist (with barcode from the start)
+      const mainBarcode = `SUP${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
       foodSupply = await prisma.foodSupply.create({
         data: {
           name,
-          quantity: parseFloat(quantity), // Keep this for backward compatibility
+          quantity: parseFloat(quantity),
           unit,
           category,
-          expirationDate: new Date(expirationDate), // Keep this for backward compatibility
+          expirationDate: new Date(expirationDate),
           notes: notes || "",
           userId: user.id,
           pricePerUnit: parseFloat(pricePerUnit || 0),
           vendorId: vendorId === "none" ? null : vendorId || null,
+          barcode: mainBarcode,
         },
       });
 

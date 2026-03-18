@@ -37,7 +37,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { fetchWithCache, getFromCache, invalidateCache } from "@/lib/api-cache";
 
 const FS_KEY   = "/api/food-supply";
@@ -500,6 +500,7 @@ export default function FoodSupplyPage() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [activeTab, setActiveTab] = useState("inventory");
   const [selectedSupplyForDetails, setSelectedSupplyForDetails] = useState<any | null>(null);
+  const backfillBarcodesRan = useRef(false);
   const { toast } = useToast();
   const { t } = useTranslation();
   const isMobile = useMediaQuery("(max-width: 768px)");
@@ -562,13 +563,30 @@ export default function FoodSupplyPage() {
     };
     const hasCached = !!getFromCache(FS_KEY, FS_TTL);
     if (hasCached) {
-      // Data already in state from cache — revalidate everything in background
       setTimeout(() => {
         loadVendors(true); loadFoodSupplies(false, true); loadStats(true); loadKitchens(true);
       }, 300);
     } else {
       loadVendors(); loadFoodSupplies(); loadStats(); loadKitchens();
     }
+  }, []);
+
+  // Once per session: backfill barcodes for existing supplies that don't have one
+  useEffect(() => {
+    if (backfillBarcodesRan.current) return;
+    backfillBarcodesRan.current = true;
+    fetch('/api/food-supply/backfill-barcodes', { method: 'POST', credentials: 'include' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data && data.updated > 0) {
+          invalidateCache(FS_KEY);
+          invalidateCache(STATS_KEY);
+          loadFoodSupplies(true);
+          loadStats();
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ─── Derived ── */
@@ -632,13 +650,15 @@ export default function FoodSupplyPage() {
             });
             if (!res.ok) throw new Error("Failed");
             invalidateCache(FS_KEY);
+            invalidateCache(STATS_KEY);
+            invalidateCache(CONSUMED_KEY);
             await loadFoodSupplies(true);
             setRefillDialogState({ open: false, item: null });
             toast({ title: "Refilled", description: "Food supply updated successfully." });
           } catch { toast({ title: "Error", description: "Failed to refill", variant: "destructive" }); }
         }}
       />
-      <AddSupplyDialog open={addOpen} onOpenChange={setAddOpen} vendors={vendors} onSuccess={() => { invalidateCache(FS_KEY); loadFoodSupplies(true); loadStats(); }} />
+      <AddSupplyDialog open={addOpen} onOpenChange={setAddOpen} vendors={vendors} onSuccess={() => { invalidateCache(FS_KEY); invalidateCache(STATS_KEY); invalidateCache(CONSUMED_KEY); loadFoodSupplies(true); loadStats(); }} />
       <FoodSupplyDetailsDialog
         supply={selectedSupplyForDetails}
         open={!!selectedSupplyForDetails}
