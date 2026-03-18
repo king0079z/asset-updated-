@@ -84,6 +84,22 @@ const createTicketSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']),
 });
 
+const addAssetSchema = z.object({
+  name: z.string().min(1, 'Name required'),
+  type: z.string().min(1, 'Type required'),
+  description: z.string(),
+  floorNumber: z.string(),
+  roomNumber: z.string(),
+});
+const ASSET_TYPES = [
+  { value: 'EQUIPMENT', label: 'Equipment' },
+  { value: 'FURNITURE', label: 'Furniture' },
+  { value: 'IT', label: 'IT / Technology' },
+  { value: 'VEHICLE', label: 'Vehicle' },
+  { value: 'TOOL', label: 'Tool' },
+  { value: 'OTHER', label: 'Other' },
+];
+
 const STATUSES = [
   { value: 'ACTIVE', label: 'Active' },
   { value: 'INACTIVE', label: 'Inactive' },
@@ -176,10 +192,19 @@ export default function HandheldHubPage() {
   const [showFoodScanner, setShowFoodScanner] = useState(false);
   const [foodScannerKey, setFoodScannerKey] = useState(0);
 
-  // Count/Inventory state
+  // Count/Inventory state — items can have full display (image, status, location)
+  type CountScanItem = {
+    id: string;
+    barcode?: string;
+    name: string;
+    imageUrl?: string | null;
+    status?: string;
+    floorNumber?: string | null;
+    roomNumber?: string | null;
+  };
+  const [countScans, setCountScans] = useState<CountScanItem[]>([]);
   const [countSessionActive, setCountSessionActive] = useState(false);
   const [countStartTime, setCountStartTime] = useState<number>(0);
-  const [countScans, setCountScans] = useState<{ id: string; barcode?: string; name: string }[]>([]);
   const [countLocationLabel, setCountLocationLabel] = useState(''); // optional: e.g. "Aisle 3", "Store A"
   const [showCountScanner, setShowCountScanner] = useState(false);
   const [reconciliationResult, setReconciliationResult] = useState<{
@@ -201,6 +226,26 @@ export default function HandheldHubPage() {
     { value: 'OTHER', label: 'Other' },
   ];
   const [reconciliationLoading, setReconciliationLoading] = useState(false);
+  const [countItemSwipedId, setCountItemSwipedId] = useState<string | null>(null);
+  const [countSwipeOffset, setCountSwipeOffset] = useState(0);
+  const countSwipeStartRef = useRef<{ x: number; id: string } | null>(null);
+  const countSwipeOffsetRef = useRef(0);
+  const [countItemDetailsAsset, setCountItemDetailsAsset] = useState<Asset | null>(null);
+  const [countItemStatusAsset, setCountItemStatusAsset] = useState<Asset | null>(null);
+  const [countItemMoveAsset, setCountItemMoveAsset] = useState<Asset | null>(null);
+  const [countItemActionLoading, setCountItemActionLoading] = useState(false);
+  const countItemMoveForm = useForm<z.infer<typeof transferSchema>>({
+    resolver: zodResolver(transferSchema),
+    defaultValues: { floorNumber: '', roomNumber: '' },
+  });
+
+  // Add new asset from handheld
+  const [showAddAssetDialog, setShowAddAssetDialog] = useState(false);
+  const [addAssetLoading, setAddAssetLoading] = useState(false);
+  const addAssetForm = useForm<z.infer<typeof addAssetSchema>>({
+    resolver: zodResolver(addAssetSchema),
+    defaultValues: { name: '', type: 'EQUIPMENT', description: '', floorNumber: '', roomNumber: '' },
+  });
 
   // Locate state
   const [locateQuery, setLocateQuery] = useState('');
@@ -605,24 +650,138 @@ export default function HandheldHubPage() {
   };
 
   const doStatus = async () => {
-    if (!currentAsset || !pickedStatus) return;
+    if (!currentAsset && !countItemStatusAsset) return;
+    const target = countItemStatusAsset || currentAsset;
+    if (!target || !pickedStatus) return;
     setSavingStatus(true);
     try {
-      const r = await fetch(`/api/assets/${currentAsset.id}`, {
+      const r = await fetch(`/api/assets/${target.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: pickedStatus }),
       });
       if (!r.ok) throw new Error();
-      setCurrentAsset((prev) => (prev ? { ...prev, status: pickedStatus } : prev));
+      if (currentAsset?.id === target.id) setCurrentAsset((prev) => (prev ? { ...prev, status: pickedStatus } : prev));
+      setCountItemStatusAsset(null);
       setShowStatus(false);
       setPickedStatus('');
+      setCountScans((prev) => prev.map((s) => (s.id === target.id ? { ...s, status: pickedStatus } : s)));
       toast({ title: 'Status updated', description: pickedStatus });
     } catch {
       toast({ title: 'Update failed', variant: 'destructive' });
     }
     setSavingStatus(false);
   };
+
+  const doCountItemMove = useCallback(async (vals: z.infer<typeof transferSchema>) => {
+    if (!countItemMoveAsset) return;
+    try {
+      const r = await fetch(`/api/assets/${countItemMoveAsset.id}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vals),
+      });
+      if (!r.ok) throw new Error();
+      setCountScans((prev) => prev.map((s) => (s.id === countItemMoveAsset.id ? { ...s, floorNumber: vals.floorNumber, roomNumber: vals.roomNumber } : s)));
+      setCountItemMoveAsset(null);
+      countItemMoveForm.reset();
+      toast({ title: 'Location updated', description: `${vals.floorNumber}, ${vals.roomNumber}` });
+    } catch {
+      toast({ title: 'Move failed', variant: 'destructive' });
+    }
+  }, [countItemMoveAsset, countItemMoveForm, toast]);
+
+  const fetchAssetForCountItem = useCallback(async (id: string): Promise<Asset | null> => {
+    const r = await fetch(`/api/assets/${id}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.asset ?? null;
+  }, []);
+
+  const openCountItemDetails = useCallback(async (item: CountScanItem) => {
+    if (item.id.startsWith('raw-')) {
+      toast({ title: 'No details', description: 'Unscanned barcode has no asset record.', variant: 'destructive' });
+      return;
+    }
+    setCountItemActionLoading(true);
+    setCountItemSwipedId(null);
+    try {
+      const asset = await fetchAssetForCountItem(item.id);
+      if (asset) setCountItemDetailsAsset(asset);
+      else toast({ title: 'Could not load asset', variant: 'destructive' });
+    } finally {
+      setCountItemActionLoading(false);
+    }
+  }, [fetchAssetForCountItem, toast]);
+
+  const openCountItemStatus = useCallback(async (item: CountScanItem) => {
+    if (item.id.startsWith('raw-')) {
+      toast({ title: 'No status', description: 'Unscanned barcode has no asset record.', variant: 'destructive' });
+      return;
+    }
+    setCountItemActionLoading(true);
+    setCountItemSwipedId(null);
+    try {
+      const asset = await fetchAssetForCountItem(item.id);
+      if (asset) {
+        setCountItemStatusAsset(asset);
+        setPickedStatus(asset.status || '');
+        setShowStatus(true);
+      } else toast({ title: 'Could not load asset', variant: 'destructive' });
+    } finally {
+      setCountItemActionLoading(false);
+    }
+  }, [fetchAssetForCountItem, toast]);
+
+  const openCountItemMove = useCallback(async (item: CountScanItem) => {
+    if (item.id.startsWith('raw-')) {
+      toast({ title: 'No location', description: 'Unscanned barcode has no asset record.', variant: 'destructive' });
+      return;
+    }
+    setCountItemActionLoading(true);
+    setCountItemSwipedId(null);
+    try {
+      const asset = await fetchAssetForCountItem(item.id);
+      if (asset) {
+        setCountItemMoveAsset(asset);
+        countItemMoveForm.reset({ floorNumber: asset.floorNumber || '', roomNumber: asset.roomNumber || '' });
+      } else toast({ title: 'Could not load asset', variant: 'destructive' });
+    } finally {
+      setCountItemActionLoading(false);
+    }
+  }, [fetchAssetForCountItem, countItemMoveForm, toast]);
+
+  const submitAddAsset = useCallback(async (vals: z.infer<typeof addAssetSchema>) => {
+    setAddAssetLoading(true);
+    try {
+      const r = await fetch('/api/assets/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: vals.name,
+          type: vals.type,
+          description: vals.description || undefined,
+          floorNumber: vals.floorNumber || undefined,
+          roomNumber: vals.roomNumber || undefined,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Create failed');
+      }
+      const data = await r.json();
+      const created = data?.asset ?? data;
+      setCurrentAsset(created);
+      setShowAddAssetDialog(false);
+      addAssetForm.reset();
+      pushRecentAction('create', `Created asset: ${created.name}`);
+      toast({ title: 'Asset created', description: created.assetId || created.name });
+    } catch (err) {
+      toast({ title: 'Create failed', variant: 'destructive', description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setAddAssetLoading(false);
+    }
+  }, [addAssetForm, pushRecentAction, toast]);
 
   const doDispose = async () => {
     if (!currentAsset) return;
@@ -889,7 +1048,15 @@ export default function HandheldHubPage() {
         const data = await res.json();
         if (data?.asset?.id) {
           const a = data.asset;
-          setCountScans((prev) => [...prev, { id: a.id, barcode: a.barcode || q, name: a.name || a.assetId || 'Unknown' }]);
+          setCountScans((prev) => [...prev, {
+            id: a.id,
+            barcode: a.barcode || q,
+            name: a.name || a.assetId || 'Unknown',
+            imageUrl: a.imageUrl,
+            status: a.status,
+            floorNumber: a.floorNumber,
+            roomNumber: a.roomNumber,
+          }]);
           toast({ title: 'Added to count', description: a.name });
           return;
         }
@@ -989,11 +1156,17 @@ export default function HandheldHubPage() {
               <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-8 text-center text-slate-500 dark:text-slate-400">
                 <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p className="font-medium">No asset selected</p>
-                <p className="text-sm mt-1">Go to Scan and scan an asset to see it here.</p>
-                <Button size="lg" className="mt-4" onClick={() => setTab('scan')}>
-                  <Scan className="h-4 w-4 mr-2" />
-                  Scan asset
-                </Button>
+                <p className="text-sm mt-1">Scan an asset or add a new one.</p>
+                <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
+                  <Button size="lg" onClick={() => setTab('scan')}>
+                    <Scan className="h-4 w-4 mr-2" />
+                    Scan asset
+                  </Button>
+                  <Button size="lg" variant="outline" onClick={() => setShowAddAssetDialog(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add new asset
+                  </Button>
+                </div>
               </div>
             ) : (
               <>
@@ -1049,6 +1222,10 @@ export default function HandheldHubPage() {
                 <Button size="lg" variant="secondary" className="w-full h-12 gap-2" onClick={() => setTab('scan')}>
                   <Scan className="h-4 w-4" />
                   Scan next
+                </Button>
+                <Button size="lg" variant="outline" className="w-full h-12 gap-2" onClick={() => setShowAddAssetDialog(true)}>
+                  <Plus className="h-4 w-4" />
+                  Add new asset
                 </Button>
               </>
             )}
@@ -1460,19 +1637,83 @@ export default function HandheldHubPage() {
                     <Scan className="h-5 w-5" />
                   </Button>
                 </div>
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 max-h-48 overflow-y-auto">
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Last scans</p>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 max-h-[420px] overflow-y-auto">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Count list — swipe left for actions</p>
                   {countScans.length === 0 ? (
                     <p className="text-sm text-slate-400">Scan or enter barcode to add.</p>
                   ) : (
-                    <ul className="space-y-1.5">
-                      {countScans.slice(-10).reverse().map((s, i) => (
-                        <li key={`${s.id}-${i}`} className="text-sm text-slate-700 dark:text-slate-200 truncate flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                          {s.name}
-                          {s.barcode && s.barcode !== s.name && <span className="text-slate-400 text-xs">({s.barcode})</span>}
-                        </li>
-                      ))}
+                    <ul className="space-y-2">
+                      {countScans.slice(-50).reverse().map((s, i) => {
+                        const rowId = `${s.id}-${i}`;
+                        const isDragging = countSwipeStartRef.current?.id === rowId;
+                        const isOpen = countItemSwipedId === rowId;
+                        const translateX = isDragging ? countSwipeOffset : isOpen ? -136 : 0;
+                        const ACTION_WIDTH = 136;
+                        return (
+                          <li key={rowId} className="rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/80 overflow-hidden touch-manipulation">
+                            <div className="flex items-stretch" style={{ minHeight: 72 }}>
+                              <div
+                                className="flex flex-1 min-w-0 items-center gap-3 p-3 bg-white dark:bg-slate-800 transition-transform duration-150 ease-out"
+                                style={{ transform: `translateX(${translateX}px)` }}
+                                onTouchStart={(e) => {
+                                  countSwipeStartRef.current = { x: e.touches[0].clientX, id: rowId };
+                                  setCountSwipeOffset(0);
+                                }}
+                                onTouchMove={(e) => {
+                                  if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
+                                  const dx = e.touches[0].clientX - countSwipeStartRef.current.x;
+                                  const offset = Math.min(0, Math.max(-ACTION_WIDTH, dx));
+                                  countSwipeOffsetRef.current = offset;
+                                  setCountSwipeOffset(offset);
+                                }}
+                                onTouchEnd={() => {
+                                  if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
+                                  const finalOffset = countSwipeOffsetRef.current;
+                                  countSwipeStartRef.current = null;
+                                  setCountSwipeOffset(0);
+                                  setCountItemSwipedId(finalOffset < -50 ? rowId : null);
+                                }}
+                              >
+                                <div className="h-12 w-12 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+                                  {s.imageUrl ? (
+                                    <img src={s.imageUrl} alt="" className="h-full w-full object-cover" />
+                                  ) : (
+                                    <Package className="h-6 w-6 text-slate-500" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-slate-900 dark:text-white truncate">{s.name}</p>
+                                  {s.barcode && s.barcode !== s.name && <p className="text-xs text-slate-500 truncate">{s.barcode}</p>}
+                                  <div className="flex flex-wrap gap-1.5 mt-0.5">
+                                    {(s.floorNumber != null || s.roomNumber != null) && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-500">
+                                        <MapPin className="h-3 w-3" /> {[s.floorNumber, s.roomNumber].filter(Boolean).join(', ')}
+                                      </span>
+                                    )}
+                                    {s.status && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+                                        {s.status}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                              </div>
+                              <div className="flex shrink-0 w-[136px] items-center justify-end gap-1 pr-2 bg-slate-100 dark:bg-slate-700/80">
+                                <Button type="button" size="sm" variant="outline" className="h-9 px-2 rounded-lg text-xs" onClick={() => openCountItemDetails(s)}>
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="h-9 px-2 rounded-lg text-xs" onClick={() => openCountItemStatus(s)}>
+                                  <RefreshCw className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="h-9 px-2 rounded-lg text-xs" onClick={() => openCountItemMove(s)}>
+                                  <MapPin className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
@@ -1716,6 +1957,11 @@ export default function HandheldHubPage() {
                 New session (reset counters)
               </Button>
             </section>
+
+            <Button variant="outline" className="w-full h-12 rounded-xl gap-2" onClick={() => setShowAddAssetDialog(true)}>
+              <Plus className="h-4 w-4" />
+              Add new asset
+            </Button>
 
             {recentActions.length > 0 && (
               <section className="space-y-2">
@@ -2072,11 +2318,27 @@ export default function HandheldHubPage() {
           onAssetUpdated={() => {}}
         />
       )}
+      {countItemDetailsAsset && (
+        <AssetDetailsDialog
+          asset={countItemDetailsAsset}
+          open={!!countItemDetailsAsset}
+          onOpenChange={(open) => { if (!open) setCountItemDetailsAsset(null); }}
+          onAssetUpdated={(a) => a && setCountItemDetailsAsset(a)}
+        />
+      )}
       {auditDetailsLoading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 flex flex-col items-center gap-3 shadow-xl">
             <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Loading asset details…</p>
+          </div>
+        </div>
+      )}
+      {countItemActionLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="rounded-2xl bg-white dark:bg-slate-800 p-6 flex flex-col items-center gap-3 shadow-xl">
+            <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Loading…</p>
           </div>
         </div>
       )}
@@ -2205,7 +2467,29 @@ export default function HandheldHubPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showStatus} onOpenChange={setShowStatus}>
+      <Dialog open={!!countItemMoveAsset} onOpenChange={(open) => { if (!open) { setCountItemMoveAsset(null); countItemMoveForm.reset(); } }}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader><DialogTitle>Update location</DialogTitle></DialogHeader>
+          {countItemMoveAsset && (
+            <Form {...countItemMoveForm}>
+              <form onSubmit={countItemMoveForm.handleSubmit(doCountItemMove)} className="space-y-4">
+                <FormField control={countItemMoveForm.control} name="floorNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Floor</FormLabel><FormControl><Input placeholder="e.g. 2" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={countItemMoveForm.control} name="roomNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Room</FormLabel><FormControl><Input placeholder="e.g. 205" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => { setCountItemMoveAsset(null); countItemMoveForm.reset(); }}>Cancel</Button>
+                  <Button type="submit">Update location</Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showStatus} onOpenChange={(open) => { if (!open) setCountItemStatusAsset(null); setShowStatus(open); }}>
         <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
           <DialogHeader><DialogTitle>Update status</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -2219,6 +2503,42 @@ export default function HandheldHubPage() {
               <Button onClick={doStatus} disabled={!pickedStatus || savingStatus}>{savingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update'}</Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAddAssetDialog} onOpenChange={setShowAddAssetDialog}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5" /> Add new asset</DialogTitle></DialogHeader>
+          <Form {...addAssetForm}>
+            <form onSubmit={addAssetForm.handleSubmit(submitAddAsset)} className="space-y-4">
+              <FormField control={addAssetForm.control} name="name" render={({ field }) => (
+                <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="e.g. Laptop A1" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={addAssetForm.control} name="type" render={({ field }) => (
+                <FormItem><FormLabel>Type</FormLabel>
+                  <FormControl>
+                    <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...field}>
+                      {ASSET_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={addAssetForm.control} name="description" render={({ field }) => (
+                <FormItem><FormLabel>Description (optional)</FormLabel><FormControl><Textarea placeholder="Notes" className="min-h-[80px]" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={addAssetForm.control} name="floorNumber" render={({ field }) => (
+                <FormItem><FormLabel>Floor (optional)</FormLabel><FormControl><Input placeholder="e.g. 2" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={addAssetForm.control} name="roomNumber" render={({ field }) => (
+                <FormItem><FormLabel>Room (optional)</FormLabel><FormControl><Input placeholder="e.g. 205" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowAddAssetDialog(false)}>Cancel</Button>
+                <Button type="submit" disabled={addAssetLoading}>{addAssetLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create asset'}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
