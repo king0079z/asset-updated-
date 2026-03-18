@@ -1,20 +1,15 @@
 // @ts-nocheck
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
-import { createClient } from '@/util/supabase/api';
+import { getSessionSafe } from '@/util/supabase/require-auth';
 import { withAuditLog } from '../../middleware/audit-middleware';
 import { logUserActivity } from '@/lib/audit';
 
 async function assetHandler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
 
-  // Verify user authentication
-  const supabase = createClient(req, res);
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-
-  if (authError || !user) {
-    console.error('Authentication error:', authError);
+  const { user, supabase } = await getSessionSafe(req, res);
+  if (!user) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

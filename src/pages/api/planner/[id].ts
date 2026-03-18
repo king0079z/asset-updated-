@@ -1,20 +1,12 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@/util/supabase/api';
 import prisma from '@/lib/prisma';
+import { getSessionSafe } from '@/util/supabase/require-auth';
 import { differenceInHours } from 'date-fns';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  console.log(`Path: ${req.url} START RequestId: ${req.headers['x-vercel-id'] || 'unknown'}`);
-  
   try {
-    const supabase = createClient(req, res);
-    
-    // Check if user is authenticated
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-    
+    const { user } = await getSessionSafe(req, res);
     if (!user) {
-      console.log(`Path: ${req.url} Unauthorized access attempt`);
       return res.status(401).json({ error: 'Unauthorized' });
     }
 

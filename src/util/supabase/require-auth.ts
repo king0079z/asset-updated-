@@ -64,11 +64,28 @@ export async function requireAuth(
   }
 }
 
-/** Use when you need to handle auth yourself (e.g. optional auth). Never throws. */
+/** Use when you need to handle auth yourself (e.g. optional auth). Never throws. Supports cookie session OR Authorization: Bearer (e.g. mobile app). */
 export async function getSessionSafe(
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<{ user: User | null; supabase: ReturnType<typeof createClient>; error?: string }> {
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+
+  if (bearerToken) {
+    try {
+      const { url, anonKey } = getSupabaseEnv();
+      const anon = createSupabaseJsClient(url, anonKey);
+      const { data: { user }, error } = await anon.auth.getUser(bearerToken);
+      if (!error && user) {
+        const supabase = createSupabase(req, res);
+        return { user, supabase };
+      }
+    } catch {
+      // fall through to cookie session
+    }
+  }
+
   const supabase = createSupabase(req, res);
   try {
     const { data: { session }, error } = await supabase.auth.getSession();

@@ -1,29 +1,18 @@
-﻿import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
-import { createClient } from "@/util/supabase/api";
+import { getSessionSafe } from "@/util/supabase/require-auth";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  // Only allow GET requests
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    // Ensure req.cookies exists to prevent TypeError
-    if (!req.cookies) {
-      req.cookies = {};
-    }
-    
-    // Get the authenticated user
-    const supabase = createClient(req, res);
-    const { data: { session }, error } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-
-    if (error || !user) {
-      console.error("Error fetching user:", error);
+    const { user } = await getSessionSafe(req, res);
+    if (!user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 

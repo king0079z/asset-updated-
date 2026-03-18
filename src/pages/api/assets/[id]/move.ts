@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
-import { createClient } from '@/util/supabase/api';
+import { getSessionSafe } from '@/util/supabase/require-auth';
 import { logDataModification, logUserActivity } from '@/lib/audit';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -16,13 +16,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Verify user authentication
-    const supabase = createClient(req, res);
-    const { data: { session }, error } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-
-    if (error || !user) {
-      console.error('Authentication error:', error);
+    const { user } = await getSessionSafe(req, res);
+    if (!user) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
