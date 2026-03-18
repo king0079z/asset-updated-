@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import Link from "next/link";
-import { Package, Utensils, Car, BarChart2, MapPin, Clock, Shield, Users, Activity, Truck, FileText, BarChart, CheckCircle, ArrowRight, ArrowLeft, Building, Database, Calendar, Brain, Zap, Lightbulb, Sparkles, Star, HelpCircle, ChevronRight, Layers, Settings, Workflow, MousePointerClick, ArrowUpRight, Globe, Sun, Moon } from "lucide-react";
+import { Package, Utensils, Car, BarChart2, MapPin, Clock, Shield, Users, Activity, Truck, FileText, BarChart, CheckCircle, ArrowRight, ArrowLeft, Building, Database, Calendar, Brain, Zap, Lightbulb, Sparkles, Star, HelpCircle, ChevronRight, Layers, Settings, Workflow, MousePointerClick, ArrowUpRight, Globe, Sun, Moon, Radio, Ticket, Smartphone, LayoutList, Gauge } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MotionCard } from "@/components/MotionCard";
 import FloatingIcons from "@/components/FloatingIcons";
@@ -26,8 +26,21 @@ import VendorEvaluationFeature from "@/components/VendorEvaluationFeature";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useContext } from "react";
+import { AuthContext } from "@/contexts/AuthContext";
+
+const LANDING_CTA_KEY = 'landing_cta';
 
 export default function Home() {
+  const { user } = useContext(AuthContext);
+  const [landingCtaMode, setLandingCtaMode] = useState<'tickets' | 'handheld'>('tickets');
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user) return;
+    try {
+      setLandingCtaMode(sessionStorage.getItem(LANDING_CTA_KEY) === 'handheld' ? 'handheld' : 'tickets');
+    } catch (_) {}
+  }, [user]);
+
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -102,6 +115,13 @@ export default function Home() {
       icon: <Users className="w-12 h-12" />,
       color: "from-amber-500/20 to-amber-600/20",
       delay: 0.8
+    },
+    {
+      title: t('rfid_tracking_title'),
+      description: t('rfid_tracking_description'),
+      icon: <Radio className="w-12 h-12" />,
+      color: "from-rose-500/20 to-rose-600/20",
+      delay: 0.9
     }
   ];
 
@@ -179,31 +199,42 @@ export default function Home() {
                     transition={{ duration: 0.5, delay: 0.4 }}
                     className="flex flex-col sm:flex-row flex-wrap gap-4 mb-10"
                   >
-                    <motion.div
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="w-full sm:w-auto"
-                    >
-                      <Link href="/login" className="w-full sm:w-auto">
-                        <Button size="lg" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300">
-                          {t('get_started')} {t('language') === 'العربية' ? 
-                            <ArrowLeft className="mr-2 h-5 w-5 rtl:rotate-180" /> : 
-                            <ArrowRight className="ml-2 h-5 w-5" />}
-                        </Button>
-                      </Link>
-                    </motion.div>
-                    
-                    <motion.div
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="w-full sm:w-auto"
-                    >
-                      <Link href="/dashboard" className="w-full sm:w-auto">
-                        <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full border-primary/20 hover:bg-primary/5 transition-all duration-300">
-                          {t('view_demo')} <ArrowUpRight className="mx-2 h-5 w-5" />
-                        </Button>
-                      </Link>
-                    </motion.div>
+                    {user ? (
+                      <>
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
+                          <Link href={landingCtaMode === 'handheld' ? '/handheld' : '/tickets'} className="w-full sm:w-auto">
+                            <Button size="lg" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300">
+                              {landingCtaMode === 'handheld' ? t('handheld_access') : t('support_ticket_access')}
+                              {t('language') === 'العربية' ? <ArrowLeft className="mr-2 h-5 w-5 rtl:rotate-180" /> : <ArrowRight className="ml-2 h-5 w-5" />}
+                            </Button>
+                          </Link>
+                        </motion.div>
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
+                          <Link href="/dashboard" className="w-full sm:w-auto">
+                            <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full border-primary/20 hover:bg-primary/5 transition-all duration-300">
+                              {t('dashboard')} <ArrowUpRight className="mx-2 h-5 w-5" />
+                            </Button>
+                          </Link>
+                        </motion.div>
+                      </>
+                    ) : (
+                      <>
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
+                          <Link href="/login" className="w-full sm:w-auto">
+                            <Button size="lg" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl transition-all duration-300">
+                              {t('get_started')} {t('language') === 'العربية' ? <ArrowLeft className="mr-2 h-5 w-5 rtl:rotate-180" /> : <ArrowRight className="ml-2 h-5 w-5" />}
+                            </Button>
+                          </Link>
+                        </motion.div>
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
+                          <Link href="/dashboard" className="w-full sm:w-auto">
+                            <Button size="lg" variant="outline" className="w-full sm:w-auto text-lg px-4 sm:px-8 py-4 sm:py-6 rounded-full border-primary/20 hover:bg-primary/5 transition-all duration-300">
+                              {t('view_demo')} <ArrowUpRight className="mx-2 h-5 w-5" />
+                            </Button>
+                          </Link>
+                        </motion.div>
+                      </>
+                    )}
                   </motion.div>
                   
                   <motion.div
@@ -503,6 +534,8 @@ export default function Home() {
                     badges = [t('fleet_optimization'), t('maintenance_tracking'), t('usage_analytics')];
                   } else if (feature.title === t('staff_activity_tracking_title')) {
                     badges = [t('activity_logging'), t('performance_metrics'), t('compliance_reporting')];
+                  } else if (feature.title === t('rfid_tracking_title')) {
+                    badges = [t('rfid_zones_floors'), t('rfid_movement_history'), t('rfid_alerts')];
                   }
                   
                   // Add badges to feature object
@@ -587,6 +620,70 @@ export default function Home() {
                     <span className="font-medium">{feature.name}</span>
                   </motion.div>
                 ))}
+              </motion.div>
+            </div>
+          </section>
+
+          {/* RFID & Real-Time Location Section - World-class showcase */}
+          <section id="rfid-tracking" className="py-24 bg-gradient-to-br from-rose-500/10 via-background to-rose-600/5 relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_800px_at_80%_20%,var(--rose-500)/8,transparent)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_600px_at_20%_80%,var(--rose-600)/6,transparent)]" />
+            <div className="container mx-auto px-4 relative z-10">
+              <motion.div className="text-center mb-16" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+                <Badge className="mb-4 px-4 py-1.5 bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 rounded-full">
+                  Real-time visibility
+                </Badge>
+                <h2 className="text-4xl md:text-5xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-rose-500 to-rose-700 dark:from-rose-400 dark:to-rose-600">
+                  {t('rfid_tracking_title')}
+                </h2>
+                <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
+                  {t('rfid_tracking_description')}
+                </p>
+              </motion.div>
+              <div className="grid md:grid-cols-3 gap-8">
+                <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl">
+                    <div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6">
+                      <Layers className="w-7 h-7 text-rose-500" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-3">{t('rfid_zones_floors')}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      Define zones and upload floor plans. See every RFID-tagged asset on interactive 2D/3D maps with live position updates.
+                    </p>
+                  </div>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl">
+                    <div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6">
+                      <Activity className="w-7 h-7 text-rose-500" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-3">{t('rfid_movement_history')}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      Full movement timeline per asset: zone transitions, dwell time, and audit trail for compliance and investigations.
+                    </p>
+                  </div>
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="relative group">
+                  <div className="absolute -inset-0.5 bg-gradient-to-br from-rose-500/20 to-rose-600/10 rounded-2xl blur opacity-60 group-hover:opacity-100 transition-opacity" />
+                  <div className="relative bg-card/95 backdrop-blur border border-rose-500/20 rounded-2xl p-8 shadow-xl">
+                    <div className="w-14 h-14 rounded-2xl bg-rose-500/15 flex items-center justify-center mb-6">
+                      <Zap className="w-7 h-7 text-rose-500" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-3">{t('rfid_alerts')}</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      Configurable alert rules: unauthorized movement, low battery, missing assets, zone breaches. Notifications in-app and by email.
+                    </p>
+                  </div>
+                </motion.div>
+              </div>
+              <motion.div className="mt-12 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+                <Link href="/rfid">
+                  <Button size="lg" variant="outline" className="rounded-full border-rose-500/30 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 px-8 py-6">
+                    Explore RFID dashboard <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </Link>
               </motion.div>
             </div>
           </section>
@@ -771,17 +868,33 @@ export default function Home() {
                               {useTranslation().t('track_complete_lifecycle')}
                             </p>
                           </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4 pt-4 border-t border-indigo-500/10">
+                            <div className="flex items-center gap-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                              <LayoutList className="w-4 h-4 shrink-0" />
+                              {useTranslation().t('ticketing_kanban_sla')}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                              <Activity className="w-4 h-4 shrink-0" />
+                              {useTranslation().t('ticketing_barcode_scan')}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                              <Gauge className="w-4 h-4 shrink-0" />
+                              {useTranslation().t('ticketing_full_lifecycle')}
+                            </div>
+                          </div>
                         </div>
                         
                         <div className="flex justify-end">
-                          <Button variant="ghost" size="sm" className="text-indigo-500 hover:text-indigo-600 hover:bg-indigo-500/10">
-                            {useTranslation().t('explore_ticketing_system')}
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-1">
-                              <path d="M5 12h14"></path>
-                              <path d="m12 5 7 7-7 7"></path>
-                            </svg>
-                          </Button>
-                        </div>
+                          <Link href="/tickets">
+                            <Button variant="ghost" size="sm" className="text-indigo-500 hover:text-indigo-600 hover:bg-indigo-500/10">
+                              {useTranslation().t('explore_ticketing_system')}
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-1">
+                                <path d="M5 12h14"></path>
+                                <path d="m12 5 7 7-7 7"></path>
+                              </svg>
+                            </Button>
+                          </Link>
+                          </div>
                       </div>
                     </div>
                   </div>

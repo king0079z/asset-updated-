@@ -76,6 +76,7 @@ export default function VehicleMap({ vehicles, userLocation, isLoading = false, 
   const [markers, setMarkers] = useState<{ [key: string]: mapboxgl.Marker }>({});
   const mapContainer = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
+  const mapInstanceRef = useRef<any>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
   // Initialize map (container must stay empty for Mapbox)
@@ -86,61 +87,86 @@ export default function VehicleMap({ vehicles, userLocation, isLoading = false, 
       return;
     }
 
-    if (!mapContainer.current) return;
+    const container = mapContainer.current;
+    if (!container) return;
 
-    const mapInstance = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v11',
-      center: [0, 0],
-      zoom: 2,
-      attributionControl: false
-    });
+    let cancelled = false;
+    const rafId = requestAnimationFrame(() => {
+      if (cancelled || !mountedRef.current || !container.isConnected) return;
+      if (container.childNodes.length > 0) return;
 
-    const mapRef = mapInstance;
-
-    mapInstance.on('load', () => {
-      if (!mountedRef.current) {
-        try { mapRef.remove(); } catch (_) {}
+      let mapInstance: any = null;
+      try {
+        mapInstance = new mapboxgl.Map({
+          container,
+          style: 'mapbox://styles/mapbox/streets-v11',
+          center: [0, 0],
+          zoom: 2,
+          attributionControl: false
+        });
+      } catch (err) {
+        if (isDev) console.error('Mapbox Map init error:', err);
         return;
       }
-      // Add custom controls with better styling
-      const navControl = new mapboxgl.NavigationControl({
-        showCompass: true,
-        visualizePitch: true
-      });
-      mapInstance.addControl(navControl, 'top-right');
-      
-      const fullscreenControl = new mapboxgl.FullscreenControl();
-      mapInstance.addControl(fullscreenControl, 'top-right');
-      
-      const geolocateControl = new mapboxgl.GeolocateControl({
-        positionOptions: {
-          enableHighAccuracy: true
-        },
-        trackUserLocation: true,
-        showUserHeading: true
-      });
-      mapInstance.addControl(geolocateControl, 'top-right');
 
-      // Add attribution control in bottom-right
-      mapInstance.addControl(new mapboxgl.AttributionControl(), 'bottom-right');
+      mapInstanceRef.current = mapInstance;
 
-      // Add scale control
-      const scale = new mapboxgl.ScaleControl({
-        maxWidth: 100,
-        unit: 'metric'
+      mapInstance.on('load', () => {
+        if (!mountedRef.current) {
+          try { mapInstance.remove(); } catch (_) {}
+          return;
+        }
+        // Add custom controls with better styling
+        const navControl = new mapboxgl.NavigationControl({
+          showCompass: true,
+          visualizePitch: true
+        });
+        mapInstance.addControl(navControl, 'top-right');
+        
+        const fullscreenControl = new mapboxgl.FullscreenControl();
+        mapInstance.addControl(fullscreenControl, 'top-right');
+        
+        const geolocateControl = new mapboxgl.GeolocateControl({
+          positionOptions: {
+            enableHighAccuracy: true
+          },
+          trackUserLocation: true,
+          showUserHeading: true
+        });
+        mapInstance.addControl(geolocateControl, 'top-right');
+
+        // Add attribution control in bottom-right
+        mapInstance.addControl(new mapboxgl.AttributionControl(), 'bottom-right');
+
+        // Add scale control
+        const scale = new mapboxgl.ScaleControl({
+          maxWidth: 100,
+          unit: 'metric'
+        });
+        mapInstance.addControl(scale, 'bottom-left');
+
+        if (mountedRef.current) setMap(mapInstance);
       });
-      mapInstance.addControl(scale, 'bottom-left');
 
-      setMap(mapInstance);
+      mapInstance.on('error', (e: any) => {
+        if (!mountedRef.current || e?.error?.message?.includes('send')) return;
+        if (isDev) console.error('Mapbox error:', e?.error);
+      });
     });
 
     return () => {
+      cancelled = true;
       mountedRef.current = false;
+      cancelAnimationFrame(rafId);
+      const mapRef = mapInstanceRef.current;
+      mapInstanceRef.current = null;
       try {
-        mapRef.remove();
+        if (mapRef && typeof mapRef.remove === 'function') mapRef.remove();
       } catch (_) {
         // ignore if already removed or in bad state
+      }
+      if (container && typeof container.innerHTML !== 'undefined') {
+        container.innerHTML = '';
       }
     };
   }, []);
@@ -543,7 +569,7 @@ export default function VehicleMap({ vehicles, userLocation, isLoading = false, 
       newMarkers['user'] = userMarker;
     }
     
-    setMarkers(newMarkers);
+    if (mountedRef.current) setMarkers(newMarkers);
   }, [map, vehicles, userLocation, isLoading, t, onVehicleSelect]);
 
   // Create a list of vehicles for quick selection with status indicators

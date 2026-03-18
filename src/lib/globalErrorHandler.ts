@@ -147,6 +147,14 @@ export function setupGlobalErrorHandler() {
       if (errorMessage.includes('Abort fetching component for route')) {
         return;
       }
+      // Chrome extension message channel noise (extension closed before async response).
+      if (errorMessage.includes('message channel closed before a response was received') || errorMessage.includes('asynchronous response by returning true')) {
+        return;
+      }
+      // Mapbox GL teardown race: request aborted after map.remove() (reading 'send').
+      if (errorMessage.includes("reading 'send'") && errorMessage.includes('undefined')) {
+        return;
+      }
 
       // Call original console.error for everything else
       originalConsoleError.apply(console, args);
@@ -196,6 +204,12 @@ export function setupGlobalErrorHandler() {
           : error?.message || 'Unhandled Promise Rejection';
 
       if (message.includes('Abort fetching component for route')) {
+        return;
+      }
+      if (message.includes('message channel closed before a response was received') || message.includes('asynchronous response by returning true')) {
+        return;
+      }
+      if (message.includes("reading 'send'") && message.includes('undefined')) {
         return;
       }
       

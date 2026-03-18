@@ -5,7 +5,7 @@ import { AuthContext } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Package, Brain, Calendar, Shield, ArrowRight, ArrowLeft, Sparkles, BarChart2, Users, Languages, Home, LogIn, User, Utensils, Car } from 'lucide-react';
+import { Menu, X, ChevronDown, Package, Brain, Calendar, Shield, ArrowRight, ArrowLeft, Sparkles, BarChart2, Users, Languages, Home, LogIn, User, Utensils, Car, Ticket, Smartphone, Radio } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { useTranslation } from '@/contexts/TranslationContext';
@@ -16,6 +16,7 @@ const Header = () => {
   const { user, initializing, signOut } = useContext(AuthContext);
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [landingCtaMode, setLandingCtaMode] = useState<'tickets' | 'handheld'>('tickets');
   const { t, dir } = useTranslation();
   const isRtl = dir === 'rtl';
   const isExtraSmall = useMediaQuery('(max-width: 360px)');
@@ -60,6 +61,17 @@ const Header = () => {
     };
   }, [router]);
   
+  // When on landing and user is logged in: show Support tickets or Handheld based on sessionStorage (set by /handheld)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user || router.pathname !== '/') return;
+    try {
+      const mode = sessionStorage.getItem('landing_cta');
+      setLandingCtaMode(mode === 'handheld' ? 'handheld' : 'tickets');
+    } catch (_) {
+      setLandingCtaMode('tickets');
+    }
+  }, [user, router.pathname]);
+
   // Close mobile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -151,14 +163,19 @@ const Header = () => {
     if (user && router.pathname === '/dashboard') {
       signOut();
       router.push('/');
+    } else if (user && router.pathname === '/') {
+      router.push(landingCtaMode === 'handheld' ? '/handheld' : '/tickets');
     } else {
-      router.push(user ? "/dashboard" : "/login");
+      router.push(user ? '/dashboard' : '/login');
     }
   };
 
   const buttonText = () => {
     if (user && router.pathname === '/dashboard') {
       return t('sign_out');
+    }
+    if (user && router.pathname === '/') {
+      return landingCtaMode === 'handheld' ? t('handheld_access') : t('support_ticket_access');
     }
     return user ? t('dashboard') : t('log_in');
   };
@@ -174,7 +191,8 @@ const Header = () => {
         { name: t('ticketing_system'), href: "#ticketing-task-planning", icon: <Shield className="w-4 h-4" /> },
         { name: t('task_planner'), href: "#ticketing-task-planning", icon: <Calendar className="w-4 h-4" /> },
         { name: t('food_supply_management'), href: "#hero", icon: <Package className="w-4 h-4" /> },
-        { name: t('vehicle_fleet_management'), href: "#hero", icon: <Package className="w-4 h-4" /> }
+        { name: t('vehicle_fleet_management'), href: "#hero", icon: <Package className="w-4 h-4" /> },
+        { name: t('rfid_tracking_title'), href: "#rfid-tracking", icon: <Radio className="w-4 h-4" /> }
       ]
     },
     { 
@@ -271,8 +289,8 @@ const Header = () => {
                   size="sm"
                   className="rounded-full h-9 px-4 flex items-center gap-1.5 text-sm font-medium shadow-md shadow-primary/20"
                 >
-                  <div className="bg-white/10 rounded-full p-0.5">
-                    {user ? (
+                    <div className="bg-white/10 rounded-full p-0.5">
+                    {user && router.pathname === '/' ? (landingCtaMode === 'handheld' ? <Smartphone className="h-3.5 w-3.5 mr-1" /> : <Ticket className="h-3.5 w-3.5 mr-1" />) : user ? (
                       <User className="h-3.5 w-3.5 mr-1" />
                     ) : (
                       <LogIn className="h-3.5 w-3.5 mr-1" />
@@ -332,7 +350,7 @@ const Header = () => {
             >
               <div className="relative">
                 <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/15 transition-colors">
-                  {user ? (
+                  {user && router.pathname === '/' ? (landingCtaMode === 'handheld' ? <Smartphone className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" /> : <Ticket className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />) : user ? (
                     <User className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
                   ) : (
                     <LogIn className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
@@ -477,7 +495,7 @@ const Header = () => {
                     size="default"
                     className="rounded-full px-5 py-2 flex items-center gap-2 shadow-md shadow-primary/20"
                   >
-                    {user ? (
+                    {user && router.pathname === '/' ? (landingCtaMode === 'handheld' ? <Smartphone className="h-4 w-4 mr-1" /> : <Ticket className="h-4 w-4 mr-1" />) : user ? (
                       <User className="h-4 w-4 mr-1" />
                     ) : (
                       <LogIn className="h-4 w-4 mr-1" />
@@ -852,7 +870,7 @@ const Header = () => {
                           setMobileMenuOpen(false);
                         }}
                       >
-                        {user ? (
+                        {user && router.pathname === '/' ? (landingCtaMode === 'handheld' ? <Smartphone className="h-5 w-5 mr-2" /> : <Ticket className="h-5 w-5 mr-2" />) : user ? (
                           <User className="h-5 w-5 mr-2" />
                         ) : (
                           <LogIn className="h-5 w-5 mr-2" />

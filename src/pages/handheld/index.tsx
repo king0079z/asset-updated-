@@ -176,6 +176,13 @@ export default function HandheldHubPage() {
     if (showMove || showDetails || showAssign || showStatus) handheldDialogOpenedAt.current = Date.now();
   }, [showMove, showDetails, showAssign, showStatus]);
 
+  // So landing page shows "Handheld" CTA instead of "Support tickets" when user returns to home
+  useEffect(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('landing_cta', 'handheld');
+    } catch (_) {}
+  }, []);
+
   // Fetch assigned tickets
   const fetchAssignedTickets = useCallback(async () => {
     setTicketsLoading(true);
