@@ -177,6 +177,14 @@ export default function HandheldHubPage() {
   const [countScans, setCountScans] = useState<{ id: string; barcode?: string; name: string }[]>([]);
   const [countLocationLabel, setCountLocationLabel] = useState(''); // optional: e.g. "Aisle 3", "Store A"
   const [showCountScanner, setShowCountScanner] = useState(false);
+  const [reconciliationResult, setReconciliationResult] = useState<{
+    expectedCount: number;
+    actualCount: number;
+    missing: { id: string; name: string; barcode?: string }[];
+    extra: { id: string; name: string; barcode?: string }[];
+    submittedForReview: boolean;
+  } | null>(null);
+  const [reconciliationLoading, setReconciliationLoading] = useState(false);
 
   // Locate state
   const [locateQuery, setLocateQuery] = useState('');
@@ -185,6 +193,7 @@ export default function HandheldHubPage() {
   const [locateTarget, setLocateTarget] = useState<Asset | null>(null);
   const [locateActive, setLocateActive] = useState(false);
   const [locateProximity, setLocateProximity] = useState(0); // 0 = far, 100 = found
+  const [locateSearchFocused, setLocateSearchFocused] = useState<string | null>(null); // last query we searched, to show "no results"
   const locateAudioContextRef = useRef<AudioContext | null>(null);
 
   // Sync state (for header and More tab)
@@ -647,7 +656,46 @@ export default function HandheldHubPage() {
     setCountSessionActive(true);
     setCountStartTime(Date.now());
     setCountScans([]);
+    setReconciliationResult(null);
   }, []);
+
+  const runReconciliation = useCallback(async () => {
+    setReconciliationLoading(true);
+    setReconciliationResult(null);
+    try {
+      const res = await fetch('/api/assets?limit=5000', { credentials: 'include', cache: 'no-store' });
+      const list: { id: string; name?: string; barcode?: string; assetId?: string }[] = res.ok ? await res.json() : [];
+      const expectedIds = new Set(list.map((a) => a.id));
+      const expectedByBarcode = new Map(list.map((a) => [((a.barcode || a.assetId || '') as string).toLowerCase(), a]));
+      const scannedIds = new Set<string>();
+      const scannedRaw = new Map<string, { id: string; name: string; barcode?: string }>();
+      countScans.forEach((s) => {
+        const key = s.id.startsWith('raw-') ? (s.barcode || s.name || s.id).toLowerCase() : s.id;
+        if (!s.id.startsWith('raw-')) scannedIds.add(s.id);
+        if (!scannedRaw.has(key)) scannedRaw.set(key, s);
+      });
+      const actualUnique = scannedRaw.size;
+      const missing = list.filter((a) => !scannedIds.has(a.id) && !scannedRaw.has((a.barcode || a.assetId || '').toLowerCase()));
+      const extra = Array.from(scannedRaw.values()).filter((s) => s.id.startsWith('raw-') || !expectedIds.has(s.id));
+      setReconciliationResult({
+        expectedCount: list.length,
+        actualCount: actualUnique,
+        missing: missing.slice(0, 50).map((a) => ({ id: a.id, name: a.name || a.assetId || a.id, barcode: a.barcode })),
+        extra: extra.slice(0, 50).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode })),
+        submittedForReview: false,
+      });
+      toast({ title: 'Reconciliation complete', description: `Expected ${list.length}, counted ${actualUnique}. ${missing.length} missing, ${extra.length} extra.` });
+    } catch {
+      toast({ title: 'Reconciliation failed', variant: 'destructive' });
+    } finally {
+      setReconciliationLoading(false);
+    }
+  }, [countScans, toast]);
+
+  const submitCountForReview = useCallback(() => {
+    setReconciliationResult((prev) => (prev ? { ...prev, submittedForReview: true } : null));
+    toast({ title: 'Submitted for review', description: 'A manager or admin can review the count and discrepancies.' });
+  }, [toast]);
 
   const endCountSession = useCallback(() => {
     setCountSessionActive(false);
@@ -699,21 +747,28 @@ export default function HandheldHubPage() {
     const q = locateQuery.trim();
     if (!q) {
       setLocateResults([]);
+      setLocateSearchFocused(null);
       return;
     }
     setLocateSearching(true);
+    setLocateSearchFocused(q);
     try {
-      const res = await fetch(`/api/assets?search=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(q)}`);
       if (res.ok) {
         const data = await res.json();
         if (data?.asset) {
           setLocateResults([data.asset]);
+          setLocateSearchFocused(null);
         } else {
-          const list = Array.isArray(data) ? data : data?.assets ?? [];
-          setLocateResults(list.slice(0, 20));
+          setLocateResults([]);
         }
       } else {
         setLocateResults([]);
+        if (res.status === 404) {
+          toast({ title: 'Asset not found', description: `No asset matching "${q}". Try barcode, asset ID, or name.`, variant: 'destructive' });
+        } else {
+          toast({ title: 'Search failed', variant: 'destructive' });
+        }
       }
     } catch {
       setLocateResults([]);
@@ -1270,6 +1325,48 @@ export default function HandheldHubPage() {
                     End count session
                   </Button>
                 </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-4">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Compare with system</p>
+                  <p className="text-xs text-slate-500">Compare your count to current system data. Managers can review discrepancies.</p>
+                  <Button variant="outline" className="w-full rounded-xl gap-2" onClick={runReconciliation} disabled={reconciliationLoading || countScans.length === 0}>
+                    {reconciliationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
+                    {reconciliationLoading ? 'Comparing…' : 'Compare actual vs expected'}
+                  </Button>
+                  {reconciliationResult && (
+                    <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl bg-slate-50 dark:bg-slate-700/50 p-3 text-center">
+                          <p className="text-2xl font-bold text-slate-900 dark:text-white">{reconciliationResult.expectedCount}</p>
+                          <p className="text-xs text-slate-500">Expected (system)</p>
+                        </div>
+                        <div className="rounded-xl bg-slate-50 dark:bg-slate-700/50 p-3 text-center">
+                          <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{reconciliationResult.actualCount}</p>
+                          <p className="text-xs text-slate-500">Actual (counted)</p>
+                        </div>
+                      </div>
+                      {(reconciliationResult.missing.length > 0 || reconciliationResult.extra.length > 0) && (
+                        <div className="text-xs space-y-1">
+                          {reconciliationResult.missing.length > 0 && (
+                            <p className="text-amber-600 dark:text-amber-400 font-medium">Missing from count: {reconciliationResult.missing.length} (in system but not scanned)</p>
+                          )}
+                          {reconciliationResult.extra.length > 0 && (
+                            <p className="text-blue-600 dark:text-blue-400 font-medium">Extra / unknown: {reconciliationResult.extra.length} (scanned but not in system or duplicate)</p>
+                          )}
+                        </div>
+                      )}
+                      {!reconciliationResult.submittedForReview ? (
+                        <Button className="w-full rounded-xl gap-2" onClick={submitCountForReview}>
+                          <User className="h-4 w-4" /> Submit for manager review
+                        </Button>
+                      ) : (
+                        <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-3 flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-sm">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" /> Submitted for review
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1289,7 +1386,7 @@ export default function HandheldHubPage() {
                   <Input
                     placeholder="Search by name or barcode"
                     value={locateQuery}
-                    onChange={(e) => setLocateQuery(e.target.value)}
+                    onChange={(e) => { setLocateQuery(e.target.value); setLocateSearchFocused(null); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') searchLocateAssets(); }}
                     className="rounded-xl flex-1"
                   />
@@ -1297,25 +1394,47 @@ export default function HandheldHubPage() {
                     {locateSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
                   </Button>
                 </div>
-                {locateResults.length > 0 && (
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700 max-h-64 overflow-y-auto">
-                    {locateResults.map((a) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => { setLocateTarget(a); setLocateResults([]); setLocateQuery(''); }}
-                        className="w-full flex items-center gap-3 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 active:bg-slate-100 dark:active:bg-slate-700 transition-colors"
-                      >
-                        <div className="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
-                          {a.imageUrl ? <img src={a.imageUrl} alt="" className="h-full w-full object-cover" /> : <Package className="h-5 w-5 text-slate-400" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-slate-900 dark:text-white truncate">{a.name}</p>
-                          <p className="text-xs text-slate-500">{a.assetId || a.barcode || a.id}</p>
-                        </div>
-                        <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
-                      </button>
-                    ))}
+                {locateSearching && (
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Searching…</p>
+                  </div>
+                )}
+                {!locateSearching && locateResults.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden shadow-sm">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-4 pt-3 pb-2">Result</p>
+                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                      {locateResults.map((a) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => { setLocateTarget(a); setLocateResults([]); setLocateQuery(''); setLocateSearchFocused(null); }}
+                          className="w-full flex items-center gap-4 p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 active:bg-slate-100 dark:active:bg-slate-700 transition-colors"
+                        >
+                          <div className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0 overflow-hidden">
+                            {a.imageUrl ? <img src={a.imageUrl} alt="" className="h-full w-full object-cover" /> : <Package className="h-7 w-7 text-slate-400" />}
+                          </div>
+                          <div className="min-w-0 flex-1 text-left">
+                            <p className="font-semibold text-slate-900 dark:text-white truncate">{a.name}</p>
+                            <p className="text-sm text-slate-500 mt-0.5">{a.assetId || a.barcode || a.id}</p>
+                            {(a.floorNumber || a.roomNumber) && (
+                              <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                                <MapPin className="h-3.5 w-3.5" /> {[a.floorNumber, a.roomNumber].filter(Boolean).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {!locateSearching && locateResults.length === 0 && locateSearchFocused !== null && (
+                  <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-900/20 p-6 text-center">
+                    <Search className="h-12 w-12 mx-auto text-amber-500 dark:text-amber-400 mb-3 opacity-80" />
+                    <p className="font-medium text-slate-900 dark:text-white">No asset found</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">Try barcode, asset ID, or part of the name.</p>
+                    <p className="text-xs text-slate-500 mt-2 font-mono">{locateSearchFocused}</p>
                   </div>
                 )}
                 {locateTarget && (
