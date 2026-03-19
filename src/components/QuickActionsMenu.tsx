@@ -310,14 +310,18 @@ export function QuickActionsMenu() {
   const { setRef: setSheetRef } = useRTLComponentFix('dialog');
   const { setRef: setTabsRef } = useRTLComponentFix('navigation');
   
-  // Define public routes where the quick actions menu should not appear
+  // Define routes where the quick actions menu should not appear
   const publicRoutes = ['/', '/login', '/signup', '/forgot-password', '/magic-link-login', '/reset-password'];
-  
-  // Check if we're on a public route
-  const isPublicRoute = typeof window !== 'undefined' && publicRoutes.includes(window.location.pathname);
-  
-  // Only render on mobile devices and not on public routes
-  if (!isMobile || isPublicRoute) return null;
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+  const isPublicRoute = publicRoutes.includes(pathname);
+  const isHandheldRoute =
+    pathname === '/handheld' ||
+    pathname.startsWith('/handheld/') ||
+    pathname === '/assets/handheld' ||
+    pathname.startsWith('/assets/handheld/');
+
+  // Only render on mobile/tablet and not on public or handheld routes (handheld has its own FAB)
+  if (!isMobile || isPublicRoute || isHandheldRoute) return null;
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);

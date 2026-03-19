@@ -26,11 +26,25 @@ const QuickActionsMenu = lazy(() =>
   }))
 );
 
-/** Renders QuickActionsMenu (FAB) only when NOT on Outlook add-in or Service Portal. */
+/** Renders QuickActionsMenu (FAB) only when NOT on Outlook, Portal, or handheld (handheld has its own command bar). */
 function QuickActionsMenuGate() {
   const router = useRouter();
   const pathname = typeof window !== 'undefined' ? window.location.pathname : router.pathname;
-  const hideFAB = pathname.startsWith('/outlook') || pathname.startsWith('/portal') || router.pathname.startsWith('/outlook') || router.pathname.startsWith('/portal');
+  const isHandheld =
+    pathname === '/handheld' ||
+    pathname.startsWith('/handheld/') ||
+    pathname === '/assets/handheld' ||
+    pathname.startsWith('/assets/handheld/') ||
+    router.pathname === '/handheld' ||
+    router.pathname.startsWith('/handheld/') ||
+    router.pathname === '/assets/handheld' ||
+    router.pathname.startsWith('/assets/handheld/');
+  const hideFAB =
+    pathname.startsWith('/outlook') ||
+    pathname.startsWith('/portal') ||
+    router.pathname.startsWith('/outlook') ||
+    router.pathname.startsWith('/portal') ||
+    isHandheld;
   if (hideFAB) return null;
 
   return (

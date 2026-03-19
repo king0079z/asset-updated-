@@ -999,9 +999,6 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                     </div>
                   )}
 
-                  {/* ── Actions ── */}
-                  <p className="text-white/20 text-[10px] uppercase tracking-[0.15em] font-bold mb-2.5 px-0.5">Quick Actions</p>
-
                   <div className="grid grid-cols-2 gap-2.5 mb-3">
                     <ActionCard
                       onClick={() => setView('p-details')}

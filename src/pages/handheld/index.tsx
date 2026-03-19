@@ -1379,7 +1379,7 @@ export default function HandheldHubPage() {
             <HandheldSessionStrip
               scans={sessionScansCount}
               tasks={sessionTasksCount}
-              hint={typeof navigator !== 'undefined' && navigator.onLine ? 'Tap quick actions (+) for shortcuts' : 'Offline — actions queue until sync'}
+              hint={typeof navigator !== 'undefined' && navigator.onLine ? 'Tap + for shortcuts' : 'Offline — actions queue until sync'}
             />
             <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-md overflow-hidden">
               <HandheldAssetScanner standalone onAssetSelected={setCurrentAsset} />
