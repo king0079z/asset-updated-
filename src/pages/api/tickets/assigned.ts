@@ -65,8 +65,8 @@ export default async function handler(
     // Map enum values to lowercase strings for frontend compatibility
     const formattedTickets = tickets.map(ticket => ({
       ...ticket,
-      status: ticket.status.toLowerCase(),
-      priority: ticket.priority.toLowerCase()
+      status: (ticket.status || '').toLowerCase(),
+      priority: (ticket.priority || '').toLowerCase()
     }));
 
     console.info(`Path: ${req.url} Found ${tickets.length} assigned tickets for user: ${user.email}`);

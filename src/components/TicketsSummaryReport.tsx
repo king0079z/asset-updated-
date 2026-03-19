@@ -115,7 +115,7 @@ const safeFormatDate = (dateString: string | null | undefined): string => {
 
 const formatStatusLabel = (status: TicketStatus): string => status.replace("_", " ");
 const formatPriorityLabel = (priority: TicketPriority): string =>
-  priority.charAt(0) + priority.slice(1).toLowerCase();
+  (priority || '').charAt(0) + (priority || '').slice(1).toLowerCase();
 
 const BarChartIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -236,12 +236,12 @@ const TicketsSummaryReport: React.FC<TicketsSummaryReportProps> = ({ tickets }) 
                 <td style={{ fontWeight: 600 }}>{ticket.displayId || `ID-${ticket.id.slice(0, 8)}`}</td>
                 <td>{ticket.title}</td>
                 <td>
-                  <span className={`badge ${ticket.status.toLowerCase().replace('_', '-')}`}>
+                  <span className={`badge ${(ticket.status || '').toLowerCase().replace('_', '-')}`}>
                     {formatStatusLabel(ticket.status)}
                   </span>
                 </td>
                 <td>
-                  <span className={`badge ${ticket.priority.toLowerCase()}`}>
+                  <span className={`badge ${(ticket.priority || '').toLowerCase()}`}>
                     {formatPriorityLabel(ticket.priority)}
                   </span>
                 </td>

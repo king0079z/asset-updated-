@@ -182,7 +182,8 @@ export default function TicketDashboard() {
   };
 
   const formatPriorityLabel = (priority: string): string => {
-    return priority.charAt(0) + priority.slice(1).toLowerCase();
+    const p = priority || '';
+    return p.charAt(0) + p.slice(1).toLowerCase();
   };
 
   // Colors for charts

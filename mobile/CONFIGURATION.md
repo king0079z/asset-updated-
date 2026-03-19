@@ -64,4 +64,11 @@ You can generate all from one image using [appicon.co](https://www.appicon.co) o
 - **Production profile**: `eas.json` already has a `production` build profile with `autoIncrement: true` and Android `app-bundle`.
 - **Submit block**: Fill in `submit.production.ios` (appleId, ascAppId, appleTeamId) and ensure `submit.production.android.serviceAccountKeyPath` points to your local `google-service-account.json` (file not committed).
 
-After filling everything, use **[STORE_DEPLOYMENT.md](./STORE_DEPLOYMENT.md)** to build and push to the stores.
+After filling everything, you can push in one go:
+
+```bash
+cd mobile
+npm run push-to-stores
+```
+
+This script syncs EAS secrets from your `.env`, runs the production build for both platforms, then submits to Google Play and App Store. See **[STORE_DEPLOYMENT.md](./STORE_DEPLOYMENT.md)** for manual steps and store-console setup.

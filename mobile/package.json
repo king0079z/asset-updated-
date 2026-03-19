@@ -10,7 +10,10 @@
     "build:android": "eas build --platform android --profile production",
     "build:ios": "eas build --platform ios --profile production",
     "submit:android": "eas submit --platform android --profile production",
-    "submit:ios": "eas submit --platform ios --profile production"
+    "submit:ios": "eas submit --platform ios --profile production",
+    "push-to-stores": "node scripts/push-to-stores.js",
+    "push-to-stores:build": "node scripts/push-to-stores.js --build-only",
+    "push-to-stores:submit": "node scripts/push-to-stores.js --submit-only"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.0",

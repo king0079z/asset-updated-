@@ -53,8 +53,8 @@ export default async function handler(
     // and rename startDate to dueDate for frontend compatibility
     const formattedTasks = tasks.map(task => ({
       ...task,
-      status: task.status.toLowerCase() === "planned" ? "pending" : task.status.toLowerCase(),
-      priority: task.priority.toLowerCase(),
+      status: (task.status || '').toLowerCase() === "planned" ? "pending" : (task.status || '').toLowerCase(),
+      priority: (task.priority || '').toLowerCase(),
       dueDate: task.endDate || task.startDate
     }));
 

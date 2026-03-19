@@ -543,7 +543,7 @@ const AssetTicketsList = ({ tickets }: { tickets: Ticket[] }) => {
               <h3 className="font-medium text-lg">{ticket.title}</h3>
               <div className="flex gap-2">
                 <Badge variant="outline" className={getPriorityColor(ticket.priority)}>
-                  {ticket.priority.charAt(0) + ticket.priority.slice(1).toLowerCase()}
+                  {(ticket.priority || '').charAt(0) + (ticket.priority || '').slice(1).toLowerCase()}
                 </Badge>
                 <Badge variant="outline" className={getStatusColor(ticket.status)}>
                   {ticket.status.replace('_', ' ')}

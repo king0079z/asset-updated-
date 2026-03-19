@@ -280,12 +280,12 @@ export function TaskList({ tasks, onEdit, onDelete, onStatusChange }: TaskListPr
                         </div>
                         <div className="flex space-x-2">
                           <Badge className={getPriorityColor(task.priority)}>
-                            {t(`priority_${task.priority.toLowerCase()}`)}
+                            {t(`priority_${(task.priority || '').toLowerCase()}`)}
                           </Badge>
                           <Badge className={getStatusColor(task.status)}>
                             <span className="flex items-center">
                               {getStatusIcon(task.status)}
-                              {t(`status_${task.status.toLowerCase()}`)}
+                              {t(`status_${(task.status || '').toLowerCase()}`)}
                             </span>
                           </Badge>
                         </div>

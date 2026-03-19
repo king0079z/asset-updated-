@@ -777,7 +777,7 @@ export default function PortalPage() {
   const myTickets = tickets.filter(t => t.userId === user?.id || t.assignedToId === user?.id);
 
   const filteredMyTickets = myTickets.filter(t => {
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase()) && !t.description.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !(t.title || '').toLowerCase().includes(search.toLowerCase()) && !(t.description || '').toLowerCase().includes(search.toLowerCase())) return false;
     if (activeFilter === "open") return t.status === "OPEN";
     if (activeFilter === "in_progress") return t.status === "IN_PROGRESS";
     if (activeFilter === "resolved") return t.status === "RESOLVED" || t.status === "CLOSED";

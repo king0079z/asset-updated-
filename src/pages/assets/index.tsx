@@ -664,8 +664,8 @@ export default function AssetsPage() {
 
   const filteredAssets = assets.filter(asset => {
     const matchesSearch = !searchQuery ||
-      asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      asset.assetId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (asset.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (asset.assetId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (asset.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (asset.vendor?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = typeFilter === 'all' || asset.type === typeFilter;
@@ -1308,7 +1308,7 @@ export default function AssetsPage() {
                                 : 'bg-amber-50 text-amber-700 border-amber-200/70 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700/40'
                             }`}>
                               <span className={`h-1.5 w-1.5 rounded-full ${asset.status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse' : asset.status === 'DISPOSED' ? 'bg-red-500' : 'bg-amber-500'}`} />
-                              {asset.status === 'IN_TRANSIT' ? 'Transit' : asset.status.charAt(0) + asset.status.slice(1).toLowerCase()}
+                              {asset.status === 'IN_TRANSIT' ? 'Transit' : (asset.status || '').charAt(0) + (asset.status || '').slice(1).toLowerCase()}
                             </span>
                           </div>
 
@@ -1406,7 +1406,7 @@ export default function AssetsPage() {
                               asset.type === 'FURNITURE' ? 'text-blue-700 dark:text-blue-400'
                               : asset.type === 'EQUIPMENT' ? 'text-emerald-700 dark:text-emerald-400'
                               : 'text-violet-700 dark:text-violet-400'
-                            }`}>{asset.type.toLowerCase()}</span>
+                            }`}>{(asset.type || '').toLowerCase()}</span>
                           </div>
                         </TableCell>
                         <TableCell className="py-3.5">
@@ -1440,7 +1440,7 @@ export default function AssetsPage() {
                               : asset.status === 'DISPOSED' ? 'bg-red-500'
                               : 'bg-amber-500'
                             }`} />
-                            {asset.status === 'IN_TRANSIT' ? 'In Transit' : asset.status.charAt(0) + asset.status.slice(1).toLowerCase()}
+                            {asset.status === 'IN_TRANSIT' ? 'In Transit' : (asset.status || '').charAt(0) + (asset.status || '').slice(1).toLowerCase()}
                           </span>
                         </TableCell>
                         <TableCell className="py-3.5" onClick={e => e.stopPropagation()}>

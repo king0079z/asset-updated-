@@ -162,9 +162,9 @@ export default function EnhancedKanbanBoard() {
   const filteredTickets = useMemo(() => {
     return tickets.filter(ticket => {
       const matchesSearch = searchQuery === "" || 
-        ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ticket.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ticket.displayId?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (ticket.asset?.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        ((ticket.asset?.name) || '').toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesPriority = priorityFilter === "ALL" || ticket.priority === priorityFilter;
       

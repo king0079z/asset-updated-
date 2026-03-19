@@ -220,7 +220,7 @@ export function UserAssetsPanel({ open, onOpenChange, onViewAsset, onClearanceCo
   const filteredAssets = assets.filter(a => {
     if (!assetSearch.trim()) return true;
     const q = assetSearch.toLowerCase();
-    return a.name.toLowerCase().includes(q) || a.assetId.toLowerCase().includes(q) || (a.type || "").toLowerCase().includes(q);
+    return (a.name || '').toLowerCase().includes(q) || (a.assetId || '').toLowerCase().includes(q) || (a.type || "").toLowerCase().includes(q);
   });
 
   const totalAssigned = users.reduce((s, u) => s + u.total, 0);

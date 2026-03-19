@@ -794,7 +794,7 @@ function TicketsContent() {
     if (activeTab === "critical") return t.priority === TicketPriority.CRITICAL;
     return true;
   }).filter(t => {
-    if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (searchQuery && !(t.title || '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (priorityFilter && t.priority !== priorityFilter) return false;
     return true;
   }).sort((a, b) => {
@@ -807,7 +807,7 @@ function TicketsContent() {
   });
 
   const filteredPortalTickets = portalTickets.filter(t =>
-    (!searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase())) &&
+    (!searchQuery || (t.title || '').toLowerCase().includes(searchQuery.toLowerCase())) &&
     (!priorityFilter || t.priority === priorityFilter)
   );
 

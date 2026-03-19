@@ -310,7 +310,7 @@ export function UserClearanceDialog({ open, onOpenChange, user, assets, onCleara
   const filteredDecisions = decisions.filter(d => {
     if (!assetFilter) return true;
     const q = assetFilter.toLowerCase();
-    return d.asset.name.toLowerCase().includes(q) || d.asset.assetId.toLowerCase().includes(q);
+    return (d.asset?.name || '').toLowerCase().includes(q) || (d.asset?.assetId || '').toLowerCase().includes(q);
   });
 
   const handleSubmit = async () => {

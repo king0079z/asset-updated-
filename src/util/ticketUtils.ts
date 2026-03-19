@@ -107,10 +107,10 @@ export const filterTickets = (tickets: any[], activeTab: string, searchQuery: st
     
     const query = searchQuery.toLowerCase();
     return matchesTab && (
-      ticket.title.toLowerCase().includes(query) ||
-      ticket.description.toLowerCase().includes(query) ||
+      (ticket.title || '').toLowerCase().includes(query) ||
+      (ticket.description || '').toLowerCase().includes(query) ||
       (ticket.displayId && ticket.displayId.toLowerCase().includes(query)) ||
-      (ticket.asset && ticket.asset.name.toLowerCase().includes(query))
+      (ticket.asset && (ticket.asset.name || '').toLowerCase().includes(query))
     );
   });
 };
