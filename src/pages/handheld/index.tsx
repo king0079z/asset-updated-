@@ -267,6 +267,7 @@ export default function HandheldHubPage() {
     reasonCode?: string;
     note?: string;
     submittedAt?: number;
+    locationOverrideApplied?: string; // audit: "From Floor X Room Y → Floor A Room B"
   } | null>(null);
   const [reconcileEditLocationAsset, setReconcileEditLocationAsset] = useState<{ id: string; name: string; floorNumber?: string | null; roomNumber?: string | null } | null>(null);
   const [reconcileEditLocationSaving, setReconcileEditLocationSaving] = useState(false);
@@ -285,6 +286,11 @@ export default function HandheldHubPage() {
   const [reconciliationLoading, setReconciliationLoading] = useState(false);
   const [reconcileShowMissing, setReconcileShowMissing] = useState(false);
   const [reconcileShowExtra, setReconcileShowExtra] = useState(false);
+  const [showReconcileConfirmDialog, setShowReconcileConfirmDialog] = useState(false);
+  const [reconcileConfirmStep, setReconcileConfirmStep] = useState<'confirm' | 'change_location'>('confirm');
+  const [reconcileCorrectFloor, setReconcileCorrectFloor] = useState('');
+  const [reconcileCorrectRoom, setReconcileCorrectRoom] = useState('');
+  const [reconcileShowMissingByLocation, setReconcileShowMissingByLocation] = useState(false);
   const [countItemSwipedId, setCountItemSwipedId] = useState<string | null>(null);
   const [countSwipeOffset, setCountSwipeOffset] = useState(0);
   const countSwipeStartRef = useRef<{ x: number; id: string } | null>(null);
@@ -1192,12 +1198,25 @@ export default function HandheldHubPage() {
     () => unifiedInventory.filter((x): x is { type: 'asset'; data: CountScanItem } => x.type === 'asset').map((x) => x.data),
     [unifiedInventory]
   );
-  const runReconciliation = useCallback(async () => {
+  const runReconciliation = useCallback(async (locationOverride?: { floor: string; room: string }) => {
     setReconciliationLoading(true);
     setReconciliationResult(null);
-    const sessionFloor = inventorySessionFloor.trim();
-    const sessionRoom = inventorySessionRoom.trim();
+    const sessionFloor = (locationOverride?.floor ?? inventorySessionFloor).trim();
+    const sessionRoom = (locationOverride?.room ?? inventorySessionRoom).trim();
+    if (locationOverride) {
+      setInventorySessionFloor(locationOverride.floor.trim());
+      setInventorySessionRoom(locationOverride.room.trim());
+      const from = [inventorySessionFloor, inventorySessionRoom].filter(Boolean).join(', ') || '—';
+      const to = [locationOverride.floor, locationOverride.room].filter(Boolean).join(', ') || '—';
+      pushRecentAction('reconcile_location_override', `Location corrected: ${from} → ${to}`);
+    }
     const scopeByLocation = sessionFloor !== '' || sessionRoom !== '';
+    let locationOverrideApplied: string | undefined;
+    if (locationOverride) {
+      const from = [inventorySessionFloor.trim(), inventorySessionRoom.trim()].filter(Boolean).join(', ') || '—';
+      const to = [locationOverride.floor.trim(), locationOverride.room.trim()].filter(Boolean).join(', ') || '—';
+      if (from !== to) locationOverrideApplied = `Location corrected: ${from} → ${to}`;
+    }
     try {
       const res = await fetch('/api/assets?limit=5000', { credentials: 'include', cache: 'no-store' });
       const list: { id: string; name?: string; barcode?: string; assetId?: string; floorNumber?: string | null; roomNumber?: string | null }[] = res.ok ? await res.json() : [];
@@ -1220,8 +1239,6 @@ export default function HandheldHubPage() {
       const scannedInLocation = scopeByLocation
         ? countScansForReconciliation.filter((s) => inLocation(s.floorNumber, s.roomNumber))
         : countScansForReconciliation;
-      const scannedInLocKeys = new Set(scannedInLocation.map((s) => (s.id.startsWith('raw-') ? (s.barcode || s.name || s.id).toLowerCase() : s.id)));
-      const actualUnique = scopeByLocation ? new Set(scannedInLocation.map((s) => s.id.startsWith('raw-') ? (s.barcode || s.name || s.id).toLowerCase() : s.id)).size : scannedByKey.size;
       const expectedInLoc = listForScope.length;
       const actualInLoc = scopeByLocation ? Array.from(scannedByKey.entries()).filter(([, s]) => inLocation(s.floorNumber, s.roomNumber)).length : scannedByKey.size;
       const missing = listForScope.filter((a) => !scannedIds.has(a.id) && !scannedByKey.has((a.barcode || a.assetId || '').toLowerCase()));
@@ -1229,6 +1246,7 @@ export default function HandheldHubPage() {
       const locationDisplay = scopeByLocation ? [sessionFloor || null, sessionRoom || null].filter(Boolean).join(', ') || 'This location' : undefined;
       setReconcileShowMissing(false);
       setReconcileShowExtra(false);
+      setReconcileShowMissingByLocation(false);
       setReconciliationResult({
         expectedCount: scopeByLocation ? expectedInLoc : list.length,
         actualCount: scopeByLocation ? actualInLoc : scannedByKey.size,
@@ -1240,6 +1258,7 @@ export default function HandheldHubPage() {
         missing: missing.slice(0, 100).map((a) => ({ id: a.id, name: a.name || a.assetId || a.id, barcode: a.barcode, floorNumber: a.floorNumber, roomNumber: a.roomNumber })),
         extra: extra.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, floorNumber: s.floorNumber, roomNumber: s.roomNumber })),
         submittedForReview: false,
+        locationOverrideApplied,
       });
       const diff = scopeByLocation ? expectedInLoc - actualInLoc : list.length - scannedByKey.size;
       toast({
@@ -1253,7 +1272,7 @@ export default function HandheldHubPage() {
     } finally {
       setReconciliationLoading(false);
     }
-  }, [countScansForReconciliation, inventorySessionFloor, inventorySessionRoom, normalizeLoc, toast]);
+  }, [countScansForReconciliation, inventorySessionFloor, inventorySessionRoom, normalizeLoc, pushRecentAction, toast]);
 
   const submitCountForReview = useCallback(() => {
     setReconciliationResult((prev) =>
@@ -1959,15 +1978,21 @@ export default function HandheldHubPage() {
                     </div>
                     <Button
                       className="w-full mt-4 h-12 rounded-xl gap-2 font-semibold shadow-sm"
-                      onClick={runReconciliation}
+                      onClick={() => { setReconcileConfirmStep('confirm'); setReconcileCorrectFloor(inventorySessionFloor); setReconcileCorrectRoom(inventorySessionRoom); setShowReconcileConfirmDialog(true); }}
                       disabled={reconciliationLoading || countScansForReconciliation.length === 0}
                     >
                       {reconciliationLoading ? <Loader2 className="h-5 w-5 animate-spin shrink-0" /> : <Scale className="h-5 w-5 shrink-0" />}
-                      {reconciliationLoading ? 'Comparing…' : 'Run reconciliation'}
+                      {reconciliationLoading ? 'Comparing…' : 'Start reconciliation'}
                     </Button>
                   </div>
                   {reconciliationResult && (
                     <div className="p-4 space-y-4">
+                      {reconciliationResult.locationOverrideApplied && (
+                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-2.5 flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <p className="text-xs font-medium text-amber-900 dark:text-amber-100">Audit: {reconciliationResult.locationOverrideApplied}</p>
+                        </div>
+                      )}
                       {reconciliationResult.scope === 'location' && reconciliationResult.locationDisplay && (
                         <div className="rounded-2xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-4 py-3 flex items-center gap-3">
                           <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0" />
@@ -2015,7 +2040,54 @@ export default function HandheldHubPage() {
                       {(reconciliationResult.missing.length > 0 || reconciliationResult.extra.length > 0) && (
                         <div className="space-y-3">
                           {reconciliationResult.missing.length > 0 && (
-                            <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 overflow-hidden">
+                            <>
+                              <div className="flex gap-2">
+                                <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => setReconcileShowMissingByLocation((v) => !v)}>
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  {reconcileShowMissingByLocation ? 'Hide missing by room' : 'View missing by room/location'}
+                                </Button>
+                              </div>
+                              {reconcileShowMissingByLocation && (() => {
+                                const byLoc = reconciliationResult.missing.reduce((acc, m) => {
+                                  const key = [m.floorNumber ?? '', m.roomNumber ?? ''].join('|');
+                                  if (!acc[key]) acc[key] = [];
+                                  acc[key].push(m);
+                                  return acc;
+                                }, {} as Record<string, typeof reconciliationResult.missing>);
+                                const entries = Object.entries(byLoc).sort((a, b) => a[0].localeCompare(b[0]));
+                                return (
+                                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 overflow-hidden space-y-2">
+                                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 px-3 pt-3">Missing assets grouped by system location</p>
+                                    {entries.map(([key, items]) => {
+                                      const [f, r] = key.split('|');
+                                      const locLabel = [f, r].filter(Boolean).join(', ') || 'No location';
+                                      return (
+                                        <div key={key} className="border-t border-slate-200 dark:border-slate-700">
+                                          <div className="px-3 py-2 bg-slate-100 dark:bg-slate-800/80 flex items-center gap-2">
+                                            <MapPin className="h-4 w-4 text-slate-500 shrink-0" />
+                                            <span className="font-semibold text-slate-800 dark:text-slate-200">Floor {f || '—'}, Room {r || '—'}</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">({items.length} missing)</span>
+                                          </div>
+                                          <ul className="px-3 pb-3 pt-1 space-y-1 max-h-40 overflow-y-auto">
+                                            {items.map((m) => (
+                                              <li key={m.id} className="text-xs text-slate-700 dark:text-slate-300 py-1.5 px-2 rounded-lg bg-white dark:bg-slate-800/80 truncate flex items-center justify-between gap-2">
+                                                <span title={m.name}>{m.name || m.barcode || m.id}</span>
+                                                <Button type="button" size="sm" variant="ghost" className="h-6 text-[10px] rounded-lg shrink-0" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); }}>
+                                                  Edit location
+                                                </Button>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </>
+                          )}
+                          {reconciliationResult.missing.length > 0 && (
+                            <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 overflow-hidden mt-2">
                               <button
                                 type="button"
                                 onClick={() => setReconcileShowMissing((v) => !v)}
@@ -2756,6 +2828,64 @@ export default function HandheldHubPage() {
               </Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reconcile: Pre-reconciliation location confirmation */}
+      <Dialog open={showReconcileConfirmDialog} onOpenChange={(open) => { if (!open) setShowReconcileConfirmDialog(false); setReconcileConfirmStep('confirm'); }}>
+        <DialogContent className="max-w-md rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Scale className="h-5 w-5 text-violet-500" /> Confirm location</DialogTitle>
+            <DialogDescription>Ensure the physical room where you are counting matches before comparing with the system.</DialogDescription>
+          </DialogHeader>
+          {reconcileConfirmStep === 'confirm' ? (
+            <div className="space-y-4 pt-2">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Current count location (system)</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">
+                  {inventorySessionFloor.trim() || inventorySessionRoom.trim()
+                    ? `Floor ${inventorySessionFloor.trim() || '—'}, Room ${inventorySessionRoom.trim() || '—'}`
+                    : 'All locations (no filter)'}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">System matches formats like 101 and 0101.</p>
+              </div>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Are you currently counting in this same location?</p>
+              <div className="flex gap-3">
+                <Button className="flex-1 rounded-xl h-12 font-semibold" onClick={() => { setShowReconcileConfirmDialog(false); runReconciliation(); }}>
+                  Yes, start reconciliation
+                </Button>
+                <Button variant="outline" className="flex-1 rounded-xl h-12 font-semibold" onClick={() => setReconcileConfirmStep('change_location')}>
+                  No, change location
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-2">
+              <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Session location (system)</p>
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Floor {inventorySessionFloor.trim() || '—'}, Room {inventorySessionRoom.trim() || '—'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-2">Correct physical location (where you are counting)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input placeholder="Floor" value={reconcileCorrectFloor} onChange={(e) => setReconcileCorrectFloor(e.target.value)} className="rounded-xl" />
+                  <Input placeholder="Room" value={reconcileCorrectRoom} onChange={(e) => setReconcileCorrectRoom(e.target.value)} className="rounded-xl" />
+                </div>
+              </div>
+              <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10 p-3">
+                <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">Selected: Floor {reconcileCorrectFloor.trim() || '—'}, Room {reconcileCorrectRoom.trim() || '—'}</p>
+                {(normalizeLoc(inventorySessionFloor) !== normalizeLoc(reconcileCorrectFloor) || normalizeLoc(inventorySessionRoom) !== normalizeLoc(reconcileCorrectRoom)) && (inventorySessionFloor.trim() || inventorySessionRoom.trim()) && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 font-medium">Different from session location — will update and run.</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1 rounded-xl h-12" onClick={() => setReconcileConfirmStep('confirm')}>Back</Button>
+                <Button className="flex-1 rounded-xl h-12 font-semibold" onClick={() => { setShowReconcileConfirmDialog(false); runReconciliation({ floor: reconcileCorrectFloor.trim(), room: reconcileCorrectRoom.trim() }); }}>
+                  Update location & run
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
