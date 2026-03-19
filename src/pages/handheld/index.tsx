@@ -1945,7 +1945,7 @@ export default function HandheldHubPage() {
                             <div
                               className={cn(
                                 'absolute inset-0 z-10 flex items-center gap-3 px-4 bg-white dark:bg-slate-800 rounded-2xl will-change-transform',
-                                isDragging ? 'transition-none' : 'transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]'
+                                isDragging ? 'transition-none' : 'handheld-swipe-spring'
                               )}
                               style={{
                                 transform: `translateX(${translateX}px)`,

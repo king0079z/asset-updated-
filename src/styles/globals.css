@@ -200,6 +200,11 @@
   animation: handheld-shine 2.2s ease-in-out infinite;
 }
 
+/* Spring-like transition when releasing swipe (slight overshoot) */
+.handheld-swipe-spring {
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /* Import Arabic fonts */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@200;300;400;500;700;800;900&display=swap');
