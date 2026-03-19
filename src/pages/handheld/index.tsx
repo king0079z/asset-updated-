@@ -2444,7 +2444,15 @@ export default function HandheldHubPage() {
         )}
       </div>
 
-      <HandheldTabNav tab={tab} onChange={setTab} rapidMode={rapidMode} />
+      <HandheldTabNav
+        tab={tab}
+        onChange={setTab}
+        counts={{
+          work: assignedTickets.length + assignedTasks.length,
+          count: countSessionActive ? countScans.length : 0,
+          scan: sessionScansCount,
+        }}
+      />
 
       <HandheldFloatingCommandBar
         onScan={() => setTab('scan')}
