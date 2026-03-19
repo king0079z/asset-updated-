@@ -1,10 +1,10 @@
 // @ts-nocheck
 /**
  * Handheld hub: SimplyRFiD-style field assistant for HANDHELD-role users.
- * Tabs: Scan | Inventory (Count + Audit) | Locate | Work (Tickets + Tasks) | Asset | More.
+ * Tabs: Scan | Inventory (unified count & audit) | Locate | Work (Tickets + Tasks) | Asset | More.
  * Features: RFID-style scan, ultra-fast count, locate (beep), audit, sync, export, print/encode tag workflow.
  */
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { HandheldLayout } from '@/components/HandheldLayout';
 import {
   HandheldTabNav,
@@ -199,8 +199,23 @@ export default function HandheldHubPage() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
-  // Audit state — store full asset for world-class cards (image, location, assignee, RFID)
-  const [auditScans, setAuditScans] = useState<any[]>([]);
+  // Unified inventory (count + audit): one list for assets, food, tickets
+  type CountScanItem = {
+    id: string;
+    barcode?: string;
+    name: string;
+    imageUrl?: string | null;
+    status?: string;
+    floorNumber?: string | null;
+    roomNumber?: string | null;
+  };
+  type UnifiedInventoryItem =
+    | { type: 'asset'; data: CountScanItem }
+    | { type: 'food'; supply: any }
+    | { type: 'ticket'; ticket: any };
+  const [unifiedInventory, setUnifiedInventory] = useState<UnifiedInventoryItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  // Audit modals (details, comment, food, ticket, RFID map)
   const [auditLoading, setAuditLoading] = useState(false);
   const [selectedAuditAssetForDetails, setSelectedAuditAssetForDetails] = useState<any | null>(null);
   const [auditDetailsLoading, setAuditDetailsLoading] = useState(false);
@@ -221,17 +236,7 @@ export default function HandheldHubPage() {
   const [showFoodScanner, setShowFoodScanner] = useState(false);
   const [foodScannerKey, setFoodScannerKey] = useState(0);
 
-  // Count/Inventory state — items can have full display (image, status, location)
-  type CountScanItem = {
-    id: string;
-    barcode?: string;
-    name: string;
-    imageUrl?: string | null;
-    status?: string;
-    floorNumber?: string | null;
-    roomNumber?: string | null;
-  };
-  const [countScans, setCountScans] = useState<CountScanItem[]>([]);
+  // Count/Inventory session and reconciliation (uses unifiedInventory for assets)
   const [countSessionActive, setCountSessionActive] = useState(false);
   const [countStartTime, setCountStartTime] = useState<number>(0);
   const [countLocationLabel, setCountLocationLabel] = useState(''); // optional: e.g. "Aisle 3", "Store A"
@@ -311,7 +316,6 @@ export default function HandheldHubPage() {
   // Sync state (for header and More tab)
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
 
-  const [inventoryMode, setInventoryMode] = useState<'count' | 'audit'>('count');
   const [workMode, setWorkMode] = useState<'tickets' | 'tasks'>('tickets');
   const [showPrintTagDialog, setShowPrintTagDialog] = useState(false);
   const [printTagAsset, setPrintTagAsset] = useState<Asset | null>(null);
@@ -655,29 +659,36 @@ export default function HandheldHubPage() {
     if (tab === 'work') fetchAssignedTasks();
   }, [tab, fetchAssignedTasks]);
 
-  const lookupAsset = useCallback(async (code: string) => {
+  const addToUnifiedInventory = useCallback(async (code: string) => {
     const q = code.trim();
     if (!q) return;
-    setAuditLoading(true);
+    setInventoryLoading(true);
+    setSessionScansCount((s) => s + 1);
     try {
       // 1) Try asset scan first
       const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(q)}`);
       if (res.ok) {
         const data = await res.json();
         if (data?.asset?.id) {
-          const asset = data.asset;
-          setAuditScans((prev) => {
-            const exists = prev.some((a) => (a && typeof a === 'object' && (a as any).type === 'food')
-              ? false
-              : (typeof a === 'string' ? a === asset.id : (a as any)?.id === asset.id));
-            if (exists) return prev;
-            return [...prev, asset];
+          const a = data.asset;
+          const item: CountScanItem = {
+            id: a.id,
+            barcode: a.barcode || q,
+            name: a.name || a.assetId || 'Unknown',
+            imageUrl: a.imageUrl,
+            status: a.status,
+            floorNumber: a.floorNumber,
+            roomNumber: a.roomNumber,
+          };
+          setUnifiedInventory((prev) => {
+            if (prev.some((x) => x.type === 'asset' && x.data.id === a.id)) return prev;
+            return [...prev, { type: 'asset', data: item }];
           });
-          toast({ title: 'Scanned', description: asset.name });
+          toast({ title: 'Added', description: a.name });
           return;
         }
       }
-      // 2) If not an asset, try food supply barcode (e.g. KIT...SUP...)
+      // 2) Try food supply barcode
       const scanRes = await fetch('/api/food-supply/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -687,12 +698,11 @@ export default function HandheldHubPage() {
         const scanData = await scanRes.json();
         if (scanData?.supply?.id) {
           const supply = scanData.supply;
-          setAuditScans((prev) => {
-            const exists = prev.some((a) => a && typeof a === 'object' && (a as any).type === 'food' && (a as any).supply?.id === supply.id);
-            if (exists) return prev;
+          setUnifiedInventory((prev) => {
+            if (prev.some((x) => x.type === 'food' && x.supply?.id === supply.id)) return prev;
             return [...prev, { type: 'food', supply }];
           });
-          toast({ title: 'Food supply scanned', description: `${supply.name} — ${supply.quantity} ${supply.unit} left` });
+          toast({ title: 'Food supply added', description: `${supply.name} — ${supply.quantity} ${supply.unit} left` });
           return;
         }
       }
@@ -701,20 +711,21 @@ export default function HandheldHubPage() {
       if (ticketRes.ok) {
         const ticketData = await ticketRes.json();
         if (ticketData?.id) {
-          setAuditScans((prev) => {
-            const exists = prev.some((a) => a && typeof a === 'object' && (a as any).type === 'ticket' && (a as any).ticket?.id === ticketData.id);
-            if (exists) return prev;
+          setUnifiedInventory((prev) => {
+            if (prev.some((x) => x.type === 'ticket' && x.ticket?.id === ticketData.id)) return prev;
             return [...prev, { type: 'ticket', ticket: ticketData }];
           });
-          toast({ title: 'Ticket scanned', description: ticketData.title || ticketData.displayId || 'Ticket' });
+          toast({ title: 'Ticket added', description: ticketData.title || ticketData.displayId || 'Ticket' });
           return;
         }
       }
+      setSessionScansCount((s) => Math.max(0, s - 1));
       toast({ title: 'Not found', description: q, variant: 'destructive' });
     } catch {
+      setSessionScansCount((s) => Math.max(0, s - 1));
       toast({ title: 'Lookup failed', variant: 'destructive' });
     } finally {
-      setAuditLoading(false);
+      setInventoryLoading(false);
     }
   }, [toast]);
 
@@ -764,7 +775,7 @@ export default function HandheldHubPage() {
       setCountItemStatusAsset(null);
       setShowStatus(false);
       setPickedStatus('');
-      setCountScans((prev) => prev.map((s) => (s.id === target.id ? { ...s, status: pickedStatus } : s)));
+      setUnifiedInventory((prev) => prev.map((x) => (x.type === 'asset' && x.data.id === target.id ? { ...x, data: { ...x.data, status: pickedStatus } } : x)));
       toast({ title: 'Status updated', description: pickedStatus });
     } catch {
       toast({ title: 'Update failed', variant: 'destructive' });
@@ -781,7 +792,7 @@ export default function HandheldHubPage() {
         body: JSON.stringify(vals),
       });
       if (!r.ok) throw new Error();
-      setCountScans((prev) => prev.map((s) => (s.id === countItemMoveAsset.id ? { ...s, floorNumber: vals.floorNumber, roomNumber: vals.roomNumber } : s)));
+      setUnifiedInventory((prev) => prev.map((x) => (x.type === 'asset' && x.data.id === countItemMoveAsset.id ? { ...x, data: { ...x.data, floorNumber: vals.floorNumber, roomNumber: vals.roomNumber } } : x)));
       setCountItemMoveAsset(null);
       countItemMoveForm.reset();
       toast({ title: 'Location updated', description: `${vals.floorNumber}, ${vals.roomNumber}` });
@@ -998,27 +1009,26 @@ export default function HandheldHubPage() {
   };
 
   const exportAuditList = useCallback(() => {
-    if (auditScans.length === 0) {
+    if (unifiedInventory.length === 0) {
       toast({ title: 'No items to export', variant: 'destructive' });
       return;
     }
-    const rows = auditScans.map((item, i) => {
-      const food = item && typeof item === 'object' && (item as any).type === 'food' ? (item as any).supply : null;
-      const ticket = item && typeof item === 'object' && (item as any).type === 'ticket' ? (item as any).ticket : null;
-      const asset = !food && !ticket && typeof item === 'object' && item ? (item as any) : null;
-      if (food) {
+    const rows = unifiedInventory.map((item, i) => {
+      if (item.type === 'food') {
+        const food = item.supply;
         const kitchens = (food.kitchensWithSupply && food.kitchensWithSupply.length)
           ? food.kitchensWithSupply.map((k: { name: string }) => k.name).join('; ')
           : (food.kitchenName || '—');
         return [i + 1, food.name, 'Food supply', food.id, `${food.quantity} ${food.unit}`, kitchens, '—', '—'];
       }
-      if (ticket) {
+      if (item.type === 'ticket') {
+        const ticket = item.ticket;
         return [i + 1, ticket.title || 'Ticket', 'Ticket', ticket.displayId || ticket.id, (ticket.status || '').toLowerCase(), '—', '—', '—'];
       }
-      if (!asset?.id) return [];
+      const asset = item.data;
       const loc = [asset.floorNumber, asset.roomNumber].filter(Boolean).join(', ') || '—';
-      const rfid = asset.rfidTag?.lastZone ? [asset.rfidTag.lastZone.name, asset.rfidTag.lastZone.floorNumber, asset.rfidTag.lastZone.roomNumber].filter(Boolean).join(', ') : '—';
-      return [i + 1, asset.name, 'Asset', asset.assetId || asset.barcode || '', 'Qty 1', loc, asset.assignedToName || '—', rfid];
+      const rfid = (asset as any).rfidTag?.lastZone ? [(asset as any).rfidTag.lastZone.name, (asset as any).rfidTag.lastZone.floorNumber, (asset as any).rfidTag.lastZone.roomNumber].filter(Boolean).join(', ') : '—';
+      return [i + 1, asset.name, 'Asset', asset.barcode ?? asset.id ?? '', 'Qty 1', loc, '—', rfid];
     });
     const header = ['#', 'Name', 'Type', 'ID/Barcode', 'Qty/Location', 'Kitchens/Location', 'Assigned to', 'RFID location'];
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -1030,7 +1040,7 @@ export default function HandheldHubPage() {
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: 'Audit exported' });
-  }, [auditScans, toast]);
+  }, [unifiedInventory, toast]);
 
   const openAuditAssetDetails = useCallback(async (assetId: string) => {
     setAuditDetailsLoading(true);
@@ -1149,10 +1159,14 @@ export default function HandheldHubPage() {
   const startCountSession = useCallback(() => {
     setCountSessionActive(true);
     setCountStartTime(Date.now());
-    setCountScans([]);
+    setUnifiedInventory([]);
     setReconciliationResult(null);
   }, []);
 
+  const countScansForReconciliation = useMemo(
+    () => unifiedInventory.filter((x): x is { type: 'asset'; data: CountScanItem } => x.type === 'asset').map((x) => x.data),
+    [unifiedInventory]
+  );
   const runReconciliation = useCallback(async () => {
     setReconciliationLoading(true);
     setReconciliationResult(null);
@@ -1160,10 +1174,9 @@ export default function HandheldHubPage() {
       const res = await fetch('/api/assets?limit=5000', { credentials: 'include', cache: 'no-store' });
       const list: { id: string; name?: string; barcode?: string; assetId?: string }[] = res.ok ? await res.json() : [];
       const expectedIds = new Set(list.map((a) => a.id));
-      const expectedByBarcode = new Map(list.map((a) => [((a.barcode || a.assetId || '') as string).toLowerCase(), a]));
       const scannedIds = new Set<string>();
       const scannedRaw = new Map<string, { id: string; name: string; barcode?: string }>();
-      countScans.forEach((s) => {
+      countScansForReconciliation.forEach((s) => {
         const key = s.id.startsWith('raw-') ? (s.barcode || s.name || s.id).toLowerCase() : s.id;
         if (!s.id.startsWith('raw-')) scannedIds.add(s.id);
         if (!scannedRaw.has(key)) scannedRaw.set(key, s);
@@ -1184,7 +1197,7 @@ export default function HandheldHubPage() {
     } finally {
       setReconciliationLoading(false);
     }
-  }, [countScans, toast]);
+  }, [countScansForReconciliation, toast]);
 
   const submitCountForReview = useCallback(() => {
     setReconciliationResult((prev) =>
@@ -1196,20 +1209,21 @@ export default function HandheldHubPage() {
   }, [toast, countReviewReason, countReviewNote]);
 
   const endCountSession = useCallback(() => {
-    const total = countScans.length;
-    pushRecentAction('count', `Count session: ${total} item${total !== 1 ? 's' : ''} (${countLocationLabel.trim() || 'All'})`);
+    const total = unifiedInventory.length;
+    pushRecentAction('count', `Inventory session: ${total} item${total !== 1 ? 's' : ''} (${countLocationLabel.trim() || 'All'})`);
     setCountSessionActive(false);
-    toast({ title: 'Count ended', description: `${total} item${total !== 1 ? 's' : ''} counted.` });
-  }, [countScans.length, countLocationLabel, pushRecentAction, toast]);
+    toast({ title: 'Session ended', description: `${total} item${total !== 1 ? 's' : ''} in list.` });
+  }, [unifiedInventory.length, countLocationLabel, pushRecentAction, toast]);
 
   const exportCountReport = useCallback(() => {
-    if (countScans.length === 0) {
-      toast({ title: 'Nothing to export', description: 'Run a count session first.', variant: 'destructive' });
+    const assetItems = unifiedInventory.filter((x): x is { type: 'asset'; data: CountScanItem } => x.type === 'asset').map((x) => x.data);
+    if (assetItems.length === 0) {
+      toast({ title: 'Nothing to export', description: 'Add assets to inventory first.', variant: 'destructive' });
       return;
     }
     const headers = ['Location', 'Asset ID', 'Barcode', 'Name'];
     const locationLabel = countLocationLabel.trim() || 'All';
-    const rows = countScans.map((s) => [locationLabel, s.id, s.barcode ?? '', s.name ?? '']);
+    const rows = assetItems.map((s) => [locationLabel, s.id, s.barcode ?? '', s.name ?? '']);
     const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -1219,7 +1233,7 @@ export default function HandheldHubPage() {
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: 'Count report exported' });
-  }, [countScans, toast]);
+  }, [unifiedInventory, countLocationLabel, toast]);
 
   const toggleCountVoice = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -1259,36 +1273,6 @@ export default function HandheldHubPage() {
     }
   }, [countVoiceListening, toast]);
 
-  const addToCount = useCallback(async (code: string) => {
-    const q = code.trim();
-    if (!q) return;
-    setSessionScansCount((s) => s + 1);
-    try {
-      const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.asset?.id) {
-          const a = data.asset;
-          setCountScans((prev) => [...prev, {
-            id: a.id,
-            barcode: a.barcode || q,
-            name: a.name || a.assetId || 'Unknown',
-            imageUrl: a.imageUrl,
-            status: a.status,
-            floorNumber: a.floorNumber,
-            roomNumber: a.roomNumber,
-          }]);
-          toast({ title: 'Added to count', description: a.name });
-          return;
-        }
-      }
-      setCountScans((prev) => [...prev, { id: `raw-${Date.now()}`, barcode: q, name: q }]);
-      toast({ title: 'Added to count', description: q });
-    } catch {
-      setSessionScansCount((s) => Math.max(0, s - 1));
-      toast({ title: 'Lookup failed', variant: 'destructive' });
-    }
-  }, [toast]);
 
   const searchLocateAssets = useCallback(async () => {
     const q = locateQuery.trim();
@@ -1598,255 +1582,15 @@ export default function HandheldHubPage() {
 
         {tab === 'inventory' && (
           <div className="max-w-lg mx-auto space-y-4">
-            <div className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <button type="button" onClick={() => setInventoryMode('count')} className={cn('flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all', inventoryMode === 'count' ? 'bg-white dark:bg-slate-700 shadow text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-400')}>
-                <Hash className="h-4 w-4 inline mr-1.5 align-middle" /> Count
-              </button>
-              <button type="button" onClick={() => setInventoryMode('audit')} className={cn('flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all', inventoryMode === 'audit' ? 'bg-white dark:bg-slate-700 shadow text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-400')}>
-                <ClipboardList className="h-4 w-4 inline mr-1.5 align-middle" /> Audit
-              </button>
-            </div>
-            {inventoryMode === 'audit' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Inventory audit</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Scan assets to verify location &amp; assignment.</p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 dark:bg-violet-900/30 px-3 py-1.5 text-sm font-semibold text-violet-800 dark:text-violet-200">
-                  <ClipboardList className="h-4 w-4" /> {auditScans.length} item{auditScans.length !== 1 ? 's' : ''}
-                </span>
-                {auditScans.length > 0 && (
-                  <>
-                    <select
-                      value={auditSort}
-                      onChange={(e) => setAuditSort(e.target.value as 'scan' | 'name' | 'location')}
-                      className="h-9 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-2"
-                    >
-                      <option value="scan">Scan order</option>
-                      <option value="name">Name A–Z</option>
-                      <option value="location">Location</option>
-                    </select>
-                    <Button variant="outline" size="sm" onClick={exportAuditList} className="gap-1">
-                      <Download className="h-3.5 w-3.5" /> Export
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setAuditScans([])}>Clear all</Button>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Barcode or Asset ID"
-                className="flex-1 h-12 rounded-xl"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = (e.target as HTMLInputElement).value.trim();
-                    if (v) lookupAsset(v);
-                    (e.target as HTMLInputElement).value = '';
-                  }
-                }}
-              />
-              <Button size="lg" className="h-12 rounded-xl min-w-[52px]" disabled={auditLoading} onClick={() => { const el = document.querySelector('input[placeholder="Barcode or Asset ID"]') as HTMLInputElement; if (el?.value) { lookupAsset(el.value); el.value = ''; } }}>
-                {auditLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Scan className="h-5 w-5" />}
-              </Button>
-            </div>
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto pb-2">
-              {auditScans.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-600 p-8 text-center">
-                  <ClipboardList className="h-12 w-12 mx-auto text-slate-300 dark:text-slate-500 mb-3" />
-                  <p className="font-medium text-slate-600 dark:text-slate-400">No items scanned yet</p>
-                  <p className="text-sm text-slate-500 mt-1">Scan or enter a barcode above to add items to this audit.</p>
-                </div>
-              ) : (
-                [...auditScans]
-                  .sort((a, b) => {
-                    const foodA = a && typeof a === 'object' && (a as any).type === 'food' ? (a as any).supply : null;
-                    const foodB = b && typeof b === 'object' && (b as any).type === 'food' ? (b as any).supply : null;
-                    const ticketA = a && typeof a === 'object' && (a as any).type === 'ticket' ? (a as any).ticket : null;
-                    const ticketB = b && typeof b === 'object' && (b as any).type === 'ticket' ? (b as any).ticket : null;
-                    const ax = foodA || ticketA || (typeof a === 'string' ? null : (a as any));
-                    const bx = foodB || ticketB || (typeof b === 'string' ? null : (b as any));
-                    if (!ax || !bx) return 0;
-                    const nameA = foodA ? foodA.name : (ticketA ? (ticketA.title || ticketA.displayId || '') : (ax.name || ''));
-                    const nameB = foodB ? foodB.name : (ticketB ? (ticketB.title || ticketB.displayId || '') : (bx.name || ''));
-                    if (auditSort === 'name') return nameA.localeCompare(nameB);
-                    if (auditSort === 'location') {
-                      const locA = foodA
-                        ? ((foodA.kitchensWithSupply && foodA.kitchensWithSupply.length) ? foodA.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ') : foodA.kitchenName || '')
-                        : ticketA ? (ticketA.status || '') : [ax.floorNumber, ax.roomNumber].filter(Boolean).join(' ');
-                      const locB = foodB
-                        ? ((foodB.kitchensWithSupply && foodB.kitchensWithSupply.length) ? foodB.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ') : foodB.kitchenName || '')
-                        : ticketB ? (ticketB.status || '') : [bx.floorNumber, bx.roomNumber].filter(Boolean).join(' ');
-                      return locA.localeCompare(locB);
-                    }
-                    return 0;
-                  })
-                  .map((item, i) => {
-                  const isFood = item && typeof item === 'object' && (item as any).type === 'food';
-                  const isTicket = item && typeof item === 'object' && (item as any).type === 'ticket';
-                  const supply = isFood ? (item as any).supply : null;
-                  const ticket = isTicket ? (item as any).ticket : null;
-                  const asset = !isFood && !isTicket && typeof item === 'string' ? null : !isFood && !isTicket ? (item as any) : null;
-
-                  if (supply?.id) {
-                    const kitchensList = (supply.kitchensWithSupply && supply.kitchensWithSupply.length)
-                      ? supply.kitchensWithSupply.map((k: { name: string }) => k.name).join(', ')
-                      : supply.kitchenName || '—';
-                    const expDate = supply.expirationDate ? new Date(supply.expirationDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-                    return (
-                      <div
-                        key={`food-${supply.id}-${i}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => openAuditFoodDetails(supply)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditFoodDetails(supply); } }}
-                        className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-md"
-                      >
-                        <div className="flex gap-4 p-4">
-                          <div className="h-20 w-20 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex-shrink-0 flex items-center justify-center">
-                            <UtensilsCrossed className="h-8 w-8 text-amber-600 dark:text-amber-400" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-semibold text-slate-900 dark:text-white truncate">{supply.name}</p>
-                              <span className="rounded-lg bg-amber-200/80 dark:bg-amber-800/50 text-xs font-bold text-amber-800 dark:text-amber-200 px-2 py-0.5 shrink-0">
-                                {supply.quantity} {supply.unit}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Food supply</p>
-                            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2 font-medium">Expires: {expDate}</p>
-                          </div>
-                        </div>
-                        <div className="px-4 pb-4 grid gap-2">
-                          <div className="flex items-center gap-2 text-xs">
-                            <MapPin className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                            <span className="text-slate-600 dark:text-slate-300">Kitchens: {kitchensList}</span>
-                          </div>
-                          <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Tap for full details</p>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  if (ticket?.id) {
-                    const status = (ticket.status || 'open').toLowerCase().replace('_', ' ');
-                    return (
-                      <div
-                        key={`ticket-${ticket.id}-${i}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => openAuditTicketDetails(ticket)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditTicketDetails(ticket); } }}
-                        className="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-900/10 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-sky-400 dark:hover:border-sky-600 hover:shadow-md"
-                      >
-                        <div className="flex gap-4 p-4">
-                          <div className="h-20 w-20 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex-shrink-0 flex items-center justify-center">
-                            <Ticket className="h-8 w-8 text-sky-600 dark:text-sky-400" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-semibold text-slate-900 dark:text-white truncate">{ticket.title || 'Ticket'}</p>
-                              <span className="rounded-lg bg-sky-200/80 dark:bg-sky-800/50 text-xs font-bold text-sky-800 dark:text-sky-200 px-2 py-0.5 shrink-0 capitalize">
-                                {status}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{ticket.displayId || ticket.id}</p>
-                            <p className="text-[10px] text-sky-600 dark:text-sky-400 mt-2 font-medium">Tap for full details</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  if (!asset?.id) return null;
-                  const loc = [asset.floorNumber, asset.roomNumber].filter(Boolean).join(', ') || '—';
-                  const rfidZone = asset.rfidTag?.lastZone;
-                  const rfidLoc = rfidZone ? [rfidZone.name, rfidZone.floorNumber, rfidZone.roomNumber].filter(Boolean).join(', ') : null;
-                  return (
-                    <div
-                      key={`${asset.id}-${i}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => !auditDetailsLoading && openAuditAssetDetails(asset.id)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditAssetDetails(asset.id); } }}
-                      className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md"
-                    >
-                      <div className="flex gap-4 p-4">
-                        <div className="h-20 w-20 rounded-xl bg-slate-100 dark:bg-slate-700 flex-shrink-0 overflow-hidden">
-                          {asset.imageUrl ? (
-                            <img src={asset.imageUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="h-full w-full flex items-center justify-center"><Package className="h-8 w-8 text-slate-400" /></div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-semibold text-slate-900 dark:text-white truncate">{asset.name}</p>
-                            <span className="rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 px-2 py-0.5 shrink-0">Qty 1</span>
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{asset.assetId || asset.barcode || asset.id}</p>
-                          {asset.description && (
-                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 line-clamp-2">{asset.description}</p>
-                          )}
-                          <p className="text-[10px] text-violet-600 dark:text-violet-400 mt-2 font-medium">Tap for full details</p>
-                        </div>
-                      </div>
-                      <div className="px-4 pb-4 grid gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setAuditCommentAsset({ id: asset.id, name: asset.name }); setAuditCommentText(''); setAuditCommentImagePreview(null); if (auditCommentImageInputRef.current) auditCommentImageInputRef.current.value = ''; }}
-                          className="flex items-center gap-2 text-xs text-left w-full rounded-lg py-2 px-3 -mx-1 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 active:scale-[0.98] transition-transform touch-manipulation"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                          <span>Add comment / photo</span>
-                        </button>
-                        <div className="flex items-center gap-2 text-xs">
-                          <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          <span className="text-slate-600 dark:text-slate-300">Location: {loc}</span>
-                        </div>
-                        {asset.assignedToName && (
-                          <div className="flex items-center gap-2 text-xs">
-                            <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                            <span className="text-slate-600 dark:text-slate-300">Assigned to: {asset.assignedToName}</span>
-                          </div>
-                        )}
-                        {rfidLoc ? (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setAuditRfidMapAsset(asset); }}
-                            className="flex items-center gap-2 text-xs text-left w-full rounded-lg py-2 px-3 -mx-1 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30 active:scale-[0.98] transition-transform touch-manipulation"
-                          >
-                            <Radio className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                            <span>RFID: {rfidLoc}</span>
-                            <span className="ml-auto text-[10px] font-semibold">View on map →</span>
-                          </button>
-                        ) : (
-                          <div className="flex items-center gap-2 text-xs text-slate-400">
-                            <Radio className="h-3.5 w-3.5 shrink-0" />
-                            <span>No RFID location</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-            )}
-            {inventoryMode === 'count' && (
-          <div className="space-y-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Hash className="h-5 w-5" /> Fast count
+              <ClipboardList className="h-5 w-5" /> Inventory
             </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Scan assets, food supply, or tickets into one list. Export count or audit reports and compare with system.</p>
             {!countSessionActive ? (
               <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm space-y-4">
-                <p className="text-sm text-slate-600 dark:text-slate-300">Start a count session to scan assets. Get running total, scans per minute, and export for multi-location inventory.</p>
                 <Input placeholder="Location (optional, e.g. Aisle 3, Store A)" value={countLocationLabel} onChange={(e) => setCountLocationLabel(e.target.value)} className="rounded-xl" />
                 <Button size="lg" className="w-full h-12 rounded-xl" onClick={startCountSession}>
-                  <Hash className="h-5 w-5 mr-2" /> Start count
+                  <Hash className="h-5 w-5 mr-2" /> Start inventory session
                 </Button>
               </div>
             ) : (
@@ -1854,12 +1598,12 @@ export default function HandheldHubPage() {
                 <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20 p-5 shadow-sm">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-3xl font-bold text-violet-700 dark:text-violet-200">{countScans.length}</p>
-                      <p className="text-sm text-slate-600 dark:text-slate-400">items counted</p>
+                      <p className="text-3xl font-bold text-violet-700 dark:text-violet-200">{unifiedInventory.length}</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">items</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xl font-semibold text-slate-800 dark:text-slate-200">
-                        {countStartTime ? Math.round(countScans.length / ((Date.now() - countStartTime) / 60000)) : 0}
+                        {countStartTime ? Math.round(unifiedInventory.length / ((Date.now() - countStartTime) / 60000)) : 0}
                       </p>
                       <p className="text-xs text-slate-500">per minute</p>
                     </div>
@@ -1874,12 +1618,12 @@ export default function HandheldHubPage() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           const v = (e.target as HTMLInputElement).value?.trim();
-                          if (v) { addToCount(v); (e.target as HTMLInputElement).value = ''; }
+                          if (v) { addToUnifiedInventory(v); (e.target as HTMLInputElement).value = ''; }
                         }
                       }}
                     />
-                    <Button size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => { const el = countBarcodeInputRef.current; if (el?.value?.trim()) { addToCount(el.value.trim()); el.value = ''; } }}>
-                      <Plus className="h-5 w-5" />
+                    <Button size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => { const el = countBarcodeInputRef.current; if (el?.value?.trim()) { addToUnifiedInventory(el.value.trim()); el.value = ''; } }} disabled={inventoryLoading}>
+                      {inventoryLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
                     </Button>
                   </div>
                   <Button variant="outline" size="icon" className={cn('h-11 w-11 rounded-xl shrink-0', countVoiceListening && 'bg-red-100 dark:bg-red-900/30')} onClick={toggleCountVoice} aria-label="Voice input">
@@ -1889,58 +1633,133 @@ export default function HandheldHubPage() {
                     <Scan className="h-5 w-5" />
                   </Button>
                 </div>
+                {unifiedInventory.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={auditSort}
+                      onChange={(e) => setAuditSort(e.target.value as 'scan' | 'name' | 'location')}
+                      className="h-9 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-2"
+                    >
+                      <option value="scan">Scan order</option>
+                      <option value="name">Name A–Z</option>
+                      <option value="location">Location</option>
+                    </select>
+                    <Button variant="outline" size="sm" onClick={exportCountReport} disabled={!unifiedInventory.some((x) => x.type === 'asset')} className="gap-1">
+                      <Download className="h-3.5 w-3.5" /> Count CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={exportAuditList} className="gap-1">
+                      <Download className="h-3.5 w-3.5" /> Audit CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setUnifiedInventory([])}>Clear all</Button>
+                  </div>
+                )}
                 <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-lg p-4 max-h-[420px] overflow-y-auto">
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Count list</p>
-                    {countScans.length > 0 && !countSwipeHintDismissed && (
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">List</p>
+                    {unifiedInventory.some((x) => x.type === 'asset') && !countSwipeHintDismissed && (
                       <span className="handheld-swipe-hint inline-flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400">
                         <ChevronRight className="h-3.5 w-3.5 rotate-180" aria-hidden />
-                        Swipe left for actions
+                        Swipe assets for actions
                       </span>
                     )}
                   </div>
-                  {countScans.length === 0 ? (
+                  {unifiedInventory.length === 0 ? (
                     <div className="py-8 text-center rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600">
                       <Package className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-500 mb-2" />
                       <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Scan or enter barcode to add</p>
                     </div>
                   ) : (
                     <ul className="space-y-2.5">
-                      {countScans.slice(-50).reverse().map((s, i) => {
-                        const rowId = `${s.id}-${i}`;
-                        const isDragging = countSwipeStartRef.current?.id === rowId;
-                        const isOpen = countItemSwipedId === rowId;
-                        const translateX = isDragging ? countSwipeOffset : isOpen ? -136 : 0;
-                        const ACTION_WIDTH = 136;
-                        const showSwipeHint = !countSwipeHintDismissed;
-                        const statusColor = (st: string) => {
-                          const v = (st || '').toUpperCase();
-                          if (v === 'ACTIVE') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/30';
-                          if (v === 'MAINTENANCE') return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/30';
-                          if (v === 'DISPOSED') return 'bg-slate-400/15 text-slate-600 dark:text-slate-400 border-slate-400/30';
-                          return 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-400/20';
-                        };
-                        return (
-                          <li
-                            key={rowId}
-                            className="relative rounded-2xl overflow-hidden touch-manipulation shadow-sm border border-slate-200/80 dark:border-slate-600/80"
-                            style={{ minHeight: 80 }}
-                          >
-                            {/* Action strip: behind the sliding content; subtle fade-in when revealed */}
-                            <div className={cn(
-                              'absolute right-0 top-0 bottom-0 w-[136px] flex items-center justify-end gap-1.5 pr-3 border-l border-slate-200/60 dark:border-slate-600/60 transition-opacity duration-200',
-                              (isOpen || (isDragging && countSwipeOffset < -20)) ? 'opacity-100 bg-gradient-to-l from-violet-50/90 to-slate-50 dark:from-violet-950/50 dark:to-slate-800' : 'opacity-100 bg-gradient-to-l from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800'
-                            )}>
-                              <Button type="button" size="sm" variant="outline" className="h-9 w-9 p-0 rounded-xl border-slate-300 dark:border-slate-600" onClick={() => { openCountItemDetails(s); setCountItemSwipedId(null); }}>
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button type="button" size="sm" variant="outline" className="h-9 w-9 p-0 rounded-xl border-slate-300 dark:border-slate-600" onClick={() => { openCountItemStatus(s); setCountItemSwipedId(null); }}>
-                                <RefreshCw className="h-4 w-4" />
-                              </Button>
-                              <Button type="button" size="sm" variant="outline" className="h-9 w-9 p-0 rounded-xl border-slate-300 dark:border-slate-600" onClick={() => { openCountItemMove(s); setCountItemSwipedId(null); }}>
-                                <MapPin className="h-4 w-4" />
-                              </Button>
-                            </div>
+                      {[...unifiedInventory]
+                        .sort((a, b) => {
+                          const name = (x: UnifiedInventoryItem) => x.type === 'food' ? x.supply?.name : x.type === 'ticket' ? (x.ticket?.title || x.ticket?.displayId || '') : (x.data?.name || '');
+                          const loc = (x: UnifiedInventoryItem) => x.type === 'food' ? ((x.supply?.kitchensWithSupply?.length ? x.supply.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ') : x.supply?.kitchenName) || '') : x.type === 'ticket' ? (x.ticket?.status || '') : [x.data?.floorNumber, x.data?.roomNumber].filter(Boolean).join(' ');
+                          if (auditSort === 'name') return name(a).localeCompare(name(b));
+                          if (auditSort === 'location') return loc(a).localeCompare(loc(b));
+                          return 0;
+                        })
+                        .map((item, i) => {
+                          if (item.type === 'food') {
+                            const supply = item.supply;
+                            const kitchensList = (supply.kitchensWithSupply && supply.kitchensWithSupply.length) ? supply.kitchensWithSupply.map((k: { name: string }) => k.name).join(', ') : supply.kitchenName || '—';
+                            const expDate = supply.expirationDate ? new Date(supply.expirationDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+                            return (
+                              <li key={`food-${supply.id}-${i}`}>
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => openAuditFoodDetails(supply)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditFoodDetails(supply); } }}
+                                  className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-amber-400 dark:hover:border-amber-600 p-4 flex gap-4"
+                                >
+                                  <div className="h-14 w-14 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex-shrink-0 flex items-center justify-center">
+                                    <UtensilsCrossed className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-semibold text-slate-900 dark:text-white truncate">{supply.name}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Food · {supply.quantity} {supply.unit} · Expires {expDate}</p>
+                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">Kitchens: {kitchensList}</p>
+                                  </div>
+                                </div>
+                              </li>
+                            );
+                          }
+                          if (item.type === 'ticket') {
+                            const ticket = item.ticket;
+                            const status = (ticket.status || 'open').toLowerCase().replace('_', ' ');
+                            return (
+                              <li key={`ticket-${ticket.id}-${i}`}>
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => openAuditTicketDetails(ticket)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditTicketDetails(ticket); } }}
+                                  className="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-900/10 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-sky-400 dark:hover:border-sky-600 p-4 flex gap-4"
+                                >
+                                  <div className="h-14 w-14 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex-shrink-0 flex items-center justify-center">
+                                    <Ticket className="h-7 w-7 text-sky-600 dark:text-sky-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-semibold text-slate-900 dark:text-white truncate">{ticket.title || 'Ticket'}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{ticket.displayId || ticket.id} · {status}</p>
+                                  </div>
+                                </div>
+                              </li>
+                            );
+                          }
+                          const s = item.data;
+                          const rowId = `${s.id}-${i}`;
+                          const isDragging = countSwipeStartRef.current?.id === rowId;
+                          const isOpen = countItemSwipedId === rowId;
+                          const ACTION_WIDTH = 170;
+                          const translateX = isDragging ? countSwipeOffset : isOpen ? -ACTION_WIDTH : 0;
+                          const showSwipeHint = !countSwipeHintDismissed;
+                          const statusColor = (st: string) => {
+                            const v = (st || '').toUpperCase();
+                            if (v === 'ACTIVE') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/30';
+                            if (v === 'MAINTENANCE') return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/30';
+                            if (v === 'DISPOSED') return 'bg-slate-400/15 text-slate-600 dark:text-slate-400 border-slate-400/30';
+                            return 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-400/20';
+                          };
+                          return (
+                            <li key={rowId} className="relative rounded-2xl overflow-hidden touch-manipulation shadow-sm border border-slate-200/80 dark:border-slate-600/80" style={{ minHeight: 80 }}>
+                              <div className={cn(
+                                'absolute right-0 top-0 bottom-0 w-[170px] flex items-center justify-end gap-1 pr-2 border-l border-slate-200/60 dark:border-slate-600/60',
+                                (isOpen || (isDragging && countSwipeOffset < -20)) ? 'opacity-100 bg-gradient-to-l from-violet-50/90 to-slate-50 dark:from-violet-950/50 dark:to-slate-800' : 'opacity-100 bg-gradient-to-l from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800'
+                              )}>
+                                <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-slate-300 dark:border-slate-600" onClick={() => { openCountItemDetails(s); setCountItemSwipedId(null); }}>
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-slate-300 dark:border-slate-600" onClick={() => { openCountItemStatus(s); setCountItemSwipedId(null); }}>
+                                  <RefreshCw className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-slate-300 dark:border-slate-600" onClick={() => { openCountItemMove(s); setCountItemSwipedId(null); }}>
+                                  <MapPin className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-slate-300 dark:border-slate-600" onClick={() => { setAuditCommentAsset({ id: s.id, name: s.name }); setAuditCommentText(''); setAuditCommentImagePreview(null); if (auditCommentImageInputRef.current) auditCommentImageInputRef.current.value = ''; setCountItemSwipedId(null); }}>
+                                  <MessageSquare className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             {/* Sliding content: full width, sits on top; user swipes left to reveal actions */}
                             <div
                               className={cn(
@@ -2019,18 +1838,15 @@ export default function HandheldHubPage() {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1 rounded-xl" onClick={exportCountReport} disabled={countScans.length === 0}>
-                    <Download className="h-4 w-4 mr-1" /> Export
-                  </Button>
                   <Button variant="outline" className="flex-1 rounded-xl" onClick={endCountSession}>
-                    End count session
+                    End session
                   </Button>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-4">
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Compare with system</p>
                   <p className="text-xs text-slate-500">Compare your count to current system data. Managers can review discrepancies.</p>
-                  <Button variant="outline" className="w-full rounded-xl gap-2" onClick={runReconciliation} disabled={reconciliationLoading || countScans.length === 0}>
+                  <Button variant="outline" className="w-full rounded-xl gap-2" onClick={runReconciliation} disabled={reconciliationLoading || countScansForReconciliation.length === 0}>
                     {reconciliationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
                     {reconciliationLoading ? 'Comparing…' : 'Compare actual vs expected'}
                   </Button>
@@ -2102,8 +1918,6 @@ export default function HandheldHubPage() {
                   )}
                 </div>
               </div>
-            )}
-          </div>
             )}
           </div>
         )}
@@ -2246,8 +2060,8 @@ export default function HandheldHubPage() {
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-white/80 dark:bg-slate-800/80 p-3 text-center">
-                  <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{countSessionActive ? countScans.length : sessionScansCount}</p>
-                  <p className="text-xs text-slate-500">Scans (count)</p>
+                  <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{countSessionActive ? unifiedInventory.length : sessionScansCount}</p>
+                  <p className="text-xs text-slate-500">Inventory / scans</p>
                 </div>
                 <div className="rounded-xl bg-white/80 dark:bg-slate-800/80 p-3 text-center">
                   <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{sessionTasksCount}</p>
@@ -2384,9 +2198,9 @@ export default function HandheldHubPage() {
             <section className="space-y-3">
               <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Reports &amp; tags</p>
               <div className="grid gap-2">
-                <Button variant="outline" className="w-full justify-start gap-2 rounded-xl h-12" onClick={exportCountReport} disabled={countScans.length === 0}>
+                <Button variant="outline" className="w-full justify-start gap-2 rounded-xl h-12" onClick={exportCountReport} disabled={!unifiedInventory.some((x) => x.type === 'asset')}>
                   <Download className="h-4 w-4" />
-                  Export count report {countScans.length > 0 && `(${countScans.length})`}
+                  Export count report {unifiedInventory.some((x) => x.type === 'asset') && `(${unifiedInventory.filter((x) => x.type === 'asset').length})`}
                 </Button>
                 <Button variant="outline" className="w-full justify-start gap-2 rounded-xl h-12" onClick={() => { setPrintTagAsset(currentAsset); setShowPrintTagDialog(true); }}>
                   <Printer className="h-4 w-4" />
@@ -2499,7 +2313,7 @@ export default function HandheldHubPage() {
         onChange={setTab}
         counts={{
           work: assignedTickets.length + assignedTasks.length,
-          count: countSessionActive ? countScans.length : 0,
+          count: unifiedInventory.length,
           scan: sessionScansCount,
         }}
       />
@@ -2508,10 +2322,7 @@ export default function HandheldHubPage() {
         onScan={() => setTab('scan')}
         onAddAsset={() => setShowAddAssetDialog(true)}
         onGoodsReceiving={() => setShowAddAssetDialog(true)}
-        onAudit={() => {
-          setTab('inventory');
-          setInventoryMode('audit');
-        }}
+        onAudit={() => setTab('inventory')}
         onLocate={() => setTab('locate')}
         onWork={() => {
           setTab('work');
@@ -2637,7 +2448,7 @@ export default function HandheldHubPage() {
         onOpenChange={setShowCountScanner}
         onScan={(payload) => {
           const b = 'barcode' in payload ? payload.barcode : (payload as Asset).barcode ?? (payload as Asset).assetId ?? '';
-          if (b) addToCount(b);
+          if (b) addToUnifiedInventory(b);
         }}
       />
 
