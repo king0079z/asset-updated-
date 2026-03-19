@@ -62,6 +62,11 @@ export default async function handler(
       locationSource,
       purchaseAmount,
       purchaseDate,
+      batchNumber,
+      serialNumber,
+      donorName,
+      nextServiceDate,
+      isProvisional,
     } = req.body;
 
     // Validate required fields (vendorId is optional)
@@ -150,6 +155,11 @@ export default async function handler(
           organizationId: organizationId || null,
           purchaseAmount: purchaseAmount ? parseFloat(purchaseAmount) : null,
           purchaseDate: parsedPurchaseDate,
+          batchNumber: batchNumber && String(batchNumber).trim() ? String(batchNumber).trim() : null,
+          serialNumber: serialNumber && String(serialNumber).trim() ? String(serialNumber).trim() : null,
+          donorName: donorName && String(donorName).trim() ? String(donorName).trim() : null,
+          nextServiceDate: nextServiceDate ? (() => { try { const d = new Date(nextServiceDate); return isNaN(d.getTime()) ? null : d; } catch { return null; } })() : null,
+          isProvisional: isProvisional === true || isProvisional === 'true',
           location: latitude && longitude ? {
             create: {
               latitude: parseFloat(latitude),

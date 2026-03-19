@@ -279,9 +279,9 @@ export function AiAlerts({ className }: AiAlertsProps) {
               </span>
             )}
           </div>
-        )}
-      </div>
-
+            )}
+          </div>
+          
       {/* ── Summary stats ──────────────────────────────────────────────────── */}
       {!loading && s && (
         <div className="grid grid-cols-4 gap-1 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-3 py-2.5">
@@ -311,7 +311,7 @@ export function AiAlerts({ className }: AiAlertsProps) {
               )}
             </button>
           ))}
-        </div>
+      </div>
       )}
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
@@ -358,10 +358,10 @@ export function AiAlerts({ className }: AiAlertsProps) {
 
                     <div className="min-w-0 flex-1">
                       {/* Title row */}
-                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                         <SeverityBadge severity={alert.severity} />
                         <span className="text-[11px] font-semibold text-slate-500">{alert.category}</span>
-                      </div>
+                        </div>
                       <h4 className="mt-1 text-sm font-bold text-slate-900 leading-snug">{alert.title}</h4>
                       <p className="mt-0.5 text-xs leading-relaxed text-slate-600 line-clamp-2">{alert.message}</p>
 
@@ -389,9 +389,9 @@ export function AiAlerts({ className }: AiAlertsProps) {
                 </div>
               );
             })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between border-t border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-2.5">

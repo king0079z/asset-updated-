@@ -50,6 +50,8 @@ import {
   AlertCircle,
   ListChecks,
   Type,
+  Mic,
+  Truck,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
@@ -85,6 +87,8 @@ const createTicketSchema = z.object({
   title: z.string().min(1, 'Title required'),
   description: z.string(),
   priority: z.enum(['low', 'medium', 'high']),
+  missionName: z.string().optional(),
+  resolveBy: z.string().optional(),
 });
 
 const addAssetSchema = z.object({
@@ -96,6 +100,11 @@ const addAssetSchema = z.object({
   roomNumber: z.string().optional(),
   purchaseAmount: z.string().optional(),
   purchaseDate: z.string().optional(),
+  batchNumber: z.string().optional(),
+  serialNumber: z.string().optional(),
+  donorName: z.string().optional(),
+  nextServiceDate: z.string().optional(),
+  isProvisional: z.boolean().optional(),
 });
 const ASSET_TYPES_MAIN = [
   { value: 'FURNITURE', label: 'Furniture' },
@@ -246,6 +255,9 @@ export default function HandheldHubPage() {
   const [countSwipeOffset, setCountSwipeOffset] = useState(0);
   const countSwipeStartRef = useRef<{ x: number; id: string } | null>(null);
   const countSwipeOffsetRef = useRef(0);
+  const countBarcodeInputRef = useRef<HTMLInputElement>(null);
+  const [countVoiceListening, setCountVoiceListening] = useState(false);
+  const countSpeechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const [countItemDetailsAsset, setCountItemDetailsAsset] = useState<Asset | null>(null);
   const [countItemStatusAsset, setCountItemStatusAsset] = useState<Asset | null>(null);
   const [countItemMoveAsset, setCountItemMoveAsset] = useState<Asset | null>(null);
@@ -273,6 +285,11 @@ export default function HandheldHubPage() {
       roomNumber: '',
       purchaseAmount: '',
       purchaseDate: '',
+      batchNumber: '',
+      serialNumber: '',
+      donorName: '',
+      nextServiceDate: '',
+      isProvisional: false,
     },
   });
 
@@ -331,6 +348,28 @@ export default function HandheldHubPage() {
       return next;
     });
   }, []);
+
+  // Rapid deployment / crisis mode: fewer tabs, faster workflow
+  const [rapidMode, setRapidMode] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('handheld_rapid_mode');
+      setRapidMode(stored === '1');
+    } catch {}
+  }, []);
+  const toggleRapidMode = useCallback(() => {
+    setRapidMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('handheld_rapid_mode', next ? '1' : '0');
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (rapidMode && !['scan', 'inventory', 'more'].includes(tab)) setTab('scan');
+  }, [rapidMode, tab]);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
@@ -406,6 +445,11 @@ export default function HandheldHubPage() {
         roomNumber: '',
         purchaseAmount: '',
         purchaseDate: '',
+        batchNumber: '',
+        serialNumber: '',
+        donorName: '',
+        nextServiceDate: '',
+        isProvisional: false,
       });
     }
   }, [showAddAssetDialog]);
@@ -825,6 +869,11 @@ export default function HandheldHubPage() {
         purchaseAmount: vals.purchaseAmount || undefined,
         purchaseDate: vals.purchaseDate || undefined,
         imageUrl: imageUrl ?? undefined,
+        batchNumber: vals.batchNumber || undefined,
+        serialNumber: vals.serialNumber || undefined,
+        donorName: vals.donorName || undefined,
+        nextServiceDate: vals.nextServiceDate || undefined,
+        isProvisional: vals.isProvisional ?? undefined,
       };
       if (geoLat != null && geoLng != null) {
         body.latitude = geoLat;
@@ -853,6 +902,11 @@ export default function HandheldHubPage() {
         roomNumber: '',
         purchaseAmount: '',
         purchaseDate: '',
+        batchNumber: '',
+        serialNumber: '',
+        donorName: '',
+        nextServiceDate: '',
+        isProvisional: false,
       });
       if (addAssetImageInputRef.current) addAssetImageInputRef.current.value = '';
       pushRecentAction('create', `Created asset: ${created.name}`);
@@ -882,6 +936,8 @@ export default function HandheldHubPage() {
     setCreateTicketLoading(true);
     try {
       const body: any = { title: vals.title, description: vals.description || '', priority: vals.priority };
+      if (vals.missionName?.trim()) body.missionName = vals.missionName.trim();
+      if (vals.resolveBy) body.resolveBy = vals.resolveBy;
       if (currentAsset?.id) body.assetId = currentAsset.id;
       const r = await fetch('/api/tickets', {
         method: 'POST',
@@ -1157,6 +1213,44 @@ export default function HandheldHubPage() {
     URL.revokeObjectURL(url);
     toast({ title: 'Count report exported' });
   }, [countScans, toast]);
+
+  const toggleCountVoice = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      toast({ title: 'Voice input not supported', variant: 'destructive' });
+      return;
+    }
+    if (countVoiceListening) {
+      try {
+        countSpeechRecognitionRef.current?.stop();
+      } catch {}
+      countSpeechRecognitionRef.current = null;
+      setCountVoiceListening(false);
+      return;
+    }
+    try {
+      const rec = new SpeechRecognitionAPI();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = 'en-US';
+      rec.onresult = (e: SpeechRecognitionEvent) => {
+        const t = e.results?.[0]?.[0]?.transcript?.trim();
+        if (t && countBarcodeInputRef.current) {
+          countBarcodeInputRef.current.value = t;
+          countBarcodeInputRef.current.focus();
+        }
+      };
+      rec.onend = () => { setCountVoiceListening(false); countSpeechRecognitionRef.current = null; };
+      rec.onerror = () => { setCountVoiceListening(false); countSpeechRecognitionRef.current = null; };
+      countSpeechRecognitionRef.current = rec;
+      rec.start();
+      setCountVoiceListening(true);
+    } catch (err) {
+      toast({ title: 'Voice start failed', variant: 'destructive' });
+      setCountVoiceListening(false);
+    }
+  }, [countVoiceListening, toast]);
 
   const addToCount = useCallback(async (code: string) => {
     const q = code.trim();
@@ -1763,6 +1857,7 @@ export default function HandheldHubPage() {
                 <div className="flex gap-2">
                   <div className="flex-1 flex gap-2">
                     <Input
+                      ref={countBarcodeInputRef}
                       placeholder="Barcode or Asset ID"
                       className="rounded-xl flex-1"
                       onKeyDown={(e) => {
@@ -1772,10 +1867,13 @@ export default function HandheldHubPage() {
                         }
                       }}
                     />
-                    <Button size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => { const el = document.querySelector('input[placeholder="Barcode or Asset ID"]') as HTMLInputElement; if (el?.value?.trim()) { addToCount(el.value.trim()); el.value = ''; } }}>
+                    <Button size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => { const el = countBarcodeInputRef.current; if (el?.value?.trim()) { addToCount(el.value.trim()); el.value = ''; } }}>
                       <Plus className="h-5 w-5" />
                     </Button>
                   </div>
+                  <Button variant="outline" size="icon" className={cn('h-11 w-11 rounded-xl shrink-0', countVoiceListening && 'bg-red-100 dark:bg-red-900/30')} onClick={toggleCountVoice} aria-label="Voice input">
+                    <Mic className="h-5 w-5" />
+                  </Button>
                   <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => setShowCountScanner(true)} aria-label="Open scanner">
                     <Scan className="h-5 w-5" />
                   </Button>
@@ -2102,9 +2200,44 @@ export default function HandheldHubPage() {
             </section>
 
             <Button variant="outline" className="w-full h-12 rounded-xl gap-2" onClick={() => setShowAddAssetDialog(true)}>
+              <Truck className="h-4 w-4" />
+              Goods receiving
+            </Button>
+            <Button variant="outline" className="w-full h-12 rounded-xl gap-2" onClick={() => setShowAddAssetDialog(true)}>
               <Plus className="h-4 w-4" />
               Add new asset
             </Button>
+
+            <Button
+              variant="outline"
+              className="w-full h-12 rounded-xl gap-2"
+              onClick={() => window.open('/reports/audit-print', '_blank', 'noopener,noreferrer')}
+            >
+              <Download className="h-4 w-4" />
+              Export / Donor report
+            </Button>
+
+            <section className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+                <div>
+                  <p className="font-medium text-slate-900 dark:text-white">Rapid mode</p>
+                  <p className="text-xs text-slate-500">Fewer tabs, crisis-style fast scan</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={rapidMode}
+                onClick={toggleRapidMode}
+                className={cn(
+                  'relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2',
+                  rapidMode ? 'bg-amber-500' : 'bg-slate-200 dark:bg-slate-700'
+                )}
+              >
+                <span className={cn('pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition', rapidMode ? 'translate-x-5' : 'translate-x-1')} />
+              </button>
+            </section>
 
             {recentActions.length > 0 && (
               <section className="space-y-2">
@@ -2301,9 +2434,9 @@ export default function HandheldHubPage() {
         )}
       </div>
 
-      {/* Bottom tab bar — world-class: pill active state, safe area, equal touch targets */}
+      {/* Bottom tab bar — world-class: pill active state, safe area, equal touch targets; rapid mode shows only Scan, Inventory, More */}
       <nav className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around gap-0 min-h-[64px] pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] px-1 bg-white/98 dark:bg-slate-900/98 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-700/80 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.3)]">
-        {TABS.map((t) => {
+        {(rapidMode ? TABS.filter((t) => ['scan', 'inventory', 'more'].includes(t.id)) : TABS).map((t) => {
           const isActive = tab === t.id;
           return (
             <button
@@ -2750,6 +2883,29 @@ export default function HandheldHubPage() {
                   <FormItem><FormLabel>Purchase date</FormLabel><FormControl><Input type="date" className="rounded-xl" {...field} /></FormControl><FormDescription className="text-xs">When the asset was purchased</FormDescription><FormMessage /></FormItem>
                 )} />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={addAssetForm.control} name="batchNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Batch / Lot <span className="text-muted-foreground text-xs">(optional)</span></FormLabel><FormControl><Input className="rounded-xl" placeholder="Batch number" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={addAssetForm.control} name="serialNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Serial number <span className="text-muted-foreground text-xs">(optional)</span></FormLabel><FormControl><Input className="rounded-xl" placeholder="Serial" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+              <FormField control={addAssetForm.control} name="donorName" render={({ field }) => (
+                <FormItem><FormLabel>Donor <span className="text-muted-foreground text-xs">(optional)</span></FormLabel><FormControl><Input className="rounded-xl" placeholder="Donated by" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <div className="flex items-center gap-4">
+                <FormField control={addAssetForm.control} name="nextServiceDate" render={({ field }) => (
+                  <FormItem><FormLabel>Next service date <span className="text-muted-foreground text-xs">(optional)</span></FormLabel><FormControl><Input type="date" className="rounded-xl" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={addAssetForm.control} name="isProvisional" render={({ field }) => (
+                  <FormItem className="flex flex-row items-center gap-2 space-y-0 pt-8">
+                    <FormControl><input type="checkbox" className="rounded border-input" checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} /></FormControl>
+                    <FormLabel className="font-normal">Provisional / temporary asset</FormLabel>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
               <FormItem>
                 <FormLabel>Location</FormLabel>
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -2846,6 +3002,8 @@ export default function HandheldHubPage() {
                 </div>
                 <p className="text-xs text-slate-400">
                   Created {selectedTicketDetail.createdAt ? new Date(selectedTicketDetail.createdAt).toLocaleString() : '—'}
+                  {selectedTicketDetail.missionName && <span className="ml-2">· Mission: {selectedTicketDetail.missionName}</span>}
+                  {selectedTicketDetail.resolveBy && <span className="ml-2">· Resolve by: {new Date(selectedTicketDetail.resolveBy).toLocaleDateString()}</span>}
                 </p>
                 <div className="flex flex-wrap gap-3 text-xs">
                   <div className="flex items-center gap-1.5">
@@ -2949,6 +3107,12 @@ export default function HandheldHubPage() {
                     </select>
                   </FormControl>
                 </FormItem>
+              )} />
+              <FormField control={createTicketForm.control} name="missionName" render={({ field }) => (
+                <FormItem><FormLabel>Mission / Campaign <span className="text-muted-foreground text-xs">(optional)</span></FormLabel><FormControl><Input placeholder="e.g. Field deployment, Campaign X" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={createTicketForm.control} name="resolveBy" render={({ field }) => (
+                <FormItem><FormLabel>Resolve by (SLA) <span className="text-muted-foreground text-xs">(optional)</span></FormLabel><FormControl><Input type="date" className="rounded-xl" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setShowCreateTicket(false)}>Cancel</Button>

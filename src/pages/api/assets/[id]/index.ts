@@ -120,6 +120,11 @@ async function assetHandler(req: NextApiRequest, res: NextApiResponse) {
         purchaseAmount,
         purchaseDate,
         imageUrl,
+        batchNumber,
+        serialNumber,
+        donorName,
+        nextServiceDate,
+        isProvisional,
       } = req.body;
 
       // Get the current asset data to compare changes
@@ -154,6 +159,11 @@ async function assetHandler(req: NextApiRequest, res: NextApiResponse) {
             : null,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
           ...(imageUrl !== undefined ? { imageUrl: imageUrl || null } : {}),
+          ...(batchNumber !== undefined ? { batchNumber: batchNumber && String(batchNumber).trim() ? String(batchNumber).trim() : null } : {}),
+          ...(serialNumber !== undefined ? { serialNumber: serialNumber && String(serialNumber).trim() ? String(serialNumber).trim() : null } : {}),
+          ...(donorName !== undefined ? { donorName: donorName && String(donorName).trim() ? String(donorName).trim() : null } : {}),
+          ...(nextServiceDate !== undefined ? { nextServiceDate: nextServiceDate ? (() => { try { const d = new Date(nextServiceDate); return isNaN(d.getTime()) ? null : d; } catch { return null; } })() : null } : {}),
+          ...(isProvisional !== undefined ? { isProvisional: isProvisional === true || isProvisional === 'true' } : {}),
         },
       });
 

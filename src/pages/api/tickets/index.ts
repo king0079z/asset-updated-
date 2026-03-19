@@ -117,6 +117,7 @@ async function ticketsHandler(
                 id: true, title: true, description: true, status: true,
                 priority: true, userId: true, assetId: true, source: true,
                 displayId: true, assignedToId: true, requesterName: true,
+                missionName: true, resolveBy: true,
                 ticketType: true, category: true, subcategory: true,
                 location: true, contactDetails: true,
                 createdAt: true, updatedAt: true,
@@ -140,6 +141,7 @@ async function ticketsHandler(
               id: true, title: true, description: true, status: true,
               priority: true, userId: true, assetId: true, source: true,
               displayId: true, assignedToId: true, requesterName: true,
+              missionName: true, resolveBy: true,
               ticketType: true, category: true, subcategory: true,
               location: true, contactDetails: true,
               createdAt: true, updatedAt: true,
@@ -160,7 +162,8 @@ async function ticketsHandler(
         const formattedTickets = tickets.map(ticket => ({
           ...ticket,
           createdAt: ticket.createdAt ? ticket.createdAt.toISOString() : new Date().toISOString(),
-          updatedAt: ticket.updatedAt ? ticket.updatedAt.toISOString() : new Date().toISOString()
+          updatedAt: ticket.updatedAt ? ticket.updatedAt.toISOString() : new Date().toISOString(),
+          resolveBy: ticket.resolveBy ? ticket.resolveBy.toISOString() : null
         }));
         
         endTimer(processingTimer, 'Ticket data processing');
@@ -194,7 +197,7 @@ async function ticketsHandler(
         }
         
         // Extract ticket data from request body
-        const { title, description, priority, assetId, assignedToId, requesterName, source, ticketType, category, subcategory, location, contactDetails } = req.body;
+        const { title, description, priority, assetId, assignedToId, requesterName, source, ticketType, category, subcategory, location, contactDetails, missionName, resolveBy } = req.body;
         
         logApiEvent(`Ticket creation request received`, { 
           title, 
@@ -321,6 +324,8 @@ async function ticketsHandler(
             ...(subcategory ? { subcategory } : {}),
             ...(location ? { location: location.trim() } : {}),
             ...(contactDetails ? { contactDetails: contactDetails.trim() } : {}),
+            ...(missionName && String(missionName).trim() ? { missionName: String(missionName).trim() } : {}),
+            ...(resolveBy ? { resolveBy: (() => { try { const d = new Date(resolveBy); return isNaN(d.getTime()) ? undefined : d; } catch { return undefined; } })() } : {}),
           };
           
           // Only add assetId if it's valid

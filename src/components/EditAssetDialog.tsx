@@ -24,6 +24,11 @@ interface Asset {
   purchaseAmount?: number;
   purchaseDate?: string;
   barcode?: string;
+  batchNumber?: string;
+  serialNumber?: string;
+  donorName?: string;
+  nextServiceDate?: string;
+  isProvisional?: boolean;
   vendor?: {
     name: string;
   };
@@ -111,6 +116,11 @@ export function EditAssetDialog({ asset, open, onOpenChange, onAssetUpdated }: E
           roomNumber: formData.roomNumber,
           purchaseAmount: formData.purchaseAmount ? Number(formData.purchaseAmount) : null,
           purchaseDate: formData.purchaseDate || null,
+          batchNumber: formData.batchNumber || null,
+          serialNumber: formData.serialNumber || null,
+          donorName: formData.donorName || null,
+          nextServiceDate: formData.nextServiceDate || null,
+          isProvisional: formData.isProvisional ?? null,
           ...(imageUrl !== undefined ? { imageUrl } : {}),
         }),
       });
@@ -299,6 +309,53 @@ export function EditAssetDialog({ asset, open, onOpenChange, onAssetUpdated }: E
                 value={formData.roomNumber || ''}
                 onChange={(e) => setFormData({ ...formData, roomNumber: e.target.value })}
               />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="batchNumber" className="text-sm font-medium">Batch / Lot</label>
+              <Input
+                id="batchNumber"
+                value={formData.batchNumber || ''}
+                onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="serialNumber" className="text-sm font-medium">Serial number</label>
+              <Input
+                id="serialNumber"
+                value={formData.serialNumber || ''}
+                onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="donorName" className="text-sm font-medium">Donor</label>
+              <Input
+                id="donorName"
+                value={formData.donorName || ''}
+                onChange={(e) => setFormData({ ...formData, donorName: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="nextServiceDate" className="text-sm font-medium">Next service date</label>
+              <Input
+                id="nextServiceDate"
+                type="date"
+                value={formData.nextServiceDate ? (typeof formData.nextServiceDate === 'string' && formData.nextServiceDate.includes('T') ? formData.nextServiceDate.split('T')[0] : formData.nextServiceDate) : ''}
+                onChange={(e) => setFormData({ ...formData, nextServiceDate: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isProvisional"
+                checked={!!formData.isProvisional}
+                onChange={(e) => setFormData({ ...formData, isProvisional: e.target.checked })}
+                className="rounded border-input"
+              />
+              <label htmlFor="isProvisional" className="text-sm font-medium">Provisional / temporary asset</label>
             </div>
           </div>
 

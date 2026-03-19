@@ -46,6 +46,8 @@ export function CreateTicketDialog({ open, onOpenChange, onTicketCreated, assetI
   const [assetId, setAssetId] = useState<string>("none");
   const [assignedToId, setAssignedToId] = useState<string>("none");
   const [requesterName, setRequesterName] = useState("");
+  const [missionName, setMissionName] = useState("");
+  const [resolveBy, setResolveBy] = useState("");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,6 +64,8 @@ export function CreateTicketDialog({ open, onOpenChange, onTicketCreated, assetI
       setAssetId(initialAssetId || "none");
       setAssignedToId("none");
       setRequesterName("");
+      setMissionName("");
+      setResolveBy("");
       setError(null);
       
       // Fetch assets and staff members for the dropdowns
@@ -246,7 +250,9 @@ export function CreateTicketDialog({ open, onOpenChange, onTicketCreated, assetI
           priority,
           ...(assetId && assetId !== "" && assetId !== "none" && assetId !== "no_assets" ? { assetId } : {}),
           ...(assignedToId && assignedToId !== "" && assignedToId !== "none" && assignedToId !== "no_staff" ? { assignedToId } : {}),
-          ...(requesterName.trim() !== "" ? { requesterName: requesterName.trim() } : {})
+          ...(requesterName.trim() !== "" ? { requesterName: requesterName.trim() } : {}),
+          ...(missionName.trim() !== "" ? { missionName: missionName.trim() } : {}),
+          ...(resolveBy.trim() !== "" ? { resolveBy: resolveBy.trim() } : {})
         };
         
         console.log("Ticket data to submit:", ticketData);
@@ -325,6 +331,8 @@ export function CreateTicketDialog({ open, onOpenChange, onTicketCreated, assetI
         setDescription("");
         setPriority(TicketPriority.MEDIUM);
         setAssetId("none");
+        setMissionName("");
+        setResolveBy("");
         
         // Close dialog and refresh tickets
         onOpenChange(false);
@@ -502,6 +510,27 @@ export function CreateTicketDialog({ open, onOpenChange, onTicketCreated, assetI
               onChange={(e) => setRequesterName(e.target.value)}
               placeholder={t("enter_requester_name")}
               required
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="missionName" className="font-medium">Mission / Campaign</Label>
+            <Input
+              id="missionName"
+              value={missionName}
+              onChange={(e) => setMissionName(e.target.value)}
+              placeholder="e.g. Field deployment, Campaign X"
+              disabled={isSubmitting}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="resolveBy" className="font-medium">Resolve by (SLA)</Label>
+            <Input
+              id="resolveBy"
+              type="date"
+              value={resolveBy}
+              onChange={(e) => setResolveBy(e.target.value)}
               disabled={isSubmitting}
             />
           </div>

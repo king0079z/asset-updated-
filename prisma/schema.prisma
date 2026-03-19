@@ -203,6 +203,11 @@ model Asset {
   status         AssetStatus     @default(ACTIVE)
   purchaseAmount Float?
   purchaseDate   DateTime?
+  batchNumber    String?         // Batch/lot tracking
+  serialNumber   String?         // Serial number tracking
+  donorName      String?         // Donated asset tracking
+  nextServiceDate DateTime?     // Preventive maintenance due
+  isProvisional  Boolean?       @default(false) // Temporary/emergency tagging
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   userId         String          @db.Uuid
@@ -647,6 +652,8 @@ model Ticket {
   assignedToId   String?         @db.Uuid
   requesterName  String?
   organizationId String?
+  missionName    String?         // Mission/campaign (e.g. field deployment)
+  resolveBy      DateTime?       // SLA: target resolution date
   source         String?         @default("INTERNAL") // "PORTAL" | "INTERNAL"
   ticketType     String?         @default("ISSUE")    // "ISSUE" | "REQUEST" | "INQUIRY" | "MANAGEMENT"
   category       String?                              // e.g. "DEVICES" | "ACCESS" | "SERVICE_DESK"
@@ -998,6 +1005,13 @@ enum AssetType {
   FURNITURE
   EQUIPMENT
   ELECTRONICS
+  MEDICAL_EQUIPMENT
+  CONSUMABLE_MEDICAL
+  SPARE_PART
+  IT
+  VEHICLE
+  TOOL
+  OTHER
 }
 
 enum AssetStatus {

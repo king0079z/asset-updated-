@@ -83,7 +83,8 @@ export default async function handler(
         const formattedTicket = {
           ...ticket,
           createdAt: ticket.createdAt ? ticket.createdAt.toISOString() : new Date().toISOString(),
-          updatedAt: ticket.updatedAt ? ticket.updatedAt.toISOString() : new Date().toISOString()
+          updatedAt: ticket.updatedAt ? ticket.updatedAt.toISOString() : new Date().toISOString(),
+          resolveBy: ticket.resolveBy ? ticket.resolveBy.toISOString() : null
         };
         
         // Log the ticket data to verify barcode is included

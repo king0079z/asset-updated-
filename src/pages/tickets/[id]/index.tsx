@@ -410,6 +410,12 @@ function TicketDetailsContent() {
             </div>
             <p className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
               <Calendar className="h-3.5 w-3.5" /> Created {safeFormatDate(ticket.createdAt)}
+              {ticket.missionName && (
+                <span className="ml-2">· Mission: {ticket.missionName}</span>
+              )}
+              {ticket.resolveBy && (
+                <span className="ml-2">· Resolve by: {safeFormatDate(ticket.resolveBy)}</span>
+              )}
             </p>
           </div>
         </div>
