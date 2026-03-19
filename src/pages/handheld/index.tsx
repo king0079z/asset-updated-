@@ -259,7 +259,7 @@ export default function HandheldHubPage() {
   const [countSwipeOffset, setCountSwipeOffset] = useState(0);
   const countSwipeStartRef = useRef<{ x: number; id: string } | null>(null);
   const countSwipeOffsetRef = useRef(0);
-  const countSwipeHintShownRef = useRef(false);
+  const [countSwipeHintDismissed, setCountSwipeHintDismissed] = useState(false);
   const countBarcodeInputRef = useRef<HTMLInputElement>(null);
   const [countVoiceListening, setCountVoiceListening] = useState(false);
   const countSpeechRecognitionRef = useRef<SpeechRecognition | null>(null);
@@ -1892,7 +1892,7 @@ export default function HandheldHubPage() {
                 <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-lg p-4 max-h-[420px] overflow-y-auto">
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Count list</p>
-                    {countScans.length > 0 && !countSwipeHintShownRef.current && (
+                    {countScans.length > 0 && !countSwipeHintDismissed && (
                       <span className="handheld-swipe-hint inline-flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400">
                         <ChevronRight className="h-3.5 w-3.5 rotate-180" aria-hidden />
                         Swipe left for actions
@@ -1912,8 +1912,7 @@ export default function HandheldHubPage() {
                         const isOpen = countItemSwipedId === rowId;
                         const translateX = isDragging ? countSwipeOffset : isOpen ? -136 : 0;
                         const ACTION_WIDTH = 136;
-                        const isFirst = i === countScans.length - 1;
-                        const showSwipeHint = isFirst && !countSwipeHintShownRef.current;
+                        const showSwipeHint = !countSwipeHintDismissed;
                         const statusColor = (st: string) => {
                           const v = (st || '').toUpperCase();
                           if (v === 'ACTIVE') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/30';
@@ -1927,8 +1926,11 @@ export default function HandheldHubPage() {
                             className="relative rounded-2xl overflow-hidden touch-manipulation shadow-sm border border-slate-200/80 dark:border-slate-600/80"
                             style={{ minHeight: 80 }}
                           >
-                            {/* Action strip: behind the sliding content, only visible when user swipes */}
-                            <div className="absolute right-0 top-0 bottom-0 w-[136px] flex items-center justify-end gap-1.5 pr-3 bg-gradient-to-l from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800 border-l border-slate-200/60 dark:border-slate-600/60">
+                            {/* Action strip: behind the sliding content; subtle fade-in when revealed */}
+                            <div className={cn(
+                              'absolute right-0 top-0 bottom-0 w-[136px] flex items-center justify-end gap-1.5 pr-3 border-l border-slate-200/60 dark:border-slate-600/60 transition-opacity duration-200',
+                              (isOpen || (isDragging && countSwipeOffset < -20)) ? 'opacity-100 bg-gradient-to-l from-violet-50/90 to-slate-50 dark:from-violet-950/50 dark:to-slate-800' : 'opacity-100 bg-gradient-to-l from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800'
+                            )}>
                               <Button type="button" size="sm" variant="outline" className="h-9 w-9 p-0 rounded-xl border-slate-300 dark:border-slate-600" onClick={() => { openCountItemDetails(s); setCountItemSwipedId(null); }}>
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -1941,12 +1943,18 @@ export default function HandheldHubPage() {
                             </div>
                             {/* Sliding content: full width, sits on top; user swipes left to reveal actions */}
                             <div
-                              className="absolute inset-0 z-10 flex items-center gap-3 px-4 bg-white dark:bg-slate-800 rounded-2xl transition-transform duration-200 ease-out will-change-transform"
-                              style={{ transform: `translateX(${translateX}px)` }}
+                              className={cn(
+                                'absolute inset-0 z-10 flex items-center gap-3 px-4 bg-white dark:bg-slate-800 rounded-2xl will-change-transform',
+                                isDragging ? 'transition-none' : 'transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]'
+                              )}
+                              style={{
+                                transform: `translateX(${translateX}px)`,
+                                ...(isDragging && Math.abs(translateX) > 10 ? { boxShadow: '4px 0 20px rgba(0,0,0,0.08)' } : {}),
+                              }}
                               onTouchStart={(e) => {
                                 countSwipeStartRef.current = { x: e.touches[0].clientX, id: rowId };
                                 setCountSwipeOffset(0);
-                                if (!countSwipeHintShownRef.current) countSwipeHintShownRef.current = true;
+                                setCountSwipeHintDismissed((prev) => prev || true);
                               }}
                               onTouchMove={(e) => {
                                 if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
@@ -1990,12 +1998,19 @@ export default function HandheldHubPage() {
                                   )}
                                 </div>
                               </div>
-                              <div className="flex flex-col items-center shrink-0">
-                                <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500" />
-                                {showSwipeHint && (
-                                  <span className="text-[9px] font-medium text-slate-400 dark:text-slate-500 mt-0.5 animate-pulse">Swipe</span>
+                              <div className="flex flex-col items-center shrink-0 pr-1">
+                                {showSwipeHint ? (
+                                  <span className="handheld-row-swipe-hint flex flex-col items-center gap-0.5">
+                                    <ChevronRight className="h-5 w-5 text-violet-500 dark:text-violet-400" aria-hidden />
+                                    <span className="text-[9px] font-bold text-violet-500/80 dark:text-violet-400/80 uppercase tracking-wider">Swipe</span>
+                                  </span>
+                                ) : (
+                                  <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500" />
                                 )}
                               </div>
+                              {showSwipeHint && (
+                                <div className="absolute right-0 top-0 bottom-0 w-12 pointer-events-none rounded-r-2xl handheld-swipe-shine" aria-hidden />
+                              )}
                             </div>
                           </li>
                         );

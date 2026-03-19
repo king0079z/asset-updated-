@@ -164,6 +164,42 @@
   animation: swipe-hint 2s ease-in-out 2;
 }
 
+/* Row-level: chevron + "Swipe" nudge (repeats until user swipes) */
+@keyframes handheld-chevron-nudge {
+  0%, 100% {
+    transform: translateX(0);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translateX(-8px);
+    opacity: 1;
+  }
+}
+
+.handheld-row-swipe-hint {
+  animation: handheld-chevron-nudge 1.8s ease-in-out infinite;
+}
+
+/* Shimmer strip on right edge of row to suggest "drag from here" */
+@keyframes handheld-shine {
+  0% {
+    opacity: 0.4;
+    background: linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.12) 50%, rgba(139, 92, 246, 0.2) 100%);
+  }
+  50% {
+    opacity: 0.8;
+    background: linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.18) 50%, rgba(139, 92, 246, 0.28) 100%);
+  }
+  100% {
+    opacity: 0.4;
+    background: linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.12) 50%, rgba(139, 92, 246, 0.2) 100%);
+  }
+}
+
+.handheld-swipe-shine {
+  animation: handheld-shine 2.2s ease-in-out infinite;
+}
+
 /* Import Arabic fonts */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@100;200;300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@200;300;400;500;700;800;900&display=swap');
