@@ -58,6 +58,9 @@ import {
   Type,
   Mic,
   Truck,
+  Scale,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
@@ -260,6 +263,8 @@ export default function HandheldHubPage() {
     { value: 'OTHER', label: 'Other' },
   ];
   const [reconciliationLoading, setReconciliationLoading] = useState(false);
+  const [reconcileShowMissing, setReconcileShowMissing] = useState(false);
+  const [reconcileShowExtra, setReconcileShowExtra] = useState(false);
   const [countItemSwipedId, setCountItemSwipedId] = useState<string | null>(null);
   const [countSwipeOffset, setCountSwipeOffset] = useState(0);
   const countSwipeStartRef = useRef<{ x: number; id: string } | null>(null);
@@ -1184,6 +1189,8 @@ export default function HandheldHubPage() {
       const actualUnique = scannedRaw.size;
       const missing = list.filter((a) => !scannedIds.has(a.id) && !scannedRaw.has((a.barcode || a.assetId || '').toLowerCase()));
       const extra = Array.from(scannedRaw.values()).filter((s) => s.id.startsWith('raw-') || !expectedIds.has(s.id));
+      setReconcileShowMissing(false);
+      setReconcileShowExtra(false);
       setReconciliationResult({
         expectedCount: list.length,
         actualCount: actualUnique,
@@ -1843,43 +1850,107 @@ export default function HandheldHubPage() {
                   </Button>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-4">
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Compare with system</p>
-                  <p className="text-xs text-slate-500">Compare your count to current system data. Managers can review discrepancies.</p>
-                  <Button variant="outline" className="w-full rounded-xl gap-2" onClick={runReconciliation} disabled={reconciliationLoading || countScansForReconciliation.length === 0}>
-                    {reconciliationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
-                    {reconciliationLoading ? 'Comparing…' : 'Compare actual vs expected'}
-                  </Button>
+                <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden shadow-sm">
+                  <div className="p-5 bg-gradient-to-br from-slate-50 to-slate-100/80 dark:from-slate-800/80 dark:to-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-2xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center shrink-0">
+                        <Scale className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Compare with system</h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">Reconcile scanned inventory against master data. See variances and submit for manager review.</p>
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full mt-4 h-12 rounded-xl gap-2 font-semibold shadow-sm"
+                      onClick={runReconciliation}
+                      disabled={reconciliationLoading || countScansForReconciliation.length === 0}
+                    >
+                      {reconciliationLoading ? <Loader2 className="h-5 w-5 animate-spin shrink-0" /> : <Scale className="h-5 w-5 shrink-0" />}
+                      {reconciliationLoading ? 'Comparing…' : 'Run reconciliation'}
+                    </Button>
+                  </div>
                   {reconciliationResult && (
-                    <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div className="p-4 space-y-4">
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-xl bg-slate-50 dark:bg-slate-700/50 p-3 text-center">
-                          <p className="text-2xl font-bold text-slate-900 dark:text-white">{reconciliationResult.expectedCount}</p>
-                          <p className="text-xs text-slate-500">Expected (system)</p>
+                        <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4 text-center border border-slate-200/80 dark:border-slate-700">
+                          <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{reconciliationResult.expectedCount}</p>
+                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">In system</p>
                         </div>
-                        <div className="rounded-xl bg-slate-50 dark:bg-slate-700/50 p-3 text-center">
-                          <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{reconciliationResult.actualCount}</p>
-                          <p className="text-xs text-slate-500">Actual (counted)</p>
+                        <div className="rounded-2xl bg-violet-50 dark:bg-violet-900/20 p-4 text-center border border-violet-200/80 dark:border-violet-800">
+                          <p className="text-2xl font-bold text-violet-700 dark:text-violet-300 tabular-nums">{reconciliationResult.actualCount}</p>
+                          <p className="text-xs font-medium text-violet-600/80 dark:text-violet-400/80 mt-0.5">Scanned</p>
                         </div>
                       </div>
+                      {reconciliationResult.expectedCount === reconciliationResult.actualCount && reconciliationResult.missing.length === 0 && reconciliationResult.extra.length === 0 && (
+                        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
+                          <CheckCircle2 className="h-10 w-10 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div>
+                            <p className="font-semibold text-emerald-900 dark:text-emerald-100">Perfect match</p>
+                            <p className="text-sm text-emerald-700 dark:text-emerald-300">Inventory matches system records.</p>
+                          </div>
+                        </div>
+                      )}
                       {(reconciliationResult.missing.length > 0 || reconciliationResult.extra.length > 0) && (
-                        <div className="text-xs space-y-1">
+                        <div className="space-y-3">
                           {reconciliationResult.missing.length > 0 && (
-                            <p className="text-amber-600 dark:text-amber-400 font-medium">Missing from count: {reconciliationResult.missing.length} (in system but not scanned)</p>
+                            <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => setReconcileShowMissing((v) => !v)}
+                                className="w-full flex items-center justify-between gap-2 p-3 text-left"
+                              >
+                                <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
+                                  <AlertCircle className="h-4 w-4 shrink-0" />
+                                  Missing from scan ({reconciliationResult.missing.length})
+                                </span>
+                                {reconcileShowMissing ? <ChevronUp className="h-4 w-4 text-amber-600" /> : <ChevronDown className="h-4 w-4 text-amber-600" />}
+                              </button>
+                              {reconcileShowMissing && (
+                                <ul className="px-3 pb-3 space-y-1.5 max-h-48 overflow-y-auto">
+                                  {reconciliationResult.missing.map((m) => (
+                                    <li key={m.id} className="text-xs text-amber-800 dark:text-amber-200 py-1.5 px-2 rounded-lg bg-amber-100/80 dark:bg-amber-900/20 truncate" title={m.name}>
+                                      {m.name || m.barcode || m.id}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
                           )}
                           {reconciliationResult.extra.length > 0 && (
-                            <p className="text-blue-600 dark:text-blue-400 font-medium">Extra / unknown: {reconciliationResult.extra.length} (scanned but not in system or duplicate)</p>
+                            <div className="rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => setReconcileShowExtra((v) => !v)}
+                                className="w-full flex items-center justify-between gap-2 p-3 text-left"
+                              >
+                                <span className="flex items-center gap-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
+                                  <Package className="h-4 w-4 shrink-0" />
+                                  Extra / unknown ({reconciliationResult.extra.length})
+                                </span>
+                                {reconcileShowExtra ? <ChevronUp className="h-4 w-4 text-blue-600" /> : <ChevronDown className="h-4 w-4 text-blue-600" />}
+                              </button>
+                              {reconcileShowExtra && (
+                                <ul className="px-3 pb-3 space-y-1.5 max-h-48 overflow-y-auto">
+                                  {reconciliationResult.extra.map((e) => (
+                                    <li key={e.id} className="text-xs text-blue-800 dark:text-blue-200 py-1.5 px-2 rounded-lg bg-blue-100/80 dark:bg-blue-900/20 truncate" title={e.name}>
+                                      {e.name || e.barcode || e.id}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
                       {!reconciliationResult.submittedForReview ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                           <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1">Variance reason (optional)</label>
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">Variance reason (optional)</label>
                             <select
                               value={countReviewReason}
                               onChange={(e) => setCountReviewReason(e.target.value)}
-                              className="w-full h-10 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-3"
+                              className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-3"
                             >
                               {COUNT_REVIEW_REASONS.map((r) => (
                                 <option key={r.value || 'opt'} value={r.value}>{r.label}</option>
@@ -1887,25 +1958,26 @@ export default function HandheldHubPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1">Note for reviewer (optional)</label>
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">Note for reviewer (optional)</label>
                             <Textarea
-                              placeholder="e.g. Aisle 3 was blocked during count"
+                              placeholder="e.g. Aisle 3 was blocked; count done in two passes"
                               value={countReviewNote}
                               onChange={(e) => setCountReviewNote(e.target.value)}
-                              className="min-h-[80px] rounded-xl resize-none"
+                              className="min-h-[88px] rounded-xl resize-none text-sm"
                             />
                           </div>
-                          <Button className="w-full rounded-xl gap-2" onClick={submitCountForReview}>
-                            <User className="h-4 w-4" /> Submit for manager review
+                          <Button className="w-full h-12 rounded-xl gap-2 font-semibold" onClick={submitCountForReview}>
+                            <User className="h-5 w-5 shrink-0" /> Submit for manager review
                           </Button>
                         </div>
                       ) : (
-                        <div className="space-y-2">
-                          <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-3 flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-sm">
-                            <CheckCircle2 className="h-4 w-4 shrink-0" /> Submitted for review
+                        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 space-y-2">
+                          <div className="flex items-center gap-3">
+                            <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <p className="font-semibold text-emerald-900 dark:text-emerald-100">Submitted for review</p>
                           </div>
                           {(reconciliationResult.reasonCode || reconciliationResult.note) && (
-                            <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                            <div className="text-sm text-emerald-800 dark:text-emerald-200 space-y-1 pl-11">
                               {reconciliationResult.reasonCode && (
                                 <p>Reason: {COUNT_REVIEW_REASONS.find((r) => r.value === reconciliationResult.reasonCode)?.label || reconciliationResult.reasonCode}</p>
                               )}
@@ -1916,7 +1988,7 @@ export default function HandheldHubPage() {
                       )}
                     </div>
                   )}
-                </div>
+                </section>
               </div>
             )}
           </div>
@@ -2313,7 +2385,7 @@ export default function HandheldHubPage() {
         onChange={setTab}
         counts={{
           work: assignedTickets.length + assignedTasks.length,
-          count: unifiedInventory.length,
+          inventory: unifiedInventory.length,
           scan: sessionScansCount,
         }}
       />

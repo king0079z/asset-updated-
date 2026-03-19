@@ -5,16 +5,16 @@ import { Scan, Hash, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HandheldTabId } from './types';
 
-/** Order: Work (left), Count (center), Scan (right) */
+/** Order: Work (left), Inventory (center), Scan (right) */
 const THREE_TABS = [
   { id: 'work' as const, label: 'Work', shortLabel: 'Work', Icon: Briefcase },
-  { id: 'inventory' as const, label: 'Count', shortLabel: 'Count', Icon: Hash },
+  { id: 'inventory' as const, label: 'Inventory', shortLabel: 'Inventory', Icon: Hash },
   { id: 'scan' as const, label: 'Scan', shortLabel: 'Scan', Icon: Scan },
 ] as const;
 
 export interface HandheldTabNavCounts {
   work: number;
-  count: number;
+  inventory: number;
   scan: number;
 }
 
@@ -39,7 +39,7 @@ function Badge({ value }: { value: number }) {
 }
 
 function HandheldTabNavInner({ tab, onChange, counts }: HandheldTabNavProps) {
-  const c = counts ?? { work: 0, count: 0, scan: 0 };
+  const c = counts ?? { work: 0, inventory: 0, scan: 0 };
 
   return (
     <nav
@@ -50,7 +50,7 @@ function HandheldTabNavInner({ tab, onChange, counts }: HandheldTabNavProps) {
         <div className="flex items-stretch justify-center gap-0 min-h-[64px] px-2 py-2">
           {THREE_TABS.map(({ id, label, shortLabel, Icon }) => {
             const active = tab === id;
-            const count = id === 'work' ? c.work : id === 'inventory' ? c.count : c.scan;
+            const count = id === 'work' ? c.work : id === 'inventory' ? c.inventory : c.scan;
             return (
               <button
                 key={id}
