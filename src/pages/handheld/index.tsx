@@ -6,6 +6,13 @@
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { HandheldLayout } from '@/components/HandheldLayout';
+import {
+  HandheldTabNav,
+  HandheldFloatingCommandBar,
+  HandheldSessionStrip,
+  type HandheldTabId,
+  RAPID_TAB_IDS,
+} from '@/components/handheld';
 import { HandheldAssetScanner } from '@/components/HandheldAssetScanner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +23,6 @@ import {
   Ticket,
   ListTodo,
   ClipboardList,
-  MoreHorizontal,
   MapPin,
   ArrowRightLeft,
   UserCheck,
@@ -142,20 +148,18 @@ type Asset = {
   assignedToEmail?: string | null;
 };
 
-type TabId = 'scan' | 'inventory' | 'locate' | 'work' | 'asset' | 'more';
-
-const TABS: { id: TabId; label: string; icon: React.ReactNode; shortLabel?: string }[] = [
-  { id: 'scan', label: 'Scan', shortLabel: 'Scan', icon: <Scan className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'inventory', label: 'Inventory', shortLabel: 'Inv', icon: <Layers className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'locate', label: 'Locate', shortLabel: 'Locate', icon: <Crosshair className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'work', label: 'Work', shortLabel: 'Work', icon: <Briefcase className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'asset', label: 'Asset', shortLabel: 'Asset', icon: <Package className="h-[22px] w-[22px] shrink-0" /> },
-  { id: 'more', label: 'More', shortLabel: 'More', icon: <MoreHorizontal className="h-[22px] w-[22px] shrink-0" /> },
-];
+const TAB_SUBTITLE: Record<HandheldTabId, string> = {
+  scan: 'Scan · lookup & capture',
+  inventory: 'Inventory · count & audit',
+  locate: 'Locate · proximity assist',
+  work: 'Work · tickets & tasks',
+  asset: 'Asset · actions on hand',
+  more: 'More · sync & settings',
+};
 
 export default function HandheldHubPage() {
   const { toast } = useToast();
-  const [tab, setTab] = useState<TabId>('scan');
+  const [tab, setTab] = useState<HandheldTabId>('scan');
   const [currentAsset, setCurrentAsset] = useState<Asset | null>(null);
 
   // Asset actions state
@@ -187,7 +191,7 @@ export default function HandheldHubPage() {
   const [updatingTicketStatusId, setUpdatingTicketStatusId] = useState<string | null>(null);
   const createTicketForm = useForm<z.infer<typeof createTicketSchema>>({
     resolver: zodResolver(createTicketSchema),
-    defaultValues: { title: '', description: '', priority: 'medium' },
+    defaultValues: { title: '', description: '', priority: 'medium', missionName: '', resolveBy: '' },
   });
 
   // Tasks state
@@ -368,7 +372,7 @@ export default function HandheldHubPage() {
   }, []);
 
   useEffect(() => {
-    if (rapidMode && !['scan', 'inventory', 'more'].includes(tab)) setTab('scan');
+    if (rapidMode && !RAPID_TAB_IDS.includes(tab)) setTab('scan');
   }, [rapidMode, tab]);
 
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -1357,25 +1361,29 @@ export default function HandheldHubPage() {
   }, [locateActive, locateProximity]);
 
   return (
-    <HandheldLayout title="Field Assistant" lastSyncTime={lastSyncTime} onSyncNow={handleSyncNow}>
-      {/* Tab content — touch-friendly, safe area; optional large text for accessibility */}
-      <div className={cn('flex-1 overflow-auto p-4 pb-28 min-h-0', largeTextMode && 'text-base [&_input]:text-base [&_button]:text-base')}>
+    <HandheldLayout
+      title="Field Assistant"
+      subtitle={TAB_SUBTITLE[tab]}
+      lastSyncTime={lastSyncTime}
+      onSyncNow={handleSyncNow}
+    >
+      {/* Tab content — extra bottom padding for floating nav + FAB */}
+      <div
+        className={cn(
+          'flex-1 overflow-auto p-4 pb-40 min-h-0 max-w-2xl mx-auto w-full',
+          largeTextMode && 'text-base [&_input]:text-base [&_button]:text-base'
+        )}
+      >
         {tab === 'scan' && (
-          <div className="max-w-lg mx-auto space-y-4">
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">This session</p>
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-violet-600 dark:text-violet-400">{sessionScansCount}</span>
-                  <span className="text-sm text-slate-600 dark:text-slate-300">scans</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{sessionTasksCount}</span>
-                  <span className="text-sm text-slate-600 dark:text-slate-300">tasks</span>
-                </div>
-              </div>
+          <div className="max-w-lg mx-auto space-y-5">
+            <HandheldSessionStrip
+              scans={sessionScansCount}
+              tasks={sessionTasksCount}
+              hint={typeof navigator !== 'undefined' && navigator.onLine ? 'Tap quick actions (+) for shortcuts' : 'Offline — actions queue until sync'}
+            />
+            <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-md overflow-hidden">
+              <HandheldAssetScanner standalone onAssetSelected={setCurrentAsset} />
             </div>
-            <HandheldAssetScanner standalone onAssetSelected={setCurrentAsset} />
           </div>
         )}
 
@@ -1401,7 +1409,7 @@ export default function HandheldHubPage() {
               </div>
             ) : (
               <>
-                <div className="flex items-start gap-3 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="flex items-start gap-3 p-4 rounded-2xl bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-slate-200/80 dark:border-slate-700/80 shadow-md">
                   <div className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
                     {currentAsset.imageUrl ? (
                       <img src={currentAsset.imageUrl} alt="" className="h-full w-full object-cover" />
@@ -1465,11 +1473,11 @@ export default function HandheldHubPage() {
 
         {tab === 'work' && (
           <div className="max-w-lg mx-auto space-y-4">
-            <div className="flex items-center gap-2 p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <button type="button" onClick={() => setWorkMode('tickets')} className={cn('flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all', workMode === 'tickets' ? 'bg-white dark:bg-slate-700 shadow text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-400')}>
+            <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+              <button type="button" onClick={() => setWorkMode('tickets')} className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation', workMode === 'tickets' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
                 <Ticket className="h-4 w-4 inline mr-1.5 align-middle" /> Tickets
               </button>
-              <button type="button" onClick={() => setWorkMode('tasks')} className={cn('flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all', workMode === 'tasks' ? 'bg-white dark:bg-slate-700 shadow text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-400')}>
+              <button type="button" onClick={() => setWorkMode('tasks')} className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation', workMode === 'tasks' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
                 <ListTodo className="h-4 w-4 inline mr-1.5 align-middle" /> Tasks
               </button>
             </div>
@@ -2436,37 +2444,25 @@ export default function HandheldHubPage() {
         )}
       </div>
 
-      {/* Bottom tab bar — world-class: pill active state, safe area, equal touch targets; rapid mode shows only Scan, Inventory, More */}
-      <nav className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-around gap-0 min-h-[64px] pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] px-1 bg-white/98 dark:bg-slate-900/98 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-700/80 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.3)]">
-        {(rapidMode ? TABS.filter((t) => ['scan', 'inventory', 'more'].includes(t.id)) : TABS).map((t) => {
-          const isActive = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                'flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 min-h-[52px] py-1.5 px-1 rounded-xl transition-all duration-200 touch-manipulation select-none',
-                isActive
-                  ? 'bg-gradient-to-b from-violet-600 to-indigo-600 text-white shadow-md'
-                  : 'text-slate-500 dark:text-slate-400 active:bg-slate-100 dark:active:bg-slate-800'
-              )}
-              aria-current={isActive ? 'page' : undefined}
-              aria-label={t.label}
-            >
-              <span className={cn('flex items-center justify-center', isActive ? 'text-white' : '')}>
-                {t.icon}
-              </span>
-              <span className={cn(
-                'text-[10px] font-semibold truncate w-full text-center leading-tight',
-                isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'
-              )}>
-                {t.shortLabel ?? t.label}
-              </span>
-            </button>
-          );
-        })}
-      </nav>
+      <HandheldTabNav tab={tab} onChange={setTab} rapidMode={rapidMode} />
+
+      <HandheldFloatingCommandBar
+        onScan={() => setTab('scan')}
+        onAddAsset={() => setShowAddAssetDialog(true)}
+        onGoodsReceiving={() => setShowAddAssetDialog(true)}
+        onAudit={() => {
+          setTab('inventory');
+          setInventoryMode('audit');
+        }}
+        onLocate={() => setTab('locate')}
+        onWork={() => {
+          setTab('work');
+          setWorkMode('tickets');
+        }}
+        onSync={() => void handleSyncNow()}
+        onCreateTicket={() => setShowCreateTicket(true)}
+        canCreateTicket={!!currentAsset}
+      />
 
       {/* Dialogs */}
       {currentAsset && (
