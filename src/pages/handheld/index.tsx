@@ -935,7 +935,9 @@ export default function HandheldHubPage() {
   const handleCreateTicket = async (vals: z.infer<typeof createTicketSchema>) => {
     setCreateTicketLoading(true);
     try {
-      const body: any = { title: vals.title, description: vals.description || '', priority: vals.priority };
+      const rawDesc = (vals.description || '').trim();
+      const description = rawDesc.length >= 10 ? rawDesc : (rawDesc ? `${rawDesc} — reported from handheld` : 'Reported from handheld (no additional details).');
+      const body: any = { title: vals.title, description, priority: vals.priority };
       if (vals.missionName?.trim()) body.missionName = vals.missionName.trim();
       if (vals.resolveBy) body.resolveBy = vals.resolveBy;
       if (currentAsset?.id) body.assetId = currentAsset.id;
