@@ -259,6 +259,7 @@ export default function HandheldHubPage() {
   const [countSwipeOffset, setCountSwipeOffset] = useState(0);
   const countSwipeStartRef = useRef<{ x: number; id: string } | null>(null);
   const countSwipeOffsetRef = useRef(0);
+  const countSwipeHintShownRef = useRef(false);
   const countBarcodeInputRef = useRef<HTMLInputElement>(null);
   const [countVoiceListening, setCountVoiceListening] = useState(false);
   const countSpeechRecognitionRef = useRef<SpeechRecognition | null>(null);
@@ -1888,78 +1889,112 @@ export default function HandheldHubPage() {
                     <Scan className="h-5 w-5" />
                   </Button>
                 </div>
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 max-h-[420px] overflow-y-auto">
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Count list — swipe left for actions</p>
+                <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-lg p-4 max-h-[420px] overflow-y-auto">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Count list</p>
+                    {countScans.length > 0 && !countSwipeHintShownRef.current && (
+                      <span className="handheld-swipe-hint inline-flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400">
+                        <ChevronRight className="h-3.5 w-3.5 rotate-180" aria-hidden />
+                        Swipe left for actions
+                      </span>
+                    )}
+                  </div>
                   {countScans.length === 0 ? (
-                    <p className="text-sm text-slate-400">Scan or enter barcode to add.</p>
+                    <div className="py-8 text-center rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600">
+                      <Package className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-500 mb-2" />
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Scan or enter barcode to add</p>
+                    </div>
                   ) : (
-                    <ul className="space-y-2">
+                    <ul className="space-y-2.5">
                       {countScans.slice(-50).reverse().map((s, i) => {
                         const rowId = `${s.id}-${i}`;
                         const isDragging = countSwipeStartRef.current?.id === rowId;
                         const isOpen = countItemSwipedId === rowId;
                         const translateX = isDragging ? countSwipeOffset : isOpen ? -136 : 0;
                         const ACTION_WIDTH = 136;
+                        const isFirst = i === countScans.length - 1;
+                        const showSwipeHint = isFirst && !countSwipeHintShownRef.current;
+                        const statusColor = (st: string) => {
+                          const v = (st || '').toUpperCase();
+                          if (v === 'ACTIVE') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/30';
+                          if (v === 'MAINTENANCE') return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/30';
+                          if (v === 'DISPOSED') return 'bg-slate-400/15 text-slate-600 dark:text-slate-400 border-slate-400/30';
+                          return 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-400/20';
+                        };
                         return (
-                          <li key={rowId} className="rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/80 overflow-hidden touch-manipulation">
-                            <div className="flex items-stretch" style={{ minHeight: 72 }}>
-                              <div
-                                className="flex flex-1 min-w-0 items-center gap-3 p-3 bg-white dark:bg-slate-800 transition-transform duration-150 ease-out"
-                                style={{ transform: `translateX(${translateX}px)` }}
-                                onTouchStart={(e) => {
-                                  countSwipeStartRef.current = { x: e.touches[0].clientX, id: rowId };
-                                  setCountSwipeOffset(0);
-                                }}
-                                onTouchMove={(e) => {
-                                  if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
-                                  const dx = e.touches[0].clientX - countSwipeStartRef.current.x;
-                                  const offset = Math.min(0, Math.max(-ACTION_WIDTH, dx));
-                                  countSwipeOffsetRef.current = offset;
-                                  setCountSwipeOffset(offset);
-                                }}
-                                onTouchEnd={() => {
-                                  if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
-                                  const finalOffset = countSwipeOffsetRef.current;
-                                  countSwipeStartRef.current = null;
-                                  setCountSwipeOffset(0);
-                                  setCountItemSwipedId(finalOffset < -50 ? rowId : null);
-                                }}
-                              >
-                                <div className="h-12 w-12 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden shrink-0">
-                                  {s.imageUrl ? (
-                                    <img src={s.imageUrl} alt="" className="h-full w-full object-cover" />
-                                  ) : (
-                                    <Package className="h-6 w-6 text-slate-500" />
+                          <li
+                            key={rowId}
+                            className="relative rounded-2xl overflow-hidden touch-manipulation shadow-sm border border-slate-200/80 dark:border-slate-600/80"
+                            style={{ minHeight: 80 }}
+                          >
+                            {/* Action strip: behind the sliding content, only visible when user swipes */}
+                            <div className="absolute right-0 top-0 bottom-0 w-[136px] flex items-center justify-end gap-1.5 pr-3 bg-gradient-to-l from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800 border-l border-slate-200/60 dark:border-slate-600/60">
+                              <Button type="button" size="sm" variant="outline" className="h-9 w-9 p-0 rounded-xl border-slate-300 dark:border-slate-600" onClick={() => { openCountItemDetails(s); setCountItemSwipedId(null); }}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button type="button" size="sm" variant="outline" className="h-9 w-9 p-0 rounded-xl border-slate-300 dark:border-slate-600" onClick={() => { openCountItemStatus(s); setCountItemSwipedId(null); }}>
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                              <Button type="button" size="sm" variant="outline" className="h-9 w-9 p-0 rounded-xl border-slate-300 dark:border-slate-600" onClick={() => { openCountItemMove(s); setCountItemSwipedId(null); }}>
+                                <MapPin className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {/* Sliding content: full width, sits on top; user swipes left to reveal actions */}
+                            <div
+                              className="absolute inset-0 z-10 flex items-center gap-3 px-4 bg-white dark:bg-slate-800 rounded-2xl transition-transform duration-200 ease-out will-change-transform"
+                              style={{ transform: `translateX(${translateX}px)` }}
+                              onTouchStart={(e) => {
+                                countSwipeStartRef.current = { x: e.touches[0].clientX, id: rowId };
+                                setCountSwipeOffset(0);
+                                if (!countSwipeHintShownRef.current) countSwipeHintShownRef.current = true;
+                              }}
+                              onTouchMove={(e) => {
+                                if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
+                                const dx = e.touches[0].clientX - countSwipeStartRef.current.x;
+                                const offset = Math.min(0, Math.max(-ACTION_WIDTH, dx));
+                                countSwipeOffsetRef.current = offset;
+                                setCountSwipeOffset(offset);
+                              }}
+                              onTouchEnd={() => {
+                                if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
+                                const finalOffset = countSwipeOffsetRef.current;
+                                countSwipeStartRef.current = null;
+                                setCountSwipeOffset(0);
+                                setCountItemSwipedId(finalOffset < -50 ? rowId : null);
+                              }}
+                            >
+                              <div className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700/80 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200/50 dark:ring-slate-600/50">
+                                {s.imageUrl ? (
+                                  <img src={s.imageUrl} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  <Package className="h-7 w-7 text-slate-500 dark:text-slate-400" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-slate-900 dark:text-white truncate text-[15px] leading-tight">{s.name}</p>
+                                {s.barcode && s.barcode !== s.name && (
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5 font-mono">{s.barcode}</p>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2 mt-2">
+                                  {s.status && (
+                                    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border', statusColor(s.status))}>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+                                      {s.status}
+                                    </span>
+                                  )}
+                                  {(s.floorNumber != null || s.roomNumber != null) && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                      <MapPin className="h-3 w-3 shrink-0" />
+                                      <span className="truncate">{[s.floorNumber, s.roomNumber].filter(Boolean).join(', ')}</span>
+                                    </span>
                                   )}
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-slate-900 dark:text-white truncate">{s.name}</p>
-                                  {s.barcode && s.barcode !== s.name && <p className="text-xs text-slate-500 truncate">{s.barcode}</p>}
-                                  <div className="flex flex-wrap gap-1.5 mt-0.5">
-                                    {(s.floorNumber != null || s.roomNumber != null) && (
-                                      <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-500">
-                                        <MapPin className="h-3 w-3" /> {[s.floorNumber, s.roomNumber].filter(Boolean).join(', ')}
-                                      </span>
-                                    )}
-                                    {s.status && (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
-                                        {s.status}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
                               </div>
-                              <div className="flex shrink-0 w-[136px] items-center justify-end gap-1 pr-2 bg-slate-100 dark:bg-slate-700/80">
-                                <Button type="button" size="sm" variant="outline" className="h-9 px-2 rounded-lg text-xs" onClick={() => openCountItemDetails(s)}>
-                                  <Eye className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button type="button" size="sm" variant="outline" className="h-9 px-2 rounded-lg text-xs" onClick={() => openCountItemStatus(s)}>
-                                  <RefreshCw className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button type="button" size="sm" variant="outline" className="h-9 px-2 rounded-lg text-xs" onClick={() => openCountItemMove(s)}>
-                                  <MapPin className="h-3.5 w-3.5" />
-                                </Button>
+                              <div className="flex flex-col items-center shrink-0">
+                                <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+                                {showSwipeHint && (
+                                  <span className="text-[9px] font-medium text-slate-400 dark:text-slate-500 mt-0.5 animate-pulse">Swipe</span>
+                                )}
                               </div>
                             </div>
                           </li>
