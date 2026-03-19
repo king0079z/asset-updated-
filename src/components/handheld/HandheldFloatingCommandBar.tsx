@@ -113,7 +113,7 @@ function HandheldFloatingCommandBarInner({
         )}
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label={open ? 'Close quick actions' : 'Open quick actions'}
+        aria-label={open ? 'Close shortcuts menu' : 'Open shortcuts menu'}
       >
         {open ? <X className="h-7 w-7" strokeWidth={2.25} /> : <Sparkles className="h-7 w-7" strokeWidth={2.25} />}
       </button>
