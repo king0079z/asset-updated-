@@ -295,6 +295,9 @@ export default function HandheldHubPage() {
   const [showRoomTagScanDialog, setShowRoomTagScanDialog] = useState(false);
   const [roomTagScanning, setRoomTagScanning] = useState(false);
   const [roomTagError, setRoomTagError] = useState<string | null>(null);
+  const [showManualRoomDialog, setShowManualRoomDialog] = useState(false);
+  const [manualFloorInput, setManualFloorInput] = useState('');
+  const [manualRoomInput, setManualRoomInput] = useState('');
   const [showCountScanner, setShowCountScanner] = useState(false);
   const [reconciliationResult, setReconciliationResult] = useState<{
     expectedCount: number;
@@ -306,6 +309,7 @@ export default function HandheldHubPage() {
     difference?: number; // expectedInLocation - actualInLocation (positive = missing from scan)
     missing: { id: string; name: string; barcode?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }[];
     extra: { id: string; name: string; barcode?: string; floorNumber?: string | null; roomNumber?: string | null }[];
+    wrongLocation: { id: string; name: string; barcode?: string; systemFloor?: string | null; systemRoom?: string | null }[]; // scanned, exist in system, but at different location
     submittedForReview: boolean;
     reasonCode?: string;
     note?: string;
@@ -1603,6 +1607,36 @@ export default function HandheldHubPage() {
     setReconciliationResult(null);
   }, [inventoryRoomTagVerified]);
 
+  const startWithManualLocation = useCallback((floor: string, room: string) => {
+    const f = floor.trim();
+    const r = room.trim();
+    setInventorySessionFloor(f);
+    setInventorySessionRoom(r);
+    setInventoryRoomTagVerified(false); // manual, not RFID-verified
+    setShowManualRoomDialog(false);
+    setManualFloorInput('');
+    setManualRoomInput('');
+    // If session already active, just update the location (don't clear inventory)
+    if (countSessionActive) {
+      pushInventoryAudit('location_changed_manual', `Floor ${f || '—'}, Room ${r || '—'}`);
+      toast({ title: 'Location updated', description: f && r ? `Now counting Floor ${f}, Room ${r}` : 'Global count (no location filter)' });
+      return;
+    }
+    try {
+      localStorage.removeItem(INVENTORY_SESSION_KEY);
+    } catch { /* ignore */ }
+    inventoryUndoStackRef.current = [];
+    setInventorySearch('');
+    setInventoryAuditLog([]);
+    setSessionProofNote('');
+    setSessionProofImages([]);
+    setCountSessionActive(true);
+    setCountStartTime(Date.now());
+    setUnifiedInventory([]);
+    setReconciliationResult(null);
+    toast({ title: 'Session started', description: f && r ? `Floor ${f}, Room ${r}` : 'Global count mode' });
+  }, [toast, countSessionActive, pushInventoryAudit]);
+
   const countScansForReconciliation = useMemo(
     () => unifiedInventory.filter((x): x is { type: 'asset'; data: CountScanItem } => x.type === 'asset').map((x) => x.data),
     [unifiedInventory]
@@ -1714,7 +1748,12 @@ export default function HandheldHubPage() {
       const expectedInLoc = listForScope.length;
       const actualInLoc = scopeByLocation ? Array.from(scannedByKey.entries()).filter(([, s]) => inLocation(s.floorNumber, s.roomNumber)).length : scannedByKey.size;
       const missing = listForScope.filter((a) => !scannedIds.has(a.id) && !scannedByKey.has((a.barcode || a.assetId || '').toLowerCase()));
-      const extra = Array.from(scannedByKey.values()).filter((s) => s.id.startsWith('raw-') || !expectedIds.has(s.id));
+      // Truly extra = scanned but NOT in system at all
+      const trulyExtra = Array.from(scannedByKey.values()).filter((s) => s.id.startsWith('raw-') || !expectedIds.has(s.id));
+      // Wrong location = scanned, exists in system, but system location differs from session location
+      const wrongLocation = scopeByLocation
+        ? Array.from(scannedByKey.values()).filter((s) => !s.id.startsWith('raw-') && expectedIds.has(s.id) && !inLocation(s.floorNumber, s.roomNumber))
+        : [];
       const locationDisplay = scopeByLocation ? [sessionFloor || null, sessionRoom || null].filter(Boolean).join(', ') || 'This location' : undefined;
       setReconcileShowMissing(false);
       setReconcileShowExtra(false);
@@ -1729,7 +1768,8 @@ export default function HandheldHubPage() {
         actualInLocation: scopeByLocation ? actualInLoc : undefined,
         difference: scopeByLocation ? expectedInLoc - actualInLoc : undefined,
         missing: missingList,
-        extra: extra.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, floorNumber: s.floorNumber, roomNumber: s.roomNumber })),
+        extra: trulyExtra.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, floorNumber: s.floorNumber, roomNumber: s.roomNumber })),
+        wrongLocation: wrongLocation.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, systemFloor: s.floorNumber, systemRoom: s.roomNumber })),
         submittedForReview: false,
         locationOverrideApplied,
       });
@@ -1738,14 +1778,14 @@ export default function HandheldHubPage() {
       pushInventoryAudit(
         'reconciliation',
         scopeByLocation
-          ? `loc=${locationDisplay || ''} sys=${expectedInLoc} scan=${actualInLoc} missing=${missingList.length}`
-          : `all sys=${list.length} scan=${scannedByKey.size} missing=${missing.length} extra=${extra.length}`,
+          ? `loc=${locationDisplay || ''} sys=${expectedInLoc} scan=${actualInLoc} missing=${missingList.length} wrong_loc=${wrongLocation.length} unknown=${trulyExtra.length}`
+          : `all sys=${list.length} scan=${scannedByKey.size} missing=${missing.length} unknown=${trulyExtra.length}`,
       );
       toast({
         title: 'Reconciliation complete',
         description: scopeByLocation
-          ? `This location: system ${expectedInLoc}, scanned ${actualInLoc} (${diff > 0 ? `${diff} missing` : diff < 0 ? `${-diff} extra` : 'match'}).`
-          : `Expected ${list.length}, counted ${scannedByKey.size}. ${missing.length} missing, ${extra.length} extra.`,
+          ? `System: ${expectedInLoc}, scanned here: ${actualInLoc}. ${missingList.length} missing, ${wrongLocation.length} wrong location, ${trulyExtra.length} unknown.`
+          : `Expected ${list.length}, counted ${scannedByKey.size}. ${missing.length} missing, ${trulyExtra.length} unknown.`,
       });
     } catch {
       toast({ title: 'Reconciliation failed', variant: 'destructive' });
@@ -1795,7 +1835,10 @@ export default function HandheldHubPage() {
       .finally(() => setInventorySummaryLoading(false));
   }, [reconciliationResult, inventorySessionFloor, inventorySessionRoom, countScansForReconciliation.length]);
 
-  const submitCountForReview = useCallback(() => {
+  const submitCountForReview = useCallback(async () => {
+    const r = reconciliationResult;
+    if (!r) return;
+    // Mark locally first for instant feedback
     setReconciliationResult((prev) =>
       prev ? { ...prev, submittedForReview: true, reasonCode: countReviewReason, note: countReviewNote, submittedAt: Date.now() } : null
     );
@@ -1803,10 +1846,35 @@ export default function HandheldHubPage() {
       'submit_review',
       `reason=${countReviewReason || '—'} note=${(countReviewNote || '').slice(0, 200)} proof_images=${sessionProofImages.length}`,
     );
+    // Persist to server so managers can view it
+    try {
+      await fetch('/api/inventory/submit-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          floorNumber: inventorySessionFloor.trim() || null,
+          roomNumber: inventorySessionRoom.trim() || null,
+          sessionStartTime: countStartTime,
+          sessionDurationMs: countStartTime ? Date.now() - countStartTime : null,
+          totalScanned: countScansForReconciliation.length,
+          totalInSystem: r.expectedCount,
+          missingCount: r.missing.length,
+          extraCount: r.extra.length,
+          wrongLocationCount: (r.wrongLocation || []).length,
+          reasonCode: countReviewReason || null,
+          note: countReviewNote || null,
+          missingItems: r.missing.slice(0, 50).map(m => ({ id: m.id, name: m.name, barcode: m.barcode, floorNumber: m.floorNumber, roomNumber: m.roomNumber })),
+          wrongLocationItems: (r.wrongLocation || []).slice(0, 50).map(w => ({ id: w.id, name: w.name, systemFloor: w.systemFloor, systemRoom: w.systemRoom })),
+        }),
+      });
+    } catch {
+      // Server submission is best-effort; local state already updated
+    }
     setCountReviewReason('');
     setCountReviewNote('');
-    toast({ title: 'Submitted for review', description: 'A manager or admin can review the count and discrepancies.' });
-  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length]);
+    toast({ title: 'Submitted for review', description: 'Manager can review the inventory count and discrepancies.' });
+  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length]);
 
   const saveReconcileEditLocation = useCallback(async () => {
     const asset = reconcileEditLocationAsset;
@@ -2255,83 +2323,181 @@ export default function HandheldHubPage() {
             </header>
 
             {!countSessionActive ? (
-              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800/95 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 overflow-hidden">
-                <div className="p-5 sm:p-6 space-y-5">
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-2">Location (optional)</label>
-                    <Input
-                      placeholder="e.g. Aisle 3, Store A"
-                      value={countLocationLabel}
-                      onChange={(e) => setCountLocationLabel(e.target.value)}
-                      className="rounded-xl h-12 text-base border-slate-200 dark:border-slate-600 focus-visible:ring-violet-500"
-                    />
+              <div className="space-y-4">
+                {/* Step indicator */}
+                <div className="flex items-center gap-2 px-1">
+                  <div className={cn('flex items-center justify-center h-7 w-7 rounded-full text-xs font-bold shrink-0', inventoryRoomTagVerified || (inventorySessionFloor || inventorySessionRoom) ? 'bg-emerald-500 text-white' : 'bg-violet-600 text-white')}>
+                    {inventoryRoomTagVerified || (inventorySessionFloor || inventorySessionRoom) ? <CheckCircle2 className="h-4 w-4" /> : '1'}
                   </div>
+                  <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                  <div className={cn('flex items-center justify-center h-7 w-7 rounded-full text-xs font-bold shrink-0', inventoryRoomTagVerified || (inventorySessionFloor || inventorySessionRoom) ? 'bg-violet-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400')}>2</div>
+                </div>
+
+                {/* Location card */}
+                <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800/95 shadow-lg overflow-hidden">
                   {inventoryRoomTagVerified ? (
-                    <div className="space-y-3">
-                      <div className="rounded-xl border-2 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 p-4">
-                        <div className="flex items-start gap-3">
-                          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-green-900 dark:text-green-100">Room verified</p>
-                            <p className="text-sm text-green-700 dark:text-green-300 mt-0.5">
-                              Floor {inventorySessionFloor}, Room {inventorySessionRoom}
-                            </p>
-                            <p className="text-xs text-green-600/90 dark:text-green-400/90 mt-1">
-                              Location automatically set from room RFID tag. Reconciliation will compare this location only (101 = 0101).
-                            </p>
-                          </div>
+                    <div className="p-5 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">Step 1 — Room verified via RFID</p>
+                          <p className="text-base font-semibold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                            Floor {inventorySessionFloor}, Room {inventorySessionRoom}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Reconciliation will compare this exact location. Rescanning corrects the location.
+                          </p>
                         </div>
                       </div>
-                      <Button
-                        size="lg"
-                        className="w-full h-14 rounded-2xl text-base font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/30 transition-shadow"
-                        onClick={startCountSession}
-                      >
-                        <Hash className="h-5 w-5 mr-2 shrink-0" />
-                        Start inventory session
+                      <Button variant="ghost" size="sm" className="rounded-xl text-slate-500 gap-1.5 h-9" onClick={() => setShowRoomTagScanDialog(true)}>
+                        <Radio className="h-4 w-4" /> Rescan room tag
                       </Button>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4">
-                        <div className="flex items-start gap-3">
-                          <Radio className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Room RFID tag required</p>
-                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                              Scan the room's RFID tag first to automatically set the location. This ensures accurate inventory tracking and automatic location detection.
-                            </p>
-                          </div>
+                  ) : (inventorySessionFloor || inventorySessionRoom) ? (
+                    <div className="p-5 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
+                          <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">Step 1 — Location set manually</p>
+                          <p className="text-base font-semibold text-blue-700 dark:text-blue-300 mt-0.5">
+                            Floor {inventorySessionFloor || '—'}, Room {inventorySessionRoom || '—'}
+                          </p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 shrink-0" /> RFID scan recommended for higher accuracy
+                          </p>
                         </div>
                       </div>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" className="rounded-xl gap-1.5 h-9" onClick={() => { setManualFloorInput(inventorySessionFloor); setManualRoomInput(inventorySessionRoom); setShowManualRoomDialog(true); }}>
+                          <MapPin className="h-4 w-4" /> Change
+                        </Button>
+                        <Button variant="ghost" size="sm" className="rounded-xl gap-1.5 h-9" onClick={() => setShowRoomTagScanDialog(true)}>
+                          <Radio className="h-4 w-4" /> Scan RFID instead
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-5 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center shrink-0">
+                          <Radio className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">Step 1 — Set your location</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Scan room RFID tag for automatic detection, or enter location manually. Location is used for accurate reconciliation.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <Button
+                          size="lg"
+                          className="h-14 rounded-2xl text-sm font-semibold shadow-md shadow-violet-500/20"
+                          onClick={() => setShowRoomTagScanDialog(true)}
+                        >
+                          <Radio className="h-5 w-5 mr-2 shrink-0" />
+                          Scan room RFID tag
+                        </Button>
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          className="h-14 rounded-2xl text-sm font-semibold"
+                          onClick={() => { setManualFloorInput(''); setManualRoomInput(''); setShowManualRoomDialog(true); }}
+                        >
+                          <MapPin className="h-5 w-5 mr-2 shrink-0" />
+                          Enter manually
+                        </Button>
+                      </div>
                       <Button
-                        size="lg"
-                        className="w-full h-14 rounded-2xl text-base font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/30 transition-shadow"
-                        onClick={() => setShowRoomTagScanDialog(true)}
+                        variant="ghost"
+                        size="sm"
+                        className="w-full rounded-xl text-slate-500 h-9"
+                        onClick={() => startWithManualLocation('', '')}
                       >
-                        <Radio className="h-5 w-5 mr-2 shrink-0" />
-                        Scan room RFID tag
+                        Skip — global count (no location filter)
                       </Button>
                     </div>
                   )}
                 </div>
+
+                {/* Step 2 - Start session */}
+                {(inventoryRoomTagVerified || inventorySessionFloor || inventorySessionRoom) && (
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800/95 shadow-lg p-5 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center shrink-0">
+                        <Hash className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">Step 2 — Start scanning</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Scan barcodes, RFID tags, or QR codes into the inventory list</p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-2">Session label (optional)</label>
+                      <Input
+                        placeholder="e.g. Morning shift, Aisle 3"
+                        value={countLocationLabel}
+                        onChange={(e) => setCountLocationLabel(e.target.value)}
+                        className="rounded-xl h-11 text-base border-slate-200 dark:border-slate-600 focus-visible:ring-violet-500"
+                      />
+                    </div>
+                    <Button
+                      size="lg"
+                      className="w-full h-14 rounded-2xl text-base font-semibold shadow-lg shadow-violet-500/25"
+                      onClick={startCountSession}
+                    >
+                      <Hash className="h-5 w-5 mr-2 shrink-0" />
+                      Start inventory session
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-5">
                 {/* Stats: world-class card, responsive grid */}
-                <div className="rounded-2xl border border-violet-200/80 dark:border-violet-800/80 bg-gradient-to-br from-violet-50 via-white to-indigo-50/80 dark:from-violet-950/30 dark:via-slate-800/80 dark:to-indigo-950/20 p-5 sm:p-6 shadow-lg shadow-violet-200/30 dark:shadow-violet-900/20">
-                  <div className="grid grid-cols-2 gap-4 sm:gap-6">
+                <div className="rounded-2xl border border-violet-200/80 dark:border-violet-800/80 bg-gradient-to-br from-violet-50 via-white to-indigo-50/80 dark:from-violet-950/30 dark:via-slate-800/80 dark:to-indigo-950/20 p-4 sm:p-5 shadow-lg shadow-violet-200/30 dark:shadow-violet-900/20">
+                  <div className="flex items-center justify-between gap-4 mb-3">
                     <div>
-                      <p className={cn('font-bold tabular-nums text-violet-700 dark:text-violet-200', largeTextMode ? 'text-4xl' : 'text-3xl')}>{unifiedInventory.length}</p>
-                      <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mt-0.5">items in list</p>
+                      <p className={cn('font-bold tabular-nums text-violet-700 dark:text-violet-200 leading-none', largeTextMode ? 'text-4xl' : 'text-3xl')}>{unifiedInventory.length}</p>
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mt-1">items in session</p>
                     </div>
-                    <div className="text-right sm:text-left">
-                      <p className={cn('font-bold tabular-nums text-slate-800 dark:text-slate-200', largeTextMode ? 'text-2xl' : 'text-xl')}>
-                        {countStartTime ? Math.round(unifiedInventory.length / Math.max(1, (Date.now() - countStartTime) / 60000)) : 0}
-                      </p>
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">per minute</p>
-                    </div>
+                    {inventoryRoomTagVerified && (
+                      <div className="rounded-xl bg-emerald-100 dark:bg-emerald-900/40 px-3 py-1.5 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">RFID verified</span>
+                      </div>
+                    )}
                   </div>
+                  {unifiedInventory.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {(() => {
+                        const assetCount = unifiedInventory.filter(x => x.type === 'asset').length;
+                        const foodCount = unifiedInventory.filter(x => x.type === 'food').length;
+                        const ticketCount = unifiedInventory.filter(x => x.type === 'ticket').length;
+                        const pending = unifiedInventory.filter(x => x.type === 'pending_scan').length;
+                        return (
+                          <>
+                            <div className="rounded-xl bg-white/70 dark:bg-slate-800/60 px-2 py-1.5 text-center">
+                              <p className="text-base font-bold text-slate-800 dark:text-slate-200 tabular-nums">{assetCount}</p>
+                              <p className="text-[10px] text-slate-500 mt-0.5">assets</p>
+                            </div>
+                            <div className="rounded-xl bg-white/70 dark:bg-slate-800/60 px-2 py-1.5 text-center">
+                              <p className="text-base font-bold text-slate-800 dark:text-slate-200 tabular-nums">{foodCount}</p>
+                              <p className="text-[10px] text-slate-500 mt-0.5">food</p>
+                            </div>
+                            <div className="rounded-xl bg-white/70 dark:bg-slate-800/60 px-2 py-1.5 text-center">
+                              <p className="text-base font-bold text-slate-800 dark:text-slate-200 tabular-nums">{ticketCount + pending}</p>
+                              <p className="text-[10px] text-slate-500 mt-0.5">{pending > 0 ? `tickets+${pending}q` : 'tickets'}</p>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
 
                 {/* Scan bar: touch-optimized, clear CTAs */}
@@ -2566,23 +2732,49 @@ export default function HandheldHubPage() {
                 </div>
 
                 {(inventorySessionFloor.trim() || inventorySessionRoom.trim()) && (
-                  <div className="rounded-2xl border border-violet-200/80 dark:border-violet-800/80 bg-violet-50/80 dark:bg-violet-900/20 px-4 py-3 flex items-start sm:items-center gap-3">
-                    <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5 sm:mt-0" />
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm font-semibold text-violet-900 dark:text-violet-100 block">Count location</span>
-                      <span className="text-sm text-violet-700 dark:text-violet-300">{[inventorySessionFloor.trim(), inventorySessionRoom.trim()].filter(Boolean).join(', ') || '—'}</span>
-                      <p className="text-xs text-violet-600/90 dark:text-violet-400/90 mt-1">Reconciliation compares this location only (101 = 0101)</p>
+                  <div className="rounded-2xl border border-violet-200/80 dark:border-violet-800/80 bg-violet-50/80 dark:bg-violet-900/20 px-4 py-3">
+                    <div className="flex items-start sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-8 w-8 rounded-lg bg-violet-100 dark:bg-violet-900/60 flex items-center justify-center shrink-0">
+                          <MapPin className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-bold text-violet-900 dark:text-violet-100">
+                              Floor {inventorySessionFloor.trim() || '—'}, Room {inventorySessionRoom.trim() || '—'}
+                            </span>
+                            {inventoryRoomTagVerified ? (
+                              <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">RFID</span>
+                            ) : (
+                              <span className="text-[10px] font-bold uppercase tracking-wide bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">Manual</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-violet-600/80 dark:text-violet-400/80 mt-0.5">Reconciliation compares this location (101 = 0101)</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="rounded-xl h-8 px-2.5 text-violet-700 dark:text-violet-300"
+                          onClick={() => { roomTagChangeOnlyRef.current = true; setShowRoomTagScanDialog(true); }}
+                        >
+                          <Radio className="h-3.5 w-3.5 mr-1" />
+                          RFID
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="rounded-xl h-8 px-2.5 text-violet-700 dark:text-violet-300"
+                          onClick={() => { setManualFloorInput(inventorySessionFloor); setManualRoomInput(inventorySessionRoom); setShowManualRoomDialog(true); }}
+                        >
+                          <MapPin className="h-3.5 w-3.5 mr-1" />
+                          Edit
+                        </Button>
+                      </div>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="rounded-xl shrink-0 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300"
-                      onClick={() => { roomTagChangeOnlyRef.current = true; setShowRoomTagScanDialog(true); }}
-                    >
-                      <Radio className="h-3.5 w-3.5 mr-1" />
-                      Change room
-                    </Button>
                   </div>
                 )}
 
@@ -2624,45 +2816,74 @@ export default function HandheldHubPage() {
                         </div>
                       )}
                       {reconciliationResult.scope === 'location' && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          <span className="font-medium tabular-nums">{countScansForReconciliation.length}</span> in list total · <span className="font-medium text-violet-600 dark:text-violet-400 tabular-nums">{reconciliationResult.actualCount}</span> at this location · <span className="font-medium text-blue-600 dark:text-blue-400 tabular-nums">{reconciliationResult.extra.length}</span> from other locations
-                        </p>
-                      )}
-                      {reconciliationResult.extra.length > 0 && reconciliationResult.scope === 'location' && (
-                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-                          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Items from other rooms</p>
-                            <p className="text-xs text-amber-700 dark:text-amber-300">Move them to current count location or change room and recount.</p>
+                        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 px-3 py-2.5 space-y-1.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Scan breakdown</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1">
+                            <span className="text-xs text-slate-600 dark:text-slate-400">
+                              <span className="font-bold text-slate-800 dark:text-slate-200 tabular-nums">{countScansForReconciliation.length}</span> total scanned
+                            </span>
+                            <span className="text-xs text-violet-700 dark:text-violet-300">
+                              <span className="font-bold tabular-nums">{reconciliationResult.actualCount}</span> at this location
+                            </span>
+                            {(reconciliationResult.wrongLocation || []).length > 0 && (
+                              <span className="text-xs text-amber-700 dark:text-amber-300">
+                                <span className="font-bold tabular-nums">{(reconciliationResult.wrongLocation || []).length}</span> from other locations
+                              </span>
+                            )}
+                            {reconciliationResult.extra.length > 0 && (
+                              <span className="text-xs text-red-700 dark:text-red-300">
+                                <span className="font-bold tabular-nums">{reconciliationResult.extra.length}</span> not in system
+                              </span>
+                            )}
                           </div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl border-amber-500 text-amber-800 dark:text-amber-200 shrink-0"
-                            onClick={async () => {
-                              const sessionFloor = inventorySessionFloor.trim();
-                              const sessionRoom = inventorySessionRoom.trim();
-                              if (!sessionFloor || !sessionRoom) { toast({ title: 'Count location required', variant: 'destructive' }); return; }
-                              let moved = 0;
-                              for (const e of reconciliationResult.extra) {
-                                if (e.id.startsWith('raw-')) continue;
-                                try {
-                                  const r = await fetch(`/api/assets/${e.id}/move`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ floorNumber: sessionFloor, roomNumber: sessionRoom }) });
-                                  if (r.ok) moved++;
-                                } catch { /* skip */ }
-                              }
-                              if (moved > 0) {
-                                toast({ title: 'Locations updated', description: `${moved} item(s) moved to ${sessionFloor}, ${sessionRoom}. Re-running comparison.` });
-                                setReconciliationResult(null);
-                                void runReconciliation();
-                              } else {
-                                toast({ title: 'Move failed', variant: 'destructive', description: 'Check network and try again.' });
-                              }
-                            }}
-                          >
-                            Move all to current room
-                          </Button>
+                        </div>
+                      )}
+                      {(reconciliationResult.wrongLocation || []).length > 0 && reconciliationResult.scope === 'location' && (
+                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 space-y-3">
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">{(reconciliationResult.wrongLocation || []).length} scanned items belong to other rooms</p>
+                              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">These assets exist in the system but their registered location is different. They were likely physically moved here.</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 pl-8">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="rounded-xl border-amber-500 text-amber-800 dark:text-amber-200"
+                              onClick={async () => {
+                                const sessionFloor = inventorySessionFloor.trim();
+                                const sessionRoom = inventorySessionRoom.trim();
+                                if (!sessionFloor || !sessionRoom) { toast({ title: 'Count location required to move assets', variant: 'destructive' }); return; }
+                                let moved = 0;
+                                for (const e of (reconciliationResult.wrongLocation || [])) {
+                                  try {
+                                    const r = await fetch(`/api/assets/${e.id}/move`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ floorNumber: sessionFloor, roomNumber: sessionRoom }) });
+                                    if (r.ok) moved++;
+                                  } catch { /* skip */ }
+                                }
+                                if (moved > 0) {
+                                  toast({ title: 'Locations updated', description: `${moved} item(s) moved to Floor ${sessionFloor}, Room ${sessionRoom}.` });
+                                  void runReconciliation();
+                                } else {
+                                  toast({ title: 'Move failed', variant: 'destructive', description: 'Check network and try again.' });
+                                }
+                              }}
+                            >
+                              Move all to this room
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="rounded-xl text-amber-800 dark:text-amber-200"
+                              onClick={() => setReconcileShowExtra((v) => !v)}
+                            >
+                              {reconcileShowExtra ? 'Hide details' : 'View details'}
+                            </Button>
+                          </div>
                         </div>
                       )}
                       <div className={cn('grid gap-3', reconciliationResult.difference !== undefined ? 'grid-cols-3' : 'grid-cols-2')}>
@@ -2686,12 +2907,12 @@ export default function HandheldHubPage() {
                               {reconciliationResult.difference > 0 ? '+' : ''}{reconciliationResult.difference}
                             </p>
                             <p className="text-xs font-medium mt-0.5 text-slate-600 dark:text-slate-400">
-                              {reconciliationResult.difference === 0 ? 'Match' : reconciliationResult.difference > 0 ? 'Missing from scan' : 'Extra in scan'}
+                              {reconciliationResult.difference === 0 ? '✓ Match' : reconciliationResult.difference > 0 ? `${reconciliationResult.difference} missing` : `${-reconciliationResult.difference} extra scanned`}
                             </p>
                           </div>
                         )}
                       </div>
-                      {reconciliationResult.expectedCount === reconciliationResult.actualCount && reconciliationResult.missing.length === 0 && reconciliationResult.extra.length === 0 && (
+                      {reconciliationResult.expectedCount === reconciliationResult.actualCount && reconciliationResult.missing.length === 0 && reconciliationResult.extra.length === 0 && (reconciliationResult.wrongLocation || []).length === 0 && (
                         <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
                           <CheckCircle2 className="h-10 w-10 text-emerald-600 dark:text-emerald-400 shrink-0" />
                           <div>
@@ -2700,7 +2921,7 @@ export default function HandheldHubPage() {
                           </div>
                         </div>
                       )}
-                      {(reconciliationResult.missing.length > 0 || reconciliationResult.extra.length > 0) && (
+                      {(reconciliationResult.missing.length > 0 || reconciliationResult.extra.length > 0 || (reconciliationResult.wrongLocation || []).length > 0) && (
                         <div className="space-y-3">
                           {reconciliationResult.missing.length > 0 && (
                             <>
@@ -2788,39 +3009,64 @@ export default function HandheldHubPage() {
                               )}
                             </div>
                           )}
+                          {/* Wrong location items (exist in system but registered elsewhere) */}
+                          {reconcileShowExtra && (reconciliationResult.wrongLocation || []).length > 0 && (
+                            <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 overflow-hidden">
+                              <div className="flex items-center justify-between gap-2 p-3">
+                                <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
+                                  <ArrowRightLeft className="h-4 w-4 shrink-0" />
+                                  Wrong location — {(reconciliationResult.wrongLocation || []).length} items
+                                </span>
+                              </div>
+                              <ul className="px-3 pb-3 space-y-2 max-h-56 overflow-y-auto">
+                                {(reconciliationResult.wrongLocation || []).map((e) => {
+                                  const sysLoc = [e.systemFloor, e.systemRoom].filter(Boolean).join(', ') || 'no location in system';
+                                  return (
+                                    <li key={e.id} className="rounded-xl bg-amber-100/80 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/60 p-2.5 flex flex-col gap-1.5">
+                                      <p className="text-xs font-medium text-amber-900 dark:text-amber-100 truncate" title={e.name}>{e.name || e.barcode || e.id}</p>
+                                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                                        <span className="text-[10px] text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                                          <MapPin className="h-3 w-3 shrink-0" /> System says: {sysLoc}
+                                        </span>
+                                        <Button type="button" size="sm" variant="outline" className="h-7 text-[10px] rounded-lg border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200" onClick={() => { setReconcileEditLocationAsset({ id: e.id, name: e.name, floorNumber: e.systemFloor, roomNumber: e.systemRoom }); reconcileEditLocationForm.reset({ floorNumber: e.systemFloor || '', roomNumber: e.systemRoom || '' }); }}>
+                                          <MapPin className="h-3 w-3 mr-1" /> Update location
+                                        </Button>
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                          {/* Truly unknown — scanned but not in system at all */}
                           {reconciliationResult.extra.length > 0 && (
-                            <div className="rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10 overflow-hidden">
+                            <div className="rounded-2xl border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10 overflow-hidden">
                               <button
                                 type="button"
                                 onClick={() => setReconcileShowExtra((v) => !v)}
                                 className="w-full flex items-center justify-between gap-2 p-3 text-left"
                               >
-                                <span className="flex items-center gap-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
-                                  <Package className="h-4 w-4 shrink-0" />
-                                  Extra / unknown ({reconciliationResult.extra.length})
+                                <span className="flex items-center gap-2 text-sm font-semibold text-red-900 dark:text-red-100">
+                                  <AlertCircle className="h-4 w-4 shrink-0" />
+                                  Not in system — {reconciliationResult.extra.length} unknown
                                 </span>
-                                {reconcileShowExtra ? <ChevronUp className="h-4 w-4 text-blue-600" /> : <ChevronDown className="h-4 w-4 text-blue-600" />}
+                                {reconcileShowExtra ? <ChevronUp className="h-4 w-4 text-red-600" /> : <ChevronDown className="h-4 w-4 text-red-600" />}
                               </button>
                               {reconcileShowExtra && (
                                 <ul className="px-3 pb-3 space-y-2 max-h-56 overflow-y-auto">
-                                  {reconciliationResult.extra.map((e) => {
-                                    const sysLoc = [e.floorNumber, e.roomNumber].filter(Boolean).join(', ') || '—';
-                                    return (
-                                      <li key={e.id} className="rounded-xl bg-blue-100/80 dark:bg-blue-900/20 border border-blue-200/60 dark:border-blue-800/60 p-2.5 flex flex-col gap-1.5">
-                                        <p className="text-xs font-medium text-blue-900 dark:text-blue-100 truncate" title={e.name}>{e.name || e.barcode || e.id}</p>
-                                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                                          <span className="text-[10px] text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                                            <MapPin className="h-3 w-3 shrink-0" /> Scanned at: {sysLoc}
-                                          </span>
-                                          {!e.id.startsWith('raw-') && (
-                                            <Button type="button" size="sm" variant="outline" className="h-7 text-[10px] rounded-lg border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200" onClick={() => { setReconcileEditLocationAsset({ id: e.id, name: e.name, floorNumber: e.floorNumber, roomNumber: e.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: e.floorNumber || '', roomNumber: e.roomNumber || '' }); }}>
-                                              <MapPin className="h-3 w-3 mr-1" /> Edit location
-                                            </Button>
-                                          )}
-                                        </div>
-                                      </li>
-                                    );
-                                  })}
+                                  {reconciliationResult.extra.map((e) => (
+                                    <li key={e.id} className="rounded-xl bg-red-100/80 dark:bg-red-900/20 border border-red-200/60 dark:border-red-800/60 p-2.5 flex items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-medium text-red-900 dark:text-red-100 truncate">{e.name || e.barcode || e.id}</p>
+                                        {e.barcode && <p className="text-[10px] text-red-600 dark:text-red-400 font-mono">{e.barcode}</p>}
+                                      </div>
+                                      {!e.id.startsWith('raw-') && (
+                                        <Button type="button" size="sm" variant="outline" className="h-7 text-[10px] rounded-lg border-red-400 dark:border-red-600 text-red-800 dark:text-red-200 shrink-0" onClick={() => { setReconcileEditLocationAsset({ id: e.id, name: e.name, floorNumber: e.floorNumber, roomNumber: e.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: e.floorNumber || '', roomNumber: e.roomNumber || '' }); }}>
+                                          Register location
+                                        </Button>
+                                      )}
+                                    </li>
+                                  ))}
                                 </ul>
                               )}
                             </div>
@@ -3609,19 +3855,25 @@ export default function HandheldHubPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto space-y-5 py-2 min-h-0 -mx-1 px-1">
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <div className="rounded-2xl bg-slate-100 dark:bg-slate-800 p-3 sm:p-4 text-center border border-slate-200/60 dark:border-slate-700">
                   <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{reconciliationResult.expectedCount}</p>
                   <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">In system</p>
                 </div>
                 <div className="rounded-2xl bg-violet-100 dark:bg-violet-900/30 p-3 sm:p-4 text-center border border-violet-200/60 dark:border-violet-800">
                   <p className="text-xl sm:text-2xl font-bold text-violet-700 dark:text-violet-300 tabular-nums">{reconciliationResult.actualCount}</p>
-                  <p className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mt-1">Scanned</p>
+                  <p className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mt-1">Scanned here</p>
                 </div>
                 <div className="rounded-2xl bg-amber-100 dark:bg-amber-900/30 p-3 sm:p-4 text-center border border-amber-200/60 dark:border-amber-800">
                   <p className="text-xl sm:text-2xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">{reconciliationResult.missing.length}</p>
                   <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mt-1">Missing</p>
                 </div>
+                {(reconciliationResult.wrongLocation || []).length > 0 && (
+                  <div className="rounded-2xl bg-orange-100 dark:bg-orange-900/30 p-3 sm:p-4 text-center border border-orange-200/60 dark:border-orange-800">
+                    <p className="text-xl sm:text-2xl font-bold text-orange-700 dark:text-orange-300 tabular-nums">{(reconciliationResult.wrongLocation || []).length}</p>
+                    <p className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider mt-1">Wrong room</p>
+                  </div>
+                )}
               </div>
               {reconciliationResult.scope === 'location' && reconciliationResult.locationDisplay && (
                 <div className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 px-3 py-2">
@@ -3896,6 +4148,59 @@ export default function HandheldHubPage() {
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setShowRoomTagScanDialog(false)} disabled={roomTagScanning}>
               Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual room/floor entry dialog */}
+      <Dialog open={showManualRoomDialog} onOpenChange={setShowManualRoomDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-blue-600" />
+              Enter location manually
+            </DialogTitle>
+            <DialogDescription>
+              Type your floor and room number. For best accuracy, use RFID room tags instead.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <p className="text-xs text-amber-800 dark:text-amber-200">RFID scan is recommended for higher accuracy and tamper-proof audit trail.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">Floor</label>
+                <Input
+                  placeholder="e.g. 2"
+                  value={manualFloorInput}
+                  onChange={(e) => setManualFloorInput(e.target.value)}
+                  className="rounded-xl h-11 text-base"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">Room</label>
+                <Input
+                  placeholder="e.g. 101"
+                  value={manualRoomInput}
+                  onChange={(e) => setManualRoomInput(e.target.value)}
+                  className="rounded-xl h-11 text-base"
+                  onKeyDown={(e) => { if (e.key === 'Enter') startWithManualLocation(manualFloorInput, manualRoomInput); }}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowManualRoomDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => startWithManualLocation(manualFloorInput, manualRoomInput)}
+            >
+              <Hash className="h-4 w-4 mr-1.5" /> Start session
             </Button>
           </DialogFooter>
         </DialogContent>
