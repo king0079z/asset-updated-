@@ -21,13 +21,13 @@ This document maps your requested feature list to what is **implemented** in the
 
 | Feature | Status | Where |
 |--------|--------|--------|
-| Stock counting (cycle / full audit) | **Implemented** | Handheld: Inventory → Count (session, scan list, reconciliation expected vs actual, reason codes) |
+| Stock counting (cycle / full audit) | **Implemented** | Handheld: Inventory session; virtualized list; search/filter; undo; session resume (`localStorage`); scan queue offline + sync |
 | Goods receiving & issuing | **Partial** | Food supply: refill, consumption, disposal; assets: create, assign, move. No dedicated "receiving" workflow |
 | Automated reconciliation | **Implemented** | Handheld count: run reconciliation, missing/extra lists, submit for review with reason |
 | Batch & serial number tracking | **Partial** | Food supply has barcodes; production batches API exists. Asset-level batch/serial not in schema |
 | Expiry date tracking | **Implemented** | Food supply: `expirationDate`; dashboard/ExpiringItemsCard; filter by expired/expiring |
 | Multi-warehouse support | **Implemented** | Locations model; kitchens; asset location by floor/room and location |
-| Offline inventory capture → sync when online | **Implemented** | Handheld: `handheld_offline_queue` in localStorage; move/status queued; "Sync now" replays queue |
+| Offline inventory capture → sync when online | **Implemented** | Handheld: `handheld_offline_queue` for moves; inventory scans queued as pending rows; "Sync now" + online event replays; session persisted `handheld_inventory_session_v1` |
 
 ---
 

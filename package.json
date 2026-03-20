@@ -50,6 +50,7 @@
     "@radix-ui/react-visually-hidden": "^1.2.4",
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "^2.45.3",
+    "@tanstack/react-virtual": "^3.13.23",
     "axios": "^1.6.7",
     "chart.js": "^4.4.2",
     "class-variance-authority": "^0.7.0",

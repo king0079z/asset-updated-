@@ -61,6 +61,7 @@ import {
   Scale,
   ChevronDown,
   ChevronUp,
+  Undo2,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
@@ -86,6 +87,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { cn } from '@/lib/utils';
+import {
+  handheldInventoryItemsEqual,
+  type HandheldCountScanItem,
+  type HandheldUnifiedInventoryItem,
+} from '@/components/handheld/inventorySessionTypes';
+import {
+  HandheldInventoryVirtualList,
+  useHandheldInventoryVirtualizer,
+} from '@/components/handheld/HandheldInventoryVirtualList';
 
 const transferSchema = z.object({
   floorNumber: z.string().min(1, 'Required'),
@@ -160,6 +170,11 @@ const TAB_SUBTITLE: Record<HandheldTabId, string> = {
   more: 'More · sync & settings',
 };
 
+/** Persisted handheld inventory session (device-local recovery). */
+const INVENTORY_SESSION_KEY = 'handheld_inventory_session_v1';
+const INVENTORY_AUDIT_LOG_MAX = 250;
+const INVENTORY_PROOF_MAX_IMAGES = 3;
+
 export default function HandheldHubPage() {
   const { toast } = useToast();
   const [tab, setTab] = useState<HandheldTabId>('scan');
@@ -202,22 +217,39 @@ export default function HandheldHubPage() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
-  // Unified inventory (count + audit): one list for assets, food, tickets
-  type CountScanItem = {
-    id: string;
-    barcode?: string;
-    name: string;
-    imageUrl?: string | null;
-    status?: string;
-    floorNumber?: string | null;
-    roomNumber?: string | null;
-  };
-  type UnifiedInventoryItem =
-    | { type: 'asset'; data: CountScanItem }
-    | { type: 'food'; supply: any }
-    | { type: 'ticket'; ticket: any };
-  const [unifiedInventory, setUnifiedInventory] = useState<UnifiedInventoryItem[]>([]);
+  type CountScanItem = HandheldCountScanItem;
+  type UnifiedInventoryItem = HandheldUnifiedInventoryItem;
+  const [unifiedInventory, setUnifiedInventory] = useState<HandheldUnifiedInventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryAuditLog, setInventoryAuditLog] = useState<{ at: number; action: string; detail: string }[]>([]);
+  const [sessionProofNote, setSessionProofNote] = useState('');
+  const [sessionProofImages, setSessionProofImages] = useState<string[]>([]);
+  const [inventoryLiveMessage, setInventoryLiveMessage] = useState('');
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const inventoryScrollParentRef = useRef<HTMLDivElement | null>(null);
+  const inventoryProofFileRef = useRef<HTMLInputElement>(null);
+  const unifiedInventoryRef = useRef<HandheldUnifiedInventoryItem[]>([]);
+  const inventoryUndoStackRef = useRef<Array<{ kind: 'pending'; localKey: string } | { kind: 'item'; item: HandheldUnifiedInventoryItem }>>([]);
+  const inventorySessionRestoreDone = useRef(false);
+
+  useEffect(() => {
+    unifiedInventoryRef.current = unifiedInventory;
+  }, [unifiedInventory]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const upd = () => setPrefersReducedMotion(mq.matches);
+    upd();
+    mq.addEventListener('change', upd);
+    return () => mq.removeEventListener('change', upd);
+  }, []);
+
+  const pushInventoryAudit = useCallback((action: string, detail: string) => {
+    const row = { at: Date.now(), action, detail: detail.slice(0, 500) };
+    setInventoryAuditLog((prev) => [row, ...prev].slice(0, INVENTORY_AUDIT_LOG_MAX));
+  }, []);
   // Audit modals (details, comment, food, ticket, RFID map)
   const [auditLoading, setAuditLoading] = useState(false);
   const [selectedAuditAssetForDetails, setSelectedAuditAssetForDetails] = useState<any | null>(null);
@@ -308,6 +340,73 @@ export default function HandheldHubPage() {
     resolver: zodResolver(transferSchema),
     defaultValues: { floorNumber: '', roomNumber: '' },
   });
+
+  // Resume inventory session from device (crash / tab close recovery)
+  useEffect(() => {
+    if (typeof window === 'undefined' || inventorySessionRestoreDone.current) return;
+    inventorySessionRestoreDone.current = true;
+    try {
+      const raw = localStorage.getItem(INVENTORY_SESSION_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.v !== 1 || !s.countSessionActive) return;
+      setCountSessionActive(true);
+      setCountStartTime(typeof s.countStartTime === 'number' ? s.countStartTime : Date.now());
+      setCountLocationLabel(typeof s.countLocationLabel === 'string' ? s.countLocationLabel : '');
+      setInventorySessionFloor(typeof s.inventorySessionFloor === 'string' ? s.inventorySessionFloor : '');
+      setInventorySessionRoom(typeof s.inventorySessionRoom === 'string' ? s.inventorySessionRoom : '');
+      setUnifiedInventory(Array.isArray(s.unifiedInventory) ? s.unifiedInventory : []);
+      if (s.reconciliationResult) setReconciliationResult(s.reconciliationResult);
+      if (Array.isArray(s.inventoryAuditLog)) setInventoryAuditLog(s.inventoryAuditLog.slice(0, INVENTORY_AUDIT_LOG_MAX));
+      setSessionProofNote(typeof s.sessionProofNote === 'string' ? s.sessionProofNote : '');
+      setSessionProofImages(Array.isArray(s.sessionProofImages) ? s.sessionProofImages.slice(0, INVENTORY_PROOF_MAX_IMAGES) : []);
+      toast({
+        title: 'Session resumed',
+        description: 'Inventory session restored from this device.',
+      });
+    } catch {
+      /* ignore corrupt storage */
+    }
+  }, [toast]);
+
+  // Persist active inventory session (debounced)
+  useEffect(() => {
+    if (!countSessionActive) return;
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          INVENTORY_SESSION_KEY,
+          JSON.stringify({
+            v: 1,
+            countSessionActive: true,
+            countStartTime,
+            countLocationLabel,
+            inventorySessionFloor,
+            inventorySessionRoom,
+            unifiedInventory,
+            reconciliationResult,
+            inventoryAuditLog,
+            sessionProofNote,
+            sessionProofImages,
+          }),
+        );
+      } catch {
+        /* quota / private mode */
+      }
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [
+    countSessionActive,
+    countStartTime,
+    countLocationLabel,
+    inventorySessionFloor,
+    inventorySessionRoom,
+    unifiedInventory,
+    reconciliationResult,
+    inventoryAuditLog,
+    sessionProofNote,
+    sessionProofImages,
+  ]);
 
   // Add new asset from handheld (full form as main app)
   const [showAddAssetDialog, setShowAddAssetDialog] = useState(false);
@@ -691,75 +790,210 @@ export default function HandheldHubPage() {
     if (tab === 'work') fetchAssignedTasks();
   }, [tab, fetchAssignedTasks]);
 
-  const addToUnifiedInventory = useCallback(async (code: string) => {
+  /** Resolve barcode / id online (no UI side effects). */
+  const performInventoryLookup = useCallback(async (code: string): Promise<UnifiedInventoryItem | null> => {
     const q = code.trim();
-    if (!q) return;
-    setInventoryLoading(true);
-    setSessionScansCount((s) => s + 1);
-    try {
-      // 1) Try asset scan first
-      const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.asset?.id) {
-          const a = data.asset;
-          const item: CountScanItem = {
-            id: a.id,
-            barcode: a.barcode || q,
-            name: a.name || a.assetId || 'Unknown',
-            imageUrl: a.imageUrl,
-            status: a.status,
-            floorNumber: a.floorNumber,
-            roomNumber: a.roomNumber,
-          };
-          setUnifiedInventory((prev) => {
-            if (prev.some((x) => x.type === 'asset' && x.data.id === a.id)) return prev;
-            return [...prev, { type: 'asset', data: item }];
-          });
-          toast({ title: 'Added', description: a.name });
-          return;
-        }
+    if (!q) return null;
+    const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(q)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.asset?.id) {
+        const a = data.asset;
+        const item: CountScanItem = {
+          id: a.id,
+          barcode: a.barcode || q,
+          name: a.name || a.assetId || 'Unknown',
+          imageUrl: a.imageUrl,
+          status: a.status,
+          floorNumber: a.floorNumber,
+          roomNumber: a.roomNumber,
+        };
+        return { type: 'asset', data: item };
       }
-      // 2) Try food supply barcode
-      const scanRes = await fetch('/api/food-supply/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barcode: q }),
-      });
-      if (scanRes.ok) {
-        const scanData = await scanRes.json();
-        if (scanData?.supply?.id) {
-          const supply = scanData.supply;
-          setUnifiedInventory((prev) => {
-            if (prev.some((x) => x.type === 'food' && x.supply?.id === supply.id)) return prev;
-            return [...prev, { type: 'food', supply }];
-          });
-          toast({ title: 'Food supply added', description: `${supply.name} — ${supply.quantity} ${supply.unit} left` });
-          return;
-        }
-      }
-      // 3) Try ticket barcode
-      const ticketRes = await fetch(`/api/tickets/barcode?barcode=${encodeURIComponent(q)}`, { credentials: 'include' });
-      if (ticketRes.ok) {
-        const ticketData = await ticketRes.json();
-        if (ticketData?.id) {
-          setUnifiedInventory((prev) => {
-            if (prev.some((x) => x.type === 'ticket' && x.ticket?.id === ticketData.id)) return prev;
-            return [...prev, { type: 'ticket', ticket: ticketData }];
-          });
-          toast({ title: 'Ticket added', description: ticketData.title || ticketData.displayId || 'Ticket' });
-          return;
-        }
-      }
-      setSessionScansCount((s) => Math.max(0, s - 1));
-      toast({ title: 'Not found', description: q, variant: 'destructive' });
-    } catch {
-      setSessionScansCount((s) => Math.max(0, s - 1));
-      toast({ title: 'Lookup failed', variant: 'destructive' });
-    } finally {
-      setInventoryLoading(false);
     }
-  }, [toast]);
+    const scanRes = await fetch('/api/food-supply/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barcode: q }),
+    });
+    if (scanRes.ok) {
+      const scanData = await scanRes.json();
+      if (scanData?.supply?.id) {
+        return { type: 'food', supply: scanData.supply };
+      }
+    }
+    const ticketRes = await fetch(`/api/tickets/barcode?barcode=${encodeURIComponent(q)}`, { credentials: 'include' });
+    if (ticketRes.ok) {
+      const ticketData = await ticketRes.json();
+      if (ticketData?.id) {
+        return { type: 'ticket', ticket: ticketData };
+      }
+    }
+    return null;
+  }, []);
+
+  const flushPendingInventoryScans = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    const prev = unifiedInventoryRef.current;
+    const pending = prev.filter((x): x is Extract<HandheldUnifiedInventoryItem, { type: 'pending_scan' }> => x.type === 'pending_scan');
+    if (pending.length === 0) return;
+    let resolvedN = 0;
+    for (const p of pending) {
+      try {
+        const result = await performInventoryLookup(p.code);
+        if (result) {
+          const now = Date.now();
+          const withMeta: HandheldUnifiedInventoryItem =
+            result.type === 'asset'
+              ? { type: 'asset', data: result.data, meta: { addedAt: now, syncStatus: 'synced' } }
+              : result.type === 'food'
+                ? { type: 'food', supply: result.supply, meta: { addedAt: now, syncStatus: 'synced' } }
+                : { type: 'ticket', ticket: result.ticket, meta: { addedAt: now, syncStatus: 'synced' } };
+          setUnifiedInventory((cur) =>
+            cur.map((x) => (x.type === 'pending_scan' && x.localKey === p.localKey ? withMeta : x)),
+          );
+          pushInventoryAudit('offline_scan_resolved', p.code);
+          resolvedN += 1;
+        } else {
+          setUnifiedInventory((cur) =>
+            cur.map((x) =>
+              x.type === 'pending_scan' && x.localKey === p.localKey ? { ...x, error: 'Not found' } : x,
+            ),
+          );
+          pushInventoryAudit('offline_scan_failed', p.code);
+        }
+      } catch {
+        setUnifiedInventory((cur) =>
+          cur.map((x) => (x.type === 'pending_scan' && x.localKey === p.localKey ? { ...x, error: 'Network error' } : x)),
+        );
+      }
+    }
+    if (resolvedN > 0) {
+      toast({ title: 'Offline queue synced', description: `${resolvedN} scan(s) resolved.` });
+      setInventoryLiveMessage(`${resolvedN} offline scan(s) synced`);
+    }
+  }, [performInventoryLookup, pushInventoryAudit, toast]);
+
+  useEffect(() => {
+    if (!countSessionActive) return;
+    const handler = () => {
+      void flushPendingInventoryScans();
+    };
+    window.addEventListener('online', handler);
+    return () => window.removeEventListener('online', handler);
+  }, [countSessionActive, flushPendingInventoryScans]);
+
+  const undoLastInventoryAdd = useCallback(() => {
+    const stack = inventoryUndoStackRef.current;
+    const last = stack.pop();
+    if (!last) {
+      toast({ title: 'Nothing to undo', description: 'No recent add in this session.', variant: 'destructive' });
+      return;
+    }
+    if (last.kind === 'pending') {
+      setUnifiedInventory((prev) => prev.filter((x) => !(x.type === 'pending_scan' && x.localKey === last.localKey)));
+      pushInventoryAudit('undo', `pending:${last.localKey}`);
+    } else {
+      const label =
+        last.item.type === 'asset'
+          ? last.item.data.name
+          : last.item.type === 'food'
+            ? last.item.supply?.name
+            : last.item.type === 'ticket'
+              ? last.item.ticket?.title
+              : '';
+      pushInventoryAudit('undo', label || 'item');
+      setUnifiedInventory((prev) => {
+        const idx = prev.findIndex((x) => handheldInventoryItemsEqual(x, last.item));
+        if (idx === -1) return prev;
+        return prev.filter((_, i) => i !== idx);
+      });
+    }
+    setSessionScansCount((s) => Math.max(0, s - 1));
+    setInventoryLiveMessage('Last add undone');
+    toast({ title: 'Undone', description: 'Removed the last scanned item.' });
+  }, [pushInventoryAudit, toast]);
+
+  const addToUnifiedInventory = useCallback(
+    async (code: string) => {
+      const q = code.trim();
+      if (!q) return;
+      const now = Date.now();
+      const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+      if (offline) {
+        const localKey = `pq_${now}_${Math.random().toString(36).slice(2, 10)}`;
+        setUnifiedInventory((prev) => [...prev, { type: 'pending_scan', localKey, code: q, queuedAt: now }]);
+        inventoryUndoStackRef.current.push({ kind: 'pending', localKey });
+        if (inventoryUndoStackRef.current.length > 50) inventoryUndoStackRef.current.shift();
+        setSessionScansCount((s) => s + 1);
+        pushInventoryAudit('scan_queued_offline', q);
+        setInventoryLiveMessage(`Queued offline: ${q}`);
+        toast({ title: 'Offline — queued', description: `${q} will resolve when you are online.` });
+        return;
+      }
+
+      setInventoryLoading(true);
+      setSessionScansCount((s) => s + 1);
+      try {
+        const resolved = await performInventoryLookup(q);
+        if (!resolved) {
+          setSessionScansCount((s) => Math.max(0, s - 1));
+          pushInventoryAudit('scan_not_found', q);
+          setInventoryLiveMessage(`Not found: ${q}`);
+          toast({ title: 'Not found', description: q, variant: 'destructive' });
+          return;
+        }
+
+        const snapshot = unifiedInventoryRef.current;
+        const duplicate =
+          (resolved.type === 'asset' && snapshot.some((x) => x.type === 'asset' && x.data.id === resolved.data.id)) ||
+          (resolved.type === 'food' && snapshot.some((x) => x.type === 'food' && x.supply?.id === resolved.supply?.id)) ||
+          (resolved.type === 'ticket' && snapshot.some((x) => x.type === 'ticket' && x.ticket?.id === resolved.ticket?.id));
+
+        if (duplicate) {
+          setSessionScansCount((s) => Math.max(0, s - 1));
+          setInventoryLiveMessage('Already in list');
+          toast({ title: 'Already in list', description: q });
+          return;
+        }
+
+        const meta = { addedAt: now, syncStatus: 'synced' as const };
+        const toAdd: HandheldUnifiedInventoryItem =
+          resolved.type === 'asset'
+            ? { type: 'asset', data: resolved.data, meta }
+            : resolved.type === 'food'
+              ? { type: 'food', supply: resolved.supply, meta }
+              : { type: 'ticket', ticket: resolved.ticket, meta };
+
+        inventoryUndoStackRef.current.push({ kind: 'item', item: toAdd });
+        if (inventoryUndoStackRef.current.length > 50) inventoryUndoStackRef.current.shift();
+
+        setUnifiedInventory((prev) => [...prev, toAdd]);
+
+        const live =
+          resolved.type === 'asset'
+            ? resolved.data.name
+            : resolved.type === 'food'
+              ? resolved.supply.name
+              : resolved.ticket.title || resolved.ticket.displayId || 'Ticket';
+        pushInventoryAudit('scan_added', `${resolved.type}:${q}`);
+        setInventoryLiveMessage(`Added: ${live}`);
+        if (resolved.type === 'asset') toast({ title: 'Added', description: resolved.data.name });
+        else if (resolved.type === 'food')
+          toast({ title: 'Food supply added', description: `${resolved.supply.name} — ${resolved.supply.quantity} ${resolved.supply.unit} left` });
+        else toast({ title: 'Ticket added', description: resolved.ticket.title || resolved.ticket.displayId || 'Ticket' });
+      } catch {
+        setSessionScansCount((s) => Math.max(0, s - 1));
+        pushInventoryAudit('scan_error', q);
+        setInventoryLiveMessage('Lookup failed');
+        toast({ title: 'Lookup failed', variant: 'destructive' });
+      } finally {
+        setInventoryLoading(false);
+      }
+    },
+    [performInventoryLookup, pushInventoryAudit, toast],
+  );
 
   const doMove = async (vals: z.infer<typeof transferSchema>) => {
     if (!currentAsset) return;
@@ -1045,25 +1279,58 @@ export default function HandheldHubPage() {
       toast({ title: 'No items to export', variant: 'destructive' });
       return;
     }
+    const metaIso = (item: HandheldUnifiedInventoryItem) =>
+      item.type !== 'pending_scan' && item.meta?.addedAt ? new Date(item.meta.addedAt).toISOString() : '—';
+    const metaSync = (item: HandheldUnifiedInventoryItem) =>
+      item.type === 'pending_scan' ? 'pending_offline' : item.meta?.syncStatus || 'synced';
+
     const rows = unifiedInventory.map((item, i) => {
+      if (item.type === 'pending_scan') {
+        return [
+          i + 1,
+          item.code,
+          'Pending offline',
+          item.localKey,
+          '—',
+          '—',
+          '—',
+          '—',
+          new Date(item.queuedAt).toISOString(),
+          metaSync(item),
+          item.error || '',
+        ];
+      }
       if (item.type === 'food') {
         const food = item.supply;
         const kitchens = (food.kitchensWithSupply && food.kitchensWithSupply.length)
           ? food.kitchensWithSupply.map((k: { name: string }) => k.name).join('; ')
           : (food.kitchenName || '—');
-        return [i + 1, food.name, 'Food supply', food.id, `${food.quantity} ${food.unit}`, kitchens, '—', '—'];
+        return [i + 1, food.name, 'Food supply', food.id, `${food.quantity} ${food.unit}`, kitchens, '—', '—', metaIso(item), metaSync(item), ''];
       }
       if (item.type === 'ticket') {
         const ticket = item.ticket;
-        return [i + 1, ticket.title || 'Ticket', 'Ticket', ticket.displayId || ticket.id, (ticket.status || '').toLowerCase(), '—', '—', '—'];
+        return [i + 1, ticket.title || 'Ticket', 'Ticket', ticket.displayId || ticket.id, (ticket.status || '').toLowerCase(), '—', '—', '—', metaIso(item), metaSync(item), ''];
       }
       const asset = item.data;
       const loc = [asset.floorNumber, asset.roomNumber].filter(Boolean).join(', ') || '—';
       const rfid = (asset as any).rfidTag?.lastZone ? [(asset as any).rfidTag.lastZone.name, (asset as any).rfidTag.lastZone.floorNumber, (asset as any).rfidTag.lastZone.roomNumber].filter(Boolean).join(', ') : '—';
-      return [i + 1, asset.name, 'Asset', asset.barcode ?? asset.id ?? '', 'Qty 1', loc, '—', rfid];
+      return [i + 1, asset.name, 'Asset', asset.barcode ?? asset.id ?? '', 'Qty 1', loc, '—', rfid, metaIso(item), metaSync(item), ''];
     });
-    const header = ['#', 'Name', 'Type', 'ID/Barcode', 'Qty/Location', 'Kitchens/Location', 'Assigned to', 'RFID location'];
-    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const auditExtras =
+      inventoryAuditLog.length > 0
+        ? [
+            [],
+            ['SESSION_AUDIT_LOG'],
+            ['timestamp_iso', 'action', 'detail'],
+            ...inventoryAuditLog.map((e) => [new Date(e.at).toISOString(), e.action, e.detail]),
+          ]
+        : [];
+    const proofRows =
+      sessionProofNote.trim() || sessionProofImages.length > 0
+        ? [[], ['SESSION_PROOF'], ['note', sessionProofNote.replace(/\r?\n/g, ' ')], ['images_count', String(sessionProofImages.length)]]
+        : [];
+    const header = ['#', 'Name', 'Type', 'ID/Barcode', 'Qty/Location', 'Kitchens/Location', 'Assigned to', 'RFID location', 'AddedAtISO', 'Sync', 'Extra'];
+    const csv = [header, ...rows, ...auditExtras, ...proofRows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1072,7 +1339,7 @@ export default function HandheldHubPage() {
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: 'Audit exported' });
-  }, [unifiedInventory, toast]);
+  }, [unifiedInventory, inventoryAuditLog, sessionProofNote, sessionProofImages, toast]);
 
   const openAuditAssetDetails = useCallback(async (assetId: string) => {
     setAuditDetailsLoading(true);
@@ -1180,15 +1447,28 @@ export default function HandheldHubPage() {
   const handleSyncNow = useCallback(async () => {
     setLastSyncTime(Date.now());
     try {
-      if (isOnline) await processOfflineQueue();
+      if (isOnline) {
+        await processOfflineQueue();
+        await flushPendingInventoryScans();
+      }
       await Promise.all([fetchAssignedTickets(), fetchAssignedTasks()]);
       toast({ title: 'Synced', description: offlineQueueLength > 0 ? 'Queue replayed, tickets and tasks refreshed.' : 'Tickets and tasks refreshed.' });
     } catch {
       toast({ title: 'Sync failed', variant: 'destructive' });
     }
-  }, [fetchAssignedTickets, fetchAssignedTasks, toast, isOnline, processOfflineQueue, offlineQueueLength]);
+  }, [fetchAssignedTickets, fetchAssignedTasks, toast, isOnline, processOfflineQueue, offlineQueueLength, flushPendingInventoryScans]);
 
   const startCountSession = useCallback(() => {
+    try {
+      localStorage.removeItem(INVENTORY_SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+    inventoryUndoStackRef.current = [];
+    setInventorySearch('');
+    setInventoryAuditLog([]);
+    setSessionProofNote('');
+    setSessionProofImages([]);
     setCountSessionActive(true);
     setCountStartTime(Date.now());
     setUnifiedInventory([]);
@@ -1199,6 +1479,68 @@ export default function HandheldHubPage() {
     () => unifiedInventory.filter((x): x is { type: 'asset'; data: CountScanItem } => x.type === 'asset').map((x) => x.data),
     [unifiedInventory]
   );
+
+  const inventoryPendingCount = useMemo(
+    () => unifiedInventory.filter((x) => x.type === 'pending_scan').length,
+    [unifiedInventory],
+  );
+
+  const inventoryDisplayList = useMemo(() => {
+    const q = inventorySearch.trim().toLowerCase();
+    const matches = (item: HandheldUnifiedInventoryItem) => {
+      if (!q) return true;
+      if (item.type === 'pending_scan') {
+        return (
+          item.code.toLowerCase().includes(q) ||
+          'pending'.includes(q) ||
+          'offline'.includes(q) ||
+          'queued'.includes(q)
+        );
+      }
+      if (item.type === 'asset') {
+        const d = item.data;
+        return (
+          (d.name || '').toLowerCase().includes(q) ||
+          (d.barcode || '').toLowerCase().includes(q) ||
+          (d.id || '').toLowerCase().includes(q) ||
+          [d.floorNumber, d.roomNumber].filter(Boolean).join(' ').toLowerCase().includes(q)
+        );
+      }
+      if (item.type === 'food') {
+        const s = item.supply;
+        return (s?.name || '').toLowerCase().includes(q) || String(s?.barcode || '').toLowerCase().includes(q);
+      }
+      const t = item.ticket;
+      return (t?.title || '').toLowerCase().includes(q) || String(t?.displayId || t?.id || '').toLowerCase().includes(q);
+    };
+    const filtered = unifiedInventory.filter(matches);
+    if (auditSort === 'scan') return filtered;
+    return [...filtered].sort((a, b) => {
+      const name = (x: HandheldUnifiedInventoryItem) =>
+        x.type === 'food'
+          ? x.supply?.name
+          : x.type === 'ticket'
+            ? x.ticket?.title || x.ticket?.displayId || ''
+            : x.type === 'pending_scan'
+              ? x.code
+              : x.data?.name || '';
+      const loc = (x: HandheldUnifiedInventoryItem) =>
+        x.type === 'food'
+          ? (x.supply?.kitchensWithSupply?.length
+              ? x.supply.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ')
+              : x.supply?.kitchenName) || ''
+          : x.type === 'ticket'
+            ? x.ticket?.status || ''
+            : x.type === 'pending_scan'
+              ? ''
+              : [x.data?.floorNumber, x.data?.roomNumber].filter(Boolean).join(' ');
+      if (auditSort === 'name') return name(a).localeCompare(name(b));
+      return loc(a).localeCompare(loc(b));
+    });
+  }, [unifiedInventory, inventorySearch, auditSort]);
+
+  const inventoryRowVirtualizer = useHandheldInventoryVirtualizer(inventoryDisplayList.length, inventoryScrollParentRef);
+
   const runReconciliation = useCallback(async (locationOverride?: { floor: string; room: string }) => {
     setReconciliationLoading(true);
     setReconciliationResult(null);
@@ -1265,6 +1607,12 @@ export default function HandheldHubPage() {
       });
       if (missingList.length > 0) setShowMissingItemsDialog(true);
       const diff = scopeByLocation ? expectedInLoc - actualInLoc : list.length - scannedByKey.size;
+      pushInventoryAudit(
+        'reconciliation',
+        scopeByLocation
+          ? `loc=${locationDisplay || ''} sys=${expectedInLoc} scan=${actualInLoc} missing=${missingList.length}`
+          : `all sys=${list.length} scan=${scannedByKey.size} missing=${missing.length} extra=${extra.length}`,
+      );
       toast({
         title: 'Reconciliation complete',
         description: scopeByLocation
@@ -1276,16 +1624,20 @@ export default function HandheldHubPage() {
     } finally {
       setReconciliationLoading(false);
     }
-  }, [countScansForReconciliation, inventorySessionFloor, inventorySessionRoom, normalizeLoc, pushRecentAction, toast]);
+  }, [countScansForReconciliation, inventorySessionFloor, inventorySessionRoom, normalizeLoc, pushRecentAction, pushInventoryAudit, toast]);
 
   const submitCountForReview = useCallback(() => {
     setReconciliationResult((prev) =>
       prev ? { ...prev, submittedForReview: true, reasonCode: countReviewReason, note: countReviewNote, submittedAt: Date.now() } : null
     );
+    pushInventoryAudit(
+      'submit_review',
+      `reason=${countReviewReason || '—'} note=${(countReviewNote || '').slice(0, 200)} proof_images=${sessionProofImages.length}`,
+    );
     setCountReviewReason('');
     setCountReviewNote('');
     toast({ title: 'Submitted for review', description: 'A manager or admin can review the count and discrepancies.' });
-  }, [toast, countReviewReason, countReviewNote]);
+  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length]);
 
   const saveReconcileEditLocation = useCallback(async () => {
     const asset = reconcileEditLocationAsset;
@@ -1324,6 +1676,12 @@ export default function HandheldHubPage() {
   const endCountSession = useCallback(() => {
     const total = unifiedInventory.length;
     pushRecentAction('count', `Inventory session: ${total} item${total !== 1 ? 's' : ''} (${countLocationLabel.trim() || 'All'})`);
+    try {
+      localStorage.removeItem(INVENTORY_SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+    inventoryUndoStackRef.current = [];
     setCountSessionActive(false);
     toast({ title: 'Session ended', description: `${total} item${total !== 1 ? 's' : ''} in list.` });
   }, [unifiedInventory.length, countLocationLabel, pushRecentAction, toast]);
@@ -1809,13 +2167,112 @@ export default function HandheldHubPage() {
                   </div>
                 </div>
 
-                {/* Toolbar: sort + export + clear */}
-                {unifiedInventory.length > 0 && (
+                <div className="sr-only" aria-live="polite" aria-atomic="true">
+                  {inventoryLiveMessage}
+                </div>
+
+                {inventoryPendingCount > 0 && (
+                  <div className="rounded-xl border border-amber-400/80 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-amber-950 dark:text-amber-100">
+                      {inventoryPendingCount} offline · will sync when online
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg h-9 border-amber-600 text-amber-900 dark:text-amber-100"
+                      disabled={!isOnline}
+                      onClick={() => void flushPendingInventoryScans()}
+                    >
+                      Retry sync
+                    </Button>
+                  </div>
+                )}
+
+                {/* Session proof + audit (optional) */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/90 p-3 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Session proof & notes (audit export)</p>
+                  <Textarea
+                    value={sessionProofNote}
+                    onChange={(e) => setSessionProofNote(e.target.value)}
+                    placeholder="e.g. Supervisor present, sealed room…"
+                    className="min-h-[72px] rounded-xl text-sm resize-none"
+                    aria-label="Session proof notes for auditors"
+                  />
                   <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={inventoryProofFileRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="sr-only"
+                      aria-label="Attach proof photos"
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files?.length) return;
+                        const cap = INVENTORY_PROOF_MAX_IMAGES - sessionProofImages.length;
+                        if (cap <= 0) {
+                          toast({ title: 'Photo limit', description: `Maximum ${INVENTORY_PROOF_MAX_IMAGES} images.`, variant: 'destructive' });
+                          e.target.value = '';
+                          return;
+                        }
+                        Array.from(files)
+                          .slice(0, cap)
+                          .forEach((file) => {
+                            if (file.size > 450_000) {
+                              toast({ title: 'File too large', description: 'Use images under 450 KB each.', variant: 'destructive' });
+                              return;
+                            }
+                            const r = new FileReader();
+                            r.onload = () => {
+                              if (typeof r.result === 'string') {
+                                setSessionProofImages((prev) => [...prev, r.result as string].slice(0, INVENTORY_PROOF_MAX_IMAGES));
+                                pushInventoryAudit('proof_image_added', file.name);
+                              }
+                            };
+                            r.readAsDataURL(file);
+                          });
+                        e.target.value = '';
+                      }}
+                    />
+                    <Button type="button" variant="outline" size="sm" className="rounded-xl h-9 gap-1" onClick={() => inventoryProofFileRef.current?.click()}>
+                      <Camera className="h-4 w-4" aria-hidden />
+                      Add photo ({sessionProofImages.length}/{INVENTORY_PROOF_MAX_IMAGES})
+                    </Button>
+                    {sessionProofImages.length > 0 && (
+                      <Button type="button" variant="ghost" size="sm" className="h-9 text-red-600" onClick={() => { setSessionProofImages([]); pushInventoryAudit('proof_images_cleared', ''); }}>
+                        Remove photos
+                      </Button>
+                    )}
+                  </div>
+                  {sessionProofImages.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {sessionProofImages.map((src, idx) => (
+                        <img key={idx} src={src} alt="" className="h-14 w-14 rounded-lg object-cover border border-slate-200 dark:border-slate-600" />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Toolbar: search + sort + export + undo + clear */}
+                {unifiedInventory.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" aria-hidden />
+                      <Input
+                        value={inventorySearch}
+                        onChange={(e) => setInventorySearch(e.target.value)}
+                        placeholder="Search list by name, barcode, location…"
+                        className="rounded-xl h-10 pl-9 text-base"
+                        aria-label="Filter inventory list"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
                     <select
                       value={auditSort}
                       onChange={(e) => setAuditSort(e.target.value as 'scan' | 'name' | 'location')}
                       className="h-10 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-3 font-medium min-w-[120px]"
+                      aria-label="Sort inventory list"
                     >
                       <option value="scan">Scan order</option>
                       <option value="name">Name A–Z</option>
@@ -1827,7 +2284,13 @@ export default function HandheldHubPage() {
                     <Button variant="outline" size="sm" onClick={exportAuditList} className="rounded-xl gap-1.5 h-10">
                       <Download className="h-4 w-4" /> Audit CSV
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setUnifiedInventory([])} className="rounded-xl h-10">Clear all</Button>
+                    <Button variant="outline" size="sm" onClick={undoLastInventoryAdd} className="rounded-xl gap-1.5 h-10" aria-label="Undo last scan">
+                      <Undo2 className="h-4 w-4" /> Undo
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => { setUnifiedInventory([]); inventoryUndoStackRef.current = []; pushInventoryAudit('clear_all', String(unifiedInventory.length)); toast({ title: 'List cleared' }); }} className="rounded-xl h-10">
+                      Clear all
+                    </Button>
+                    </div>
                   </div>
                 )}
 
@@ -1835,7 +2298,12 @@ export default function HandheldHubPage() {
                 <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800/95 backdrop-blur-sm shadow-lg overflow-hidden">
                   <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 bg-slate-50/95 dark:bg-slate-800/95 border-b border-slate-200/80 dark:border-slate-700/80 backdrop-blur-sm">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      List {unifiedInventory.length > 0 && <span className="text-slate-700 dark:text-slate-300 font-normal">({unifiedInventory.length})</span>}
+                      List{' '}
+                      {unifiedInventory.length > 0 && (
+                        <span className="text-slate-700 dark:text-slate-300 font-normal tabular-nums">
+                          ({inventorySearch.trim() ? `${inventoryDisplayList.length}/` : ''}{unifiedInventory.length})
+                        </span>
+                      )}
                     </p>
                     {unifiedInventory.some((x) => x.type === 'asset') && !countSwipeHintDismissed && (
                       <span className="handheld-swipe-hint inline-flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400">
@@ -1844,182 +2312,51 @@ export default function HandheldHubPage() {
                       </span>
                     )}
                   </div>
-                  <div className="max-h-[min(420px,50vh)] sm:max-h-[440px] overflow-y-auto overscroll-contain p-4">
+                  <div
+                    ref={inventoryScrollParentRef}
+                    className="max-h-[min(420px,50vh)] sm:max-h-[440px] overflow-y-auto overscroll-contain px-4 pb-4"
+                    role="list"
+                    aria-label="Items in this inventory session"
+                  >
                   {unifiedInventory.length === 0 ? (
                     <div className="py-12 sm:py-14 text-center rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/30">
                       <Package className="h-12 w-12 mx-auto text-slate-300 dark:text-slate-500 mb-3" />
                       <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Scan or enter barcode to add items</p>
                       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Assets, food supply, or tickets</p>
                     </div>
+                  ) : inventoryDisplayList.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-slate-600 dark:text-slate-400 px-2">
+                      No items match your search.{' '}
+                      <button type="button" className="text-violet-600 dark:text-violet-400 font-semibold underline" onClick={() => setInventorySearch('')}>
+                        Clear search
+                      </button>
+                    </div>
                   ) : (
-                    <ul className="space-y-2.5">
-                      {[...unifiedInventory]
-                        .sort((a, b) => {
-                          const name = (x: UnifiedInventoryItem) => x.type === 'food' ? x.supply?.name : x.type === 'ticket' ? (x.ticket?.title || x.ticket?.displayId || '') : (x.data?.name || '');
-                          const loc = (x: UnifiedInventoryItem) => x.type === 'food' ? ((x.supply?.kitchensWithSupply?.length ? x.supply.kitchensWithSupply.map((k: { name: string }) => k.name).join(' ') : x.supply?.kitchenName) || '') : x.type === 'ticket' ? (x.ticket?.status || '') : [x.data?.floorNumber, x.data?.roomNumber].filter(Boolean).join(' ');
-                          if (auditSort === 'name') return name(a).localeCompare(name(b));
-                          if (auditSort === 'location') return loc(a).localeCompare(loc(b));
-                          return 0;
-                        })
-                        .map((item, i) => {
-                          if (item.type === 'food') {
-                            const supply = item.supply;
-                            const kitchensList = (supply.kitchensWithSupply && supply.kitchensWithSupply.length) ? supply.kitchensWithSupply.map((k: { name: string }) => k.name).join(', ') : supply.kitchenName || '—';
-                            const expDate = supply.expirationDate ? new Date(supply.expirationDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-                            return (
-                              <li key={`food-${supply.id}-${i}`}>
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => openAuditFoodDetails(supply)}
-                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditFoodDetails(supply); } }}
-                                  className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-amber-400 dark:hover:border-amber-600 p-4 flex gap-4"
-                                >
-                                  <div className="h-14 w-14 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex-shrink-0 flex items-center justify-center">
-                                    <UtensilsCrossed className="h-7 w-7 text-amber-600 dark:text-amber-400" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-semibold text-slate-900 dark:text-white truncate">{supply.name}</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">Food · {supply.quantity} {supply.unit} · Expires {expDate}</p>
-                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">Kitchens: {kitchensList}</p>
-                                  </div>
-                                </div>
-                              </li>
-                            );
-                          }
-                          if (item.type === 'ticket') {
-                            const ticket = item.ticket;
-                            const status = (ticket.status || 'open').toLowerCase().replace('_', ' ');
-                            return (
-                              <li key={`ticket-${ticket.id}-${i}`}>
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => openAuditTicketDetails(ticket)}
-                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuditTicketDetails(ticket); } }}
-                                  className="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-900/10 shadow-sm overflow-hidden cursor-pointer active:scale-[0.99] transition-transform touch-manipulation hover:border-sky-400 dark:hover:border-sky-600 p-4 flex gap-4"
-                                >
-                                  <div className="h-14 w-14 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex-shrink-0 flex items-center justify-center">
-                                    <Ticket className="h-7 w-7 text-sky-600 dark:text-sky-400" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-semibold text-slate-900 dark:text-white truncate">{ticket.title || 'Ticket'}</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">{ticket.displayId || ticket.id} · {status}</p>
-                                  </div>
-                                </div>
-                              </li>
-                            );
-                          }
-                          const s = item.data;
-                          const rowId = `${s.id}-${i}`;
-                          const isDragging = countSwipeStartRef.current?.id === rowId;
-                          const isOpen = countItemSwipedId === rowId;
-                          const ACTION_WIDTH = 170;
-                          const translateX = isDragging ? countSwipeOffset : isOpen ? -ACTION_WIDTH : 0;
-                          const showSwipeHint = !countSwipeHintDismissed;
-                          const statusColor = (st: string) => {
-                            const v = (st || '').toUpperCase();
-                            if (v === 'ACTIVE') return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/30';
-                            if (v === 'MAINTENANCE') return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/30';
-                            if (v === 'DISPOSED') return 'bg-slate-400/15 text-slate-600 dark:text-slate-400 border-slate-400/30';
-                            return 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-400/20';
-                          };
-                          return (
-                            <li key={rowId} className="relative rounded-2xl overflow-hidden touch-manipulation shadow-sm border border-slate-200/80 dark:border-slate-600/80" style={{ minHeight: 80 }}>
-                              <div className={cn(
-                                'absolute right-0 top-0 bottom-0 w-[170px] flex items-center justify-end gap-1 pr-2 border-l border-slate-200/60 dark:border-slate-600/60',
-                                (isOpen || (isDragging && countSwipeOffset < -20)) ? 'opacity-100 bg-gradient-to-l from-violet-50/90 to-slate-50 dark:from-violet-950/50 dark:to-slate-800' : 'opacity-100 bg-gradient-to-l from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800'
-                              )}>
-                                <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-slate-300 dark:border-slate-600" onClick={() => { openCountItemDetails(s); setCountItemSwipedId(null); }}>
-                                  <Eye className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-slate-300 dark:border-slate-600" onClick={() => { openCountItemStatus(s); setCountItemSwipedId(null); }}>
-                                  <RefreshCw className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-slate-300 dark:border-slate-600" onClick={() => { openCountItemMove(s); setCountItemSwipedId(null); }}>
-                                  <MapPin className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-slate-300 dark:border-slate-600" onClick={() => { setAuditCommentAsset({ id: s.id, name: s.name }); setAuditCommentText(''); setAuditCommentImagePreview(null); if (auditCommentImageInputRef.current) auditCommentImageInputRef.current.value = ''; setCountItemSwipedId(null); }}>
-                                  <MessageSquare className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            {/* Sliding content: full width, sits on top; user swipes left to reveal actions */}
-                            <div
-                              className={cn(
-                                'absolute inset-0 z-10 flex items-center gap-3 px-4 bg-white dark:bg-slate-800 rounded-2xl will-change-transform',
-                                isDragging ? 'transition-none' : 'handheld-swipe-spring'
-                              )}
-                              style={{
-                                transform: `translateX(${translateX}px)`,
-                                ...(isDragging && Math.abs(translateX) > 10 ? { boxShadow: '4px 0 20px rgba(0,0,0,0.08)' } : {}),
-                              }}
-                              onTouchStart={(e) => {
-                                countSwipeStartRef.current = { x: e.touches[0].clientX, id: rowId };
-                                setCountSwipeOffset(0);
-                                setCountSwipeHintDismissed((prev) => prev || true);
-                              }}
-                              onTouchMove={(e) => {
-                                if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
-                                const dx = e.touches[0].clientX - countSwipeStartRef.current.x;
-                                const offset = Math.min(0, Math.max(-ACTION_WIDTH, dx));
-                                countSwipeOffsetRef.current = offset;
-                                setCountSwipeOffset(offset);
-                              }}
-                              onTouchEnd={() => {
-                                if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
-                                const finalOffset = countSwipeOffsetRef.current;
-                                countSwipeStartRef.current = null;
-                                setCountSwipeOffset(0);
-                                setCountItemSwipedId(finalOffset < -50 ? rowId : null);
-                              }}
-                            >
-                              <div className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700/80 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200/50 dark:ring-slate-600/50">
-                                {s.imageUrl ? (
-                                  <img src={s.imageUrl} alt="" className="h-full w-full object-cover" />
-                                ) : (
-                                  <Package className="h-7 w-7 text-slate-500 dark:text-slate-400" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-slate-900 dark:text-white truncate text-[15px] leading-tight">{s.name}</p>
-                                {s.barcode && s.barcode !== s.name && (
-                                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5 font-mono">{s.barcode}</p>
-                                )}
-                                <div className="flex flex-wrap items-center gap-2 mt-2">
-                                  {s.status && (
-                                    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border', statusColor(s.status))}>
-                                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
-                                      {s.status}
-                                    </span>
-                                  )}
-                                  {(s.floorNumber != null || s.roomNumber != null) && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
-                                      <MapPin className="h-3 w-3 shrink-0" />
-                                      <span className="truncate">{[s.floorNumber, s.roomNumber].filter(Boolean).join(', ')}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-center shrink-0 pr-1">
-                                {showSwipeHint ? (
-                                  <span className="handheld-row-swipe-hint flex flex-col items-center gap-0.5">
-                                    <ChevronRight className="h-5 w-5 text-violet-500 dark:text-violet-400" aria-hidden />
-                                    <span className="text-[9px] font-bold text-violet-500/80 dark:text-violet-400/80 uppercase tracking-wider">Swipe</span>
-                                  </span>
-                                ) : (
-                                  <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500" />
-                                )}
-                              </div>
-                              {showSwipeHint && (
-                                <div className="absolute right-0 top-0 bottom-0 w-12 pointer-events-none rounded-r-2xl handheld-swipe-shine" aria-hidden />
-                              )}
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <HandheldInventoryVirtualList
+                      items={inventoryDisplayList}
+                      rowVirtualizer={inventoryRowVirtualizer}
+                      prefersReducedMotion={prefersReducedMotion}
+                      countSwipeHintDismissed={countSwipeHintDismissed}
+                      setCountSwipeHintDismissed={setCountSwipeHintDismissed}
+                      countSwipeStartRef={countSwipeStartRef}
+                      countSwipeOffsetRef={countSwipeOffsetRef}
+                      countItemSwipedId={countItemSwipedId}
+                      setCountItemSwipedId={setCountItemSwipedId}
+                      countSwipeOffset={countSwipeOffset}
+                      setCountSwipeOffset={setCountSwipeOffset}
+                      openAuditFoodDetails={openAuditFoodDetails}
+                      openAuditTicketDetails={openAuditTicketDetails}
+                      openCountItemDetails={openCountItemDetails}
+                      openCountItemStatus={openCountItemStatus}
+                      openCountItemMove={openCountItemMove}
+                      setAuditCommentAsset={setAuditCommentAsset}
+                      setAuditCommentText={setAuditCommentText}
+                      setAuditCommentImagePreview={setAuditCommentImagePreview}
+                      auditCommentImageInputRef={auditCommentImageInputRef}
+                    />
                   )}
                   </div>
+
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1 rounded-2xl h-12 font-medium" onClick={endCountSession}>
