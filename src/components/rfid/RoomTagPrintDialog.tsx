@@ -3,8 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer, QrCode, Barcode, Download } from 'lucide-react';
-import JsBarcode from 'jsbarcode';
-import QRCode from 'qrcode';
+// Will use dynamic imports in useEffect
 import { printBarcode } from '@/util/barcode';
 
 interface RoomTag {
@@ -30,46 +29,57 @@ export function RoomTagPrintDialog({ open, onOpenChange, roomTag }: RoomTagPrint
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!roomTag || !open) return;
+    if (!roomTag || !open || typeof window === 'undefined') return;
 
-    // Generate barcode
-    if (barcodeCanvasRef.current) {
-      try {
-        const canvas = barcodeCanvasRef.current;
-        JsBarcode(canvas, roomTag.tagId, {
-          format: 'CODE128',
-          lineColor: '#000',
-          width: 2,
-          height: 80,
-          displayValue: true,
-          text: roomTag.tagId,
-          fontSize: 14,
-          margin: 10,
-          background: '#fff',
-        });
-        setBarcodeDataUrl(canvas.toDataURL('image/png'));
-      } catch (error) {
-        console.error('Error generating barcode:', error);
+    const generateCodes = async () => {
+      // Generate barcode
+      if (barcodeCanvasRef.current) {
+        try {
+          if (!JsBarcode) {
+            const jsbarcodeModule = await import('jsbarcode');
+            JsBarcode = jsbarcodeModule.default;
+          }
+          const canvas = barcodeCanvasRef.current;
+          JsBarcode(canvas, roomTag.tagId, {
+            format: 'CODE128',
+            lineColor: '#000',
+            width: 2,
+            height: 80,
+            displayValue: true,
+            text: roomTag.tagId,
+            fontSize: 14,
+            margin: 10,
+            background: '#fff',
+          });
+          setBarcodeDataUrl(canvas.toDataURL('image/png'));
+        } catch (error) {
+          console.error('Error generating barcode:', error);
+        }
       }
-    }
 
-    // Generate QR code
-    if (qrCodeCanvasRef.current) {
-      QRCode.toDataURL(roomTag.tagId, {
-        width: 300,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-      })
-        .then((dataUrl) => {
+      // Generate QR code
+      if (qrCodeCanvasRef.current) {
+        try {
+          if (!QRCode) {
+            const qrcodeModule = await import('qrcode');
+            QRCode = qrcodeModule.default;
+          }
+          const dataUrl = await QRCode.toDataURL(roomTag.tagId, {
+            width: 300,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#ffffff',
+            },
+          });
           setQrCodeDataUrl(dataUrl);
-        })
-        .catch((error) => {
+        } catch (error) {
           console.error('Error generating QR code:', error);
-        });
-    }
+        }
+      }
+    };
+
+    void generateCodes();
   }, [roomTag, open]);
 
   const handlePrint = async () => {
