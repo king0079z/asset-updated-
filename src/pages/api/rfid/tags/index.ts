@@ -13,16 +13,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const orgId    = roleData?.organizationId ?? null;
 
   if (req.method === 'GET') {
+    const { isRoomTag } = req.query;
+    const where: any = orgId ? { organizationId: orgId } : {};
+    
+    if (isRoomTag === 'true') {
+      where.isRoomTag = true;
+    }
+
     const tags = await prisma.rFIDTag.findMany({
-      where: orgId ? { organizationId: orgId } : {},
+      where,
       include: {
         asset:    { select: { id: true, name: true, type: true, status: true, imageUrl: true, floorNumber: true, roomNumber: true } },
         lastZone: { select: { id: true, name: true, floorNumber: true, roomNumber: true } },
+        roomZone: { select: { id: true, name: true, floorNumber: true, roomNumber: true, building: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
     res.setHeader('Cache-Control', 'private, max-age=10, stale-while-revalidate=20');
-    return res.status(200).json({ tags });
+    return res.status(200).json(Array.isArray(tags) ? tags : { tags });
   }
 
   if (req.method === 'POST') {

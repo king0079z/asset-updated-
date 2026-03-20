@@ -17,7 +17,7 @@ import {
   Battery, BatteryLow, BatteryCharging, AlertTriangle, CheckCircle2,
   Settings, Copy, X, Search, Zap, Activity, Eye, ChevronDown, ChevronUp,
   Signal, Clock, Package, Link, Unlink, Info, ExternalLink, Layers, Bell,
-  ArrowRight, LogOut, History, Shield,
+  ArrowRight, LogOut, History, Shield, Printer, QrCode,
 } from 'lucide-react';
 
 const ZoneMapEditor        = dynamic(() => import('@/components/rfid/ZoneMapEditor'),        { ssr: false });
@@ -26,6 +26,7 @@ const AlertRulesPanel      = dynamic(() => import('@/components/rfid/AlertRulesP
 const AlertsLog            = dynamic(() => import('@/components/rfid/AlertsLog'),            { ssr: false });
 const FloorMap3D           = dynamic(() => import('@/components/rfid/FloorMap3D'),           { ssr: false });
 const RFIDMovementTimeline = dynamic(() => import('@/components/rfid/RFIDMovementTimeline').then(m => ({ default: m.RFIDMovementTimeline })), { ssr: false });
+const RoomTagPrintDialog    = dynamic(() => import('@/components/rfid/RoomTagPrintDialog').then(m => ({ default: m.RoomTagPrintDialog })), { ssr: false });
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface RFIDTag {
@@ -83,7 +84,7 @@ export default function RFIDPage() {
   const [zones,       setZones]       = useState<RFIDZone[]>(cachedRfid?.zones ?? []);
   const [stats,       setStats]       = useState<Stats | null>(cachedRfid?.stats ?? null);
   const [loading,     setLoading]     = useState(!cachedRfid);
-  const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'zone-map' | 'movements' | 'alerts' | 'setup'>('overview');
+  const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'zone-map' | 'movements' | 'alerts' | 'setup' | 'room-tags'>('overview');
   const [unresolvedAlerts, setUnresolvedAlerts] = useState(0);
   const [zoneMapMode, setZoneMapMode] = useState<'edit' | 'live' | '3d'>('3d');
   const [seedingDemo, setSeedingDemo] = useState(false);
@@ -104,6 +105,12 @@ export default function RFIDPage() {
   const [savingZone,    setSavingZone]    = useState(false);
 
   const [expandedTagId, setExpandedTagId] = useState<string | null>(null);
+
+  // Room tags
+  const [roomTags, setRoomTags] = useState<any[]>([]);
+  const [loadingRoomTags, setLoadingRoomTags] = useState(false);
+  const [generatingRoomTags, setGeneratingRoomTags] = useState(false);
+  const [selectedRoomTagForPrint, setSelectedRoomTagForPrint] = useState<any | null>(null);
 
   // ── Data loading — single endpoint replaces 3 separate API calls ────────────
   const loadAll = useCallback(async (force = false) => {
@@ -265,6 +272,53 @@ export default function RFIDPage() {
     loadAll();
   };
 
+  // ── Load room tags ──────────────────────────────────────────────────────────
+  const loadRoomTags = useCallback(async () => {
+    setLoadingRoomTags(true);
+    try {
+      const res = await fetch('/api/rfid/tags?isRoomTag=true');
+      if (res.ok) {
+        const data = await res.json();
+        setRoomTags(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error('Error loading room tags:', e);
+      toast({ title: 'Failed to load room tags', variant: 'destructive' });
+    } finally {
+      setLoadingRoomTags(false);
+    }
+  }, []);
+
+  // ── Generate room tags ──────────────────────────────────────────────────────
+  const handleGenerateRoomTags = async (generateForAll = false, zoneIds?: string[]) => {
+    setGeneratingRoomTags(true);
+    try {
+      const res = await fetch('/api/rfid/generate-room-tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generateForAll, zoneIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate room tags');
+      toast({
+        title: 'Room tags generated',
+        description: data.message || `Generated ${data.generated?.length || 0} room tag(s)`,
+      });
+      await loadRoomTags();
+      await loadAll(true);
+    } catch (e: any) {
+      toast({ title: 'Failed to generate room tags', description: e.message, variant: 'destructive' });
+    } finally {
+      setGeneratingRoomTags(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'room-tags') {
+      loadRoomTags();
+    }
+  }, [activeTab, loadRoomTags]);
+
   // ── Filtered tags ────────────────────────────────────────────────────────────
   const filteredTags = tags.filter(t => {
     const q = search.toLowerCase();
@@ -374,6 +428,7 @@ export default function RFIDPage() {
               { id: 'movements',  label: 'Movement History',   icon: History },
               { id: 'tags',       label: 'Tags',               icon: Tag },
               { id: 'zones',      label: 'Zones / APs',        icon: Building2 },
+              { id: 'room-tags',  label: 'Room Tags',           icon: Radio },
               { id: 'zone-map',   label: 'Zone Map',           icon: Layers },
               { id: 'alerts',     label: 'Alerts',             icon: Bell },
               { id: 'setup',      label: 'Integration',        icon: Settings },
@@ -1056,8 +1111,152 @@ Content-Type: application/json
               </div>
             </div>
           )}
+
+          {/* ══ ROOM TAGS TAB ══════════════════════════════════════════════════ */}
+          {activeTab === 'room-tags' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Room RFID Tags</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Generate and print RFID tags for rooms to enable automatic location detection during inventory.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleGenerateRoomTags(true)}
+                    disabled={generatingRoomTags}
+                    className="rounded-xl gap-2"
+                  >
+                    {generatingRoomTags ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    {generatingRoomTags ? 'Generating...' : 'Generate for All Rooms'}
+                  </Button>
+                </div>
+              </div>
+
+              {loadingRoomTags ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="rounded-xl border border-border bg-card p-4">
+                      <Skeleton className="h-6 w-32 mb-2" />
+                      <Skeleton className="h-4 w-24 mb-4" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : roomTags.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-12 text-center">
+                  <Radio className="h-16 w-16 mx-auto text-slate-400 mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                    No room tags found
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+                    Generate RFID tags for rooms that have floor and room numbers defined.
+                  </p>
+                  <Button
+                    onClick={() => handleGenerateRoomTags(true)}
+                    disabled={generatingRoomTags}
+                    className="rounded-xl gap-2"
+                  >
+                    {generatingRoomTags ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    {generatingRoomTags ? 'Generating...' : 'Generate Room Tags'}
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {roomTags.map((tag: any) => {
+                    const zone = tag.roomZone || tag.zone;
+                    const locationText = [
+                      zone?.building,
+                      zone?.floorNumber ? `Floor ${zone.floorNumber}` : null,
+                      zone?.roomNumber ? `Room ${zone.roomNumber}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ');
+
+                    return (
+                      <div
+                        key={tag.id}
+                        className="rounded-xl border border-border bg-card p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">
+                              {zone?.name || 'Unknown Zone'}
+                            </h3>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                              {locationText || 'No location'}
+                            </p>
+                          </div>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${getTagStatus(tag.status).cls}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${getTagStatus(tag.status).dot}`} />
+                            {getTagStatus(tag.status).label}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">Tag ID:</span>
+                            <span className="font-mono font-semibold">{tag.tagId}</span>
+                          </div>
+                          {tag.batteryLevel != null && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Battery:</span>
+                              <span className="flex items-center gap-1">
+                                <BatteryIcon level={tag.batteryLevel} />
+                                {tag.batteryLevel}%
+                              </span>
+                            </div>
+                          )}
+                          {tag.lastSeenAt && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Last seen:</span>
+                              <span>{timeAgo(tag.lastSeenAt)}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <Button
+                          onClick={() => setSelectedRoomTagForPrint({
+                            id: tag.id,
+                            tagId: tag.tagId,
+                            zoneName: zone?.name || 'Unknown Zone',
+                            floorNumber: zone?.floorNumber,
+                            roomNumber: zone?.roomNumber,
+                            building: zone?.building,
+                          })}
+                          className="w-full rounded-xl gap-2"
+                          variant="outline"
+                        >
+                          <Printer className="h-4 w-4" />
+                          Print Tag
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </DashboardLayout>
+      {selectedRoomTagForPrint && (
+        <RoomTagPrintDialog
+          open={!!selectedRoomTagForPrint}
+          onOpenChange={(open) => {
+            if (!open) setSelectedRoomTagForPrint(null);
+          }}
+          roomTag={selectedRoomTagForPrint}
+        />
+      )}
     </ProtectedRoute>
   );
 }
