@@ -57,12 +57,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    // If not found, try case-insensitive search (for room tags especially)
+    // If not found, try searching for room tags that match (case-insensitive)
     if (!tag && inputTagId.startsWith('RO:')) {
-      const tagList = await prisma.rFIDTag.findMany({
+      // Try to find by matching the pattern (RO: followed by hex)
+      const allRoomTags = await prisma.rFIDTag.findMany({
         where: {
-          tagId: { contains: normalisedTagId, mode: 'insensitive' },
           isRoomTag: true,
+          tagId: { startsWith: 'RO:', mode: 'insensitive' },
         },
         include: {
           roomZone: {
@@ -76,9 +77,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             },
           },
         },
-        take: 1,
       });
-      tag = tagList[0] || null;
+      // Find exact match (case-insensitive)
+      tag = allRoomTags.find(t => t.tagId.toUpperCase() === normalisedTagId.toUpperCase()) || null;
     }
 
     if (!tag) {
