@@ -24,11 +24,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'tagId is required' });
     }
 
-    // Normalize tag ID (uppercase, remove invalid chars)
-    const normalisedTagId = tagId.toUpperCase().replace(/[^0-9A-F:]/g, '');
+    // Normalize tag ID (uppercase, trim)
+    const inputTagId = tagId.trim().toUpperCase();
+    
+    // For room tags that start with "RO:", preserve the prefix
+    // Otherwise, normalize by removing invalid hex chars (but keep colons)
+    let normalisedTagId: string;
+    if (inputTagId.startsWith('RO:')) {
+      // Room tag format: preserve "RO:" prefix, normalize the rest
+      const rest = inputTagId.substring(3);
+      const normalizedRest = rest.replace(/[^0-9A-F:]/g, '');
+      normalisedTagId = `RO:${normalizedRest}`;
+    } else {
+      // Regular tag: remove all non-hex chars (but keep colons)
+      normalisedTagId = inputTagId.replace(/[^0-9A-F:]/g, '');
+    }
 
-    // Find the RFID tag
-    const tag = await prisma.rFIDTag.findUnique({
+    // Try to find the tag - first try exact match, then try case-insensitive search
+    let tag = await prisma.rFIDTag.findUnique({
       where: { tagId: normalisedTagId },
       include: {
         roomZone: {
@@ -43,6 +56,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       },
     });
+
+    // If not found, try case-insensitive search (for room tags especially)
+    if (!tag && inputTagId.startsWith('RO:')) {
+      const tagList = await prisma.rFIDTag.findMany({
+        where: {
+          tagId: { contains: normalisedTagId, mode: 'insensitive' },
+          isRoomTag: true,
+        },
+        include: {
+          roomZone: {
+            select: {
+              id: true,
+              name: true,
+              floorNumber: true,
+              roomNumber: true,
+              building: true,
+              description: true,
+            },
+          },
+        },
+        take: 1,
+      });
+      tag = tagList[0] || null;
+    }
 
     if (!tag) {
       return res.status(404).json({ error: 'RFID tag not found' });
