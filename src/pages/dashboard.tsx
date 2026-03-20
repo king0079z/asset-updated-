@@ -41,8 +41,11 @@ import {
   Sun,
   Sunset,
   Moon,
-  CircleDot
+  CircleDot,
+  ClipboardList,
+  AlertCircle
 } from "lucide-react";
+import Link from "next/link";
 import { AiAlerts } from "@/components/AiAlerts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTranslation } from "@/contexts/TranslationContext";
@@ -121,6 +124,7 @@ export default function Dashboard() {
   const [consumptionAnalysisOpen, setConsumptionAnalysisOpen] = useState(false);
   const [kitchenConsumptionOpen, setKitchenConsumptionOpen] = useState(false);
   const [driverTripSummaryOpen, setDriverTripSummaryOpen] = useState(false);
+  const [missingInventoryCount, setMissingInventoryCount] = useState(0);
   const hasFetchedRef = useRef(false);
 
   // Initialize from cache for instant display on revisit — check both cache keys
@@ -167,6 +171,10 @@ export default function Dashboard() {
 
       try {
         logDebug('Dashboard: Starting to fetch data');
+        fetch('/api/inventory/missing-reports', { credentials: 'include' })
+          .then((r) => (r.ok ? r.json() : []))
+          .then((arr) => setMissingInventoryCount(Array.isArray(arr) ? arr.length : 0))
+          .catch(() => setMissingInventoryCount(0));
 
         // Use cached fetch — 2 min TTL for core stats, 5 min for secondary metrics.
         // In-flight deduplication is handled by fetchWithCache automatically.
@@ -505,6 +513,27 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+
+        {missingInventoryCount > 0 && (
+          <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 p-4 flex items-center justify-between gap-4 shadow-lg shadow-amber-500/10 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
+                <AlertCircle className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-amber-900 dark:text-amber-100">Missing inventory reports</p>
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  {missingInventoryCount} report{missingInventoryCount !== 1 ? 's' : ''} with items expected in room but not scanned. No move was recorded for those assets.
+                </p>
+              </div>
+            </div>
+            <Button asChild className="rounded-xl bg-amber-600 hover:bg-amber-700 shrink-0">
+              <Link href="/reports/missing-inventory" className="gap-2">
+                <ClipboardList className="h-4 w-4" /> View reports
+              </Link>
+            </Button>
+          </div>
+        )}
 
         {/* ══════════════════════════════════════════════════════
             KPI CARDS — 4 full-gradient premium

@@ -285,6 +285,19 @@ export default function HandheldHubPage() {
     return num || t;
   }, []);
 
+  const isWrongRoom = useCallback(
+    (assetFloor: string | null | undefined, assetRoom: string | null | undefined) => {
+      const hasSession = inventorySessionFloor.trim() !== '' || inventorySessionRoom.trim() !== '';
+      if (!hasSession) return false;
+      const nF = normalizeLoc(inventorySessionFloor);
+      const nR = normalizeLoc(inventorySessionRoom);
+      const aF = normalizeLoc(assetFloor);
+      const aR = normalizeLoc(assetRoom);
+      return (nF && nF !== aF) || (nR && nR !== aR);
+    },
+    [inventorySessionFloor, inventorySessionRoom, normalizeLoc],
+  );
+
   // Count/Inventory session and reconciliation (uses unifiedInventory for assets)
   const [countSessionActive, setCountSessionActive] = useState(false);
   const [countStartTime, setCountStartTime] = useState<number>(0);
@@ -343,6 +356,7 @@ export default function HandheldHubPage() {
   const [showMissingItemsDialog, setShowMissingItemsDialog] = useState(false);
   const [countItemSwipedId, setCountItemSwipedId] = useState<string | null>(null);
   const [countSwipeOffset, setCountSwipeOffset] = useState(0);
+  const [countItemWrongRoomExpandedId, setCountItemWrongRoomExpandedId] = useState<string | null>(null);
   const countSwipeStartRef = useRef<{ x: number; id: string } | null>(null);
   const countSwipeOffsetRef = useRef(0);
   const [countSwipeHintDismissed, setCountSwipeHintDismissed] = useState(false);
@@ -2711,6 +2725,11 @@ export default function HandheldHubPage() {
                       setCountItemSwipedId={setCountItemSwipedId}
                       countSwipeOffset={countSwipeOffset}
                       setCountSwipeOffset={setCountSwipeOffset}
+                      sessionFloor={inventorySessionFloor}
+                      sessionRoom={inventorySessionRoom}
+                      isWrongRoom={isWrongRoom}
+                      wrongRoomExpandedId={countItemWrongRoomExpandedId}
+                      setWrongRoomExpandedId={setCountItemWrongRoomExpandedId}
                       openAuditFoodDetails={openAuditFoodDetails}
                       openAuditTicketDetails={openAuditTicketDetails}
                       openCountItemDetails={openCountItemDetails}
@@ -2800,6 +2819,34 @@ export default function HandheldHubPage() {
                   </div>
                   {reconciliationResult && (
                     <div className="p-4 sm:p-5 space-y-4">
+                      {/* World-class result summary: all match vs missing */}
+                      {reconciliationResult.expectedCount === reconciliationResult.actualCount &&
+                        reconciliationResult.missing.length === 0 &&
+                        reconciliationResult.extra.length === 0 &&
+                        (reconciliationResult.wrongLocation || []).length === 0 ? (
+                        <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/30 p-5 flex items-center gap-4 shadow-lg shadow-emerald-500/10">
+                          <div className="h-14 w-14 rounded-2xl bg-emerald-500 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="h-8 w-8 text-white" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-lg font-bold text-emerald-900 dark:text-emerald-100">All items in this room match</h4>
+                            <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">System expects {reconciliationResult.expectedCount} and you scanned {reconciliationResult.actualCount}. No missing items and no wrong-room scans.</p>
+                          </div>
+                        </div>
+                      ) : reconciliationResult.missing.length > 0 ? (
+                        <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 p-5 flex items-start gap-4 shadow-lg shadow-amber-500/10">
+                          <div className="h-14 w-14 rounded-2xl bg-amber-500 flex items-center justify-center shrink-0">
+                            <AlertCircle className="h-8 w-8 text-white" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-lg font-bold text-amber-900 dark:text-amber-100">Missing items in this room</h4>
+                            <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
+                              {reconciliationResult.missing.length} asset{reconciliationResult.missing.length !== 1 ? 's' : ''} expected in this room were not scanned. No move was recorded for these assets — they are still registered here in the system.
+                            </p>
+                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Review the list below and update location if they were moved, or report as missing.</p>
+                          </div>
+                        </div>
+                      ) : null}
                       {reconciliationResult.locationOverrideApplied && (
                         <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 flex items-center gap-3">
                           <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -2987,6 +3034,9 @@ export default function HandheldHubPage() {
                                 </span>
                                 {reconcileShowMissing ? <ChevronUp className="h-4 w-4 text-amber-600" /> : <ChevronDown className="h-4 w-4 text-amber-600" />}
                               </button>
+                              <p className="px-3 pb-2 text-[11px] text-amber-700 dark:text-amber-300 border-b border-amber-200 dark:border-amber-800">
+                                Expected in this room but not scanned. No move was recorded for these assets.
+                              </p>
                               {reconcileShowMissing && (
                                 <ul className="px-3 pb-3 space-y-2 max-h-56 overflow-y-auto">
                                   {reconciliationResult.missing.map((m) => {

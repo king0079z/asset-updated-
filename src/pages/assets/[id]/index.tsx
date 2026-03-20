@@ -7,8 +7,9 @@ import { useToast } from '@/components/ui/use-toast';
 import { 
   Loader2, Move, Trash2, Info, Ticket, Calendar, PlusCircle, 
   Download, Filter, Search, BarChart4, RefreshCcw, Clock, User,
-  Printer, QrCode
+  Printer, QrCode, AlertCircle, ClipboardList
 } from 'lucide-react';
+import Link from 'next/link';
 import PrintBarcodeButton from '@/components/PrintBarcodeButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -598,6 +599,7 @@ export default function AssetDetails() {
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [selectedActionTypes, setSelectedActionTypes] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>('');
+  const [missingReports, setMissingReports] = useState<Array<{ id: string; timestamp: string; floorNumber: string | null; roomNumber: string | null; missingCount: number }>>([]);
 
   const fetchHistory = async (filters?: {
     filter?: string;
@@ -684,6 +686,14 @@ export default function AssetDetails() {
     if (id) {
       fetchAsset();
     }
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/assets/${id}/missing-reports`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((arr) => setMissingReports(Array.isArray(arr) ? arr : []))
+      .catch(() => setMissingReports([]));
   }, [id]);
 
   // Function to fetch tickets for this asset
@@ -831,6 +841,32 @@ export default function AssetDetails() {
 
   return (
     <div className="container mx-auto py-8 max-w-2xl">
+      {missingReports.length > 0 && (
+        <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 p-4 flex items-start gap-3 mb-6 shadow-lg">
+          <div className="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
+            <AlertCircle className="h-5 w-5 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-amber-900 dark:text-amber-100">Reported missing from inventory</p>
+            <p className="text-sm text-amber-800 dark:text-amber-200 mt-0.5">
+              This asset was listed as missing (expected in room but not scanned) in {missingReports.length} report{missingReports.length !== 1 ? 's' : ''}.
+            </p>
+            <ul className="mt-2 space-y-1">
+              {missingReports.slice(0, 3).map((r) => (
+                <li key={r.id} className="text-xs text-amber-700 dark:text-amber-300">
+                  Floor {r.floorNumber ?? '—'}, Room {r.roomNumber ?? '—'} · {new Date(r.timestamp).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                </li>
+              ))}
+              {missingReports.length > 3 && <li className="text-xs text-amber-600 dark:text-amber-400">+{missingReports.length - 3} more</li>}
+            </ul>
+            <Button asChild variant="outline" size="sm" className="mt-3 rounded-lg border-amber-500 text-amber-800 dark:text-amber-200">
+              <Link href="/reports/missing-inventory" className="gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5" /> View all missing reports
+              </Link>
+            </Button>
+          </div>
+        </div>
+      )}
       <Card className="p-6">
         <div className="space-y-6">
           <div className="flex justify-between items-start">

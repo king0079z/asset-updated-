@@ -26,12 +26,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sessionDurationMs,
     } = req.body || {};
 
+    const missing = Number(missingCount) || 0;
     const userData = await prisma.user.findUnique({
       where: { id: user.id },
       select: { organizationId: true, name: true, email: true },
     });
 
-    await prisma.auditLog.create({
+    const audit = await prisma.auditLog.create({
       data: {
         action: 'INVENTORY_REVIEW_SUBMITTED',
         resourceType: 'INVENTORY',
@@ -42,12 +43,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           sessionDurationMs,
           totalScanned: Number(totalScanned),
           totalInSystem: Number(totalInSystem),
-          missingCount: Number(missingCount),
+          missingCount: missing,
           extraCount: Number(extraCount),
           wrongLocationCount: Number(wrongLocationCount),
           reasonCode: reasonCode || null,
           note: note || null,
-          missingItems: (missingItems || []).slice(0, 50),
+          missingItems: (missingItems || []).slice(0, 100),
           wrongLocationItems: (wrongLocationItems || []).slice(0, 50),
           submittedByName: userData?.name,
           submittedByEmail: userData?.email,
@@ -61,7 +62,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    return res.status(200).json({ success: true });
+    if (missing > 0) {
+      const loc = [floorNumber, roomNumber].filter(Boolean).join(', ') || 'this location';
+      await prisma.notification.create({
+        data: {
+          userId: user.id,
+          type: 'INVENTORY_MISSING_ITEMS',
+          title: 'Missing items from inventory',
+          message: `Floor ${floorNumber || '—'}, Room ${roomNumber || '—'}: ${missing} item(s) expected but not scanned. View report.`,
+        },
+      });
+    }
+
+    return res.status(200).json({ success: true, auditLogId: audit.id });
   } catch (error) {
     console.error('submit-review error:', error);
     return res.status(500).json({ error: 'Failed to submit review' });
