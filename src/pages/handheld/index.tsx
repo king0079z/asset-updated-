@@ -261,7 +261,7 @@ export default function HandheldHubPage() {
     expectedInLocation?: number;
     actualInLocation?: number;
     difference?: number; // expectedInLocation - actualInLocation (positive = missing from scan)
-    missing: { id: string; name: string; barcode?: string; floorNumber?: string | null; roomNumber?: string | null }[];
+    missing: { id: string; name: string; barcode?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }[];
     extra: { id: string; name: string; barcode?: string; floorNumber?: string | null; roomNumber?: string | null }[];
     submittedForReview: boolean;
     reasonCode?: string;
@@ -291,6 +291,7 @@ export default function HandheldHubPage() {
   const [reconcileCorrectFloor, setReconcileCorrectFloor] = useState('');
   const [reconcileCorrectRoom, setReconcileCorrectRoom] = useState('');
   const [reconcileShowMissingByLocation, setReconcileShowMissingByLocation] = useState(false);
+  const [showMissingItemsDialog, setShowMissingItemsDialog] = useState(false);
   const [countItemSwipedId, setCountItemSwipedId] = useState<string | null>(null);
   const [countSwipeOffset, setCountSwipeOffset] = useState(0);
   const countSwipeStartRef = useRef<{ x: number; id: string } | null>(null);
@@ -1201,6 +1202,7 @@ export default function HandheldHubPage() {
   const runReconciliation = useCallback(async (locationOverride?: { floor: string; room: string }) => {
     setReconciliationLoading(true);
     setReconciliationResult(null);
+    setShowMissingItemsDialog(false);
     const sessionFloor = (locationOverride?.floor ?? inventorySessionFloor).trim();
     const sessionRoom = (locationOverride?.room ?? inventorySessionRoom).trim();
     if (locationOverride) {
@@ -1219,7 +1221,7 @@ export default function HandheldHubPage() {
     }
     try {
       const res = await fetch('/api/assets?limit=5000', { credentials: 'include', cache: 'no-store' });
-      const list: { id: string; name?: string; barcode?: string; assetId?: string; floorNumber?: string | null; roomNumber?: string | null }[] = res.ok ? await res.json() : [];
+      const list: { id: string; name?: string; barcode?: string; assetId?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }[] = res.ok ? await res.json() : [];
       const normF = normalizeLoc(sessionFloor || undefined);
       const normR = normalizeLoc(sessionRoom || undefined);
       const inLocation = (f: string | null | undefined, r: string | null | undefined) =>
@@ -1247,6 +1249,7 @@ export default function HandheldHubPage() {
       setReconcileShowMissing(false);
       setReconcileShowExtra(false);
       setReconcileShowMissingByLocation(false);
+      const missingList = missing.slice(0, 100).map((a) => ({ id: a.id, name: a.name || a.assetId || a.id, barcode: a.barcode, floorNumber: a.floorNumber, roomNumber: a.roomNumber, lastMovedAt: a.lastMovedAt }));
       setReconciliationResult({
         expectedCount: scopeByLocation ? expectedInLoc : list.length,
         actualCount: scopeByLocation ? actualInLoc : scannedByKey.size,
@@ -1255,11 +1258,12 @@ export default function HandheldHubPage() {
         expectedInLocation: scopeByLocation ? expectedInLoc : undefined,
         actualInLocation: scopeByLocation ? actualInLoc : undefined,
         difference: scopeByLocation ? expectedInLoc - actualInLoc : undefined,
-        missing: missing.slice(0, 100).map((a) => ({ id: a.id, name: a.name || a.assetId || a.id, barcode: a.barcode, floorNumber: a.floorNumber, roomNumber: a.roomNumber })),
+        missing: missingList,
         extra: extra.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, floorNumber: s.floorNumber, roomNumber: s.roomNumber })),
         submittedForReview: false,
         locationOverrideApplied,
       });
+      if (missingList.length > 0) setShowMissingItemsDialog(true);
       const diff = scopeByLocation ? expectedInLoc - actualInLoc : list.length - scannedByKey.size;
       toast({
         title: 'Reconciliation complete',
@@ -2041,10 +2045,14 @@ export default function HandheldHubPage() {
                         <div className="space-y-3">
                           {reconciliationResult.missing.length > 0 && (
                             <>
-                              <div className="flex gap-2">
+                              <div className="flex flex-wrap gap-2">
+                                <Button variant="default" size="sm" className="rounded-xl gap-1.5 shadow-sm" onClick={() => setShowMissingItemsDialog(true)}>
+                                  <AlertCircle className="h-3.5 w-3.5" />
+                                  View missing items
+                                </Button>
                                 <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => setReconcileShowMissingByLocation((v) => !v)}>
                                   <MapPin className="h-3.5 w-3.5" />
-                                  {reconcileShowMissingByLocation ? 'Hide missing by room' : 'View missing by room/location'}
+                                  {reconcileShowMissingByLocation ? 'Hide missing by room' : 'Missing by room'}
                                 </Button>
                               </div>
                               {reconcileShowMissingByLocation && (() => {
@@ -2888,6 +2896,98 @@ export default function HandheldHubPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Missing items popup: available vs missing, recently moved highlight */}
+      {reconciliationResult && reconciliationResult.missing.length > 0 && (
+        <Dialog open={showMissingItemsDialog} onOpenChange={setShowMissingItemsDialog}>
+          <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-hidden flex flex-col rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+            <DialogHeader className="flex-shrink-0">
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+                Missing items at this location
+              </DialogTitle>
+              <DialogDescription>Items in system at this location that were not scanned. Check if recently moved.</DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto space-y-4 py-2 min-h-0">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl bg-slate-100 dark:bg-slate-800 p-3 text-center">
+                  <p className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{reconciliationResult.expectedCount}</p>
+                  <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">In system</p>
+                </div>
+                <div className="rounded-2xl bg-violet-100 dark:bg-violet-900/30 p-3 text-center">
+                  <p className="text-xl font-bold text-violet-700 dark:text-violet-300 tabular-nums">{reconciliationResult.actualCount}</p>
+                  <p className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider">Scanned</p>
+                </div>
+                <div className="rounded-2xl bg-amber-100 dark:bg-amber-900/30 p-3 text-center">
+                  <p className="text-xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">{reconciliationResult.missing.length}</p>
+                  <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Missing</p>
+                </div>
+              </div>
+              {reconciliationResult.scope === 'location' && reconciliationResult.locationDisplay && (
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Location: {reconciliationResult.locationDisplay}
+                </p>
+              )}
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-2">
+                  <Package className="h-4 w-4 text-violet-500" />
+                  Missing from scan ({reconciliationResult.missing.length})
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">These assets are in the system at this location but were not scanned. Items marked &quot;Recently moved&quot; may have been relocated.</p>
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                  {(() => {
+                    const RECENT_DAYS = 30;
+                    const now = Date.now();
+                    const isRecent = (d: string | null | undefined) => d && (now - new Date(d).getTime()) < RECENT_DAYS * 24 * 60 * 60 * 1000;
+                    const missingRecent = reconciliationResult.missing.filter((m) => isRecent(m.lastMovedAt));
+                    const missingOther = reconciliationResult.missing.filter((m) => !isRecent(m.lastMovedAt));
+                    return (
+                      <>
+                        {missingRecent.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                              <RefreshCw className="h-3.5 w-3.5" /> Recently moved ({missingRecent.length}) — may be at different location
+                            </p>
+                            {missingRecent.map((m) => (
+                              <div key={m.id} className="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 flex flex-col gap-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="font-semibold text-slate-900 dark:text-white text-sm truncate flex-1">{m.name || m.barcode || m.id}</p>
+                                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 text-[10px] font-bold px-2 py-0.5">
+                                    <RefreshCw className="h-3 w-3" /> Recently moved
+                                  </span>
+                                </div>
+                                {m.lastMovedAt && <p className="text-[10px] text-amber-700 dark:text-amber-300">Moved: {new Date(m.lastMovedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</p>}
+                                <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1"><MapPin className="h-3 w-3" /> System: Floor {m.floorNumber ?? '—'}, Room {m.roomNumber ?? '—'}</p>
+                                <Button type="button" size="sm" variant="outline" className="w-fit h-8 text-xs rounded-lg border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); setShowMissingItemsDialog(false); }}><MapPin className="h-3 w-3 mr-1" /> Edit location</Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {missingOther.length > 0 && (
+                          <div className="space-y-2">
+                            {missingRecent.length > 0 && <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-3">Other missing</p>}
+                            {missingOther.map((m) => (
+                              <div key={m.id} className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-900/10 p-3 flex flex-col gap-2">
+                                <p className="font-semibold text-slate-900 dark:text-white text-sm truncate">{m.name || m.barcode || m.id}</p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1"><MapPin className="h-3 w-3" /> System: Floor {m.floorNumber ?? '—'}, Room {m.roomNumber ?? '—'}</p>
+                                <Button type="button" size="sm" variant="outline" className="w-fit h-8 text-xs rounded-lg border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); setShowMissingItemsDialog(false); }}><MapPin className="h-3 w-3 mr-1" /> Edit location</Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 pt-3">
+              <Button variant="outline" className="rounded-xl" onClick={() => setShowMissingItemsDialog(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Reconcile: Edit asset location (correct wrong system location) */}
       <Dialog open={!!reconcileEditLocationAsset} onOpenChange={(open) => { if (!open) setReconcileEditLocationAsset(null); }}>

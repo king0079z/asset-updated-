@@ -108,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: true, purchaseAmount: true, purchaseDate: true,
         userId: true, vendorId: true,
         vendor: { select: { id: true, name: true } },
-        createdAt: true,
+        createdAt: true, lastMovedAt: true,
         assignedToName: true,
         assignedToEmail: true,
         assignedToId: true,
@@ -151,6 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ...asset,
         purchaseDate: asset.purchaseDate ? new Date(asset.purchaseDate).toISOString() : null,
         createdAt: asset.createdAt.toISOString(),
+        lastMovedAt: asset.lastMovedAt ? new Date(asset.lastMovedAt).toISOString() : null,
       }));
 
       assetsCache.set(cacheKey, { data: formattedAssets, ts: Date.now() });
