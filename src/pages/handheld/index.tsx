@@ -53,6 +53,7 @@ import {
   Printer,
   Camera,
   BarChart3,
+  Sparkles,
   AlertCircle,
   ListChecks,
   Type,
@@ -330,6 +331,8 @@ export default function HandheldHubPage() {
   const [reconcileShowExtra, setReconcileShowExtra] = useState(false);
   const [showReconcileConfirmDialog, setShowReconcileConfirmDialog] = useState(false);
   const [reconcileConfirmStep, setReconcileConfirmStep] = useState<'confirm' | 'change_location'>('confirm');
+  const [inventorySummary, setInventorySummary] = useState<{ suggestedReason: string; summaryLine: string; tips: string[] } | null>(null);
+  const [inventorySummaryLoading, setInventorySummaryLoading] = useState(false);
   const [reconcileCorrectFloor, setReconcileCorrectFloor] = useState('');
   const [reconcileCorrectRoom, setReconcileCorrectRoom] = useState('');
   const [reconcileShowMissingByLocation, setReconcileShowMissingByLocation] = useState(false);
@@ -1522,9 +1525,12 @@ export default function HandheldHubPage() {
   }, [fetchAssignedTickets, fetchAssignedTasks, toast, isOnline, processOfflineQueue, offlineQueueLength, flushPendingInventoryScans]);
 
   // Room tag verification handler
+  const roomTagChangeOnlyRef = useRef(false);
+
   const verifyRoomTag = useCallback(async (tagId: string) => {
     setRoomTagScanning(true);
     setRoomTagError(null);
+    const changeOnly = roomTagChangeOnlyRef.current;
     try {
       const res = await fetch('/api/rfid/resolve-room-tag', {
         method: 'POST',
@@ -1540,11 +1546,13 @@ export default function HandheldHubPage() {
       setInventorySessionRoom(data.roomNumber);
       setInventoryRoomTagVerified(true);
       setShowRoomTagScanDialog(false);
+      roomTagChangeOnlyRef.current = false;
       toast({
-        title: 'Room verified',
+        title: changeOnly ? 'Count location updated' : 'Room verified',
         description: `Floor ${data.floorNumber}, Room ${data.roomNumber}${data.building ? ` (${data.building})` : ''}`,
       });
-      // Now start the session
+      if (changeOnly) return;
+      // Now start the session (first-time verification)
       try {
         localStorage.removeItem(INVENTORY_SESSION_KEY);
       } catch {
@@ -1559,7 +1567,6 @@ export default function HandheldHubPage() {
       setCountStartTime(Date.now());
       setUnifiedInventory([]);
       setReconciliationResult(null);
-      // Keep room tag verification and location from verification
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to verify room tag';
       setRoomTagError(msg);
@@ -1746,6 +1753,47 @@ export default function HandheldHubPage() {
       setReconciliationLoading(false);
     }
   }, [countScansForReconciliation, inventorySessionFloor, inventorySessionRoom, normalizeLoc, pushRecentAction, pushInventoryAudit, toast]);
+
+  // AI-assisted summary when reconciliation result is set
+  useEffect(() => {
+    const r = reconciliationResult;
+    if (!r || (r.missing.length === 0 && r.extra.length === 0)) {
+      setInventorySummary(null);
+      return;
+    }
+    setInventorySummaryLoading(true);
+    const sessionLocationDisplay = [inventorySessionFloor.trim(), inventorySessionRoom.trim()].filter(Boolean).join(', ') || undefined;
+    const extraLocationList = [...new Set(r.extra.map((e) => [e.floorNumber, e.roomNumber].filter(Boolean).join(', ')).filter(Boolean))];
+    const missingRecentMoved = r.missing.filter((m) => {
+      const t = m.lastMovedAt ? new Date(m.lastMovedAt).getTime() : 0;
+      return Date.now() - t < 7 * 24 * 60 * 60 * 1000;
+    }).length;
+    fetch('/api/ai-analysis/inventory-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionLocationDisplay,
+        missingCount: r.missing.length,
+        extraCount: r.extra.length,
+        extraFromOtherLocations: r.scope === 'location' && r.extra.length > 0,
+        extraLocationList,
+        missingRecentMovedCount: missingRecentMoved,
+        totalScanned: countScansForReconciliation.length,
+        inSystemAtLocation: r.expectedCount,
+      }),
+    })
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((data) => {
+        setInventorySummary({
+          suggestedReason: data.suggestedReason || '',
+          summaryLine: data.summaryLine || '',
+          tips: Array.isArray(data.tips) ? data.tips : [],
+        });
+        if (data.suggestedReason && !countReviewReason) setCountReviewReason(data.suggestedReason);
+      })
+      .catch(() => setInventorySummary(null))
+      .finally(() => setInventorySummaryLoading(false));
+  }, [reconciliationResult, inventorySessionFloor, inventorySessionRoom, countScansForReconciliation.length]);
 
   const submitCountForReview = useCallback(() => {
     setReconciliationResult((prev) =>
@@ -2520,11 +2568,21 @@ export default function HandheldHubPage() {
                 {(inventorySessionFloor.trim() || inventorySessionRoom.trim()) && (
                   <div className="rounded-2xl border border-violet-200/80 dark:border-violet-800/80 bg-violet-50/80 dark:bg-violet-900/20 px-4 py-3 flex items-start sm:items-center gap-3">
                     <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5 sm:mt-0" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <span className="text-sm font-semibold text-violet-900 dark:text-violet-100 block">Count location</span>
                       <span className="text-sm text-violet-700 dark:text-violet-300">{[inventorySessionFloor.trim(), inventorySessionRoom.trim()].filter(Boolean).join(', ') || '—'}</span>
                       <p className="text-xs text-violet-600/90 dark:text-violet-400/90 mt-1">Reconciliation compares this location only (101 = 0101)</p>
                     </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl shrink-0 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300"
+                      onClick={() => { roomTagChangeOnlyRef.current = true; setShowRoomTagScanDialog(true); }}
+                    >
+                      <Radio className="h-3.5 w-3.5 mr-1" />
+                      Change room
+                    </Button>
                   </div>
                 )}
 
@@ -2565,6 +2623,48 @@ export default function HandheldHubPage() {
                           </div>
                         </div>
                       )}
+                      {reconciliationResult.scope === 'location' && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          <span className="font-medium tabular-nums">{countScansForReconciliation.length}</span> in list total · <span className="font-medium text-violet-600 dark:text-violet-400 tabular-nums">{reconciliationResult.actualCount}</span> at this location · <span className="font-medium text-blue-600 dark:text-blue-400 tabular-nums">{reconciliationResult.extra.length}</span> from other locations
+                        </p>
+                      )}
+                      {reconciliationResult.extra.length > 0 && reconciliationResult.scope === 'location' && (
+                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Items from other rooms</p>
+                            <p className="text-xs text-amber-700 dark:text-amber-300">Move them to current count location or change room and recount.</p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-amber-500 text-amber-800 dark:text-amber-200 shrink-0"
+                            onClick={async () => {
+                              const sessionFloor = inventorySessionFloor.trim();
+                              const sessionRoom = inventorySessionRoom.trim();
+                              if (!sessionFloor || !sessionRoom) { toast({ title: 'Count location required', variant: 'destructive' }); return; }
+                              let moved = 0;
+                              for (const e of reconciliationResult.extra) {
+                                if (e.id.startsWith('raw-')) continue;
+                                try {
+                                  const r = await fetch(`/api/assets/${e.id}/move`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ floorNumber: sessionFloor, roomNumber: sessionRoom }) });
+                                  if (r.ok) moved++;
+                                } catch { /* skip */ }
+                              }
+                              if (moved > 0) {
+                                toast({ title: 'Locations updated', description: `${moved} item(s) moved to ${sessionFloor}, ${sessionRoom}. Re-running comparison.` });
+                                setReconciliationResult(null);
+                                void runReconciliation();
+                              } else {
+                                toast({ title: 'Move failed', variant: 'destructive', description: 'Check network and try again.' });
+                              }
+                            }}
+                          >
+                            Move all to current room
+                          </Button>
+                        </div>
+                      )}
                       <div className={cn('grid gap-3', reconciliationResult.difference !== undefined ? 'grid-cols-3' : 'grid-cols-2')}>
                         <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4 text-center border border-slate-200/80 dark:border-slate-700">
                           <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{reconciliationResult.expectedCount}</p>
@@ -2572,7 +2672,7 @@ export default function HandheldHubPage() {
                         </div>
                         <div className="rounded-2xl bg-violet-50 dark:bg-violet-900/20 p-4 text-center border border-violet-200/80 dark:border-violet-800">
                           <p className="text-2xl font-bold text-violet-700 dark:text-violet-300 tabular-nums">{reconciliationResult.actualCount}</p>
-                          <p className="text-xs font-medium text-violet-600/80 dark:text-violet-400/80 mt-0.5">Scanned</p>
+                          <p className="text-xs font-medium text-violet-600/80 dark:text-violet-400/80 mt-0.5">Scanned (this location)</p>
                         </div>
                         {reconciliationResult.difference !== undefined && (
                           <div className={cn(
@@ -2729,8 +2829,23 @@ export default function HandheldHubPage() {
                       )}
                       {!reconciliationResult.submittedForReview ? (
                         <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-700">
+                          {(inventorySummary?.summaryLine || inventorySummaryLoading) && (
+                            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-4 py-3">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">AI summary</p>
+                              {inventorySummaryLoading ? (
+                                <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Analyzing variance…</p>
+                              ) : (
+                                <p className="text-sm text-slate-800 dark:text-slate-200">{inventorySummary?.summaryLine}</p>
+                              )}
+                            </div>
+                          )}
                           <div>
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">Variance reason (optional)</label>
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">
+                              Variance reason (optional)
+                              {inventorySummary?.suggestedReason && (
+                                <span className="ml-2 text-xs font-normal text-violet-600 dark:text-violet-400">— suggested</span>
+                              )}
+                            </label>
                             <select
                               value={countReviewReason}
                               onChange={(e) => setCountReviewReason(e.target.value)}
@@ -3424,6 +3539,21 @@ export default function HandheldHubPage() {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">System normalizes 101 and 0101 as the same.</p>
               </div>
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Are you currently counting in this same location?</p>
+              {(inventorySessionFloor.trim() || inventorySessionRoom.trim()) && (() => {
+                const normF = normalizeLoc(inventorySessionFloor || undefined);
+                const normR = normalizeLoc(inventorySessionRoom || undefined);
+                const inLoc = (f: string | null | undefined, r: string | null | undefined) => (!normF || normalizeLoc(f) === normF) && (!normR || normalizeLoc(r) === normR);
+                const atThisLoc = countScansForReconciliation.filter((s) => inLoc(s.floorNumber, s.roomNumber)).length;
+                const fromOther = countScansForReconciliation.length - atThisLoc;
+                if (fromOther === 0) return null;
+                return (
+                  <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-3">
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      <strong>{fromOther}</strong> item(s) in your list are from other locations. They will show as &quot;Extra&quot; for this room. You can move them to this room after reconciliation or change count location.
+                    </p>
+                  </div>
+                );
+              })()}
               <div className="grid grid-cols-2 gap-3">
                 <Button className="rounded-2xl h-12 font-semibold shadow-md" onClick={() => { setShowReconcileConfirmDialog(false); runReconciliation(); }}>
                   Yes, run
