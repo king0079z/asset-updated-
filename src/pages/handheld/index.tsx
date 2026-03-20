@@ -2831,7 +2831,7 @@ export default function HandheldHubPage() {
                         <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                           {(inventorySummary?.summaryLine || inventorySummaryLoading) && (
                             <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-4 py-3">
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">AI summary</p>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5"><Sparkles className="h-3 w-3" /> AI summary</p>
                               {inventorySummaryLoading ? (
                                 <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Analyzing variance…</p>
                               ) : (

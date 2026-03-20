@@ -19,16 +19,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const body = req.body || {};
-    const {
-      sessionLocationDisplay,
-      missingCount = 0,
-      extraCount = 0,
-      extraFromOtherLocations = false,
-      extraLocationList = [] as string[],
-      missingRecentMovedCount = 0,
-      totalScanned = 0,
-      inSystemAtLocation = 0,
-    } = body;
+    const sessionLocationDisplay = body.sessionLocationDisplay;
+    const missingCount = Number(body.missingCount) || 0;
+    const extraCount = Number(body.extraCount) || 0;
+    const extraFromOtherLocations = Boolean(body.extraFromOtherLocations);
+    const extraLocationList = Array.isArray(body.extraLocationList) ? body.extraLocationList : [];
+    const missingRecentMovedCount = Number(body.missingRecentMovedCount) || 0;
+    const totalScanned = Number(body.totalScanned) || 0;
+    const inSystemAtLocation = Number(body.inSystemAtLocation) || 0;
 
     let suggestedReason = '';
     const tips: string[] = [];
