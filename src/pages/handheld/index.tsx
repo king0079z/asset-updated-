@@ -278,7 +278,14 @@ export default function HandheldHubPage() {
   const [showFoodScanner, setShowFoodScanner] = useState(false);
   const [foodScannerKey, setFoodScannerKey] = useState(0);
 
-  // Normalize location part for comparison (101 === 0101, trim, case-insensitive)
+  // Count/Inventory session and reconciliation (uses unifiedInventory for assets)
+  const [countSessionActive, setCountSessionActive] = useState(false);
+  const [countStartTime, setCountStartTime] = useState<number>(0);
+  const [countLocationLabel, setCountLocationLabel] = useState(''); // optional: e.g. "Aisle 3", "Store A"
+  const [inventorySessionFloor, setInventorySessionFloor] = useState(''); // optional: for location-based reconciliation
+  const [inventorySessionRoom, setInventorySessionRoom] = useState(''); // optional: e.g. "101"
+
+  // Normalize location part for comparison (101 === 0101, trim, case-insensitive) — must be after inventorySessionFloor/Room
   const normalizeLoc = useCallback((s: string | null | undefined): string => {
     const t = String(s ?? '').trim().toLowerCase();
     const num = t.replace(/^0+(\d+)$/, '$1');
@@ -297,13 +304,6 @@ export default function HandheldHubPage() {
     },
     [inventorySessionFloor, inventorySessionRoom, normalizeLoc],
   );
-
-  // Count/Inventory session and reconciliation (uses unifiedInventory for assets)
-  const [countSessionActive, setCountSessionActive] = useState(false);
-  const [countStartTime, setCountStartTime] = useState<number>(0);
-  const [countLocationLabel, setCountLocationLabel] = useState(''); // optional: e.g. "Aisle 3", "Store A"
-  const [inventorySessionFloor, setInventorySessionFloor] = useState(''); // optional: for location-based reconciliation
-  const [inventorySessionRoom, setInventorySessionRoom] = useState(''); // optional: e.g. "101"
   const [inventoryRoomTagVerified, setInventoryRoomTagVerified] = useState(false); // Room RFID tag verification status
   const [showRoomTagScanDialog, setShowRoomTagScanDialog] = useState(false);
   const [roomTagScanning, setRoomTagScanning] = useState(false);
