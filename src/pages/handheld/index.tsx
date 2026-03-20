@@ -363,6 +363,7 @@ export default function HandheldHubPage() {
   const countBarcodeInputRef = useRef<HTMLInputElement>(null);
   const [countVoiceListening, setCountVoiceListening] = useState(false);
   const countSpeechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const autoSentMissingReportRef = useRef(false);
   const [countItemDetailsAsset, setCountItemDetailsAsset] = useState<Asset | null>(null);
   const [countItemStatusAsset, setCountItemStatusAsset] = useState<Asset | null>(null);
   const [countItemMoveAsset, setCountItemMoveAsset] = useState<Asset | null>(null);
@@ -1890,6 +1891,17 @@ export default function HandheldHubPage() {
     toast({ title: 'Submitted for review', description: 'Manager can review the inventory count and discrepancies.' });
   }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length]);
 
+  // Auto-send missing items report when reconciliation shows missing (once per result)
+  useEffect(() => {
+    if (!reconciliationResult || reconciliationResult.submittedForReview || reconciliationResult.missing.length === 0) return;
+    if (autoSentMissingReportRef.current) return;
+    autoSentMissingReportRef.current = true;
+    submitCountForReview();
+  }, [reconciliationResult, submitCountForReview]);
+  useEffect(() => {
+    if (!reconciliationResult) autoSentMissingReportRef.current = false;
+  }, [reconciliationResult]);
+
   const saveReconcileEditLocation = useCallback(async () => {
     const asset = reconcileEditLocationAsset;
     if (!asset) return;
@@ -2819,7 +2831,7 @@ export default function HandheldHubPage() {
                   </div>
                   {reconciliationResult && (
                     <div className="p-4 sm:p-5 space-y-4">
-                      {/* World-class result summary: all match vs missing */}
+                      {/* Single clear result: all match OR only missing list + send report */}
                       {reconciliationResult.expectedCount === reconciliationResult.actualCount &&
                         reconciliationResult.missing.length === 0 &&
                         reconciliationResult.extra.length === 0 &&
@@ -2830,30 +2842,59 @@ export default function HandheldHubPage() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <h4 className="text-lg font-bold text-emerald-900 dark:text-emerald-100">All items in this room match</h4>
-                            <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">System expects {reconciliationResult.expectedCount} and you scanned {reconciliationResult.actualCount}. No missing items and no wrong-room scans.</p>
+                            <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">Expected {reconciliationResult.expectedCount}, scanned {reconciliationResult.actualCount}. Nothing missing.</p>
                           </div>
                         </div>
                       ) : reconciliationResult.missing.length > 0 ? (
-                        <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 p-5 flex items-start gap-4 shadow-lg shadow-amber-500/10">
-                          <div className="h-14 w-14 rounded-2xl bg-amber-500 flex items-center justify-center shrink-0">
-                            <AlertCircle className="h-8 w-8 text-white" />
+                        <>
+                          <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 p-5 shadow-lg shadow-amber-500/10">
+                            <div className="flex items-start gap-4">
+                              <div className="h-14 w-14 rounded-2xl bg-amber-500 flex items-center justify-center shrink-0">
+                                <AlertCircle className="h-8 w-8 text-white" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-lg font-bold text-amber-900 dark:text-amber-100">Items missing from this room</h4>
+                                <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
+                                  {reconciliationResult.missing.length} item{reconciliationResult.missing.length !== 1 ? 's' : ''} expected here were not scanned. No move was recorded — still registered in this room.
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-xs font-semibold text-amber-800 dark:text-amber-100 mt-4 mb-2">Missing items:</p>
+                            <ul className="space-y-2 max-h-64 overflow-y-auto rounded-xl bg-amber-100/50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+                              {reconciliationResult.missing.map((m) => (
+                                <li key={m.id} className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-white dark:bg-slate-800/80 border border-amber-200/60 dark:border-amber-800/60">
+                                  <span className="text-sm font-medium text-amber-900 dark:text-amber-100 truncate" title={m.name}>{m.name || m.barcode || m.id}</span>
+                                  <span className="text-xs text-amber-700 dark:text-amber-300 shrink-0">Floor {m.floorNumber ?? '—'}, Room {m.roomNumber ?? '—'}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            {!reconciliationResult.submittedForReview ? (
+                              <Button className="w-full mt-4 h-12 rounded-xl gap-2 font-semibold bg-amber-600 hover:bg-amber-700" onClick={submitCountForReview}>
+                                <ClipboardList className="h-5 w-5 shrink-0" /> Send missing items report
+                              </Button>
+                            ) : (
+                              <div className="mt-4 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 flex items-center gap-3">
+                                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">Report sent. Dashboard and asset pages will show these missing items.</p>
+                              </div>
+                            )}
                           </div>
+                        </>
+                      ) : (
+                        <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 p-5 flex items-center gap-4">
                           <div className="min-w-0 flex-1">
-                            <h4 className="text-lg font-bold text-amber-900 dark:text-amber-100">Missing items in this room</h4>
-                            <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
-                              {reconciliationResult.missing.length} asset{reconciliationResult.missing.length !== 1 ? 's' : ''} expected in this room were not scanned. No move was recorded for these assets — they are still registered here in the system.
-                            </p>
-                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Review the list below and update location if they were moved, or report as missing.</p>
+                            <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">Reconciliation result</h4>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Expected {reconciliationResult.expectedCount}, scanned {reconciliationResult.actualCount}. No missing items from this room.</p>
                           </div>
                         </div>
-                      ) : null}
-                      {reconciliationResult.locationOverrideApplied && (
+                      )}
+                      {reconciliationResult.missing.length === 0 && reconciliationResult.locationOverrideApplied && (
                         <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 flex items-center gap-3">
                           <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
                           <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Audit: {reconciliationResult.locationOverrideApplied}</p>
                         </div>
                       )}
-                      {reconciliationResult.scope === 'location' && reconciliationResult.locationDisplay && (
+                      {reconciliationResult.missing.length === 0 && reconciliationResult.scope === 'location' && reconciliationResult.locationDisplay && (
                         <div className="rounded-2xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-4 py-3 flex items-center gap-3">
                           <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0" />
                           <div className="min-w-0">
@@ -2862,7 +2903,7 @@ export default function HandheldHubPage() {
                           </div>
                         </div>
                       )}
-                      {reconciliationResult.scope === 'location' && (
+                      {reconciliationResult.missing.length === 0 && reconciliationResult.scope === 'location' && (
                         <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 px-3 py-2.5 space-y-1.5">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Scan breakdown</p>
                           <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -2885,7 +2926,7 @@ export default function HandheldHubPage() {
                           </div>
                         </div>
                       )}
-                      {(reconciliationResult.wrongLocation || []).length > 0 && reconciliationResult.scope === 'location' && (
+                      {reconciliationResult.missing.length === 0 && (reconciliationResult.wrongLocation || []).length > 0 && reconciliationResult.scope === 'location' && (
                         <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 space-y-3">
                           <div className="flex items-start gap-3">
                             <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -2933,6 +2974,7 @@ export default function HandheldHubPage() {
                           </div>
                         </div>
                       )}
+                      {reconciliationResult.missing.length === 0 && (
                       <div className={cn('grid gap-3', reconciliationResult.difference !== undefined ? 'grid-cols-3' : 'grid-cols-2')}>
                         <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4 text-center border border-slate-200/80 dark:border-slate-700">
                           <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{reconciliationResult.expectedCount}</p>
@@ -2959,7 +3001,8 @@ export default function HandheldHubPage() {
                           </div>
                         )}
                       </div>
-                      {reconciliationResult.expectedCount === reconciliationResult.actualCount && reconciliationResult.missing.length === 0 && reconciliationResult.extra.length === 0 && (reconciliationResult.wrongLocation || []).length === 0 && (
+                      )}
+                      {reconciliationResult.missing.length === 0 && reconciliationResult.expectedCount === reconciliationResult.actualCount && reconciliationResult.extra.length === 0 && (reconciliationResult.wrongLocation || []).length === 0 && (
                         <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
                           <CheckCircle2 className="h-10 w-10 text-emerald-600 dark:text-emerald-400 shrink-0" />
                           <div>
@@ -2968,7 +3011,7 @@ export default function HandheldHubPage() {
                           </div>
                         </div>
                       )}
-                      {(reconciliationResult.missing.length > 0 || reconciliationResult.extra.length > 0 || (reconciliationResult.wrongLocation || []).length > 0) && (
+                      {reconciliationResult.missing.length === 0 && (reconciliationResult.missing.length > 0 || reconciliationResult.extra.length > 0 || (reconciliationResult.wrongLocation || []).length > 0) && (
                         <div className="space-y-3">
                           {reconciliationResult.missing.length > 0 && (
                             <>
@@ -3123,7 +3166,7 @@ export default function HandheldHubPage() {
                           )}
                         </div>
                       )}
-                      {!reconciliationResult.submittedForReview ? (
+                      {reconciliationResult.missing.length === 0 && !reconciliationResult.submittedForReview ? (
                         <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                           {(inventorySummary?.summaryLine || inventorySummaryLoading) && (
                             <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-4 py-3">
@@ -3165,7 +3208,7 @@ export default function HandheldHubPage() {
                             <User className="h-5 w-5 shrink-0" /> Submit for manager review
                           </Button>
                         </div>
-                      ) : (
+                      ) : reconciliationResult.missing.length === 0 ? (
                         <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 space-y-2">
                           <div className="flex items-center gap-3">
                             <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -3180,7 +3223,7 @@ export default function HandheldHubPage() {
                             </div>
                           )}
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </section>
