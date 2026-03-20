@@ -175,7 +175,7 @@ function InventoryRow({
   };
 
   return (
-    <div className="relative rounded-2xl overflow-hidden touch-manipulation shadow-sm border border-slate-200/80 dark:border-slate-600/80" style={{ minHeight: 80 }}>
+    <div className="relative rounded-2xl overflow-hidden touch-manipulation shadow-sm border border-slate-200/80 dark:border-slate-600/80">
       <div
         className={cn(
           'absolute right-0 top-0 bottom-0 w-[170px] flex items-center justify-end gap-1 pr-2 border-l border-slate-200/60 dark:border-slate-600/60',
@@ -240,116 +240,118 @@ function InventoryRow({
           <MessageSquare className="h-3.5 w-3.5" />
         </Button>
       </div>
-      <div
-        className={cn(
-          'absolute inset-0 z-10 flex items-center gap-3 px-4 bg-white dark:bg-slate-800 rounded-2xl will-change-transform',
-          isDragging ? 'transition-none' : 'handheld-swipe-spring',
-        )}
-        style={{
-          transform: `translateX(${translateX}px)`,
-          ...(isDragging && Math.abs(translateX) > 10 ? { boxShadow: '4px 0 20px rgba(0,0,0,0.08)' } : {}),
-        }}
-        onTouchStart={(e) => {
-          countSwipeStartRef.current = { x: e.touches[0].clientX, id: rowId };
-          setCountSwipeOffset(0);
-          setCountSwipeHintDismissed((prev) => prev || true);
-        }}
-        onTouchMove={(e) => {
-          if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
-          const dx = e.touches[0].clientX - countSwipeStartRef.current.x;
-          const offset = Math.min(0, Math.max(-ACTION_WIDTH, dx));
-          countSwipeOffsetRef.current = offset;
-          setCountSwipeOffset(offset);
-        }}
-        onTouchEnd={() => {
-          if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
-          const finalOffset = countSwipeOffsetRef.current;
-          countSwipeStartRef.current = null;
-          setCountSwipeOffset(0);
-          setCountItemSwipedId(finalOffset < -50 ? rowId : null);
-        }}
-      >
-        <div className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700/80 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200/50 dark:ring-slate-600/50">
-          {s.imageUrl ? (
-            <img src={s.imageUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <Package className="h-7 w-7 text-slate-500 dark:text-slate-400" />
+      <div className="relative z-10">
+        <div
+          className={cn(
+            'flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 rounded-2xl will-change-transform',
+            isDragging ? 'transition-none' : 'handheld-swipe-spring',
           )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-slate-900 dark:text-white truncate text-[15px] leading-tight">{s.name}</p>
-          {s.barcode && s.barcode !== s.name && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5 font-mono">{s.barcode}</p>
-          )}
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            {s.status && (
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border',
-                  statusColor(s.status),
-                )}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
-                {s.status}
-              </span>
-            )}
-            {(s.floorNumber != null || s.roomNumber != null) && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
-                <MapPin className="h-3 w-3 shrink-0" />
-                <span className="truncate">{[s.floorNumber, s.roomNumber].filter(Boolean).join(', ')}</span>
-              </span>
+          style={{
+            transform: `translateX(${translateX}px)`,
+            ...(isDragging && Math.abs(translateX) > 10 ? { boxShadow: '4px 0 20px rgba(0,0,0,0.08)' } : {}),
+          }}
+          onTouchStart={(e) => {
+            countSwipeStartRef.current = { x: e.touches[0].clientX, id: rowId };
+            setCountSwipeOffset(0);
+            setCountSwipeHintDismissed((prev) => prev || true);
+          }}
+          onTouchMove={(e) => {
+            if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
+            const dx = e.touches[0].clientX - countSwipeStartRef.current.x;
+            const offset = Math.min(0, Math.max(-ACTION_WIDTH, dx));
+            countSwipeOffsetRef.current = offset;
+            setCountSwipeOffset(offset);
+          }}
+          onTouchEnd={() => {
+            if (!countSwipeStartRef.current || countSwipeStartRef.current.id !== rowId) return;
+            const finalOffset = countSwipeOffsetRef.current;
+            countSwipeStartRef.current = null;
+            setCountSwipeOffset(0);
+            setCountItemSwipedId(finalOffset < -50 ? rowId : null);
+          }}
+        >
+          <div className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700/80 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200/50 dark:ring-slate-600/50">
+            {s.imageUrl ? (
+              <img src={s.imageUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Package className="h-7 w-7 text-slate-500 dark:text-slate-400" />
             )}
           </div>
-        </div>
-        <div className="flex flex-col items-center shrink-0 pr-1">
-          {showSwipeHint ? (
-            <span className="handheld-row-swipe-hint flex flex-col items-center gap-0.5">
-              <ChevronRight className="h-5 w-5 text-violet-500 dark:text-violet-400" aria-hidden />
-              <span className="text-[9px] font-bold text-violet-500/80 dark:text-violet-400/80 uppercase tracking-wider">Swipe</span>
-            </span>
-          ) : (
-            <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-slate-900 dark:text-white truncate text-[15px] leading-tight">{s.name}</p>
+            {s.barcode && s.barcode !== s.name && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5 font-mono">{s.barcode}</p>
+            )}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {s.status && (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border',
+                    statusColor(s.status),
+                  )}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+                  {s.status}
+                </span>
+              )}
+              {(s.floorNumber != null || s.roomNumber != null) && (
+                <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{[s.floorNumber, s.roomNumber].filter(Boolean).join(', ')}</span>
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col items-center shrink-0 pr-1">
+            {showSwipeHint ? (
+              <span className="handheld-row-swipe-hint flex flex-col items-center gap-0.5">
+                <ChevronRight className="h-5 w-5 text-violet-500 dark:text-violet-400" aria-hidden />
+                <span className="text-[9px] font-bold text-violet-500/80 dark:text-violet-400/80 uppercase tracking-wider">Swipe</span>
+              </span>
+            ) : (
+              <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500" aria-hidden />
+            )}
+          </div>
+          {showSwipeHint && (
+            <div className="absolute right-0 top-0 bottom-0 w-12 pointer-events-none rounded-r-2xl handheld-swipe-shine" aria-hidden />
           )}
         </div>
-        {showSwipeHint && (
-          <div className="absolute right-0 top-0 bottom-0 w-12 pointer-events-none rounded-r-2xl handheld-swipe-shine" aria-hidden />
+        {wrongRoom && (
+          <div className="mt-1.5 mx-4 mb-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 overflow-hidden shadow-sm">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setWrongRoomExpandedId(wrongRoomExpanded ? null : rowId); }}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors"
+            >
+              <span className="flex items-center gap-2 text-xs font-semibold text-amber-900 dark:text-amber-100">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                Not in this room
+              </span>
+              <ChevronDown className={cn('h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 transition-transform duration-200', wrongRoomExpanded && 'rotate-180')} />
+            </button>
+            {wrongRoomExpanded && (
+              <div className="px-3 pb-3 pt-0 space-y-2.5 border-t border-amber-200 dark:border-amber-800 animate-in slide-in-from-top-2 duration-200">
+                <p className="text-xs text-amber-800 dark:text-amber-200 mt-2.5">
+                  Registered location: <span className="font-semibold">Floor {s.floorNumber ?? '—'}, Room {s.roomNumber ?? '—'}</span>
+                </p>
+                <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                  Current count room: Floor {sessionFloor || '—'}, Room {sessionRoom || '—'}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full rounded-lg h-9 border-amber-500 text-amber-800 dark:text-amber-200 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/60"
+                  onClick={(e) => { e.stopPropagation(); openCountItemMove(s); setWrongRoomExpandedId(null); }}
+                >
+                  <MapPin className="h-3.5 w-3.5 mr-1.5" />
+                  Update location
+                </Button>
+              </div>
+            )}
+          </div>
         )}
       </div>
-      {wrongRoom && (
-        <div className="mt-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 overflow-hidden">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setWrongRoomExpandedId(wrongRoomExpanded ? null : rowId); }}
-            className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left"
-          >
-            <span className="flex items-center gap-2 text-xs font-semibold text-amber-900 dark:text-amber-100">
-              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              Not in this room
-            </span>
-            <ChevronDown className={cn('h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 transition-transform', wrongRoomExpanded && 'rotate-180')} />
-          </button>
-          {wrongRoomExpanded && (
-            <div className="px-3 pb-3 pt-0 space-y-2 border-t border-amber-200 dark:border-amber-800">
-              <p className="text-xs text-amber-800 dark:text-amber-200 mt-2">
-                Registered location: <span className="font-semibold">Floor {s.floorNumber ?? '—'}, Room {s.roomNumber ?? '—'}</span>
-              </p>
-              <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                Current count room: Floor {sessionFloor || '—'}, Room {sessionRoom || '—'}
-              </p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-full rounded-lg h-9 border-amber-500 text-amber-800 dark:text-amber-200 font-medium"
-                onClick={(e) => { e.stopPropagation(); openCountItemMove(s); setWrongRoomExpandedId(null); }}
-              >
-                <MapPin className="h-3.5 w-3.5 mr-1.5" />
-                Update location
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -358,7 +360,7 @@ export function useHandheldInventoryVirtualizer(count: number, scrollParentRef: 
   return useVirtualizer({
     count,
     getScrollElement: () => scrollParentRef.current,
-    estimateSize: () => 96,
+    estimateSize: () => 140, // Base row (~80px) + wrong room indicator (~60px when collapsed)
     overscan: 8,
   });
 }
