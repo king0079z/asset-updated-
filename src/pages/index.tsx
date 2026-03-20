@@ -1,7 +1,8 @@
 // @ts-nocheck
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import Head from "next/head";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -12,22 +13,24 @@ import Link from "next/link";
 import { Package, Utensils, Car, BarChart2, MapPin, Clock, Shield, Users, Activity, Truck, FileText, BarChart, CheckCircle, ArrowRight, ArrowLeft, Building, Database, Calendar, Brain, Zap, Lightbulb, Sparkles, Star, HelpCircle, ChevronRight, Layers, Settings, Workflow, MousePointerClick, ArrowUpRight, Globe, Sun, Moon, Radio, Ticket, Smartphone, LayoutList, Gauge } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MotionCard } from "@/components/MotionCard";
-import FloatingIcons from "@/components/FloatingIcons";
-import FeatureShowcase from "@/components/FeatureShowcase";
-import FeatureComparison from "@/components/FeatureComparison";
-import AnimatedStats from "@/components/AnimatedStats";
-import TestimonialCarousel from "@/components/TestimonialCarousel";
-import FaqSection from "@/components/FaqSection";
-import HowItWorks from "@/components/HowItWorks";
-import EnhancedFeatureCard from "@/components/EnhancedFeatureCard";
-import LoadingAnimation from "@/components/LoadingAnimation";
-import MobileFeatureShowcase from "@/components/MobileFeatureShowcase";
-import VendorEvaluationFeature from "@/components/VendorEvaluationFeature";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useContext } from "react";
 import { AuthContext } from "@/contexts/AuthContext";
+
+// Dynamically import heavy components to prevent route fetch aborts
+const FloatingIcons = dynamic(() => import("@/components/FloatingIcons"), { ssr: false });
+const FeatureShowcase = dynamic(() => import("@/components/FeatureShowcase"), { ssr: false });
+const FeatureComparison = dynamic(() => import("@/components/FeatureComparison"), { ssr: false });
+const AnimatedStats = dynamic(() => import("@/components/AnimatedStats"), { ssr: false });
+const TestimonialCarousel = dynamic(() => import("@/components/TestimonialCarousel"), { ssr: false });
+const FaqSection = dynamic(() => import("@/components/FaqSection"), { ssr: false });
+const HowItWorks = dynamic(() => import("@/components/HowItWorks"), { ssr: false });
+const EnhancedFeatureCard = dynamic(() => import("@/components/EnhancedFeatureCard"), { ssr: false });
+const LoadingAnimation = dynamic(() => import("@/components/LoadingAnimation"), { ssr: false });
+const MobileFeatureShowcase = dynamic(() => import("@/components/MobileFeatureShowcase"), { ssr: false });
+const VendorEvaluationFeature = dynamic(() => import("@/components/VendorEvaluationFeature"), { ssr: false });
 
 const LANDING_CTA_KEY = 'landing_cta';
 
@@ -146,7 +149,9 @@ export default function Home() {
       </Head>
       
       {/* Loading Animation */}
-      <LoadingAnimation duration={2500} />
+      <Suspense fallback={null}>
+        <LoadingAnimation duration={2500} />
+      </Suspense>
       
       <div className="bg-background min-h-screen flex flex-col">
         <Header />
@@ -163,7 +168,9 @@ export default function Home() {
             </div>
             
             {/* Animated Particles */}
-            <FloatingIcons />
+            <Suspense fallback={null}>
+              <FloatingIcons />
+            </Suspense>
             
             <div className="container mx-auto px-4 sm:px-6 relative z-10">
               <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-20 items-center">
@@ -549,11 +556,13 @@ export default function Home() {
                   // Import and use the EnhancedFeatureCard component
                   return (
                     <div key={feature.title} className="h-full">
-                      <EnhancedFeatureCard 
-                        feature={enhancedFeature}
-                        index={index}
-                        t={t}
-                      />
+                      <Suspense fallback={<div className="h-48 bg-card rounded-xl border border-primary/10 animate-pulse" />}>
+                        <EnhancedFeatureCard 
+                          feature={enhancedFeature}
+                          index={index}
+                          t={t}
+                        />
+                      </Suspense>
                     </div>
                   );
                 })}
@@ -775,12 +784,16 @@ export default function Home() {
                 </p>
               </motion.div>
               
-              <FeatureShowcase />
+              <Suspense fallback={<div className="h-64 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>}>
+                <FeatureShowcase />
+              </Suspense>
             </div>
           </section>
 
           {/* Mobile Feature Showcase */}
-          <MobileFeatureShowcase />
+          <Suspense fallback={null}>
+            <MobileFeatureShowcase />
+          </Suspense>
 
           {/* Stats Section */}
           <section className="py-16 bg-background">
@@ -797,8 +810,9 @@ export default function Home() {
                 </p>
               </motion.div>
               
-              <AnimatedStats 
-                stats={[
+              <Suspense fallback={<div className="h-48 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>}>
+                <AnimatedStats 
+                  stats={[
                   { 
                     icon: <Package />, 
                     value: 25000, 
@@ -825,7 +839,8 @@ export default function Home() {
                     color: "bg-green-500", 
                   }
                 ]}
-              />
+                />
+              </Suspense>
             </div>
           </section>
           
@@ -1075,7 +1090,9 @@ export default function Home() {
           </section>
 
           {/* Vendor Evaluation Feature Section */}
-          <VendorEvaluationFeature />
+          <Suspense fallback={null}>
+            <VendorEvaluationFeature />
+          </Suspense>
           
           {/* AI Capabilities Section */}
           <section id="ai-powered-insights-analytics" className="py-20 bg-gradient-to-br from-violet-500/10 to-indigo-500/10 relative overflow-hidden">
@@ -1282,15 +1299,21 @@ export default function Home() {
                 </p>
               </motion.div>
               
-              <TestimonialCarousel />
+              <Suspense fallback={<div className="h-64 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>}>
+                <TestimonialCarousel />
+              </Suspense>
             </div>
           </section>
 
           {/* How It Works Section */}
-          <HowItWorks />
+          <Suspense fallback={null}>
+            <HowItWorks />
+          </Suspense>
 
           {/* FAQ Section */}
-          <FaqSection />
+          <Suspense fallback={<div className="h-64 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div></div>}>
+            <FaqSection />
+          </Suspense>
 
           {/* CTA Section */}
           <section className="py-20 bg-gradient-to-br from-primary/10 to-primary/5">
