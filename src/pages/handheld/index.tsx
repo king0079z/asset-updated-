@@ -1694,45 +1694,94 @@ export default function HandheldHubPage() {
         )}
 
         {tab === 'inventory' && (
-          <div className="max-w-lg mx-auto space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <ClipboardList className="h-5 w-5" /> Inventory
-            </h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400">Scan assets, food supply, or tickets into one list. Export count or audit reports and compare with system.</p>
-            {!countSessionActive ? (
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm space-y-4">
-                <Input placeholder="Location label (optional, e.g. Aisle 3, Store A)" value={countLocationLabel} onChange={(e) => setCountLocationLabel(e.target.value)} className="rounded-xl" />
-                <p className="text-xs text-slate-500 dark:text-slate-400">For location-based comparison: set Floor and/or Room so reconciliation compares only this location (e.g. Room 101 matches 0101 in system).</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Floor (optional)" value={inventorySessionFloor} onChange={(e) => setInventorySessionFloor(e.target.value)} className="rounded-xl" />
-                  <Input placeholder="Room (optional)" value={inventorySessionRoom} onChange={(e) => setInventorySessionRoom(e.target.value)} className="rounded-xl" />
+          <div className={cn('w-full max-w-lg mx-auto px-3 sm:px-4 pb-6', largeTextMode && 'max-w-xl')}>
+            {/* Hero: clear hierarchy, responsive */}
+            <header className="pt-2 pb-4 sm:pt-4">
+              <div className="flex items-start gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/20 ring-2 ring-white/50 dark:ring-slate-800/50">
+                  <ClipboardList className="h-6 w-6 text-white" />
                 </div>
-                <Button size="lg" className="w-full h-12 rounded-xl" onClick={startCountSession}>
-                  <Hash className="h-5 w-5 mr-2" /> Start inventory session
-                </Button>
+                <div className="min-w-0 flex-1">
+                  <h2 className={cn('font-bold text-slate-900 dark:text-white tracking-tight', largeTextMode ? 'text-xl' : 'text-lg')}>
+                    Inventory
+                  </h2>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">
+                    Scan assets, food, or tickets into one list. Export reports and compare with system.
+                  </p>
+                </div>
+              </div>
+            </header>
+
+            {!countSessionActive ? (
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800/95 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 overflow-hidden">
+                <div className="p-5 sm:p-6 space-y-5">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-2">Location (optional)</label>
+                    <Input
+                      placeholder="e.g. Aisle 3, Store A"
+                      value={countLocationLabel}
+                      onChange={(e) => setCountLocationLabel(e.target.value)}
+                      className="rounded-xl h-12 text-base border-slate-200 dark:border-slate-600 focus-visible:ring-violet-500"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    For location-based comparison, set Floor and Room so reconciliation compares only this location (101 = 0101 in system).
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1.5">Floor</label>
+                      <Input
+                        placeholder="e.g. 1"
+                        value={inventorySessionFloor}
+                        onChange={(e) => setInventorySessionFloor(e.target.value)}
+                        className="rounded-xl h-11 border-slate-200 dark:border-slate-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1.5">Room</label>
+                      <Input
+                        placeholder="e.g. 101"
+                        value={inventorySessionRoom}
+                        onChange={(e) => setInventorySessionRoom(e.target.value)}
+                        className="rounded-xl h-11 border-slate-200 dark:border-slate-600"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    size="lg"
+                    className="w-full h-14 rounded-2xl text-base font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/30 transition-shadow"
+                    onClick={startCountSession}
+                  >
+                    <Hash className="h-5 w-5 mr-2 shrink-0" />
+                    Start inventory session
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20 p-5 shadow-sm">
-                  <div className="flex items-center justify-between gap-4">
+              <div className="space-y-5">
+                {/* Stats: world-class card, responsive grid */}
+                <div className="rounded-2xl border border-violet-200/80 dark:border-violet-800/80 bg-gradient-to-br from-violet-50 via-white to-indigo-50/80 dark:from-violet-950/30 dark:via-slate-800/80 dark:to-indigo-950/20 p-5 sm:p-6 shadow-lg shadow-violet-200/30 dark:shadow-violet-900/20">
+                  <div className="grid grid-cols-2 gap-4 sm:gap-6">
                     <div>
-                      <p className="text-3xl font-bold text-violet-700 dark:text-violet-200">{unifiedInventory.length}</p>
-                      <p className="text-sm text-slate-600 dark:text-slate-400">items</p>
+                      <p className={cn('font-bold tabular-nums text-violet-700 dark:text-violet-200', largeTextMode ? 'text-4xl' : 'text-3xl')}>{unifiedInventory.length}</p>
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mt-0.5">items in list</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xl font-semibold text-slate-800 dark:text-slate-200">
-                        {countStartTime ? Math.round(unifiedInventory.length / ((Date.now() - countStartTime) / 60000)) : 0}
+                    <div className="text-right sm:text-left">
+                      <p className={cn('font-bold tabular-nums text-slate-800 dark:text-slate-200', largeTextMode ? 'text-2xl' : 'text-xl')}>
+                        {countStartTime ? Math.round(unifiedInventory.length / Math.max(1, (Date.now() - countStartTime) / 60000)) : 0}
                       </p>
-                      <p className="text-xs text-slate-500">per minute</p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">per minute</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <div className="flex-1 flex gap-2">
+
+                {/* Scan bar: touch-optimized, clear CTAs */}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex flex-1 gap-2 min-w-0">
                     <Input
                       ref={countBarcodeInputRef}
                       placeholder="Barcode or Asset ID"
-                      className="rounded-xl flex-1"
+                      className="rounded-xl h-12 sm:h-11 flex-1 min-w-0 text-base border-slate-200 dark:border-slate-600 focus-visible:ring-violet-500"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           const v = (e.target as HTMLInputElement).value?.trim();
@@ -1740,51 +1789,67 @@ export default function HandheldHubPage() {
                         }
                       }}
                     />
-                    <Button size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => { const el = countBarcodeInputRef.current; if (el?.value?.trim()) { addToUnifiedInventory(el.value.trim()); el.value = ''; } }} disabled={inventoryLoading}>
+                    <Button
+                      size="icon"
+                      className="h-12 w-12 sm:h-11 sm:w-11 rounded-xl shrink-0 min-h-[44px] min-w-[44px]"
+                      onClick={() => { const el = countBarcodeInputRef.current; if (el?.value?.trim()) { addToUnifiedInventory(el.value.trim()); el.value = ''; } }}
+                      disabled={inventoryLoading}
+                      aria-label="Add by barcode"
+                    >
                       {inventoryLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
                     </Button>
                   </div>
-                  <Button variant="outline" size="icon" className={cn('h-11 w-11 rounded-xl shrink-0', countVoiceListening && 'bg-red-100 dark:bg-red-900/30')} onClick={toggleCountVoice} aria-label="Voice input">
-                    <Mic className="h-5 w-5" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => setShowCountScanner(true)} aria-label="Open scanner">
-                    <Scan className="h-5 w-5" />
-                  </Button>
+                  <div className="flex gap-2 justify-end sm:justify-start">
+                    <Button variant="outline" size="icon" className={cn('h-12 w-12 sm:h-11 sm:w-11 rounded-xl shrink-0 min-h-[44px] min-w-[44px]', countVoiceListening && 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700')} onClick={toggleCountVoice} aria-label="Voice input">
+                      <Mic className="h-5 w-5" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-12 w-12 sm:h-11 sm:w-11 rounded-xl shrink-0 min-h-[44px] min-w-[44px]" onClick={() => setShowCountScanner(true)} aria-label="Open scanner">
+                      <Scan className="h-5 w-5" />
+                    </Button>
+                  </div>
                 </div>
+
+                {/* Toolbar: sort + export + clear */}
                 {unifiedInventory.length > 0 && (
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex flex-wrap items-center gap-2">
                     <select
                       value={auditSort}
                       onChange={(e) => setAuditSort(e.target.value as 'scan' | 'name' | 'location')}
-                      className="h-9 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-2"
+                      className="h-10 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-3 font-medium min-w-[120px]"
                     >
                       <option value="scan">Scan order</option>
                       <option value="name">Name A–Z</option>
                       <option value="location">Location</option>
                     </select>
-                    <Button variant="outline" size="sm" onClick={exportCountReport} disabled={!unifiedInventory.some((x) => x.type === 'asset')} className="gap-1">
-                      <Download className="h-3.5 w-3.5" /> Count CSV
+                    <Button variant="outline" size="sm" onClick={exportCountReport} disabled={!unifiedInventory.some((x) => x.type === 'asset')} className="rounded-xl gap-1.5 h-10">
+                      <Download className="h-4 w-4" /> Count CSV
                     </Button>
-                    <Button variant="outline" size="sm" onClick={exportAuditList} className="gap-1">
-                      <Download className="h-3.5 w-3.5" /> Audit CSV
+                    <Button variant="outline" size="sm" onClick={exportAuditList} className="rounded-xl gap-1.5 h-10">
+                      <Download className="h-4 w-4" /> Audit CSV
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setUnifiedInventory([])}>Clear all</Button>
+                    <Button variant="outline" size="sm" onClick={() => setUnifiedInventory([])} className="rounded-xl h-10">Clear all</Button>
                   </div>
                 )}
-                <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-lg p-4 max-h-[420px] overflow-y-auto">
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">List</p>
+
+                {/* List: sticky header, scroll, empty state */}
+                <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800/95 backdrop-blur-sm shadow-lg overflow-hidden">
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 bg-slate-50/95 dark:bg-slate-800/95 border-b border-slate-200/80 dark:border-slate-700/80 backdrop-blur-sm">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      List {unifiedInventory.length > 0 && <span className="text-slate-700 dark:text-slate-300 font-normal">({unifiedInventory.length})</span>}
+                    </p>
                     {unifiedInventory.some((x) => x.type === 'asset') && !countSwipeHintDismissed && (
                       <span className="handheld-swipe-hint inline-flex items-center gap-1.5 text-[10px] font-semibold text-violet-600 dark:text-violet-400">
                         <ChevronRight className="h-3.5 w-3.5 rotate-180" aria-hidden />
-                        Swipe assets for actions
+                        Swipe for actions
                       </span>
                     )}
                   </div>
+                  <div className="max-h-[min(420px,50vh)] sm:max-h-[440px] overflow-y-auto overscroll-contain p-4">
                   {unifiedInventory.length === 0 ? (
-                    <div className="py-8 text-center rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600">
-                      <Package className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-500 mb-2" />
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Scan or enter barcode to add</p>
+                    <div className="py-12 sm:py-14 text-center rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/30">
+                      <Package className="h-12 w-12 mx-auto text-slate-300 dark:text-slate-500 mb-3" />
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Scan or enter barcode to add items</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Assets, food supply, or tickets</p>
                     </div>
                   ) : (
                     <ul className="space-y-2.5">
@@ -1954,34 +2019,38 @@ export default function HandheldHubPage() {
                       })}
                     </ul>
                   )}
+                  </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1 rounded-xl" onClick={endCountSession}>
+                  <Button variant="outline" className="flex-1 rounded-2xl h-12 font-medium" onClick={endCountSession}>
                     End session
                   </Button>
                 </div>
 
                 {(inventorySessionFloor.trim() || inventorySessionRoom.trim()) && (
-                  <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10 px-4 py-2.5 flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0" />
-                    <span className="text-sm font-medium text-violet-900 dark:text-violet-100">Count location: {[inventorySessionFloor.trim(), inventorySessionRoom.trim()].filter(Boolean).join(', ') || '—'}</span>
-                    <span className="text-xs text-violet-600 dark:text-violet-300">(Reconciliation will compare this location only; 101 = 0101)</span>
+                  <div className="rounded-2xl border border-violet-200/80 dark:border-violet-800/80 bg-violet-50/80 dark:bg-violet-900/20 px-4 py-3 flex items-start sm:items-center gap-3">
+                    <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5 sm:mt-0" />
+                    <div className="min-w-0">
+                      <span className="text-sm font-semibold text-violet-900 dark:text-violet-100 block">Count location</span>
+                      <span className="text-sm text-violet-700 dark:text-violet-300">{[inventorySessionFloor.trim(), inventorySessionRoom.trim()].filter(Boolean).join(', ') || '—'}</span>
+                      <p className="text-xs text-violet-600/90 dark:text-violet-400/90 mt-1">Reconciliation compares this location only (101 = 0101)</p>
+                    </div>
                   </div>
                 )}
 
-                <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden shadow-sm">
-                  <div className="p-5 bg-gradient-to-br from-slate-50 to-slate-100/80 dark:from-slate-800/80 dark:to-slate-900/50 border-b border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center gap-3">
+                <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-800 overflow-hidden shadow-lg">
+                  <div className="p-5 sm:p-6 bg-gradient-to-br from-slate-50 to-slate-100/80 dark:from-slate-800/80 dark:to-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex items-start gap-4">
                       <div className="h-12 w-12 rounded-2xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center shrink-0">
                         <Scale className="h-6 w-6 text-violet-600 dark:text-violet-400" />
                       </div>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <h3 className="text-base font-bold text-slate-900 dark:text-white">Compare with system</h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Reconcile by location or all. System matches 101 and 0101. Fix wrong locations with Edit location.</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Reconcile by location or all. Fix wrong locations with Edit location.</p>
                       </div>
                     </div>
                     <Button
-                      className="w-full mt-4 h-12 rounded-xl gap-2 font-semibold shadow-sm"
+                      className="w-full mt-5 h-12 rounded-2xl gap-2 font-semibold shadow-md min-h-[48px]"
                       onClick={() => { setReconcileConfirmStep('confirm'); setReconcileCorrectFloor(inventorySessionFloor); setReconcileCorrectRoom(inventorySessionRoom); setShowReconcileConfirmDialog(true); }}
                       disabled={reconciliationLoading || countScansForReconciliation.length === 0}
                     >
@@ -1990,19 +2059,19 @@ export default function HandheldHubPage() {
                     </Button>
                   </div>
                   {reconciliationResult && (
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 sm:p-5 space-y-4">
                       {reconciliationResult.locationOverrideApplied && (
-                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-2.5 flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <p className="text-xs font-medium text-amber-900 dark:text-amber-100">Audit: {reconciliationResult.locationOverrideApplied}</p>
+                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 flex items-center gap-3">
+                          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Audit: {reconciliationResult.locationOverrideApplied}</p>
                         </div>
                       )}
                       {reconciliationResult.scope === 'location' && reconciliationResult.locationDisplay && (
                         <div className="rounded-2xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-4 py-3 flex items-center gap-3">
                           <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0" />
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">Count location</p>
-                            <p className="text-xs text-violet-700 dark:text-violet-300">Comparing only: {reconciliationResult.locationDisplay} (system uses normalized match: 101 = 0101)</p>
+                            <p className="text-xs text-violet-700 dark:text-violet-300">Comparing only: {reconciliationResult.locationDisplay}</p>
                           </div>
                         </div>
                       )}
@@ -2839,57 +2908,64 @@ export default function HandheldHubPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reconcile: Pre-reconciliation location confirmation */}
+      {/* Reconcile: Pre-reconciliation location confirmation — world-class workflow */}
       <Dialog open={showReconcileConfirmDialog} onOpenChange={(open) => { if (!open) setShowReconcileConfirmDialog(false); setReconcileConfirmStep('confirm'); }}>
-        <DialogContent className="max-w-md rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Scale className="h-5 w-5 text-violet-500" /> Confirm location</DialogTitle>
-            <DialogDescription>Ensure the physical room where you are counting matches before comparing with the system.</DialogDescription>
+        <DialogContent className="max-w-md w-[95vw] rounded-2xl shadow-2xl border-slate-200 dark:border-slate-700" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/50">
+                <Scale className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </span>
+              Confirm location
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed">
+              Make sure the physical room where you are counting matches before comparing with the system.
+            </DialogDescription>
           </DialogHeader>
           {reconcileConfirmStep === 'confirm' ? (
-            <div className="space-y-4 pt-2">
+            <div className="space-y-5 pt-2">
               <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Current count location (system)</p>
-                <p className="text-sm font-medium text-slate-900 dark:text-white">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Current count location</p>
+                <p className="text-base font-semibold text-slate-900 dark:text-white">
                   {inventorySessionFloor.trim() || inventorySessionRoom.trim()
                     ? `Floor ${inventorySessionFloor.trim() || '—'}, Room ${inventorySessionRoom.trim() || '—'}`
                     : 'All locations (no filter)'}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">System matches formats like 101 and 0101.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">System normalizes 101 and 0101 as the same.</p>
               </div>
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Are you currently counting in this same location?</p>
-              <div className="flex gap-3">
-                <Button className="flex-1 rounded-xl h-12 font-semibold" onClick={() => { setShowReconcileConfirmDialog(false); runReconciliation(); }}>
-                  Yes, start reconciliation
+              <div className="grid grid-cols-2 gap-3">
+                <Button className="rounded-2xl h-12 font-semibold shadow-md" onClick={() => { setShowReconcileConfirmDialog(false); runReconciliation(); }}>
+                  Yes, run
                 </Button>
-                <Button variant="outline" className="flex-1 rounded-xl h-12 font-semibold" onClick={() => setReconcileConfirmStep('change_location')}>
-                  No, change location
+                <Button variant="outline" className="rounded-2xl h-12 font-semibold border-2" onClick={() => setReconcileConfirmStep('change_location')}>
+                  No, change
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="space-y-4 pt-2">
-              <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Session location (system)</p>
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Floor {inventorySessionFloor.trim() || '—'}, Room {inventorySessionRoom.trim() || '—'}</p>
+            <div className="space-y-5 pt-2">
+              <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Session location</p>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Floor {inventorySessionFloor.trim() || '—'}, Room {inventorySessionRoom.trim() || '—'}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-2">Correct physical location (where you are counting)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Floor" value={reconcileCorrectFloor} onChange={(e) => setReconcileCorrectFloor(e.target.value)} className="rounded-xl" />
-                  <Input placeholder="Room" value={reconcileCorrectRoom} onChange={(e) => setReconcileCorrectRoom(e.target.value)} className="rounded-xl" />
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-2">Correct physical location</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input placeholder="Floor" value={reconcileCorrectFloor} onChange={(e) => setReconcileCorrectFloor(e.target.value)} className="rounded-xl h-11" />
+                  <Input placeholder="Room" value={reconcileCorrectRoom} onChange={(e) => setReconcileCorrectRoom(e.target.value)} className="rounded-xl h-11" />
                 </div>
               </div>
-              <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10 p-3">
+              <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10 p-4">
                 <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">Selected: Floor {reconcileCorrectFloor.trim() || '—'}, Room {reconcileCorrectRoom.trim() || '—'}</p>
                 {(normalizeLoc(inventorySessionFloor) !== normalizeLoc(reconcileCorrectFloor) || normalizeLoc(inventorySessionRoom) !== normalizeLoc(reconcileCorrectRoom)) && (inventorySessionFloor.trim() || inventorySessionRoom.trim()) && (
-                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 font-medium">Different from session location — will update and run.</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1.5 font-medium">Different from session — will update and run.</p>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 rounded-xl h-12" onClick={() => setReconcileConfirmStep('confirm')}>Back</Button>
-                <Button className="flex-1 rounded-xl h-12 font-semibold" onClick={() => { setShowReconcileConfirmDialog(false); runReconciliation({ floor: reconcileCorrectFloor.trim(), room: reconcileCorrectRoom.trim() }); }}>
-                  Update location & run
+              <div className="grid grid-cols-2 gap-3">
+                <Button variant="outline" className="rounded-2xl h-12 font-medium" onClick={() => setReconcileConfirmStep('confirm')}>Back</Button>
+                <Button className="rounded-2xl h-12 font-semibold shadow-md" onClick={() => { setShowReconcileConfirmDialog(false); runReconciliation({ floor: reconcileCorrectFloor.trim(), room: reconcileCorrectRoom.trim() }); }}>
+                  Update & run
                 </Button>
               </div>
             </div>
@@ -2897,45 +2973,49 @@ export default function HandheldHubPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Missing items popup: available vs missing, recently moved highlight */}
+      {/* Missing items popup: available vs missing, recently moved — world-class */}
       {reconciliationResult && reconciliationResult.missing.length > 0 && (
         <Dialog open={showMissingItemsDialog} onOpenChange={setShowMissingItemsDialog}>
-          <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-hidden flex flex-col rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
-            <DialogHeader className="flex-shrink-0">
-              <DialogTitle className="flex items-center gap-2 text-lg">
-                <AlertCircle className="h-5 w-5 text-amber-500" />
+          <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-hidden flex flex-col rounded-2xl shadow-2xl border-slate-200 dark:border-slate-700" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+            <DialogHeader className="flex-shrink-0 pb-2">
+              <DialogTitle className="flex items-center gap-3 text-lg">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/50">
+                  <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </span>
                 Missing items at this location
               </DialogTitle>
-              <DialogDescription>Items in system at this location that were not scanned. Check if recently moved.</DialogDescription>
+              <DialogDescription className="text-sm leading-relaxed">
+                Items in system here that were not scanned. Check &quot;Recently moved&quot; — they may be at a different location.
+              </DialogDescription>
             </DialogHeader>
-            <div className="flex-1 overflow-y-auto space-y-4 py-2 min-h-0">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-2xl bg-slate-100 dark:bg-slate-800 p-3 text-center">
-                  <p className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{reconciliationResult.expectedCount}</p>
-                  <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">In system</p>
+            <div className="flex-1 overflow-y-auto space-y-5 py-2 min-h-0 -mx-1 px-1">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="rounded-2xl bg-slate-100 dark:bg-slate-800 p-3 sm:p-4 text-center border border-slate-200/60 dark:border-slate-700">
+                  <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{reconciliationResult.expectedCount}</p>
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">In system</p>
                 </div>
-                <div className="rounded-2xl bg-violet-100 dark:bg-violet-900/30 p-3 text-center">
-                  <p className="text-xl font-bold text-violet-700 dark:text-violet-300 tabular-nums">{reconciliationResult.actualCount}</p>
-                  <p className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-wider">Scanned</p>
+                <div className="rounded-2xl bg-violet-100 dark:bg-violet-900/30 p-3 sm:p-4 text-center border border-violet-200/60 dark:border-violet-800">
+                  <p className="text-xl sm:text-2xl font-bold text-violet-700 dark:text-violet-300 tabular-nums">{reconciliationResult.actualCount}</p>
+                  <p className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mt-1">Scanned</p>
                 </div>
-                <div className="rounded-2xl bg-amber-100 dark:bg-amber-900/30 p-3 text-center">
-                  <p className="text-xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">{reconciliationResult.missing.length}</p>
-                  <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Missing</p>
+                <div className="rounded-2xl bg-amber-100 dark:bg-amber-900/30 p-3 sm:p-4 text-center border border-amber-200/60 dark:border-amber-800">
+                  <p className="text-xl sm:text-2xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">{reconciliationResult.missing.length}</p>
+                  <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mt-1">Missing</p>
                 </div>
               </div>
               {reconciliationResult.scope === 'location' && reconciliationResult.locationDisplay && (
-                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" />
-                  Location: {reconciliationResult.locationDisplay}
-                </p>
+                <div className="flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 px-3 py-2">
+                  <MapPin className="h-4 w-4 text-slate-500 shrink-0" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{reconciliationResult.locationDisplay}</span>
+                </div>
               )}
               <div>
-                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-2">
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center gap-2">
                   <Package className="h-4 w-4 text-violet-500" />
                   Missing from scan ({reconciliationResult.missing.length})
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">These assets are in the system at this location but were not scanned. Items marked &quot;Recently moved&quot; may have been relocated.</p>
-                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">In system at this location but not scanned. &quot;Recently moved&quot; items may have been relocated.</p>
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1 overscroll-contain">
                   {(() => {
                     const RECENT_DAYS = 30;
                     const now = Date.now();
@@ -2950,16 +3030,16 @@ export default function HandheldHubPage() {
                               <RefreshCw className="h-3.5 w-3.5" /> Recently moved ({missingRecent.length}) — may be at different location
                             </p>
                             {missingRecent.map((m) => (
-                              <div key={m.id} className="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 flex flex-col gap-2">
+                              <div key={m.id} className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4 flex flex-col gap-2.5 shadow-sm">
                                 <div className="flex items-start justify-between gap-2">
                                   <p className="font-semibold text-slate-900 dark:text-white text-sm truncate flex-1">{m.name || m.barcode || m.id}</p>
-                                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 text-[10px] font-bold px-2 py-0.5">
+                                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 text-[10px] font-bold px-2.5 py-1">
                                     <RefreshCw className="h-3 w-3" /> Recently moved
                                   </span>
                                 </div>
                                 {m.lastMovedAt && <p className="text-[10px] text-amber-700 dark:text-amber-300">Moved: {new Date(m.lastMovedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</p>}
-                                <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1"><MapPin className="h-3 w-3" /> System: Floor {m.floorNumber ?? '—'}, Room {m.roomNumber ?? '—'}</p>
-                                <Button type="button" size="sm" variant="outline" className="w-fit h-8 text-xs rounded-lg border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); setShowMissingItemsDialog(false); }}><MapPin className="h-3 w-3 mr-1" /> Edit location</Button>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" /> Floor {m.floorNumber ?? '—'}, Room {m.roomNumber ?? '—'}</p>
+                                <Button type="button" size="sm" variant="outline" className="w-fit h-9 text-xs rounded-xl border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200 font-medium" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); setShowMissingItemsDialog(false); }}><MapPin className="h-3.5 w-3.5 mr-1.5" /> Edit location</Button>
                               </div>
                             ))}
                           </div>
@@ -2968,10 +3048,10 @@ export default function HandheldHubPage() {
                           <div className="space-y-2">
                             {missingRecent.length > 0 && <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-3">Other missing</p>}
                             {missingOther.map((m) => (
-                              <div key={m.id} className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-900/10 p-3 flex flex-col gap-2">
+                              <div key={m.id} className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-900/10 p-4 flex flex-col gap-2.5">
                                 <p className="font-semibold text-slate-900 dark:text-white text-sm truncate">{m.name || m.barcode || m.id}</p>
-                                <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1"><MapPin className="h-3 w-3" /> System: Floor {m.floorNumber ?? '—'}, Room {m.roomNumber ?? '—'}</p>
-                                <Button type="button" size="sm" variant="outline" className="w-fit h-8 text-xs rounded-lg border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); setShowMissingItemsDialog(false); }}><MapPin className="h-3 w-3 mr-1" /> Edit location</Button>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" /> Floor {m.floorNumber ?? '—'}, Room {m.roomNumber ?? '—'}</p>
+                                <Button type="button" size="sm" variant="outline" className="w-fit h-9 text-xs rounded-xl border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200 font-medium" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); setShowMissingItemsDialog(false); }}><MapPin className="h-3.5 w-3.5 mr-1.5" /> Edit location</Button>
                               </div>
                             ))}
                           </div>
@@ -2982,8 +3062,8 @@ export default function HandheldHubPage() {
                 </div>
               </div>
             </div>
-            <DialogFooter className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 pt-3">
-              <Button variant="outline" className="rounded-xl" onClick={() => setShowMissingItemsDialog(false)}>Close</Button>
+            <DialogFooter className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 pt-4 mt-2">
+              <Button variant="outline" className="rounded-2xl h-11 w-full sm:w-auto min-w-[120px]" onClick={() => setShowMissingItemsDialog(false)}>Close</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -2991,10 +3071,15 @@ export default function HandheldHubPage() {
 
       {/* Reconcile: Edit asset location (correct wrong system location) */}
       <Dialog open={!!reconcileEditLocationAsset} onOpenChange={(open) => { if (!open) setReconcileEditLocationAsset(null); }}>
-        <DialogContent className="max-w-md rounded-2xl" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-violet-500" /> Edit location</DialogTitle>
-            <DialogDescription>{reconcileEditLocationAsset ? `Update system location for ${reconcileEditLocationAsset.name}. This creates a movement record.` : ''}</DialogDescription>
+        <DialogContent className="max-w-md w-[95vw] rounded-2xl shadow-2xl border-slate-200 dark:border-slate-700" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
+          <DialogHeader className="space-y-1.5">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/50">
+                <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              </span>
+              Edit location
+            </DialogTitle>
+            <DialogDescription className="text-sm">{reconcileEditLocationAsset ? `Update system location for "${reconcileEditLocationAsset.name}". Creates a movement record.` : ''}</DialogDescription>
           </DialogHeader>
           <Form {...reconcileEditLocationForm}>
             <form onSubmit={reconcileEditLocationForm.handleSubmit(saveReconcileEditLocation)} className="space-y-4 pt-2">
@@ -3005,7 +3090,7 @@ export default function HandheldHubPage() {
                   <FormItem>
                     <FormLabel>Floor</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. 1 or Ground" className="rounded-xl" {...field} />
+                      <Input placeholder="e.g. 1 or Ground" className="rounded-xl h-11" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -3018,15 +3103,15 @@ export default function HandheldHubPage() {
                   <FormItem>
                     <FormLabel>Room</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. 101" className="rounded-xl" {...field} />
+                      <Input placeholder="e.g. 101" className="rounded-xl h-11" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <DialogFooter className="gap-2 pt-2">
-                <Button type="button" variant="outline" className="rounded-xl" onClick={() => setReconcileEditLocationAsset(null)}>Cancel</Button>
-                <Button type="submit" className="rounded-xl" disabled={reconcileEditLocationSaving}>
+              <DialogFooter className="gap-3 pt-2">
+                <Button type="button" variant="outline" className="rounded-2xl h-11 flex-1 sm:flex-initial" onClick={() => setReconcileEditLocationAsset(null)}>Cancel</Button>
+                <Button type="submit" className="rounded-2xl h-11 flex-1 sm:flex-initial min-w-[140px]" disabled={reconcileEditLocationSaving}>
                   {reconcileEditLocationSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save location'}
                 </Button>
               </DialogFooter>
