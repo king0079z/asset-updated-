@@ -189,6 +189,12 @@ export default function HandheldHubPage() {
   const [disposing, setDisposing] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [pickedStatus, setPickedStatus] = useState('');
+  const [moveDestinationRoomTagVerified, setMoveDestinationRoomTagVerified] = useState(false);
+  const [showMoveRoomTagScan, setShowMoveRoomTagScan] = useState(false);
+  const [moveRoomTagScanning, setMoveRoomTagScanning] = useState(false);
+  const [moveRoomTagError, setMoveRoomTagError] = useState<string | null>(null);
+  const [moveDestinationFloor, setMoveDestinationFloor] = useState('');
+  const [moveDestinationRoom, setMoveDestinationRoom] = useState('');
   const transferForm = useForm<z.infer<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),
     defaultValues: { floorNumber: '', roomNumber: '' },
@@ -284,6 +290,10 @@ export default function HandheldHubPage() {
   const [countLocationLabel, setCountLocationLabel] = useState(''); // optional: e.g. "Aisle 3", "Store A"
   const [inventorySessionFloor, setInventorySessionFloor] = useState(''); // optional: for location-based reconciliation
   const [inventorySessionRoom, setInventorySessionRoom] = useState(''); // optional: e.g. "101"
+  const [inventoryRoomTagVerified, setInventoryRoomTagVerified] = useState(false); // Room RFID tag verification status
+  const [showRoomTagScanDialog, setShowRoomTagScanDialog] = useState(false);
+  const [roomTagScanning, setRoomTagScanning] = useState(false);
+  const [roomTagError, setRoomTagError] = useState<string | null>(null);
   const [showCountScanner, setShowCountScanner] = useState(false);
   const [reconciliationResult, setReconciliationResult] = useState<{
     expectedCount: number;
@@ -355,6 +365,7 @@ export default function HandheldHubPage() {
       setCountLocationLabel(typeof s.countLocationLabel === 'string' ? s.countLocationLabel : '');
       setInventorySessionFloor(typeof s.inventorySessionFloor === 'string' ? s.inventorySessionFloor : '');
       setInventorySessionRoom(typeof s.inventorySessionRoom === 'string' ? s.inventorySessionRoom : '');
+      setInventoryRoomTagVerified(typeof s.inventoryRoomTagVerified === 'boolean' ? s.inventoryRoomTagVerified : false);
       setUnifiedInventory(Array.isArray(s.unifiedInventory) ? s.unifiedInventory : []);
       if (s.reconciliationResult) setReconciliationResult(s.reconciliationResult);
       if (Array.isArray(s.inventoryAuditLog)) setInventoryAuditLog(s.inventoryAuditLog.slice(0, INVENTORY_AUDIT_LOG_MAX));
@@ -383,6 +394,7 @@ export default function HandheldHubPage() {
             countLocationLabel,
             inventorySessionFloor,
             inventorySessionRoom,
+            inventoryRoomTagVerified,
             unifiedInventory,
             reconciliationResult,
             inventoryAuditLog,
@@ -401,6 +413,7 @@ export default function HandheldHubPage() {
     countLocationLabel,
     inventorySessionFloor,
     inventorySessionRoom,
+    inventoryRoomTagVerified,
     unifiedInventory,
     reconciliationResult,
     inventoryAuditLog,
@@ -995,13 +1008,60 @@ export default function HandheldHubPage() {
     [performInventoryLookup, pushInventoryAudit, toast],
   );
 
+  // Verify move destination room tag
+  const verifyMoveDestinationRoomTag = useCallback(async (tagId: string) => {
+    setMoveRoomTagScanning(true);
+    setMoveRoomTagError(null);
+    try {
+      const res = await fetch('/api/rfid/resolve-room-tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to verify room tag');
+      }
+      // Set verified destination
+      setMoveDestinationFloor(data.floorNumber);
+      setMoveDestinationRoom(data.roomNumber);
+      setMoveDestinationRoomTagVerified(true);
+      setShowMoveRoomTagScan(false);
+      // Pre-fill form
+      transferForm.setValue('floorNumber', data.floorNumber);
+      transferForm.setValue('roomNumber', data.roomNumber);
+      toast({
+        title: 'Destination room verified',
+        description: `Floor ${data.floorNumber}, Room ${data.roomNumber}${data.building ? ` (${data.building})` : ''}`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to verify room tag';
+      setMoveRoomTagError(msg);
+      toast({
+        title: 'Room tag verification failed',
+        description: msg,
+        variant: 'destructive',
+      });
+    } finally {
+      setMoveRoomTagScanning(false);
+    }
+  }, [transferForm, toast]);
+
   const doMove = async (vals: z.infer<typeof transferSchema>) => {
     if (!currentAsset) return;
+    // Require room tag verification first
+    if (!moveDestinationRoomTagVerified || moveDestinationFloor !== vals.floorNumber || moveDestinationRoom !== vals.roomNumber) {
+      setShowMoveRoomTagScan(true);
+      return;
+    }
     const payload = { assetId: currentAsset.id, assetName: currentAsset.name, floorNumber: vals.floorNumber, roomNumber: vals.roomNumber };
     if (!isOnline) {
       setQueue([...getQueue(), { type: 'move', payload }]);
       setShowMove(false);
       transferForm.reset();
+      setMoveDestinationRoomTagVerified(false);
+      setMoveDestinationFloor('');
+      setMoveDestinationRoom('');
       toast({ title: 'Queued for sync', description: 'Move will sync when back online.' });
       return;
     }
@@ -1017,6 +1077,9 @@ export default function HandheldHubPage() {
       setCurrentAsset((prev) => (prev ? { ...prev, ...d.asset, floorNumber: vals.floorNumber, roomNumber: vals.roomNumber } : prev));
       setShowMove(false);
       transferForm.reset();
+      setMoveDestinationRoomTagVerified(false);
+      setMoveDestinationFloor('');
+      setMoveDestinationRoom('');
       pushRecentAction('move', `Moved ${currentAsset.name} to ${vals.floorNumber}, ${vals.roomNumber}`);
       toast({ title: 'Asset moved', description: `Floor ${vals.floorNumber}, Room ${vals.roomNumber}` });
     } catch {
@@ -1458,7 +1521,65 @@ export default function HandheldHubPage() {
     }
   }, [fetchAssignedTickets, fetchAssignedTasks, toast, isOnline, processOfflineQueue, offlineQueueLength, flushPendingInventoryScans]);
 
+  // Room tag verification handler
+  const verifyRoomTag = useCallback(async (tagId: string) => {
+    setRoomTagScanning(true);
+    setRoomTagError(null);
+    try {
+      const res = await fetch('/api/rfid/resolve-room-tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tagId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to verify room tag');
+      }
+      // Set verified room context
+      setInventorySessionFloor(data.floorNumber);
+      setInventorySessionRoom(data.roomNumber);
+      setInventoryRoomTagVerified(true);
+      setShowRoomTagScanDialog(false);
+      toast({
+        title: 'Room verified',
+        description: `Floor ${data.floorNumber}, Room ${data.roomNumber}${data.building ? ` (${data.building})` : ''}`,
+      });
+      // Now start the session
+      try {
+        localStorage.removeItem(INVENTORY_SESSION_KEY);
+      } catch {
+        /* ignore */
+      }
+      inventoryUndoStackRef.current = [];
+      setInventorySearch('');
+      setInventoryAuditLog([]);
+      setSessionProofNote('');
+      setSessionProofImages([]);
+      setCountSessionActive(true);
+      setCountStartTime(Date.now());
+      setUnifiedInventory([]);
+      setReconciliationResult(null);
+      // Keep room tag verification and location from verification
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to verify room tag';
+      setRoomTagError(msg);
+      toast({
+        title: 'Room tag verification failed',
+        description: msg,
+        variant: 'destructive',
+      });
+    } finally {
+      setRoomTagScanning(false);
+    }
+  }, [toast]);
+
   const startCountSession = useCallback(() => {
+    // Require room tag verification first
+    if (!inventoryRoomTagVerified) {
+      setShowRoomTagScanDialog(true);
+      return;
+    }
+    // If already verified, proceed
     try {
       localStorage.removeItem(INVENTORY_SESSION_KEY);
     } catch {
@@ -1473,7 +1594,7 @@ export default function HandheldHubPage() {
     setCountStartTime(Date.now());
     setUnifiedInventory([]);
     setReconciliationResult(null);
-  }, []);
+  }, [inventoryRoomTagVerified]);
 
   const countScansForReconciliation = useMemo(
     () => unifiedInventory.filter((x): x is { type: 'asset'; data: CountScanItem } => x.type === 'asset').map((x) => x.data),
@@ -1683,6 +1804,9 @@ export default function HandheldHubPage() {
     }
     inventoryUndoStackRef.current = [];
     setCountSessionActive(false);
+    setInventoryRoomTagVerified(false);
+    setInventorySessionFloor('');
+    setInventorySessionRoom('');
     toast({ title: 'Session ended', description: `${total} item${total !== 1 ? 's' : ''} in list.` });
   }, [unifiedInventory.length, countLocationLabel, pushRecentAction, toast]);
 
@@ -1893,7 +2017,19 @@ export default function HandheldHubPage() {
                     <Eye className="h-5 w-5" />
                     <span className="text-xs">View details</span>
                   </Button>
-                  <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => openHandheldDialogAfterTap(() => setShowMove(true))}>
+                  <Button type="button" size="lg" variant="outline" className="h-14 flex flex-col gap-0.5" onClick={() => {
+                    // Reset move destination verification when opening
+                    setMoveDestinationRoomTagVerified(false);
+                    setMoveDestinationFloor('');
+                    setMoveDestinationRoom('');
+                    transferForm.reset();
+                    // Pre-fill with current location for reference
+                    if (currentAsset?.floorNumber && currentAsset?.roomNumber) {
+                      transferForm.setValue('floorNumber', currentAsset.floorNumber);
+                      transferForm.setValue('roomNumber', currentAsset.roomNumber);
+                    }
+                    openHandheldDialogAfterTap(() => setShowMove(true));
+                  }}>
                     <ArrowRightLeft className="h-5 w-5" />
                     <span className="text-xs">Move</span>
                   </Button>
@@ -2082,37 +2218,54 @@ export default function HandheldHubPage() {
                       className="rounded-xl h-12 text-base border-slate-200 dark:border-slate-600 focus-visible:ring-violet-500"
                     />
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    For location-based comparison, set Floor and Room so reconciliation compares only this location (101 = 0101 in system).
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1.5">Floor</label>
-                      <Input
-                        placeholder="e.g. 1"
-                        value={inventorySessionFloor}
-                        onChange={(e) => setInventorySessionFloor(e.target.value)}
-                        className="rounded-xl h-11 border-slate-200 dark:border-slate-600"
-                      />
+                  {inventoryRoomTagVerified ? (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border-2 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/30 p-4">
+                        <div className="flex items-start gap-3">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-green-900 dark:text-green-100">Room verified</p>
+                            <p className="text-sm text-green-700 dark:text-green-300 mt-0.5">
+                              Floor {inventorySessionFloor}, Room {inventorySessionRoom}
+                            </p>
+                            <p className="text-xs text-green-600/90 dark:text-green-400/90 mt-1">
+                              Location automatically set from room RFID tag. Reconciliation will compare this location only (101 = 0101).
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        size="lg"
+                        className="w-full h-14 rounded-2xl text-base font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/30 transition-shadow"
+                        onClick={startCountSession}
+                      >
+                        <Hash className="h-5 w-5 mr-2 shrink-0" />
+                        Start inventory session
+                      </Button>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1.5">Room</label>
-                      <Input
-                        placeholder="e.g. 101"
-                        value={inventorySessionRoom}
-                        onChange={(e) => setInventorySessionRoom(e.target.value)}
-                        className="rounded-xl h-11 border-slate-200 dark:border-slate-600"
-                      />
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4">
+                        <div className="flex items-start gap-3">
+                          <Radio className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Room RFID tag required</p>
+                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                              Scan the room's RFID tag first to automatically set the location. This ensures accurate inventory tracking and automatic location detection.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        size="lg"
+                        className="w-full h-14 rounded-2xl text-base font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/30 transition-shadow"
+                        onClick={() => setShowRoomTagScanDialog(true)}
+                      >
+                        <Radio className="h-5 w-5 mr-2 shrink-0" />
+                        Scan room RFID tag
+                      </Button>
                     </div>
-                  </div>
-                  <Button
-                    size="lg"
-                    className="w-full h-14 rounded-2xl text-base font-semibold shadow-lg shadow-violet-500/25 hover:shadow-violet-500/30 transition-shadow"
-                    onClick={startCountSession}
-                  >
-                    <Hash className="h-5 w-5 mr-2 shrink-0" />
-                    Start inventory session
-                  </Button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -3554,20 +3707,234 @@ export default function HandheldHubPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showMove} onOpenChange={setShowMove}>
+      {/* Room tag scan dialog for inventory start */}
+      <Dialog open={showRoomTagScanDialog} onOpenChange={setShowRoomTagScanDialog}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Radio className="h-5 w-5 text-violet-600" />
+              Scan room RFID tag
+            </DialogTitle>
+            <DialogDescription>
+              Scan the room's RFID tag to automatically set the location for this inventory session. This is required before starting.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="rounded-xl border-2 border-dashed border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/20 p-6 text-center">
+              <ScanLine className="h-12 w-12 mx-auto text-violet-600 dark:text-violet-400 mb-3" />
+              <p className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Ready to scan</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Use your RFID reader to scan the room tag</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Or enter tag ID manually:</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Tag ID (e.g. AA:BB:CC:DD:EE:FF)"
+                  className="flex-1 font-mono text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const tagId = (e.target as HTMLInputElement).value.trim();
+                      if (tagId) {
+                        void verifyRoomTag(tagId);
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }
+                  }}
+                  disabled={roomTagScanning}
+                />
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const input = document.querySelector('input[placeholder*="Tag ID"]') as HTMLInputElement;
+                    if (input?.value?.trim()) {
+                      void verifyRoomTag(input.value.trim());
+                      input.value = '';
+                    }
+                  }}
+                  disabled={roomTagScanning}
+                >
+                  {roomTagScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify'}
+                </Button>
+              </div>
+            </div>
+            {roomTagError && (
+              <div className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30 p-3">
+                <p className="text-sm font-medium text-red-900 dark:text-red-100">{roomTagError}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowRoomTagScanDialog(false)} disabled={roomTagScanning}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Room tag scan dialog for move destination */}
+      <Dialog open={showMoveRoomTagScan} onOpenChange={setShowMoveRoomTagScan}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Radio className="h-5 w-5 text-violet-600" />
+              Scan destination room tag
+            </DialogTitle>
+            <DialogDescription>
+              Scan the destination room's RFID tag to automatically set where this asset is being moved. This is required before moving.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="rounded-xl border-2 border-dashed border-violet-300 dark:border-violet-700 bg-violet-50/50 dark:bg-violet-950/20 p-6 text-center">
+              <ScanLine className="h-12 w-12 mx-auto text-violet-600 dark:text-violet-400 mb-3" />
+              <p className="font-semibold text-slate-900 dark:text-slate-100 mb-1">Ready to scan</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Use your RFID reader to scan the destination room tag</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Or enter tag ID manually:</label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Tag ID (e.g. AA:BB:CC:DD:EE:FF)"
+                  className="flex-1 font-mono text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const tagId = (e.target as HTMLInputElement).value.trim();
+                      if (tagId) {
+                        void verifyMoveDestinationRoomTag(tagId);
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }
+                  }}
+                  disabled={moveRoomTagScanning}
+                />
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const input = document.querySelector('input[placeholder*="Tag ID"]') as HTMLInputElement;
+                    if (input?.value?.trim()) {
+                      void verifyMoveDestinationRoomTag(input.value.trim());
+                      input.value = '';
+                    }
+                  }}
+                  disabled={moveRoomTagScanning}
+                >
+                  {moveRoomTagScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify'}
+                </Button>
+              </div>
+            </div>
+            {moveRoomTagError && (
+              <div className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30 p-3">
+                <p className="text-sm font-medium text-red-900 dark:text-red-100">{moveRoomTagError}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowMoveRoomTagScan(false)} disabled={moveRoomTagScanning}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showMove} onOpenChange={(open) => {
+        setShowMove(open);
+        if (!open) {
+          setMoveDestinationRoomTagVerified(false);
+          setMoveDestinationFloor('');
+          setMoveDestinationRoom('');
+          transferForm.reset();
+        }
+      }}>
         <DialogContent className="sm:max-w-md" onPointerDownOutside={preventHandheldDialogOutsideClose} onInteractOutside={preventHandheldDialogOutsideClose}>
-          <DialogHeader><DialogTitle>Move asset</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Move asset</DialogTitle>
+            <DialogDescription>
+              {moveDestinationRoomTagVerified ? (
+                <span className="text-green-700 dark:text-green-400 font-medium">✓ Room verified: Floor {moveDestinationFloor}, Room {moveDestinationRoom}</span>
+              ) : (
+                'Scan the destination room RFID tag first to automatically set the location.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
           <Form {...transferForm}>
             <form onSubmit={transferForm.handleSubmit(doMove)} className="space-y-4">
+              {currentAsset && (currentAsset.floorNumber || currentAsset.roomNumber) && (
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Current location</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    Floor {currentAsset.floorNumber || '—'}, Room {currentAsset.roomNumber || '—'}
+                  </p>
+                </div>
+              )}
+              {!moveDestinationRoomTagVerified && (
+                <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">Room tag verification required</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                    Scanning the destination room tag ensures accurate tracking and automatically marks this asset as moved from its original location.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowMoveRoomTagScan(true)}
+                    className="w-full"
+                  >
+                    <Radio className="h-4 w-4 mr-2" />
+                    Scan destination room tag
+                  </Button>
+                </div>
+              )}
               <FormField control={transferForm.control} name="floorNumber" render={({ field }) => (
-                <FormItem><FormLabel>Floor</FormLabel><FormControl><Input placeholder="e.g. 2" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Floor</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g. 2" 
+                      {...field} 
+                      disabled={moveDestinationRoomTagVerified}
+                      className={moveDestinationRoomTagVerified ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-700' : ''}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )} />
               <FormField control={transferForm.control} name="roomNumber" render={({ field }) => (
-                <FormItem><FormLabel>Room</FormLabel><FormControl><Input placeholder="e.g. 205" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Room</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g. 205" 
+                      {...field} 
+                      disabled={moveDestinationRoomTagVerified}
+                      className={moveDestinationRoomTagVerified ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-700' : ''}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )} />
+              {moveDestinationRoomTagVerified && currentAsset && 
+               moveDestinationFloor === currentAsset.floorNumber && 
+               moveDestinationRoom === currentAsset.roomNumber && (
+                <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    ⚠️ Same location: Asset is already at this location
+                  </p>
+                </div>
+              )}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowMove(false)}>Cancel</Button>
-                <Button type="submit" disabled={moving}>{moving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Move'}</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setShowMove(false);
+                  setMoveDestinationRoomTagVerified(false);
+                  setMoveDestinationFloor('');
+                  setMoveDestinationRoom('');
+                  transferForm.reset();
+                }}>Cancel</Button>
+                <Button 
+                  type="submit" 
+                  disabled={moving || !moveDestinationRoomTagVerified || 
+                    (currentAsset && moveDestinationFloor === currentAsset.floorNumber && moveDestinationRoom === currentAsset.roomNumber)}
+                >
+                  {moving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Move'}
+                </Button>
               </DialogFooter>
             </form>
           </Form>

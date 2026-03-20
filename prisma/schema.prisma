@@ -1176,6 +1176,7 @@ model RFIDZone {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   tags           RFIDTag[]   @relation("CurrentZone")
+  roomTags       RFIDTag[]   @relation("RoomTagZone")
   scans          RFIDScan[]
 }
 
@@ -1195,6 +1196,10 @@ model RFIDTag {
   model          String?
   notes          String?
   organizationId String?
+  // Room tag support: when isRoomTag=true, this tag represents a physical room/location
+  isRoomTag      Boolean       @default(false)
+  roomZoneId     String?       // Links to RFIDZone that defines the room's floor/room number
+  roomZone       RFIDZone?     @relation("RoomTagZone", fields: [roomZoneId], references: [id])
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   scans          RFIDScan[]
