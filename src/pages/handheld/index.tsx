@@ -518,6 +518,9 @@ export default function HandheldHubPage() {
   const [locateProximity, setLocateProximity] = useState(0); // 0 = far, 100 = found
   const [locateSearchFocused, setLocateSearchFocused] = useState<string | null>(null); // last query we searched, to show "no results"
   const locateAudioContextRef = useRef<AudioContext | null>(null);
+  /** Whether the current locate was triggered from reconciliation context (missing item) */
+  const [locateFromReconciliation, setLocateFromReconciliation] = useState(false);
+  const [locateMarkingFound, setLocateMarkingFound] = useState(false);
 
   // Sync state (for header and More tab)
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
@@ -2380,6 +2383,32 @@ export default function HandheldHubPage() {
     setLocateActive(false);
   }, []);
 
+  const markLocateAsFound = useCallback(async () => {
+    if (!locateTarget?.id) return;
+    setLocateMarkingFound(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(locateTarget.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'ACTIVE' }),
+      });
+      if (!res.ok) throw new Error('update failed');
+      pushInventoryAudit('locate_found', `${locateTarget.name || locateTarget.id} marked ACTIVE after locate`);
+      toast({ title: 'Asset found & confirmed', description: `"${locateTarget.name}" has been marked as Active.` });
+    } catch {
+      toast({ title: 'Status update failed', description: 'Asset located but status could not be updated automatically.', variant: 'destructive' });
+    } finally {
+      setLocateMarkingFound(false);
+      setLocateActive(false);
+      setLocateProximity(0);
+      setLocateTarget(null);
+      setLocateFromReconciliation(false);
+      // Return to inventory/reconciliation tab
+      setTab('inventory');
+    }
+  }, [locateTarget, pushInventoryAudit, toast]);
+
   // Locate beep: faster beep as proximity increases (0–100)
   useEffect(() => {
     if (!locateActive || locateProximity >= 100) return;
@@ -3208,101 +3237,92 @@ export default function HandheldHubPage() {
                         </div>
                       )}
 
-                      {/* ── MISSING section ──────────────────────────── */}
-                      {reconciliationResult.missing.length > 0 && (
-                        <div className="rounded-2xl overflow-hidden border border-amber-200 dark:border-amber-800 shadow-sm">
-                          {/* section header */}
-                          <div className="flex items-center gap-2.5 px-4 py-2.5 bg-amber-500 dark:bg-amber-600">
-                            <AlertCircle className="h-4 w-4 text-white shrink-0" />
-                            <p className="text-xs font-bold text-white uppercase tracking-wider flex-1">Missing from this room</p>
-                            <span className="h-6 min-w-[1.5rem] px-1.5 rounded-lg bg-white/25 text-white text-xs font-black flex items-center justify-center tabular-nums">
-                              {reconciliationResult.missing.length}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-amber-900 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 border-b border-amber-100 dark:border-amber-900">
-                            Registered to this room in the system but not picked up by RFID this session — may have moved or been blocked.
-                          </p>
-                          <ul className="divide-y divide-amber-100 dark:divide-amber-900/40 bg-white dark:bg-slate-900 max-h-72 overflow-y-auto">
-                            {reconciliationResult.missing.map((m) => (
-                              <li key={m.id} className="flex flex-col gap-2 px-4 py-3">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
-                                    <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{m.name || m.barcode || m.id}</p>
-                                    {m.barcode && <p className="text-[11px] text-slate-500 font-mono mt-0.5">{m.barcode}</p>}
-                                  </div>
-                                  <span className="shrink-0 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg px-2 py-0.5 tabular-nums">
-                                    Fl {m.floorNumber ?? '—'} · {m.roomNumber ?? '—'}
+                      {/* ── COMBINED ROOM INVENTORY STATUS ───────────── */}
+                      {(inRoom.length > 0 || reconciliationResult.missing.length > 0) && (() => {
+                        const allRoomItems = [
+                          ...inRoom.map((c) => ({ ...c, found: true })),
+                          ...reconciliationResult.missing.map((m) => ({ id: m.id, name: m.name || m.barcode || m.id, barcode: m.barcode, floorNumber: m.floorNumber, roomNumber: m.roomNumber, found: false })),
+                        ];
+                        return (
+                          <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm">
+                            {/* header */}
+                            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-gradient-to-r from-slate-700 to-slate-800 dark:from-slate-800 dark:to-slate-900">
+                              <Layers className="h-4 w-4 text-white shrink-0" />
+                              <p className="text-xs font-bold text-white uppercase tracking-wider flex-1">Room inventory status</p>
+                              <div className="flex items-center gap-1.5">
+                                {inRoom.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 h-6 px-1.5 rounded-lg bg-emerald-500/80 text-white text-[10px] font-black tabular-nums">
+                                    <CheckCircle2 className="h-3 w-3" />{inRoom.length}
                                   </span>
-                                </div>
-                                <div className="flex flex-col sm:flex-row gap-2 w-full sm:pl-11">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="shrink-0 rounded-xl h-9 gap-1.5 border-violet-300 bg-violet-50/80 dark:bg-violet-950/30 text-violet-900 dark:text-violet-100 flex-1 sm:flex-initial font-semibold"
-                                    onClick={() => void openRoomCatalog({ withRfidStatus: true })}
-                                  >
-                                    <List className="h-3.5 w-3.5" />
-                                    Room roster
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="shrink-0 rounded-xl h-9 gap-1.5 border-amber-300 text-amber-900 dark:text-amber-100 flex-1 sm:flex-initial"
-                                    onClick={() => void openReconcileMissingMoveHistory({ id: m.id, name: m.name || m.barcode || m.id })}
-                                  >
-                                    <History className="h-3.5 w-3.5" />
-                                    Movement history
-                                  </Button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* ── CORRECT IN ROOM section ──────────────────── */}
-                      {inRoom.length > 0 && (
-                        <div className="rounded-2xl overflow-hidden border border-emerald-200 dark:border-emerald-800 shadow-sm">
-                          <div className="flex items-center gap-2.5 px-4 py-2.5 bg-emerald-500 dark:bg-emerald-600">
-                            <CheckCircle2 className="h-4 w-4 text-white shrink-0" />
-                            <p className="text-xs font-bold text-white uppercase tracking-wider flex-1">Scanned &amp; registered here</p>
-                            <span className="h-6 min-w-[1.5rem] px-1.5 rounded-lg bg-white/25 text-white text-xs font-black flex items-center justify-center tabular-nums">
-                              {inRoom.length}
-                            </span>
-                          </div>
-                          <ul className="divide-y divide-emerald-100 dark:divide-emerald-900/30 bg-white dark:bg-slate-900 max-h-56 overflow-y-auto">
-                            {inRoom.map((c) => (
-                              <li key={c.id} className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3">
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name}</p>
-                                    {c.barcode && <p className="text-[11px] text-slate-400 font-mono">{c.barcode}</p>}
-                                  </div>
-                                  <span className="shrink-0 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 uppercase tracking-wide">
-                                    In room
+                                )}
+                                {reconciliationResult.missing.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 h-6 px-1.5 rounded-lg bg-amber-500/80 text-white text-[10px] font-black tabular-nums">
+                                    <AlertCircle className="h-3 w-3" />{reconciliationResult.missing.length}
                                   </span>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="shrink-0 rounded-xl h-8 gap-1 border-violet-300 bg-violet-50/80 dark:bg-violet-950/30 text-violet-900 dark:text-violet-100 text-[11px] font-semibold w-full sm:w-auto"
-                                  onClick={() => void openRoomCatalog({ withRfidStatus: true })}
-                                >
-                                  <List className="h-3.5 w-3.5" />
-                                  Room roster
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                              All assets registered to this room — green = scanned this pass, amber = not detected.
+                            </p>
+                            <ul className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900 max-h-96 overflow-y-auto">
+                              {allRoomItems.map((item) => (
+                                <li key={item.id} className={`flex flex-col gap-1.5 px-4 py-3 ${item.found ? 'bg-emerald-50/30 dark:bg-emerald-950/10' : 'bg-amber-50/40 dark:bg-amber-950/10'}`}>
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${item.found ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-amber-100 dark:bg-amber-900/40'}`}>
+                                      {item.found
+                                        ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                        : <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{item.name}</p>
+                                      {item.barcode && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{item.barcode}</p>}
+                                    </div>
+                                    <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wide rounded-full px-2.5 py-0.5 border ${
+                                      item.found
+                                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-700'
+                                        : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-700'
+                                    }`}>
+                                      {item.found ? 'In room ✓' : 'Not detected'}
+                                    </span>
+                                  </div>
+                                  {/* Actions row */}
+                                  {!item.found && (
+                                    <div className="flex flex-col xs:flex-row gap-1.5 pl-11">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1 rounded-xl h-8 gap-1.5 border-violet-300 bg-violet-50/80 dark:bg-violet-950/30 text-violet-900 dark:text-violet-100 text-[11px] font-bold"
+                                        onClick={() => {
+                                          setLocateTarget({ id: item.id, name: item.name, barcode: item.barcode, floorNumber: item.floorNumber, roomNumber: item.roomNumber } as any);
+                                          setLocateFromReconciliation(true);
+                                          setLocateActive(false);
+                                          setLocateProximity(0);
+                                          setTab('locate');
+                                        }}
+                                      >
+                                        <Crosshair className="h-3.5 w-3.5" />
+                                        Locate asset
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1 rounded-xl h-8 gap-1.5 border-amber-300 text-amber-800 dark:text-amber-200 text-[11px]"
+                                        onClick={() => void openReconcileMissingMoveHistory({ id: item.id, name: item.name })}
+                                      >
+                                        <History className="h-3.5 w-3.5" />
+                                        History
+                                      </Button>
+                                    </div>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })()}
 
                       {/* ── WRONG LOCATION section ───────────────────── */}
                       {wrongLoc.length > 0 && (
@@ -3540,49 +3560,121 @@ export default function HandheldHubPage() {
                   </div>
                 )}
                 {locateTarget && (
-                  <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-900/10 p-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-12 w-12 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
+                  <div className="rounded-2xl border-2 border-violet-300 dark:border-violet-700 bg-gradient-to-br from-violet-50 to-indigo-50/50 dark:from-violet-950/40 dark:to-indigo-950/20 overflow-hidden">
+                    {locateFromReconciliation && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-amber-500 dark:bg-amber-600">
+                        <AlertCircle className="h-3.5 w-3.5 text-white shrink-0" />
+                        <p className="text-[11px] font-bold text-white">Locating from reconciliation — asset was not detected in RFID pass</p>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3 p-4">
+                      <div className="h-12 w-12 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-violet-200 dark:ring-violet-700">
                         {locateTarget.imageUrl ? <img src={locateTarget.imageUrl} alt="" className="h-full w-full object-cover" /> : <Package className="h-6 w-6 text-violet-500" />}
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900 dark:text-white truncate">{locateTarget.name}</p>
-                        <p className="text-xs text-slate-500">{locateTarget.assetId || locateTarget.barcode}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 dark:text-white truncate">{locateTarget.name}</p>
+                        <p className="text-xs text-slate-500 font-mono">{locateTarget.assetId || locateTarget.barcode}</p>
+                        {locateTarget.floorNumber && (
+                          <p className="text-xs text-violet-600 dark:text-violet-400 mt-0.5">Registered: Fl {locateTarget.floorNumber} · {locateTarget.roomNumber || '—'}</p>
+                        )}
                       </div>
+                      <Button size="lg" className="rounded-xl shrink-0 bg-violet-600 hover:bg-violet-700" onClick={startLocate}>
+                        <Crosshair className="h-5 w-5 mr-2" /> Start locate
+                      </Button>
                     </div>
-                    <Button size="lg" className="rounded-xl shrink-0" onClick={startLocate}>
-                      <Crosshair className="h-5 w-5 mr-2" /> Locate
-                    </Button>
+                    {locateFromReconciliation && (
+                      <div className="px-4 pb-3">
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Walk the room — once you find the asset physically, tap <strong className="text-slate-700 dark:text-slate-300">I found it!</strong> below to mark it as active and return to reconciliation.</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
             ) : (
-              <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-slate-900 text-white p-6 space-y-6">
-                <p className="text-center font-medium">Locating: {locateTarget?.name}</p>
-                <p className="text-center text-sm text-slate-300">Beep speeds up as you get closer. Simulate proximity below.</p>
-                <div className="flex justify-center">
-                  <div
-                    className={cn(
-                      'rounded-full border-4 border-violet-400 transition-all duration-300',
-                      locateProximity >= 100 ? 'bg-emerald-500 border-emerald-400 scale-110' : 'bg-violet-600/50'
-                    )}
-                    style={{ width: 120 + locateProximity * 1.5, height: 120 + locateProximity * 1.5 }}
-                  />
+              <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-slate-900 text-white overflow-hidden">
+                {/* Context banner */}
+                {locateFromReconciliation && (
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/90 border-b border-amber-600">
+                    <AlertCircle className="h-4 w-4 text-white shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white">Locating: {locateTarget?.name}</p>
+                      <p className="text-[10px] text-white/80">Walk the room — beep speeds up as you approach</p>
+                    </div>
+                  </div>
+                )}
+                <div className="p-6 space-y-6">
+                  {!locateFromReconciliation && (
+                    <p className="text-center font-medium">Locating: {locateTarget?.name}</p>
+                  )}
+                  <p className="text-center text-sm text-slate-300">Beep speeds up as you get closer.</p>
+
+                  {/* Proximity ball */}
+                  <div className="flex justify-center items-center min-h-[140px]">
+                    <div
+                      className={cn(
+                        'rounded-full border-4 transition-all duration-300 flex items-center justify-center',
+                        locateProximity >= 100
+                          ? 'bg-emerald-500 border-emerald-400 scale-110'
+                          : locateProximity >= 70
+                            ? 'bg-violet-500 border-violet-400'
+                            : 'bg-violet-600/50 border-violet-400'
+                      )}
+                      style={{ width: 120 + locateProximity * 1.2, height: 120 + locateProximity * 1.2 }}
+                    >
+                      {locateProximity >= 100 && (
+                        <CheckCircle2 className="h-10 w-10 text-white" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Proximity label */}
+                  <div className="text-center">
+                    <p className="text-2xl font-black tabular-nums">
+                      {locateProximity >= 100 ? '🎯 Found!' : `${locateProximity}%`}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {locateProximity >= 100 ? 'Asset detected — confirm below' : locateProximity >= 70 ? 'Getting close…' : locateProximity >= 30 ? 'In range' : 'Keep moving…'}
+                    </p>
+                  </div>
+
+                  {/* Simulate proximity slider */}
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 block">Proximity (simulated)</label>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={locateProximity}
+                      onChange={(e) => setLocateProximity(Number(e.target.value))}
+                      className="w-full h-3 rounded-full accent-violet-500"
+                    />
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="space-y-2">
+                    {/* Mark as found — primary CTA */}
+                    <Button
+                      className={cn(
+                        'w-full rounded-xl h-12 gap-2 font-bold text-sm transition-all',
+                        locateProximity >= 70
+                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white scale-105 shadow-lg shadow-emerald-500/30'
+                          : 'bg-emerald-600/70 hover:bg-emerald-600 text-white'
+                      )}
+                      onClick={markLocateAsFound}
+                      disabled={locateMarkingFound}
+                    >
+                      {locateMarkingFound ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-5 w-5" />
+                      )}
+                      {locateMarkingFound ? 'Updating status…' : 'I found it! — Mark as Active'}
+                    </Button>
+                    <Button variant="ghost" className="w-full rounded-xl text-slate-400 hover:text-white hover:bg-white/10 h-10" onClick={stopLocate}>
+                      Stop locate
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs text-slate-400 block">Proximity (simulated)</label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={locateProximity}
-                    onChange={(e) => setLocateProximity(Number(e.target.value))}
-                    className="w-full h-3 rounded-full accent-violet-500"
-                  />
-                </div>
-                <Button variant="secondary" className="w-full rounded-xl" onClick={stopLocate}>
-                  Stop locate
-                </Button>
               </div>
             )}
           </div>
