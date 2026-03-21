@@ -5,6 +5,7 @@
  * Features: RFID-style scan, ultra-fast count, locate (beep), audit, sync, export, print/encode tag workflow.
  */
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { HandheldLayout } from '@/components/HandheldLayout';
 import {
   HandheldTabNav,
@@ -56,6 +57,7 @@ import {
   Sparkles,
   AlertCircle,
   ListChecks,
+  List,
   Type,
   Mic,
   Truck,
@@ -346,6 +348,12 @@ export default function HandheldHubPage() {
       toRoom?: string | null;
       reason?: string | null;
     }>
+  >([]);
+  /** Full catalogue dialog: all assets registered to current count floor/room */
+  const [roomCatalogOpen, setRoomCatalogOpen] = useState(false);
+  const [roomCatalogLoading, setRoomCatalogLoading] = useState(false);
+  const [roomCatalogAssets, setRoomCatalogAssets] = useState<
+    Array<{ id: string; name?: string | null; barcode?: string | null; assetId?: string | null; status?: string | null; floorNumber?: string | null; roomNumber?: string | null; imageUrl?: string | null }>
   >([]);
   const reconcileEditLocationForm = useForm<z.infer<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),
@@ -2158,6 +2166,31 @@ export default function HandheldHubPage() {
     [toast],
   );
 
+  const openRoomCatalog = useCallback(async () => {
+    const f = inventorySessionFloor.trim();
+    const r = inventorySessionRoom.trim();
+    if (!f || !r) {
+      toast({ title: 'Set floor & room', description: 'Set the count location (floor and room) first.', variant: 'destructive' });
+      return;
+    }
+    setRoomCatalogOpen(true);
+    setRoomCatalogLoading(true);
+    setRoomCatalogAssets([]);
+    try {
+      const res = await fetch(
+        `/api/assets/by-room?floorNumber=${encodeURIComponent(f)}&roomNumber=${encodeURIComponent(r)}`,
+        { credentials: 'include', cache: 'no-store' },
+      );
+      if (!res.ok) throw new Error('failed');
+      const data = await res.json();
+      setRoomCatalogAssets(Array.isArray(data) ? data : []);
+    } catch {
+      toast({ title: 'Could not load assets for this room', variant: 'destructive' });
+    } finally {
+      setRoomCatalogLoading(false);
+    }
+  }, [inventorySessionFloor, inventorySessionRoom, toast]);
+
   const endCountSession = useCallback(() => {
     const total = unifiedInventory.length;
     pushRecentAction('count', `Inventory session: ${total} item${total !== 1 ? 's' : ''} (${countLocationLabel.trim() || 'All'})`);
@@ -2973,6 +3006,11 @@ export default function HandheldHubPage() {
                       setAuditCommentText={setAuditCommentText}
                       setAuditCommentImagePreview={setAuditCommentImagePreview}
                       auditCommentImageInputRef={auditCommentImageInputRef}
+                      onViewRoomCatalog={
+                        countSessionActive && inventorySessionFloor.trim() && inventorySessionRoom.trim()
+                          ? openRoomCatalog
+                          : undefined
+                      }
                     />
                   )}
                   </div>
@@ -4195,6 +4233,84 @@ export default function HandheldHubPage() {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* All assets registered to current count room (from inventory list “All in room”) */}
+      <Dialog
+        open={roomCatalogOpen}
+        onOpenChange={(open) => {
+          setRoomCatalogOpen(open);
+          if (!open) setRoomCatalogAssets([]);
+        }}
+      >
+        <DialogContent
+          className="max-w-md w-[95vw] max-h-[88vh] overflow-hidden flex flex-col rounded-2xl shadow-2xl border-slate-200 dark:border-slate-700 p-0 gap-0"
+          onPointerDownOutside={preventHandheldDialogOutsideClose}
+          onInteractOutside={preventHandheldDialogOutsideClose}
+        >
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-slate-200 dark:border-slate-700">
+            <DialogTitle className="flex items-center gap-2 text-lg pr-8">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
+                <List className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+              </span>
+              Registered in this room
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              Floor <span className="font-semibold text-slate-800 dark:text-slate-200">{inventorySessionFloor.trim() || '—'}</span>
+              , Room{' '}
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{inventorySessionRoom.trim() || '—'}</span>
+              <span className="block mt-1 text-xs text-slate-500">
+                {roomCatalogLoading ? 'Loading…' : `${roomCatalogAssets.length} asset${roomCatalogAssets.length !== 1 ? 's' : ''} in system at this location`}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
+            {roomCatalogLoading ? (
+              <div className="flex flex-col items-center justify-center py-14 gap-3">
+                <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
+                <p className="text-sm text-slate-500">Loading room catalogue…</p>
+              </div>
+            ) : roomCatalogAssets.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center px-2">No assets registered to this floor and room in the system.</p>
+            ) : (
+              <ul className="space-y-2 pt-2">
+                {roomCatalogAssets.map((a) => (
+                  <li
+                    key={a.id}
+                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 overflow-hidden"
+                  >
+                    <Link
+                      href={`/assets/${a.id}`}
+                      className="flex items-center gap-3 p-3 min-h-[56px] min-w-0 touch-manipulation active:bg-slate-100 dark:active:bg-slate-700/50"
+                      onClick={() => setRoomCatalogOpen(false)}
+                    >
+                      <div className="h-11 w-11 rounded-lg bg-white dark:bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200/80 dark:ring-slate-600">
+                        {a.imageUrl ? (
+                          <img src={a.imageUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <Package className="h-5 w-5 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{a.name || a.barcode || a.id}</p>
+                        <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{a.barcode || a.assetId || a.id}</p>
+                        {a.status && (
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mt-1">{a.status}</p>
+                        )}
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <DialogFooter className="border-t border-slate-200 dark:border-slate-700 px-4 py-3">
+            <Button variant="outline" className="rounded-xl w-full" onClick={() => setRoomCatalogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

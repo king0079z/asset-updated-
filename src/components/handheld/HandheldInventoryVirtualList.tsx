@@ -15,6 +15,7 @@ import {
   UtensilsCrossed,
   AlertCircle,
   CheckCircle2,
+  List,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { HandheldUnifiedInventoryItem } from './inventorySessionTypes';
@@ -44,6 +45,8 @@ export type HandheldInventoryVirtualListProps = {
   setAuditCommentText: (s: string) => void;
   setAuditCommentImagePreview: (s: string | null) => void;
   auditCommentImageInputRef: RefObject<HTMLInputElement | null>;
+  /** Tap to open full list of assets registered to the current count floor/room */
+  onViewRoomCatalog?: () => void;
 };
 
 function InventoryRow({
@@ -72,6 +75,7 @@ function InventoryRow({
   setAuditCommentText,
   setAuditCommentImagePreview,
   auditCommentImageInputRef,
+  onViewRoomCatalog,
 }: HandheldInventoryVirtualListProps & { item: HandheldUnifiedInventoryItem; listIndex: number }) {
   if (item.type === 'pending_scan') {
     return (
@@ -321,9 +325,26 @@ function InventoryRow({
         </div>
         {/* Room status under each item: one glance — in this room ✓ or not (expand to see registered room + update) */}
         {inThisRoom && (
-          <div className="mt-1.5 mx-4 mb-3 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 flex items-center gap-2 shadow-sm">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">In this room</span>
+          <div className="mt-1.5 mx-4 mb-3 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 flex items-center justify-between gap-2 shadow-sm">
+            <span className="flex items-center gap-2 min-w-0">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">In this room</span>
+            </span>
+            {onViewRoomCatalog && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 rounded-lg px-2 gap-1 border-emerald-400/80 bg-white/80 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 hover:bg-emerald-100 dark:hover:bg-emerald-900/70 text-[11px] font-semibold"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewRoomCatalog();
+                }}
+              >
+                <List className="h-3.5 w-3.5" />
+                All in room
+              </Button>
+            )}
           </div>
         )}
         {wrongRoom && (
