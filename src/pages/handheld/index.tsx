@@ -4541,6 +4541,7 @@ export default function HandheldHubPage() {
           onPointerDownOutside={preventHandheldDialogOutsideClose}
           onInteractOutside={preventHandheldDialogOutsideClose}
         >
+          <VisuallyHidden><DialogTitle>Asset not detected — take action</DialogTitle></VisuallyHidden>
           {/* Header */}
           <div className="bg-gradient-to-br from-amber-500 to-orange-500 px-5 py-5">
             <div className="flex items-center gap-3">
