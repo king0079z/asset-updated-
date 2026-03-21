@@ -1770,10 +1770,93 @@ export default function HandheldHubPage() {
         if (chunk.length < PAGE) break;
         off += PAGE;
       }
+
       const normF = normalizeLoc(sessionFloor || undefined);
       const normR = normalizeLoc(sessionRoom || undefined);
       const inLocation = (f: string | null | undefined, r: string | null | undefined) =>
         (!normF || normalizeLoc(f) === normF) && (!normR || normalizeLoc(r) === normR);
+
+      /**
+       * Org-scoped /api/assets list can miss assets that /api/assets/scan still finds
+       * (e.g. legacy organizationId null, or visibility mismatch). Merge each session
+       * scan by the same APIs used when adding to the list so reconciliation matches the UI.
+       */
+      const idInCatalog = new Set(list.map((a) => a.id));
+      let augmentMerged = 0;
+      const mergeAssetIntoCatalog = (raw: {
+        id: string;
+        name?: string | null;
+        barcode?: string | null;
+        assetId?: string | null;
+        floorNumber?: string | null;
+        roomNumber?: string | null;
+        lastMovedAt?: string | Date | null;
+      }) => {
+        if (!raw?.id || idInCatalog.has(raw.id)) return;
+        idInCatalog.add(raw.id);
+        augmentMerged += 1;
+        list.push({
+          id: raw.id,
+          name: raw.name ?? undefined,
+          barcode: raw.barcode ?? undefined,
+          assetId: raw.assetId ?? undefined,
+          floorNumber: raw.floorNumber,
+          roomNumber: raw.roomNumber,
+          lastMovedAt: raw.lastMovedAt
+            ? typeof raw.lastMovedAt === 'string'
+              ? raw.lastMovedAt
+              : new Date(raw.lastMovedAt).toISOString()
+            : null,
+        });
+      };
+
+      const AUGMENT_MAX = 120;
+      let augmentCalls = 0;
+      for (const s of countScansForReconciliation) {
+        if (augmentCalls >= AUGMENT_MAX) break;
+        try {
+          if (s.id.startsWith('raw-')) {
+            const term = (s.barcode || s.name || '').trim();
+            if (!term) continue;
+            augmentCalls += 1;
+            const res = await fetch(`/api/assets/scan?q=${encodeURIComponent(term)}`, {
+              credentials: 'include',
+              cache: 'no-store',
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.asset) mergeAssetIntoCatalog(data.asset);
+            }
+            continue;
+          }
+          if (idInCatalog.has(s.id)) continue;
+          augmentCalls += 1;
+          const res = await fetch(`/api/assets/${encodeURIComponent(s.id)}`, {
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const asset = data?.asset ?? data;
+            if (asset?.id) mergeAssetIntoCatalog(asset);
+          } else {
+            const term = (s.barcode || s.name || '').trim();
+            if (term) {
+              const resScan = await fetch(`/api/assets/scan?q=${encodeURIComponent(term)}`, {
+                credentials: 'include',
+                cache: 'no-store',
+              });
+              if (resScan.ok) {
+                const data = await resScan.json();
+                if (data?.asset) mergeAssetIntoCatalog(data.asset);
+              }
+            }
+          }
+        } catch {
+          /* best-effort augment */
+        }
+      }
+
       let listForScope = list;
       if (scopeByLocation) {
         listForScope = list.filter((a) => inLocation(a.floorNumber, a.roomNumber));
@@ -1782,8 +1865,8 @@ export default function HandheldHubPage() {
       const expectedIds = new Set(list.map((a) => a.id));
       const expectedByBarcode = new Map<string, { id: string; name?: string; barcode?: string; assetId?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }>();
       list.forEach((a) => {
-        if (a.barcode) expectedByBarcode.set(a.barcode.toLowerCase(), a);
-        if (a.assetId) expectedByBarcode.set(a.assetId.toLowerCase(), a);
+        if (a.barcode) expectedByBarcode.set(a.barcode.trim().toLowerCase(), a);
+        if (a.assetId) expectedByBarcode.set(a.assetId.trim().toLowerCase(), a);
       });
 
       const scannedIds = new Set<string>();
@@ -1796,14 +1879,15 @@ export default function HandheldHubPage() {
       });
 
       // In system: UUID in catalogue, or raw/barcode match, or barcode confirms same asset id
+      const barcodeKey = (b?: string | null) => (b || '').trim().toLowerCase();
       const isInSystem = (s: CountScanItem): boolean => {
         if (s.id.startsWith('raw-')) {
-          const bk = (s.barcode || s.name || '').toLowerCase();
+          const bk = barcodeKey(s.barcode) || barcodeKey(s.name);
           return bk ? expectedByBarcode.has(bk) : false;
         }
         if (expectedIds.has(s.id)) return true;
         if (s.barcode) {
-          const row = expectedByBarcode.get(s.barcode.toLowerCase());
+          const row = expectedByBarcode.get(barcodeKey(s.barcode));
           if (row && row.id === s.id) return true;
         }
         return false;
@@ -1812,13 +1896,13 @@ export default function HandheldHubPage() {
       /** System row for location checks — always prefer DB row over scan cache */
       const resolveSystemAsset = (s: CountScanItem) => {
         if (s.id.startsWith('raw-')) {
-          const bk = (s.barcode || s.name || '').toLowerCase();
+          const bk = barcodeKey(s.barcode) || barcodeKey(s.name);
           return bk ? (expectedByBarcode.get(bk) ?? null) : null;
         }
         const direct = list.find((a) => a.id === s.id);
         if (direct) return direct;
         if (s.barcode) {
-          const b = expectedByBarcode.get(s.barcode.toLowerCase());
+          const b = expectedByBarcode.get(barcodeKey(s.barcode));
           if (b && b.id === s.id) return b;
         }
         return null;
@@ -1915,8 +1999,8 @@ export default function HandheldHubPage() {
       pushInventoryAudit(
         'reconciliation',
         scopeByLocation
-          ? `loc=${locationDisplay || ''} catalog=${list.length} sys=${expectedInLoc} scan=${actualInLoc} missing=${missingList.length} wrong_loc=${wrongLocation.length} unknown=${trulyExtra.length}`
-          : `catalog=${list.length} all sys=${list.length} scan=${scannedByKey.size} missing=${missing.length} unknown=${trulyExtra.length}`,
+          ? `loc=${locationDisplay || ''} catalog=${list.length} augment=${augmentMerged} sys=${expectedInLoc} scan=${actualInLoc} missing=${missingList.length} wrong_loc=${wrongLocation.length} unknown=${trulyExtra.length}`
+          : `catalog=${list.length} augment=${augmentMerged} all sys=${list.length} scan=${scannedByKey.size} missing=${missing.length} unknown=${trulyExtra.length}`,
       );
       toast({
         title: 'Reconciliation complete',
