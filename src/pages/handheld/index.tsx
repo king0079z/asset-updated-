@@ -1885,9 +1885,53 @@ export default function HandheldHubPage() {
         }
       }
 
+      // ── Ground-truth room roster augment ────────────────────────────────────
+      // /api/assets (org-filtered) can miss assets with organizationId=null or a
+      // different org that HANDHELD users can still scan via the scan API.
+      // /api/assets/by-room is already permissive (no org filter for HANDHELD).
+      // Merge every asset it returns so "expected at this location" is authoritative.
+      // Assets confirmed by by-room are added to byRoomConfirmedIds — they bypass the
+      // client-side normalizeLoc re-filter (the API already confirmed they're in-room).
+      const byRoomConfirmedIds = new Set<string>();
+      if (scopeByLocation && sessionFloor.trim() !== '' && sessionRoom.trim() !== '') {
+        try {
+          const byRoomUrl =
+            `/api/assets/by-room` +
+            `?floorNumber=${encodeURIComponent(sessionFloor.trim())}` +
+            `&roomNumber=${encodeURIComponent(sessionRoom.trim())}`;
+          const byRoomRes = await fetch(byRoomUrl, {
+            credentials: 'include',
+            cache: 'no-store',
+            headers: { 'cache-control': 'no-cache' },
+          });
+          if (byRoomRes.ok) {
+            const byRoomData = await byRoomRes.json();
+            // by-room returns a plain array (not { assets: [...] })
+            const roomAssets: any[] = Array.isArray(byRoomData) ? byRoomData : (byRoomData?.assets ?? []);
+            let byRoomMerged = 0;
+            for (const a of roomAssets) {
+              if (!a?.id) continue;
+              byRoomConfirmedIds.add(a.id);
+              if (!idInCatalog.has(a.id)) {
+                mergeAssetIntoCatalog(a);
+                byRoomMerged += 1;
+              }
+            }
+            if (byRoomMerged > 0) {
+              console.log(`[reconcile] by-room augmented ${byRoomMerged} extra assets not in org catalog`);
+            }
+          }
+        } catch {
+          /* best-effort — org catalog is still the primary source */
+        }
+      }
+
       let listForScope = list;
       if (scopeByLocation) {
-        listForScope = list.filter((a) => inLocation(a.floorNumber, a.roomNumber));
+        // byRoomConfirmedIds = assets the DB-level by-room API confirmed are in this room.
+        // Include them unconditionally; don't re-apply normalizeLoc which might miss
+        // edge-case room name variants (hyphen vs space, etc.).
+        listForScope = list.filter((a) => byRoomConfirmedIds.has(a.id) || inLocation(a.floorNumber, a.roomNumber));
       }
       // Build lookup sets — primary by UUID, secondary by barcode/assetId for legacy/cross-user assets
       const expectedIds = new Set(list.map((a) => a.id));
