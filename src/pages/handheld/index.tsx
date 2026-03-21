@@ -353,19 +353,25 @@ export default function HandheldHubPage() {
   const [roomCatalogOpen, setRoomCatalogOpen] = useState(false);
   const [roomCatalogLoading, setRoomCatalogLoading] = useState(false);
   const [roomCatalogRfidMode, setRoomCatalogRfidMode] = useState(false);
-  const [roomCatalogAssets, setRoomCatalogAssets] = useState<
-    Array<{
-      id: string;
-      name?: string | null;
-      barcode?: string | null;
-      assetId?: string | null;
-      status?: string | null;
-      floorNumber?: string | null;
-      roomNumber?: string | null;
-      imageUrl?: string | null;
-      rfidReadThisSession?: boolean;
-    }>
-  >([]);
+
+  type RosterAsset = {
+    id: string;
+    name?: string | null;
+    barcode?: string | null;
+    assetId?: string | null;
+    status?: string | null;
+    floorNumber?: string | null;
+    roomNumber?: string | null;
+    imageUrl?: string | null;
+    rfidReadThisSession?: boolean;
+  };
+  const [roomCatalogAssets, setRoomCatalogAssets] = useState<RosterAsset[]>([]);
+  /** Snapshot of NOT-read items from last roster load — auto-included in submitted report */
+  const [rosterNotReadSnapshot, setRosterNotReadSnapshot] = useState<RosterAsset[]>([]);
+  /** Per-session set of asset IDs explicitly reported missing via the roster action dialog */
+  const [rosterReportedMissingIds, setRosterReportedMissingIds] = useState<Set<string>>(new Set());
+  /** Asset selected from the roster "not-read" row — drives the action sub-dialog */
+  const [rosterActionAsset, setRosterActionAsset] = useState<RosterAsset | null>(null);
   const reconcileEditLocationForm = useForm<z.infer<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),
     defaultValues: { floorNumber: '', roomNumber: '' },
@@ -2104,7 +2110,16 @@ export default function HandheldHubPage() {
           wrongLocationCount: (r.wrongLocation || []).length,
           reasonCode: countReviewReason || null,
           note: countReviewNote || null,
-          missingItems: r.missing.slice(0, 50).map(m => ({ id: m.id, name: m.name, barcode: m.barcode, floorNumber: m.floorNumber, roomNumber: m.roomNumber })),
+          // Merge reconciliation missing list with any not-read roster items not already captured
+          missingItems: (() => {
+            const base = r.missing.slice(0, 50).map(m => ({ id: m.id, name: m.name, barcode: m.barcode, floorNumber: m.floorNumber, roomNumber: m.roomNumber, source: 'reconciliation' }));
+            const baseIds = new Set(base.map(m => m.id));
+            const rosterExtra = rosterNotReadSnapshot
+              .filter(x => !baseIds.has(x.id))
+              .map(x => ({ id: x.id, name: x.name, barcode: x.barcode, floorNumber: x.floorNumber, roomNumber: x.roomNumber, source: 'roster_not_read' }));
+            return [...base, ...rosterExtra].slice(0, 100);
+          })(),
+          rosterNotReadCount: rosterNotReadSnapshot.length,
           wrongLocationItems: (r.wrongLocation || []).slice(0, 50).map(w => ({ id: w.id, name: w.name, systemFloor: w.systemFloor, systemRoom: w.systemRoom })),
           correctInRoomItems: (r.correctInRoom || []).slice(0, 100).map(c => ({ id: c.id, name: c.name, barcode: c.barcode, floorNumber: c.floorNumber, roomNumber: c.roomNumber })),
           extraItems: r.extra.slice(0, 50).map(e => ({ id: e.id, name: e.name, barcode: e.barcode, floorNumber: e.floorNumber, roomNumber: e.roomNumber })),
@@ -2116,7 +2131,7 @@ export default function HandheldHubPage() {
     setCountReviewReason('');
     setCountReviewNote('');
     toast({ title: 'Submitted for review', description: 'Manager can review the inventory count and discrepancies.' });
-  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length]);
+  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length, rosterNotReadSnapshot]);
 
   const saveReconcileEditLocation = useCallback(async () => {
     const asset = reconcileEditLocationAsset;
@@ -2232,6 +2247,8 @@ export default function HandheldHubPage() {
         );
         if (withRfid) {
           enriched.sort((x, y) => Number(x.rfidReadThisSession) - Number(y.rfidReadThisSession));
+          // Persist not-read snapshot for auto-inclusion in submitted report
+          setRosterNotReadSnapshot(enriched.filter((x) => !x.rfidReadThisSession));
         }
         setRoomCatalogAssets(enriched);
       } catch {
@@ -4381,62 +4398,271 @@ export default function HandheldHubPage() {
           <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
             {roomCatalogLoading ? (
               <div className="flex flex-col items-center justify-center py-14 gap-3">
-                <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
+                <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
                 <p className="text-sm text-slate-500">Loading room catalogue…</p>
               </div>
             ) : roomCatalogAssets.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400 py-8 text-center px-2">No assets registered to this floor and room in the system.</p>
             ) : (
               <ul className="space-y-2 pt-2">
-                {roomCatalogAssets.map((a) => (
-                  <li
-                    key={a.id}
-                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 overflow-hidden"
-                  >
-                    <Link
-                      href={`/assets/${a.id}`}
-                      className="flex items-center gap-3 p-3 min-h-[56px] min-w-0 touch-manipulation active:bg-slate-100 dark:active:bg-slate-700/50"
-                      onClick={() => setRoomCatalogOpen(false)}
+                {roomCatalogAssets.map((a) => {
+                  const isRead = !!a.rfidReadThisSession;
+                  const isReportedMissing = rosterReportedMissingIds.has(a.id);
+                  return (
+                    <li
+                      key={a.id}
+                      className={`rounded-xl border overflow-hidden transition-all ${
+                        !roomCatalogRfidMode
+                          ? 'border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60'
+                          : isRead
+                            ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20'
+                            : isReportedMissing
+                              ? 'border-red-200 dark:border-red-800 bg-red-50/60 dark:bg-red-950/20'
+                              : 'border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20'
+                      }`}
                     >
-                      <div className="h-11 w-11 rounded-lg bg-white dark:bg-slate-900 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-slate-200/80 dark:ring-slate-600">
-                        {a.imageUrl ? (
-                          <img src={a.imageUrl} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <Package className="h-5 w-5 text-slate-400" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{a.name || a.barcode || a.id}</p>
-                          {roomCatalogRfidMode && (
-                            <span
-                              className={`shrink-0 text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border ${
-                                a.rfidReadThisSession
-                                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-700'
-                                  : 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-700'
-                              }`}
-                            >
-                              {a.rfidReadThisSession ? 'Read' : 'Not read'}
-                            </span>
+                      <button
+                        type="button"
+                        className="flex items-center gap-3 p-3 min-h-[56px] min-w-0 w-full text-left touch-manipulation hover:bg-black/[0.03] dark:hover:bg-white/[0.03] active:scale-[0.99] transition-all"
+                        onClick={async () => {
+                          if (!roomCatalogRfidMode || isRead) {
+                            // Read item or non-RFID mode → open full asset details
+                            const asset = await fetchAssetForCountItem(a.id);
+                            if (asset) {
+                              setRoomCatalogOpen(false);
+                              setCountItemDetailsAsset(asset);
+                            } else {
+                              toast({ title: 'Could not load asset details', variant: 'destructive' });
+                            }
+                          } else {
+                            // Not-read item → open action dialog
+                            setRosterActionAsset(a);
+                          }
+                        }}
+                      >
+                        {/* Thumbnail */}
+                        <div
+                          className={`h-11 w-11 rounded-lg flex items-center justify-center overflow-hidden shrink-0 ring-1 ${
+                            !roomCatalogRfidMode
+                              ? 'bg-white dark:bg-slate-900 ring-slate-200/80 dark:ring-slate-600'
+                              : isRead
+                                ? 'bg-emerald-100 dark:bg-emerald-900/40 ring-emerald-200 dark:ring-emerald-700'
+                                : 'bg-amber-100 dark:bg-amber-900/40 ring-amber-200 dark:ring-amber-700'
+                          }`}
+                        >
+                          {a.imageUrl ? (
+                            <img src={a.imageUrl} alt="" className="h-full w-full object-cover" />
+                          ) : roomCatalogRfidMode && isRead ? (
+                            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                          ) : roomCatalogRfidMode ? (
+                            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                          ) : (
+                            <Package className="h-5 w-5 text-slate-400" />
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{a.barcode || a.assetId || a.id}</p>
-                        {a.status && (
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mt-1">{a.status}</p>
-                        )}
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-slate-400 shrink-0" />
-                    </Link>
-                  </li>
-                ))}
+
+                        {/* Info */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate leading-snug">{a.name || a.barcode || a.id}</p>
+                            {roomCatalogRfidMode && (
+                              <span
+                                className={`shrink-0 text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border ${
+                                  isRead
+                                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-700'
+                                    : isReportedMissing
+                                      ? 'bg-red-100 text-red-900 border-red-300 dark:bg-red-950/60 dark:text-red-200 dark:border-red-700'
+                                      : 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-700'
+                                }`}
+                              >
+                                {isRead ? 'Read ✓' : isReportedMissing ? 'Reported missing' : 'Not read'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{a.barcode || a.assetId || a.id}</p>
+                          {a.status && (
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-0.5">{a.status}</p>
+                          )}
+                          {roomCatalogRfidMode && !isRead && !isReportedMissing && (
+                            <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5 font-medium">Tap to locate or report →</p>
+                          )}
+                          {isReportedMissing && (
+                            <p className="text-[10px] text-red-700 dark:text-red-400 mt-0.5 font-medium">Will appear in manager report</p>
+                          )}
+                        </div>
+
+                        {/* Chevron */}
+                        <ChevronRight
+                          className={`h-5 w-5 shrink-0 ${
+                            roomCatalogRfidMode && !isRead && !isReportedMissing
+                              ? 'text-amber-500'
+                              : 'text-slate-400'
+                          }`}
+                        />
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
-          <DialogFooter className="border-t border-slate-200 dark:border-slate-700 px-4 py-3">
-            <Button variant="outline" className="rounded-xl w-full" onClick={() => setRoomCatalogOpen(false)}>
+          <DialogFooter className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 flex flex-col sm:flex-row gap-2">
+            {roomCatalogRfidMode && roomCatalogAssets.filter((x) => !x.rfidReadThisSession && !rosterReportedMissingIds.has(x.id)).length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 rounded-xl h-9 gap-1.5 border-red-300 text-red-800 dark:text-red-200 bg-red-50/80 dark:bg-red-950/30 font-semibold text-xs"
+                onClick={() => {
+                  const ids = roomCatalogAssets.filter((x) => !x.rfidReadThisSession).map((x) => x.id);
+                  setRosterReportedMissingIds((prev) => new Set([...prev, ...ids]));
+                  toast({ title: 'All unread items flagged', description: 'They will appear in the manager report when submitted.' });
+                }}
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                Report all {roomCatalogAssets.filter((x) => !x.rfidReadThisSession && !rosterReportedMissingIds.has(x.id)).length} unread as missing
+              </Button>
+            )}
+            <Button variant="outline" className="flex-1 sm:flex-initial rounded-xl" onClick={() => setRoomCatalogOpen(false)}>
               Close
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Roster not-read item action dialog: Locate or Report Missing */}
+      <Dialog
+        open={!!rosterActionAsset}
+        onOpenChange={(open) => {
+          if (!open) setRosterActionAsset(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-sm w-[95vw] rounded-2xl shadow-2xl border-slate-200 dark:border-slate-700 p-0 gap-0 overflow-hidden"
+          onPointerDownOutside={preventHandheldDialogOutsideClose}
+          onInteractOutside={preventHandheldDialogOutsideClose}
+        >
+          {/* Header */}
+          <div className="bg-gradient-to-br from-amber-500 to-orange-500 px-5 py-5">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                {rosterActionAsset?.imageUrl ? (
+                  <img src={rosterActionAsset.imageUrl} alt="" className="h-full w-full object-cover rounded-xl" />
+                ) : (
+                  <AlertCircle className="h-6 w-6 text-white" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-white/70 uppercase tracking-widest">Not detected this pass</p>
+                <p className="text-base font-bold text-white truncate mt-0.5 leading-snug">{rosterActionAsset?.name || rosterActionAsset?.barcode || rosterActionAsset?.id}</p>
+                {rosterActionAsset?.barcode && (
+                  <p className="text-[11px] text-white/70 font-mono mt-0.5">{rosterActionAsset.barcode}</p>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-white/80 mt-3 leading-relaxed">
+              This asset is registered in this room but its RFID tag was not detected in your current pass.
+              What would you like to do?
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="p-4 space-y-3 bg-white dark:bg-slate-900">
+            {/* Option A: Locate */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-4 rounded-2xl border-2 border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-4 py-4 text-left hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-[0.98] transition-all group"
+              onClick={() => {
+                const a = rosterActionAsset;
+                if (!a) return;
+                // Set as locate target and switch to locate tab
+                setLocateTarget({ id: a.id, name: a.name || a.barcode || a.id, barcode: a.barcode, assetId: a.assetId, imageUrl: a.imageUrl, floorNumber: a.floorNumber, roomNumber: a.roomNumber } as any);
+                setLocateQuery('');
+                setLocateResults([]);
+                setLocateActive(false);
+                setTab('locate');
+                setRosterActionAsset(null);
+                setRoomCatalogOpen(false);
+                toast({ title: 'Locate mode', description: `Walk around to find "${a.name || a.barcode}". Start Locate when ready.` });
+              }}
+            >
+              <div className="h-12 w-12 rounded-xl bg-violet-100 dark:bg-violet-900/60 flex items-center justify-center shrink-0 group-hover:bg-violet-200 dark:group-hover:bg-violet-800/60 transition-colors">
+                <Crosshair className="h-6 w-6 text-violet-700 dark:text-violet-300" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-slate-900 dark:text-white text-sm">Locate this asset</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                  Switch to Locate mode — walk the room for RFID proximity audio/visual feedback.
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-violet-400 shrink-0" />
+            </button>
+
+            {/* Option B: Report missing */}
+            <button
+              type="button"
+              className={`w-full flex items-center gap-4 rounded-2xl border-2 px-4 py-4 text-left active:scale-[0.98] transition-all group ${
+                rosterReportedMissingIds.has(rosterActionAsset?.id ?? '')
+                  ? 'border-red-300 dark:border-red-700 bg-red-100 dark:bg-red-950/40 cursor-default'
+                  : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/40'
+              }`}
+              onClick={() => {
+                const a = rosterActionAsset;
+                if (!a) return;
+                setRosterReportedMissingIds((prev) => new Set([...prev, a.id]));
+                pushInventoryAudit('roster_report_missing', `${a.name || a.barcode || a.id} (${a.id})`);
+                toast({
+                  title: 'Flagged as missing',
+                  description: `"${a.name || a.barcode}" will be included in the manager report when you submit.`,
+                });
+                setRosterActionAsset(null);
+              }}
+            >
+              <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                rosterReportedMissingIds.has(rosterActionAsset?.id ?? '')
+                  ? 'bg-red-200 dark:bg-red-900/60'
+                  : 'bg-red-100 dark:bg-red-900/40 group-hover:bg-red-200 dark:group-hover:bg-red-800/60'
+              }`}>
+                <AlertCircle className="h-6 w-6 text-red-700 dark:text-red-300" />
+              </div>
+              <div className="min-w-0 flex-1">
+                {rosterReportedMissingIds.has(rosterActionAsset?.id ?? '') ? (
+                  <>
+                    <p className="font-bold text-red-900 dark:text-red-100 text-sm flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4" /> Reported missing
+                    </p>
+                    <p className="text-xs text-red-700 dark:text-red-300 mt-0.5">Will appear in manager report on submit.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-slate-900 dark:text-white text-sm">Report as missing</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                      Flag this item — it will automatically appear in the manager's missing inventory report.
+                    </p>
+                  </>
+                )}
+              </div>
+              {!rosterReportedMissingIds.has(rosterActionAsset?.id ?? '') && (
+                <ChevronRight className="h-5 w-5 text-red-400 shrink-0" />
+              )}
+            </button>
+          </div>
+
+          {/* Info banner */}
+          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              <span className="font-semibold text-slate-700 dark:text-slate-300">Auto-included:</span> If you submit the reconciliation report without acting on any unread item, it will still be automatically flagged as missing in the manager report.
+            </p>
+          </div>
+
+          <div className="px-4 pb-4 pt-2 bg-white dark:bg-slate-900">
+            <Button
+              variant="ghost"
+              className="w-full rounded-xl h-10 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              onClick={() => setRosterActionAsset(null)}
+            >
+              Skip for now
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
