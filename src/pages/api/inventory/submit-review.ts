@@ -23,6 +23,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       note,
       missingItems = [],
       wrongLocationItems = [],
+      correctInRoomItems = [],
+      extraItems = [],
       sessionDurationMs,
     } = req.body || {};
 
@@ -50,6 +52,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           note: note || null,
           missingItems: (missingItems || []).slice(0, 100),
           wrongLocationItems: (wrongLocationItems || []).slice(0, 50),
+          correctInRoomItems: (correctInRoomItems || []).slice(0, 100),
+          extraItems: (extraItems || []).slice(0, 50),
           submittedByName: userData?.name,
           submittedByEmail: userData?.email,
           submittedAt: new Date().toISOString(),

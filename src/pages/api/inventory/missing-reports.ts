@@ -28,19 +28,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const reports = logs
       .map((log) => {
         const d = (log.details as Record<string, unknown>) || {};
-        const missingCount = Number(d.missingCount) ?? 0;
-        if (missingCount <= 0) return null;
+        const missingCount = Number(d.missingCount) || 0;
+        const wrongN = Number(d.wrongLocationCount) || 0;
+        const extraN = Number(d.extraCount) || 0;
+        const wrongItems = (d.wrongLocationItems as Array<{ id: string; name?: string; systemFloor?: string; systemRoom?: string }>) || [];
+        const extraItems = (d.extraItems as Array<{ id: string; name?: string; barcode?: string; floorNumber?: string; roomNumber?: string }>) || [];
+        const correctItems =
+          (d.correctInRoomItems as Array<{ id: string; name?: string; barcode?: string; floorNumber?: string; roomNumber?: string }>) || [];
+        const hasContent =
+          missingCount > 0 ||
+          wrongN > 0 ||
+          extraN > 0 ||
+          wrongItems.length > 0 ||
+          extraItems.length > 0 ||
+          correctItems.length > 0;
+        if (!hasContent) return null;
         return {
           id: log.id,
           timestamp: log.timestamp.toISOString(),
           floorNumber: d.floorNumber ?? null,
           roomNumber: d.roomNumber ?? null,
           missingCount,
+          wrongLocationCount: wrongN,
+          extraCount: extraN,
           totalScanned: d.totalScanned ?? 0,
           totalInSystem: d.totalInSystem ?? 0,
           submittedByName: d.submittedByName ?? null,
           submittedAt: d.submittedAt ?? null,
           missingItems: (d.missingItems as Array<{ id: string; name?: string; barcode?: string; floorNumber?: string; roomNumber?: string }>) || [],
+          wrongLocationItems: wrongItems,
+          correctInRoomItems: correctItems,
+          extraItems,
         };
       })
       .filter(Boolean);

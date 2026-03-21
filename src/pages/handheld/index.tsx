@@ -323,6 +323,8 @@ export default function HandheldHubPage() {
     missing: { id: string; name: string; barcode?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }[];
     extra: { id: string; name: string; barcode?: string; floorNumber?: string | null; roomNumber?: string | null }[];
     wrongLocation: { id: string; name: string; barcode?: string; systemFloor?: string | null; systemRoom?: string | null }[]; // scanned, exist in system, but at different location
+    /** RFID scans whose registered location matches this count room (in system at this location) */
+    correctInRoom: { id: string; name: string; barcode?: string; floorNumber?: string | null; roomNumber?: string | null }[];
     submittedForReview: boolean;
     reasonCode?: string;
     note?: string;
@@ -363,7 +365,6 @@ export default function HandheldHubPage() {
   const countBarcodeInputRef = useRef<HTMLInputElement>(null);
   const [countVoiceListening, setCountVoiceListening] = useState(false);
   const countSpeechRecognitionRef = useRef<SpeechRecognition | null>(null);
-  const autoSentMissingReportRef = useRef(false);
   const [countItemDetailsAsset, setCountItemDetailsAsset] = useState<Asset | null>(null);
   const [countItemStatusAsset, setCountItemStatusAsset] = useState<Asset | null>(null);
   const [countItemMoveAsset, setCountItemMoveAsset] = useState<Asset | null>(null);
@@ -1774,6 +1775,16 @@ export default function HandheldHubPage() {
       setReconcileShowExtra(false);
       setReconcileShowMissingByLocation(false);
       const missingList = missing.slice(0, 100).map((a) => ({ id: a.id, name: a.name || a.assetId || a.id, barcode: a.barcode, floorNumber: a.floorNumber, roomNumber: a.roomNumber, lastMovedAt: a.lastMovedAt }));
+      const correctInRoomScans = scopeByLocation
+        ? countScansForReconciliation.filter((s) => !s.id.startsWith('raw-') && expectedIds.has(s.id) && inLocation(s.floorNumber, s.roomNumber))
+        : countScansForReconciliation.filter((s) => !s.id.startsWith('raw-') && expectedIds.has(s.id));
+      const correctInRoomList = correctInRoomScans.slice(0, 200).map((s) => ({
+        id: s.id,
+        name: s.name || s.barcode || s.id,
+        barcode: s.barcode,
+        floorNumber: s.floorNumber,
+        roomNumber: s.roomNumber,
+      }));
       setReconciliationResult({
         expectedCount: scopeByLocation ? expectedInLoc : list.length,
         actualCount: scopeByLocation ? actualInLoc : scannedByKey.size,
@@ -1785,6 +1796,7 @@ export default function HandheldHubPage() {
         missing: missingList,
         extra: trulyExtra.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, floorNumber: s.floorNumber, roomNumber: s.roomNumber })),
         wrongLocation: wrongLocation.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, systemFloor: s.floorNumber, systemRoom: s.roomNumber })),
+        correctInRoom: correctInRoomList,
         submittedForReview: false,
         locationOverrideApplied,
       });
@@ -1881,6 +1893,8 @@ export default function HandheldHubPage() {
           note: countReviewNote || null,
           missingItems: r.missing.slice(0, 50).map(m => ({ id: m.id, name: m.name, barcode: m.barcode, floorNumber: m.floorNumber, roomNumber: m.roomNumber })),
           wrongLocationItems: (r.wrongLocation || []).slice(0, 50).map(w => ({ id: w.id, name: w.name, systemFloor: w.systemFloor, systemRoom: w.systemRoom })),
+          correctInRoomItems: (r.correctInRoom || []).slice(0, 100).map(c => ({ id: c.id, name: c.name, barcode: c.barcode, floorNumber: c.floorNumber, roomNumber: c.roomNumber })),
+          extraItems: r.extra.slice(0, 50).map(e => ({ id: e.id, name: e.name, barcode: e.barcode, floorNumber: e.floorNumber, roomNumber: e.roomNumber })),
         }),
       });
     } catch {
@@ -1890,17 +1904,6 @@ export default function HandheldHubPage() {
     setCountReviewNote('');
     toast({ title: 'Submitted for review', description: 'Manager can review the inventory count and discrepancies.' });
   }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length]);
-
-  // Auto-send missing items report when reconciliation shows missing (once per result)
-  useEffect(() => {
-    if (!reconciliationResult || reconciliationResult.submittedForReview || reconciliationResult.missing.length === 0) return;
-    if (autoSentMissingReportRef.current) return;
-    autoSentMissingReportRef.current = true;
-    submitCountForReview();
-  }, [reconciliationResult, submitCountForReview]);
-  useEffect(() => {
-    if (!reconciliationResult) autoSentMissingReportRef.current = false;
-  }, [reconciliationResult]);
 
   const saveReconcileEditLocation = useCallback(async () => {
     const asset = reconcileEditLocationAsset;
@@ -2817,7 +2820,7 @@ export default function HandheldHubPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-base font-bold text-slate-900 dark:text-white">Compare with system</h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Reconcile by location or all. Fix wrong locations with Edit location.</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Run once after scanning the room. You get one clear list: missing, found here, and wrong-room tags — then submit one report.</p>
                       </div>
                     </div>
                     <Button
@@ -2830,400 +2833,180 @@ export default function HandheldHubPage() {
                     </Button>
                   </div>
                   {reconciliationResult && (
-                    <div className="p-4 sm:p-5 space-y-4">
-                      {/* Single clear result: all match OR only missing list + send report */}
-                      {reconciliationResult.expectedCount === reconciliationResult.actualCount &&
-                        reconciliationResult.missing.length === 0 &&
-                        reconciliationResult.extra.length === 0 &&
-                        (reconciliationResult.wrongLocation || []).length === 0 ? (
-                        <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/30 p-5 flex items-center gap-4 shadow-lg shadow-emerald-500/10">
-                          <div className="h-14 w-14 rounded-2xl bg-emerald-500 flex items-center justify-center shrink-0">
-                            <CheckCircle2 className="h-8 w-8 text-white" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-lg font-bold text-emerald-900 dark:text-emerald-100">All items in this room match</h4>
-                            <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">Expected {reconciliationResult.expectedCount}, scanned {reconciliationResult.actualCount}. Nothing missing.</p>
-                          </div>
-                        </div>
-                      ) : reconciliationResult.missing.length > 0 ? (
-                        <>
-                          <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 p-5 shadow-lg shadow-amber-500/10">
-                            <div className="flex items-start gap-4">
-                              <div className="h-14 w-14 rounded-2xl bg-amber-500 flex items-center justify-center shrink-0">
-                                <AlertCircle className="h-8 w-8 text-white" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-lg font-bold text-amber-900 dark:text-amber-100">Items missing from this room</h4>
-                                <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
-                                  {reconciliationResult.missing.length} item{reconciliationResult.missing.length !== 1 ? 's' : ''} expected here were not scanned. No move was recorded — still registered in this room.
-                                </p>
-                              </div>
+                    <div className="p-4 sm:p-5">
+                      <div className="rounded-3xl border border-slate-200/90 dark:border-slate-700 bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 shadow-xl overflow-hidden">
+                        <div className="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800 bg-violet-50/50 dark:bg-violet-950/25">
+                          <div className="flex items-start gap-3">
+                            <div className="h-12 w-12 rounded-2xl bg-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/20">
+                              <Scale className="h-6 w-6 text-white" />
                             </div>
-                            <p className="text-xs font-semibold text-amber-800 dark:text-amber-100 mt-4 mb-2">Missing items:</p>
-                            <ul className="space-y-2 max-h-64 overflow-y-auto rounded-xl bg-amber-100/50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Room reconciliation</h3>
+                              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                                <MapPin className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+                                {reconciliationResult.locationDisplay ? (
+                                  <>RFID vs system for <span className="font-semibold text-slate-800 dark:text-slate-200">{reconciliationResult.locationDisplay}</span></>
+                                ) : (
+                                  'RFID vs system (all locations)'
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          {reconciliationResult.locationOverrideApplied && (
+                            <p className="text-xs text-amber-900 dark:text-amber-100 mt-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2">
+                              {reconciliationResult.locationOverrideApplied}
+                            </p>
+                          )}
+                        </div>
+
+                        {reconciliationResult.missing.length === 0 &&
+                          (reconciliationResult.wrongLocation || []).length === 0 &&
+                          reconciliationResult.extra.length === 0 && (
+                          <div className="mx-5 mt-4 rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 flex items-center gap-3">
+                            <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <div>
+                              <p className="font-bold text-emerald-900 dark:text-emerald-100">All clear</p>
+                              <p className="text-sm text-emerald-700 dark:text-emerald-300">No missing items, no wrong-room tags, no unknown scans.</p>
+                            </div>
+                          </div>
+                        )}
+
+                        <section className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                          <h4 className="text-[11px] font-bold uppercase tracking-wider text-amber-900 dark:text-amber-100 mb-2 flex items-center gap-2">
+                            <span className="inline-flex h-6 min-w-[1.5rem] px-1 items-center justify-center rounded-lg bg-amber-500 text-white text-xs font-bold tabular-nums">{reconciliationResult.missing.length}</span>
+                            Missing from this room
+                          </h4>
+                          {reconciliationResult.missing.length === 0 ? (
+                            <p className="text-sm text-emerald-700 dark:text-emerald-300">None — every asset expected here was scanned.</p>
+                          ) : (
+                            <ul className="space-y-2 max-h-52 overflow-y-auto">
                               {reconciliationResult.missing.map((m) => (
-                                <li key={m.id} className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-white dark:bg-slate-800/80 border border-amber-200/60 dark:border-amber-800/60">
-                                  <span className="text-sm font-medium text-amber-900 dark:text-amber-100 truncate" title={m.name}>{m.name || m.barcode || m.id}</span>
-                                  <span className="text-xs text-amber-700 dark:text-amber-300 shrink-0">Floor {m.floorNumber ?? '—'}, Room {m.roomNumber ?? '—'}</span>
+                                <li key={m.id} className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/90 dark:bg-amber-950/25 px-3 py-2.5 flex justify-between gap-2">
+                                  <span className="text-sm font-medium text-amber-950 dark:text-amber-50 truncate">{m.name || m.barcode || m.id}</span>
+                                  <span className="text-xs text-amber-800 dark:text-amber-200 shrink-0 tabular-nums">Fl {m.floorNumber ?? '—'} · Rm {m.roomNumber ?? '—'}</span>
                                 </li>
                               ))}
                             </ul>
-                            {!reconciliationResult.submittedForReview ? (
-                              <Button className="w-full mt-4 h-12 rounded-xl gap-2 font-semibold bg-amber-600 hover:bg-amber-700" onClick={submitCountForReview}>
-                                <ClipboardList className="h-5 w-5 shrink-0" /> Send missing items report
-                              </Button>
-                            ) : (
-                              <div className="mt-4 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 flex items-center gap-3">
-                                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">Report sent. Dashboard and asset pages will show these missing items.</p>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 p-5 flex items-center gap-4">
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100">Reconciliation result</h4>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Expected {reconciliationResult.expectedCount}, scanned {reconciliationResult.actualCount}. No missing items from this room.</p>
-                          </div>
-                        </div>
-                      )}
-                      {reconciliationResult.missing.length === 0 && reconciliationResult.locationOverrideApplied && (
-                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 flex items-center gap-3">
-                          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Audit: {reconciliationResult.locationOverrideApplied}</p>
-                        </div>
-                      )}
-                      {reconciliationResult.missing.length === 0 && reconciliationResult.scope === 'location' && reconciliationResult.locationDisplay && (
-                        <div className="rounded-2xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-4 py-3 flex items-center gap-3">
-                          <MapPin className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">Count location</p>
-                            <p className="text-xs text-violet-700 dark:text-violet-300">Comparing only: {reconciliationResult.locationDisplay}</p>
-                          </div>
-                        </div>
-                      )}
-                      {reconciliationResult.missing.length === 0 && reconciliationResult.scope === 'location' && (
-                        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 px-3 py-2.5 space-y-1.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Scan breakdown</p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1">
-                            <span className="text-xs text-slate-600 dark:text-slate-400">
-                              <span className="font-bold text-slate-800 dark:text-slate-200 tabular-nums">{countScansForReconciliation.length}</span> total scanned
-                            </span>
-                            <span className="text-xs text-violet-700 dark:text-violet-300">
-                              <span className="font-bold tabular-nums">{reconciliationResult.actualCount}</span> at this location
-                            </span>
-                            {(reconciliationResult.wrongLocation || []).length > 0 && (
-                              <span className="text-xs text-amber-700 dark:text-amber-300">
-                                <span className="font-bold tabular-nums">{(reconciliationResult.wrongLocation || []).length}</span> from other locations
-                              </span>
-                            )}
-                            {reconciliationResult.extra.length > 0 && (
-                              <span className="text-xs text-red-700 dark:text-red-300">
-                                <span className="font-bold tabular-nums">{reconciliationResult.extra.length}</span> not in system
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {reconciliationResult.missing.length === 0 && (reconciliationResult.wrongLocation || []).length > 0 && reconciliationResult.scope === 'location' && (
-                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 space-y-3">
-                          <div className="flex items-start gap-3">
-                            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">{(reconciliationResult.wrongLocation || []).length} scanned items belong to other rooms</p>
-                              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">These assets exist in the system but their registered location is different. They were likely physically moved here.</p>
+                          )}
+                        </section>
+
+                        <section className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                          <h4 className="text-[11px] font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-100 mb-2 flex items-center gap-2">
+                            <span className="inline-flex h-6 min-w-[1.5rem] px-1 items-center justify-center rounded-lg bg-emerald-500 text-white text-xs font-bold tabular-nums">{(reconciliationResult.correctInRoom || []).length}</span>
+                            Scanned & registered in this room
+                          </h4>
+                          {(reconciliationResult.correctInRoom || []).length === 0 ? (
+                            <p className="text-sm text-slate-500 dark:text-slate-400">None</p>
+                          ) : (
+                            <ul className="space-y-2 max-h-52 overflow-y-auto">
+                              {(reconciliationResult.correctInRoom || []).map((c) => (
+                                <li key={c.id} className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/20 px-3 py-2.5 flex items-center gap-2">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                                  <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </section>
+
+                        {(reconciliationResult.wrongLocation || []).length > 0 && (
+                        <section className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                          <h4 className="text-[11px] font-bold uppercase tracking-wider text-orange-950 dark:text-orange-100 mb-2 flex items-center gap-2">
+                            <span className="inline-flex h-6 min-w-[1.5rem] px-1 items-center justify-center rounded-lg bg-orange-500 text-white text-xs font-bold tabular-nums">{(reconciliationResult.wrongLocation || []).length}</span>
+                            Scanned here · registered in another room
+                          </h4>
+                          <ul className="space-y-3 max-h-72 overflow-y-auto">
+                            {(reconciliationResult.wrongLocation || []).map((w) => (
+                              <li key={w.id} className="rounded-xl border-2 border-orange-300 dark:border-orange-700 bg-gradient-to-br from-orange-50 to-amber-50/80 dark:from-orange-950/40 dark:to-amber-950/20 p-3 shadow-sm">
+                                <p className="text-sm font-semibold text-orange-950 dark:text-orange-50">{w.name || w.barcode || w.id}</p>
+                                <div className="mt-2 rounded-lg bg-white/80 dark:bg-slate-900/50 border border-orange-200/80 dark:border-orange-800/80 px-3 py-2 space-y-1">
+                                  <p className="text-xs text-orange-900 dark:text-orange-100">
+                                    <span className="font-bold">Registered location</span>
+                                    <span className="block mt-0.5">Floor {w.systemFloor ?? '—'}, Room {w.systemRoom ?? '—'}</span>
+                                  </p>
+                                  <p className="text-[11px] text-orange-700 dark:text-orange-300">
+                                    You scanned in: {reconciliationResult.locationDisplay || [inventorySessionFloor, inventorySessionRoom].filter(Boolean).join(', ') || 'this count'}
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full mt-2 rounded-lg h-9 border-orange-500 text-orange-900 dark:text-orange-100 font-medium"
+                                  onClick={() => {
+                                    setReconcileEditLocationAsset({ id: w.id, name: w.name, floorNumber: w.systemFloor, roomNumber: w.systemRoom });
+                                    reconcileEditLocationForm.reset({ floorNumber: w.systemFloor || '', roomNumber: w.systemRoom || '' });
+                                  }}
+                                >
+                                  <MapPin className="h-3.5 w-3.5 mr-1.5" /> Change registered room
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full mt-3 rounded-xl border-orange-400 text-orange-900 dark:text-orange-100"
+                            onClick={async () => {
+                              const sessionFloor = inventorySessionFloor.trim();
+                              const sessionRoom = inventorySessionRoom.trim();
+                              if (!sessionFloor || !sessionRoom) { toast({ title: 'Set count floor & room first', variant: 'destructive' }); return; }
+                              let moved = 0;
+                              for (const e of (reconciliationResult.wrongLocation || [])) {
+                                try {
+                                  const r = await fetch(`/api/assets/${e.id}/move`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ floorNumber: sessionFloor, roomNumber: sessionRoom }) });
+                                  if (r.ok) moved++;
+                                } catch { /* skip */ }
+                              }
+                              if (moved > 0) {
+                                toast({ title: 'Locations updated', description: `${moved} item(s) now registered to Floor ${sessionFloor}, Room ${sessionRoom}.` });
+                                void runReconciliation();
+                              } else toast({ title: 'Could not move items', variant: 'destructive' });
+                            }}
+                          >
+                            Register all listed above to this count room
+                          </Button>
+                        </section>
+                        )}
+
+                        {reconciliationResult.extra.length > 0 && (
+                        <section className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                          <h4 className="text-[11px] font-bold uppercase tracking-wider text-red-900 dark:text-red-100 mb-2">Not in system ({reconciliationResult.extra.length})</h4>
+                          <p className="text-xs text-red-800 dark:text-red-200 mb-2">Tag read but no matching asset — register or ignore.</p>
+                          <ul className="space-y-2 max-h-40 overflow-y-auto">
+                            {reconciliationResult.extra.map((e) => (
+                              <li key={e.id} className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50/90 dark:bg-red-950/25 px-3 py-2 text-sm font-medium text-red-950 dark:text-red-50">{e.name || e.barcode || e.id}</li>
+                            ))}
+                          </ul>
+                        </section>
+                        )}
+
+                        {!reconciliationResult.submittedForReview ? (
+                          <div className="px-5 py-4 space-y-3 bg-slate-50/95 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800">
+                            <div>
+                              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Note (optional)</label>
+                              <Textarea
+                                placeholder="Add context for managers…"
+                                value={countReviewNote}
+                                onChange={(e) => setCountReviewNote(e.target.value)}
+                                className="mt-1 min-h-[72px] rounded-xl resize-none text-sm"
+                              />
                             </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2 pl-8">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="rounded-xl border-amber-500 text-amber-800 dark:text-amber-200"
-                              onClick={async () => {
-                                const sessionFloor = inventorySessionFloor.trim();
-                                const sessionRoom = inventorySessionRoom.trim();
-                                if (!sessionFloor || !sessionRoom) { toast({ title: 'Count location required to move assets', variant: 'destructive' }); return; }
-                                let moved = 0;
-                                for (const e of (reconciliationResult.wrongLocation || [])) {
-                                  try {
-                                    const r = await fetch(`/api/assets/${e.id}/move`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ floorNumber: sessionFloor, roomNumber: sessionRoom }) });
-                                    if (r.ok) moved++;
-                                  } catch { /* skip */ }
-                                }
-                                if (moved > 0) {
-                                  toast({ title: 'Locations updated', description: `${moved} item(s) moved to Floor ${sessionFloor}, Room ${sessionRoom}.` });
-                                  void runReconciliation();
-                                } else {
-                                  toast({ title: 'Move failed', variant: 'destructive', description: 'Check network and try again.' });
-                                }
-                              }}
-                            >
-                              Move all to this room
+                            <Button className="w-full h-12 rounded-xl gap-2 font-bold bg-violet-600 hover:bg-violet-700 shadow-lg text-white" onClick={submitCountForReview}>
+                              <ClipboardList className="h-5 w-5 shrink-0" /> Submit inventory report
                             </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="rounded-xl text-amber-800 dark:text-amber-200"
-                              onClick={() => setReconcileShowExtra((v) => !v)}
-                            >
-                              {reconcileShowExtra ? 'Hide details' : 'View details'}
-                            </Button>
+                            <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 leading-relaxed">
+                              Report includes missing items, items OK in this room, wrong-room items (with registered locations), and unknown scans.
+                            </p>
                           </div>
-                        </div>
-                      )}
-                      {reconciliationResult.missing.length === 0 && (
-                      <div className={cn('grid gap-3', reconciliationResult.difference !== undefined ? 'grid-cols-3' : 'grid-cols-2')}>
-                        <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 p-4 text-center border border-slate-200/80 dark:border-slate-700">
-                          <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{reconciliationResult.expectedCount}</p>
-                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">{reconciliationResult.scope === 'location' ? 'In system (this location)' : 'In system'}</p>
-                        </div>
-                        <div className="rounded-2xl bg-violet-50 dark:bg-violet-900/20 p-4 text-center border border-violet-200/80 dark:border-violet-800">
-                          <p className="text-2xl font-bold text-violet-700 dark:text-violet-300 tabular-nums">{reconciliationResult.actualCount}</p>
-                          <p className="text-xs font-medium text-violet-600/80 dark:text-violet-400/80 mt-0.5">Scanned (this location)</p>
-                        </div>
-                        {reconciliationResult.difference !== undefined && (
-                          <div className={cn(
-                            'rounded-2xl p-4 text-center border tabular-nums',
-                            reconciliationResult.difference === 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : reconciliationResult.difference > 0 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                          )}>
-                            <p className={cn(
-                              'text-2xl font-bold',
-                              reconciliationResult.difference === 0 ? 'text-emerald-700 dark:text-emerald-300' : reconciliationResult.difference > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-blue-700 dark:text-blue-300'
-                            )}>
-                              {reconciliationResult.difference > 0 ? '+' : ''}{reconciliationResult.difference}
-                            </p>
-                            <p className="text-xs font-medium mt-0.5 text-slate-600 dark:text-slate-400">
-                              {reconciliationResult.difference === 0 ? '✓ Match' : reconciliationResult.difference > 0 ? `${reconciliationResult.difference} missing` : `${-reconciliationResult.difference} extra scanned`}
-                            </p>
+                        ) : (
+                          <div className="px-5 py-4 flex items-start gap-3 bg-emerald-50/90 dark:bg-emerald-950/30 border-t border-emerald-200 dark:border-emerald-800">
+                            <CheckCircle2 className="h-6 w-6 text-emerald-600 shrink-0 mt-0.5" />
+                            <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">Report submitted. Missing items appear on the dashboard and asset pages.</p>
                           </div>
                         )}
                       </div>
-                      )}
-                      {reconciliationResult.missing.length === 0 && reconciliationResult.expectedCount === reconciliationResult.actualCount && reconciliationResult.extra.length === 0 && (reconciliationResult.wrongLocation || []).length === 0 && (
-                        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
-                          <CheckCircle2 className="h-10 w-10 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <div>
-                            <p className="font-semibold text-emerald-900 dark:text-emerald-100">Perfect match</p>
-                            <p className="text-sm text-emerald-700 dark:text-emerald-300">Inventory matches system records.</p>
-                          </div>
-                        </div>
-                      )}
-                      {reconciliationResult.missing.length === 0 && (reconciliationResult.missing.length > 0 || reconciliationResult.extra.length > 0 || (reconciliationResult.wrongLocation || []).length > 0) && (
-                        <div className="space-y-3">
-                          {reconciliationResult.missing.length > 0 && (
-                            <>
-                              <div className="flex flex-wrap gap-2">
-                                <Button variant="default" size="sm" className="rounded-xl gap-1.5 shadow-sm" onClick={() => setShowMissingItemsDialog(true)}>
-                                  <AlertCircle className="h-3.5 w-3.5" />
-                                  View missing items
-                                </Button>
-                                <Button variant="outline" size="sm" className="rounded-xl gap-1.5" onClick={() => setReconcileShowMissingByLocation((v) => !v)}>
-                                  <MapPin className="h-3.5 w-3.5" />
-                                  {reconcileShowMissingByLocation ? 'Hide missing by room' : 'Missing by room'}
-                                </Button>
-                              </div>
-                              {reconcileShowMissingByLocation && (() => {
-                                const byLoc = reconciliationResult.missing.reduce((acc, m) => {
-                                  const key = [m.floorNumber ?? '', m.roomNumber ?? ''].join('|');
-                                  if (!acc[key]) acc[key] = [];
-                                  acc[key].push(m);
-                                  return acc;
-                                }, {} as Record<string, typeof reconciliationResult.missing>);
-                                const entries = Object.entries(byLoc).sort((a, b) => a[0].localeCompare(b[0]));
-                                return (
-                                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 overflow-hidden space-y-2">
-                                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 px-3 pt-3">Missing assets grouped by system location</p>
-                                    {entries.map(([key, items]) => {
-                                      const [f, r] = key.split('|');
-                                      const locLabel = [f, r].filter(Boolean).join(', ') || 'No location';
-                                      return (
-                                        <div key={key} className="border-t border-slate-200 dark:border-slate-700">
-                                          <div className="px-3 py-2 bg-slate-100 dark:bg-slate-800/80 flex items-center gap-2">
-                                            <MapPin className="h-4 w-4 text-slate-500 shrink-0" />
-                                            <span className="font-semibold text-slate-800 dark:text-slate-200">Floor {f || '—'}, Room {r || '—'}</span>
-                                            <span className="text-xs text-slate-500 dark:text-slate-400">({items.length} missing)</span>
-                                          </div>
-                                          <ul className="px-3 pb-3 pt-1 space-y-1 max-h-40 overflow-y-auto">
-                                            {items.map((m) => (
-                                              <li key={m.id} className="text-xs text-slate-700 dark:text-slate-300 py-1.5 px-2 rounded-lg bg-white dark:bg-slate-800/80 truncate flex items-center justify-between gap-2">
-                                                <span title={m.name}>{m.name || m.barcode || m.id}</span>
-                                                <Button type="button" size="sm" variant="ghost" className="h-6 text-[10px] rounded-lg shrink-0" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); }}>
-                                                  Edit location
-                                                </Button>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              })()}
-                            </>
-                          )}
-                          {reconciliationResult.missing.length > 0 && (
-                            <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 overflow-hidden mt-2">
-                              <button
-                                type="button"
-                                onClick={() => setReconcileShowMissing((v) => !v)}
-                                className="w-full flex items-center justify-between gap-2 p-3 text-left"
-                              >
-                                <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
-                                  <AlertCircle className="h-4 w-4 shrink-0" />
-                                  Missing from scan ({reconciliationResult.missing.length})
-                                </span>
-                                {reconcileShowMissing ? <ChevronUp className="h-4 w-4 text-amber-600" /> : <ChevronDown className="h-4 w-4 text-amber-600" />}
-                              </button>
-                              <p className="px-3 pb-2 text-[11px] text-amber-700 dark:text-amber-300 border-b border-amber-200 dark:border-amber-800">
-                                Expected in this room but not scanned. No move was recorded for these assets.
-                              </p>
-                              {reconcileShowMissing && (
-                                <ul className="px-3 pb-3 space-y-2 max-h-56 overflow-y-auto">
-                                  {reconciliationResult.missing.map((m) => {
-                                    const sysLoc = [m.floorNumber, m.roomNumber].filter(Boolean).join(', ') || '—';
-                                    return (
-                                      <li key={m.id} className="rounded-xl bg-amber-100/80 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/60 p-2.5 flex flex-col gap-1.5">
-                                        <p className="text-xs font-medium text-amber-900 dark:text-amber-100 truncate" title={m.name}>{m.name || m.barcode || m.id}</p>
-                                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                                          <span className="text-[10px] text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                                            <MapPin className="h-3 w-3 shrink-0" /> System: {sysLoc}
-                                          </span>
-                                          <Button type="button" size="sm" variant="outline" className="h-7 text-[10px] rounded-lg border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200" onClick={() => { setReconcileEditLocationAsset({ id: m.id, name: m.name, floorNumber: m.floorNumber, roomNumber: m.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: m.floorNumber || '', roomNumber: m.roomNumber || '' }); }}>
-                                            <MapPin className="h-3 w-3 mr-1" /> Edit location
-                                          </Button>
-                                        </div>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              )}
-                            </div>
-                          )}
-                          {/* Wrong location items (exist in system but registered elsewhere) */}
-                          {reconcileShowExtra && (reconciliationResult.wrongLocation || []).length > 0 && (
-                            <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 overflow-hidden">
-                              <div className="flex items-center justify-between gap-2 p-3">
-                                <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
-                                  <ArrowRightLeft className="h-4 w-4 shrink-0" />
-                                  Wrong location — {(reconciliationResult.wrongLocation || []).length} items
-                                </span>
-                              </div>
-                              <ul className="px-3 pb-3 space-y-2 max-h-56 overflow-y-auto">
-                                {(reconciliationResult.wrongLocation || []).map((e) => {
-                                  const sysLoc = [e.systemFloor, e.systemRoom].filter(Boolean).join(', ') || 'no location in system';
-                                  return (
-                                    <li key={e.id} className="rounded-xl bg-amber-100/80 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-800/60 p-2.5 flex flex-col gap-1.5">
-                                      <p className="text-xs font-medium text-amber-900 dark:text-amber-100 truncate" title={e.name}>{e.name || e.barcode || e.id}</p>
-                                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                                        <span className="text-[10px] text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                                          <MapPin className="h-3 w-3 shrink-0" /> System says: {sysLoc}
-                                        </span>
-                                        <Button type="button" size="sm" variant="outline" className="h-7 text-[10px] rounded-lg border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200" onClick={() => { setReconcileEditLocationAsset({ id: e.id, name: e.name, floorNumber: e.systemFloor, roomNumber: e.systemRoom }); reconcileEditLocationForm.reset({ floorNumber: e.systemFloor || '', roomNumber: e.systemRoom || '' }); }}>
-                                          <MapPin className="h-3 w-3 mr-1" /> Update location
-                                        </Button>
-                                      </div>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                          )}
-                          {/* Truly unknown — scanned but not in system at all */}
-                          {reconciliationResult.extra.length > 0 && (
-                            <div className="rounded-2xl border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10 overflow-hidden">
-                              <button
-                                type="button"
-                                onClick={() => setReconcileShowExtra((v) => !v)}
-                                className="w-full flex items-center justify-between gap-2 p-3 text-left"
-                              >
-                                <span className="flex items-center gap-2 text-sm font-semibold text-red-900 dark:text-red-100">
-                                  <AlertCircle className="h-4 w-4 shrink-0" />
-                                  Not in system — {reconciliationResult.extra.length} unknown
-                                </span>
-                                {reconcileShowExtra ? <ChevronUp className="h-4 w-4 text-red-600" /> : <ChevronDown className="h-4 w-4 text-red-600" />}
-                              </button>
-                              {reconcileShowExtra && (
-                                <ul className="px-3 pb-3 space-y-2 max-h-56 overflow-y-auto">
-                                  {reconciliationResult.extra.map((e) => (
-                                    <li key={e.id} className="rounded-xl bg-red-100/80 dark:bg-red-900/20 border border-red-200/60 dark:border-red-800/60 p-2.5 flex items-center justify-between gap-2">
-                                      <div className="min-w-0">
-                                        <p className="text-xs font-medium text-red-900 dark:text-red-100 truncate">{e.name || e.barcode || e.id}</p>
-                                        {e.barcode && <p className="text-[10px] text-red-600 dark:text-red-400 font-mono">{e.barcode}</p>}
-                                      </div>
-                                      {!e.id.startsWith('raw-') && (
-                                        <Button type="button" size="sm" variant="outline" className="h-7 text-[10px] rounded-lg border-red-400 dark:border-red-600 text-red-800 dark:text-red-200 shrink-0" onClick={() => { setReconcileEditLocationAsset({ id: e.id, name: e.name, floorNumber: e.floorNumber, roomNumber: e.roomNumber }); reconcileEditLocationForm.reset({ floorNumber: e.floorNumber || '', roomNumber: e.roomNumber || '' }); }}>
-                                          Register location
-                                        </Button>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {reconciliationResult.missing.length === 0 && !reconciliationResult.submittedForReview ? (
-                        <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-700">
-                          {(inventorySummary?.summaryLine || inventorySummaryLoading) && (
-                            <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-4 py-3">
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5"><Sparkles className="h-3 w-3" /> AI summary</p>
-                              {inventorySummaryLoading ? (
-                                <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Analyzing variance…</p>
-                              ) : (
-                                <p className="text-sm text-slate-800 dark:text-slate-200">{inventorySummary?.summaryLine}</p>
-                              )}
-                            </div>
-                          )}
-                          <div>
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">
-                              Variance reason (optional)
-                              {inventorySummary?.suggestedReason && (
-                                <span className="ml-2 text-xs font-normal text-violet-600 dark:text-violet-400">— suggested</span>
-                              )}
-                            </label>
-                            <select
-                              value={countReviewReason}
-                              onChange={(e) => setCountReviewReason(e.target.value)}
-                              className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm px-3"
-                            >
-                              {COUNT_REVIEW_REASONS.map((r) => (
-                                <option key={r.value || 'opt'} value={r.value}>{r.label}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1.5">Note for reviewer (optional)</label>
-                            <Textarea
-                              placeholder="e.g. Aisle 3 was blocked; count done in two passes"
-                              value={countReviewNote}
-                              onChange={(e) => setCountReviewNote(e.target.value)}
-                              className="min-h-[88px] rounded-xl resize-none text-sm"
-                            />
-                          </div>
-                          <Button className="w-full h-12 rounded-xl gap-2 font-semibold" onClick={submitCountForReview}>
-                            <User className="h-5 w-5 shrink-0" /> Submit for manager review
-                          </Button>
-                        </div>
-                      ) : reconciliationResult.missing.length === 0 ? (
-                        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 space-y-2">
-                          <div className="flex items-center gap-3">
-                            <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <p className="font-semibold text-emerald-900 dark:text-emerald-100">Submitted for review</p>
-                          </div>
-                          {(reconciliationResult.reasonCode || reconciliationResult.note) && (
-                            <div className="text-sm text-emerald-800 dark:text-emerald-200 space-y-1 pl-11">
-                              {reconciliationResult.reasonCode && (
-                                <p>Reason: {COUNT_REVIEW_REASONS.find((r) => r.value === reconciliationResult.reasonCode)?.label || reconciliationResult.reasonCode}</p>
-                              )}
-                              {reconciliationResult.note && <p>Note: {reconciliationResult.note}</p>}
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
                     </div>
                   )}
                 </section>
