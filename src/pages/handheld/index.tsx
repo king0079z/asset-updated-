@@ -352,8 +352,19 @@ export default function HandheldHubPage() {
   /** Full catalogue dialog: all assets registered to current count floor/room */
   const [roomCatalogOpen, setRoomCatalogOpen] = useState(false);
   const [roomCatalogLoading, setRoomCatalogLoading] = useState(false);
+  const [roomCatalogRfidMode, setRoomCatalogRfidMode] = useState(false);
   const [roomCatalogAssets, setRoomCatalogAssets] = useState<
-    Array<{ id: string; name?: string | null; barcode?: string | null; assetId?: string | null; status?: string | null; floorNumber?: string | null; roomNumber?: string | null; imageUrl?: string | null }>
+    Array<{
+      id: string;
+      name?: string | null;
+      barcode?: string | null;
+      assetId?: string | null;
+      status?: string | null;
+      floorNumber?: string | null;
+      roomNumber?: string | null;
+      imageUrl?: string | null;
+      rfidReadThisSession?: boolean;
+    }>
   >([]);
   const reconcileEditLocationForm = useForm<z.infer<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),
@@ -2166,30 +2177,71 @@ export default function HandheldHubPage() {
     [toast],
   );
 
-  const openRoomCatalog = useCallback(async () => {
-    const f = inventorySessionFloor.trim();
-    const r = inventorySessionRoom.trim();
-    if (!f || !r) {
-      toast({ title: 'Set floor & room', description: 'Set the count location (floor and room) first.', variant: 'destructive' });
-      return;
-    }
-    setRoomCatalogOpen(true);
-    setRoomCatalogLoading(true);
-    setRoomCatalogAssets([]);
-    try {
-      const res = await fetch(
-        `/api/assets/by-room?floorNumber=${encodeURIComponent(f)}&roomNumber=${encodeURIComponent(r)}`,
-        { credentials: 'include', cache: 'no-store' },
-      );
-      if (!res.ok) throw new Error('failed');
-      const data = await res.json();
-      setRoomCatalogAssets(Array.isArray(data) ? data : []);
-    } catch {
-      toast({ title: 'Could not load assets for this room', variant: 'destructive' });
-    } finally {
-      setRoomCatalogLoading(false);
-    }
-  }, [inventorySessionFloor, inventorySessionRoom, toast]);
+  const openRoomCatalog = useCallback(
+    async (opts?: { withRfidStatus?: boolean }) => {
+      const withRfid = opts?.withRfidStatus === true;
+      const f = inventorySessionFloor.trim();
+      const r = inventorySessionRoom.trim();
+      if (!f || !r) {
+        toast({ title: 'Set floor & room', description: 'Set the count location (floor and room) first.', variant: 'destructive' });
+        return;
+      }
+      setRoomCatalogRfidMode(withRfid);
+      setRoomCatalogOpen(true);
+      setRoomCatalogLoading(true);
+      setRoomCatalogAssets([]);
+
+      const scannedIds = new Set<string>();
+      const scannedByKey = new Map<string, CountScanItem>();
+      countScansForReconciliation.forEach((s) => {
+        const key = s.id.startsWith('raw-') ? (s.barcode || s.name || s.id).toLowerCase() : s.id;
+        if (!s.id.startsWith('raw-')) scannedIds.add(s.id);
+        if (!scannedByKey.has(key)) scannedByKey.set(key, s);
+      });
+      const isReadThisSession = (a: { id: string; barcode?: string | null; assetId?: string | null }) => {
+        if (scannedIds.has(a.id)) return true;
+        const bc = (a.barcode || '').trim().toLowerCase();
+        if (bc && scannedByKey.has(bc)) return true;
+        const aid = (a.assetId || '').trim().toLowerCase();
+        if (aid && scannedByKey.has(aid)) return true;
+        return false;
+      };
+
+      try {
+        const res = await fetch(
+          `/api/assets/by-room?floorNumber=${encodeURIComponent(f)}&roomNumber=${encodeURIComponent(r)}`,
+          { credentials: 'include', cache: 'no-store' },
+        );
+        if (!res.ok) throw new Error('failed');
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : [];
+        const enriched = arr.map(
+          (row: {
+            id: string;
+            name?: string | null;
+            barcode?: string | null;
+            assetId?: string | null;
+            status?: string | null;
+            floorNumber?: string | null;
+            roomNumber?: string | null;
+            imageUrl?: string | null;
+          }) => ({
+            ...row,
+            ...(withRfid ? { rfidReadThisSession: isReadThisSession(row) } : {}),
+          }),
+        );
+        if (withRfid) {
+          enriched.sort((x, y) => Number(x.rfidReadThisSession) - Number(y.rfidReadThisSession));
+        }
+        setRoomCatalogAssets(enriched);
+      } catch {
+        toast({ title: 'Could not load assets for this room', variant: 'destructive' });
+      } finally {
+        setRoomCatalogLoading(false);
+      }
+    },
+    [inventorySessionFloor, inventorySessionRoom, toast, countScansForReconciliation],
+  );
 
   const endCountSession = useCallback(() => {
     const total = unifiedInventory.length;
@@ -3008,7 +3060,7 @@ export default function HandheldHubPage() {
                       auditCommentImageInputRef={auditCommentImageInputRef}
                       onViewRoomCatalog={
                         countSessionActive && inventorySessionFloor.trim() && inventorySessionRoom.trim()
-                          ? openRoomCatalog
+                          ? () => void openRoomCatalog({ withRfidStatus: true })
                           : undefined
                       }
                     />
@@ -3155,8 +3207,8 @@ export default function HandheldHubPage() {
                           </p>
                           <ul className="divide-y divide-amber-100 dark:divide-amber-900/40 bg-white dark:bg-slate-900 max-h-72 overflow-y-auto">
                             {reconciliationResult.missing.map((m) => (
-                              <li key={m.id} className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-3">
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <li key={m.id} className="flex flex-col gap-2 px-4 py-3">
+                                <div className="flex items-center gap-3 min-w-0">
                                   <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
                                     <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                                   </div>
@@ -3168,16 +3220,28 @@ export default function HandheldHubPage() {
                                     Fl {m.floorNumber ?? '—'} · {m.roomNumber ?? '—'}
                                   </span>
                                 </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="shrink-0 rounded-xl h-9 gap-1.5 border-amber-300 text-amber-900 dark:text-amber-100 w-full sm:w-auto"
-                                  onClick={() => void openReconcileMissingMoveHistory({ id: m.id, name: m.name || m.barcode || m.id })}
-                                >
-                                  <History className="h-3.5 w-3.5" />
-                                  Movement history
-                                </Button>
+                                <div className="flex flex-col sm:flex-row gap-2 w-full sm:pl-11">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0 rounded-xl h-9 gap-1.5 border-violet-300 bg-violet-50/80 dark:bg-violet-950/30 text-violet-900 dark:text-violet-100 flex-1 sm:flex-initial font-semibold"
+                                    onClick={() => void openRoomCatalog({ withRfidStatus: true })}
+                                  >
+                                    <List className="h-3.5 w-3.5" />
+                                    Room roster
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0 rounded-xl h-9 gap-1.5 border-amber-300 text-amber-900 dark:text-amber-100 flex-1 sm:flex-initial"
+                                    onClick={() => void openReconcileMissingMoveHistory({ id: m.id, name: m.name || m.barcode || m.id })}
+                                  >
+                                    <History className="h-3.5 w-3.5" />
+                                    Movement history
+                                  </Button>
+                                </div>
                               </li>
                             ))}
                           </ul>
@@ -3196,15 +3260,27 @@ export default function HandheldHubPage() {
                           </div>
                           <ul className="divide-y divide-emerald-100 dark:divide-emerald-900/30 bg-white dark:bg-slate-900 max-h-56 overflow-y-auto">
                             {inRoom.map((c) => (
-                              <li key={c.id} className="flex items-center gap-3 px-4 py-2.5">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name}</p>
-                                  {c.barcode && <p className="text-[11px] text-slate-400 font-mono">{c.barcode}</p>}
+                              <li key={c.id} className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name}</p>
+                                    {c.barcode && <p className="text-[11px] text-slate-400 font-mono">{c.barcode}</p>}
+                                  </div>
+                                  <span className="shrink-0 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 uppercase tracking-wide">
+                                    In room
+                                  </span>
                                 </div>
-                                <span className="shrink-0 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 uppercase tracking-wide">
-                                  In room
-                                </span>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="shrink-0 rounded-xl h-8 gap-1 border-violet-300 bg-violet-50/80 dark:bg-violet-950/30 text-violet-900 dark:text-violet-100 text-[11px] font-semibold w-full sm:w-auto"
+                                  onClick={() => void openRoomCatalog({ withRfidStatus: true })}
+                                >
+                                  <List className="h-3.5 w-3.5" />
+                                  Room roster
+                                </Button>
                               </li>
                             ))}
                           </ul>
@@ -4236,12 +4312,15 @@ export default function HandheldHubPage() {
         </DialogContent>
       </Dialog>
 
-      {/* All assets registered to current count room (from inventory list “All in room”) */}
+      {/* All assets registered to current count room (from inventory list “All in room” + reconciliation “Room roster”) */}
       <Dialog
         open={roomCatalogOpen}
         onOpenChange={(open) => {
           setRoomCatalogOpen(open);
-          if (!open) setRoomCatalogAssets([]);
+          if (!open) {
+            setRoomCatalogAssets([]);
+            setRoomCatalogRfidMode(false);
+          }
         }}
       >
         <DialogContent
@@ -4251,18 +4330,52 @@ export default function HandheldHubPage() {
         >
           <DialogHeader className="px-5 pt-5 pb-3 border-b border-slate-200 dark:border-slate-700">
             <DialogTitle className="flex items-center gap-2 text-lg pr-8">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
-                <List className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+              <span
+                className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                  roomCatalogRfidMode
+                    ? 'bg-violet-100 dark:bg-violet-900/50'
+                    : 'bg-emerald-100 dark:bg-emerald-900/50'
+                }`}
+              >
+                {roomCatalogRfidMode ? (
+                  <Radio className="h-5 w-5 text-violet-700 dark:text-violet-300" />
+                ) : (
+                  <List className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                )}
               </span>
-              Registered in this room
+              {roomCatalogRfidMode ? 'Room roster & RFID pass' : 'Registered in this room'}
             </DialogTitle>
-            <DialogDescription className="text-sm">
-              Floor <span className="font-semibold text-slate-800 dark:text-slate-200">{inventorySessionFloor.trim() || '—'}</span>
-              , Room{' '}
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{inventorySessionRoom.trim() || '—'}</span>
-              <span className="block mt-1 text-xs text-slate-500">
-                {roomCatalogLoading ? 'Loading…' : `${roomCatalogAssets.length} asset${roomCatalogAssets.length !== 1 ? 's' : ''} in system at this location`}
+            <DialogDescription className="text-sm space-y-2">
+              <span>
+                Floor <span className="font-semibold text-slate-800 dark:text-slate-200">{inventorySessionFloor.trim() || '—'}</span>
+                , Room{' '}
+                <span className="font-semibold text-slate-800 dark:text-slate-200">{inventorySessionRoom.trim() || '—'}</span>
               </span>
+              {roomCatalogRfidMode && (
+                <span className="block text-xs text-slate-600 dark:text-slate-400 leading-snug">
+                  <strong className="text-slate-800 dark:text-slate-200">Read this session</strong> means the asset appeared in your count list (same RFID pass as reconciliation). Not read = registered here but no tag hit in this session yet.
+                </span>
+              )}
+              <span className="block text-xs text-slate-500">
+                {roomCatalogLoading
+                  ? 'Loading…'
+                  : `${roomCatalogAssets.length} asset${roomCatalogAssets.length !== 1 ? 's' : ''} registered in the system at this location`}
+              </span>
+              {!roomCatalogLoading && roomCatalogRfidMode && roomCatalogAssets.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-[11px] font-bold text-emerald-900 dark:text-emerald-100 tabular-nums">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    Read: {roomCatalogAssets.filter((x) => x.rfidReadThisSession).length}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 px-2.5 py-1 text-[11px] font-bold text-amber-900 dark:text-amber-100 tabular-nums">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    Not read: {roomCatalogAssets.filter((x) => !x.rfidReadThisSession).length}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
+                    Session scans: {countScansForReconciliation.length}
+                  </span>
+                </div>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
@@ -4293,7 +4406,20 @@ export default function HandheldHubPage() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{a.name || a.barcode || a.id}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{a.name || a.barcode || a.id}</p>
+                          {roomCatalogRfidMode && (
+                            <span
+                              className={`shrink-0 text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border ${
+                                a.rfidReadThisSession
+                                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-700'
+                                  : 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-700'
+                              }`}
+                            >
+                              {a.rfidReadThisSession ? 'Read' : 'Not read'}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{a.barcode || a.assetId || a.id}</p>
                         {a.status && (
                           <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mt-1">{a.status}</p>

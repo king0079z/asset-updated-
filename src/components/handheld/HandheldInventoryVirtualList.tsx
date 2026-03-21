@@ -45,8 +45,8 @@ export type HandheldInventoryVirtualListProps = {
   setAuditCommentText: (s: string) => void;
   setAuditCommentImagePreview: (s: string | null) => void;
   auditCommentImageInputRef: RefObject<HTMLInputElement | null>;
-  /** Tap to open full list of assets registered to the current count floor/room */
-  onViewRoomCatalog?: () => void;
+  /** Tap to open full list of assets registered to the current count floor/room; optional RFID vs this session */
+  onViewRoomCatalog?: (opts?: { withRfidStatus?: boolean }) => void;
 };
 
 function InventoryRow({
@@ -338,7 +338,7 @@ function InventoryRow({
                 className="h-8 shrink-0 rounded-lg px-2 gap-1 border-emerald-400/80 bg-white/80 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 hover:bg-emerald-100 dark:hover:bg-emerald-900/70 text-[11px] font-semibold"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onViewRoomCatalog();
+                  onViewRoomCatalog({ withRfidStatus: true });
                 }}
               >
                 <List className="h-3.5 w-3.5" />
