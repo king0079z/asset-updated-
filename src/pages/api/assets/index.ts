@@ -41,7 +41,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           roleData = null;
         }
         if (roleData) {
-          isAdminOrManagerUser = roleData.role === 'ADMIN' || roleData.role === 'MANAGER' || roleData.isAdmin === true;
+          // HANDHELD role gets org-wide asset visibility (same as managers) so reconciliation
+          // can correctly match every scanned item against the full org catalogue.
+          isAdminOrManagerUser = roleData.role === 'ADMIN' || roleData.role === 'MANAGER' || roleData.role === 'HANDHELD' || roleData.isAdmin === true;
           organizationId = roleData.organizationId;
         }
       }

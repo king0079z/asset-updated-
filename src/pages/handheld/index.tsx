@@ -1740,7 +1740,7 @@ export default function HandheldHubPage() {
       if (from !== to) locationOverrideApplied = `Location corrected: ${from} → ${to}`;
     }
     try {
-      const res = await fetch('/api/assets?limit=5000', { credentials: 'include', cache: 'no-store' });
+      const res = await fetch('/api/assets?limit=5000', { credentials: 'include', cache: 'no-store', headers: { 'cache-control': 'no-cache' } });
       const list: { id: string; name?: string; barcode?: string; assetId?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }[] = res.ok ? await res.json() : [];
       const normF = normalizeLoc(sessionFloor || undefined);
       const normR = normalizeLoc(sessionRoom || undefined);
@@ -1750,41 +1750,95 @@ export default function HandheldHubPage() {
       if (scopeByLocation) {
         listForScope = list.filter((a) => inLocation(a.floorNumber, a.roomNumber));
       }
+      // Build lookup sets — primary by UUID, secondary by barcode/assetId for legacy/cross-user assets
       const expectedIds = new Set(list.map((a) => a.id));
+      const expectedByBarcode = new Map<string, { id: string; name?: string; barcode?: string; assetId?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }>();
+      list.forEach((a) => {
+        if (a.barcode) expectedByBarcode.set(a.barcode.toLowerCase(), a);
+        if (a.assetId) expectedByBarcode.set(a.assetId.toLowerCase(), a);
+      });
+
       const scannedIds = new Set<string>();
       const scannedByKey = new Map<string, CountScanItem>();
       countScansForReconciliation.forEach((s) => {
+        // For raw scans: key by barcode/name; for resolved: key by UUID
         const key = s.id.startsWith('raw-') ? (s.barcode || s.name || s.id).toLowerCase() : s.id;
         if (!s.id.startsWith('raw-')) scannedIds.add(s.id);
         if (!scannedByKey.has(key)) scannedByKey.set(key, s);
       });
-      const scannedInLocation = scopeByLocation
-        ? countScansForReconciliation.filter((s) => inLocation(s.floorNumber, s.roomNumber))
-        : countScansForReconciliation;
+
+      // Helper: is a scanned item "in system"? — check UUID first, then barcode fallback
+      const isInSystem = (s: CountScanItem): boolean => {
+        if (s.id.startsWith('raw-')) {
+          // Raw scan: check if barcode matches a known asset
+          const bk = (s.barcode || s.name || '').toLowerCase();
+          return bk ? expectedByBarcode.has(bk) : false;
+        }
+        return expectedIds.has(s.id);
+      };
+
+      // Resolve a scanned item to its system record (barcode fallback for raw scans)
+      const resolveSystemAsset = (s: CountScanItem) => {
+        if (!s.id.startsWith('raw-')) return null; // UUID already resolved
+        const bk = (s.barcode || s.name || '').toLowerCase();
+        return bk ? (expectedByBarcode.get(bk) ?? null) : null;
+      };
+
+      const actualInLoc = scopeByLocation
+        ? Array.from(scannedByKey.values()).filter((s) => inLocation(s.floorNumber, s.roomNumber)).length
+        : scannedByKey.size;
       const expectedInLoc = listForScope.length;
-      const actualInLoc = scopeByLocation ? Array.from(scannedByKey.entries()).filter(([, s]) => inLocation(s.floorNumber, s.roomNumber)).length : scannedByKey.size;
-      const missing = listForScope.filter((a) => !scannedIds.has(a.id) && !scannedByKey.has((a.barcode || a.assetId || '').toLowerCase()));
-      // Truly extra = scanned but NOT in system at all
-      const trulyExtra = Array.from(scannedByKey.values()).filter((s) => s.id.startsWith('raw-') || !expectedIds.has(s.id));
-      // Wrong location = scanned, exists in system, but system location differs from session location
+
+      // Missing = expected at location but not in any scanned item
+      const missing = listForScope.filter((a) => {
+        if (scannedIds.has(a.id)) return false;
+        if (a.barcode && scannedByKey.has(a.barcode.toLowerCase())) return false;
+        if (a.assetId && scannedByKey.has(a.assetId.toLowerCase())) return false;
+        return true;
+      });
+
+      // Truly extra = scanned but NOT in system at all (not resolvable by UUID or barcode)
+      const trulyExtra = Array.from(scannedByKey.values()).filter((s) => !isInSystem(s));
+
+      // Wrong location = scanned, in system, but registered at a DIFFERENT location than session
       const wrongLocation = scopeByLocation
-        ? Array.from(scannedByKey.values()).filter((s) => !s.id.startsWith('raw-') && expectedIds.has(s.id) && !inLocation(s.floorNumber, s.roomNumber))
+        ? Array.from(scannedByKey.values()).filter((s) => {
+            if (!isInSystem(s)) return false;
+            // For raw scans resolved by barcode, use the system asset's location
+            const systemAsset = resolveSystemAsset(s);
+            const fl = systemAsset ? systemAsset.floorNumber : s.floorNumber;
+            const rm = systemAsset ? systemAsset.roomNumber : s.roomNumber;
+            return !inLocation(fl, rm);
+          })
         : [];
+
       const locationDisplay = scopeByLocation ? [sessionFloor || null, sessionRoom || null].filter(Boolean).join(', ') || 'This location' : undefined;
       setReconcileShowMissing(false);
       setReconcileShowExtra(false);
       setReconcileShowMissingByLocation(false);
       const missingList = missing.slice(0, 100).map((a) => ({ id: a.id, name: a.name || a.assetId || a.id, barcode: a.barcode, floorNumber: a.floorNumber, roomNumber: a.roomNumber, lastMovedAt: a.lastMovedAt }));
+
+      // Correct in room = scanned, in system, registered at the session location
       const correctInRoomScans = scopeByLocation
-        ? countScansForReconciliation.filter((s) => !s.id.startsWith('raw-') && expectedIds.has(s.id) && inLocation(s.floorNumber, s.roomNumber))
-        : countScansForReconciliation.filter((s) => !s.id.startsWith('raw-') && expectedIds.has(s.id));
-      const correctInRoomList = correctInRoomScans.slice(0, 200).map((s) => ({
-        id: s.id,
-        name: s.name || s.barcode || s.id,
-        barcode: s.barcode,
-        floorNumber: s.floorNumber,
-        roomNumber: s.roomNumber,
-      }));
+        ? Array.from(scannedByKey.values()).filter((s) => {
+            if (!isInSystem(s)) return false;
+            const systemAsset = resolveSystemAsset(s);
+            const fl = systemAsset ? systemAsset.floorNumber : s.floorNumber;
+            const rm = systemAsset ? systemAsset.roomNumber : s.roomNumber;
+            return inLocation(fl, rm);
+          })
+        : Array.from(scannedByKey.values()).filter((s) => isInSystem(s));
+
+      const correctInRoomList = correctInRoomScans.slice(0, 200).map((s) => {
+        const sysAsset = resolveSystemAsset(s);
+        return {
+          id: sysAsset?.id || s.id,
+          name: s.name || sysAsset?.name || s.barcode || s.id,
+          barcode: s.barcode,
+          floorNumber: sysAsset?.floorNumber ?? s.floorNumber,
+          roomNumber: sysAsset?.roomNumber ?? s.roomNumber,
+        };
+      });
       setReconciliationResult({
         expectedCount: scopeByLocation ? expectedInLoc : list.length,
         actualCount: scopeByLocation ? actualInLoc : scannedByKey.size,
@@ -1795,7 +1849,16 @@ export default function HandheldHubPage() {
         difference: scopeByLocation ? expectedInLoc - actualInLoc : undefined,
         missing: missingList,
         extra: trulyExtra.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, floorNumber: s.floorNumber, roomNumber: s.roomNumber })),
-        wrongLocation: wrongLocation.slice(0, 100).map((s) => ({ id: s.id, name: s.name, barcode: s.barcode, systemFloor: s.floorNumber, systemRoom: s.roomNumber })),
+        wrongLocation: wrongLocation.slice(0, 100).map((s) => {
+          const sysAsset = resolveSystemAsset(s);
+          return {
+            id: sysAsset?.id || s.id,
+            name: s.name || sysAsset?.name || s.barcode || s.id,
+            barcode: s.barcode,
+            systemFloor: sysAsset?.floorNumber ?? s.floorNumber,
+            systemRoom: sysAsset?.roomNumber ?? s.roomNumber,
+          };
+        }),
         correctInRoom: correctInRoomList,
         submittedForReview: false,
         locationOverrideApplied,
@@ -2832,183 +2895,279 @@ export default function HandheldHubPage() {
                       {reconciliationLoading ? 'Comparing…' : 'Start reconciliation'}
                     </Button>
                   </div>
-                  {reconciliationResult && (
-                    <div className="p-4 sm:p-5">
-                      <div className="rounded-3xl border border-slate-200/90 dark:border-slate-700 bg-gradient-to-b from-white to-slate-50/90 dark:from-slate-900 dark:to-slate-950 shadow-xl overflow-hidden">
-                        <div className="px-5 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800 bg-violet-50/50 dark:bg-violet-950/25">
-                          <div className="flex items-start gap-3">
-                            <div className="h-12 w-12 rounded-2xl bg-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/20">
-                              <Scale className="h-6 w-6 text-white" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Room reconciliation</h3>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
-                                <MapPin className="h-3.5 w-3.5 shrink-0 text-violet-600" />
-                                {reconciliationResult.locationDisplay ? (
-                                  <>RFID vs system for <span className="font-semibold text-slate-800 dark:text-slate-200">{reconciliationResult.locationDisplay}</span></>
-                                ) : (
-                                  'RFID vs system (all locations)'
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          {reconciliationResult.locationOverrideApplied && (
-                            <p className="text-xs text-amber-900 dark:text-amber-100 mt-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2">
-                              {reconciliationResult.locationOverrideApplied}
-                            </p>
-                          )}
+                  {reconciliationResult && (() => {
+                    const hasIssues =
+                      reconciliationResult.missing.length > 0 ||
+                      (reconciliationResult.wrongLocation || []).length > 0 ||
+                      reconciliationResult.extra.length > 0;
+                    const wrongLoc = reconciliationResult.wrongLocation || [];
+                    const inRoom = reconciliationResult.correctInRoom || [];
+                    return (
+                    <div className="pt-1 pb-4 px-3 sm:px-4 space-y-3">
+
+                      {/* ── Header strip ─────────────────────────────── */}
+                      <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-700 px-4 py-3.5 flex items-center gap-3 shadow-lg shadow-violet-500/25">
+                        <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                          <Scale className="h-5 w-5 text-white" />
                         </div>
-
-                        {reconciliationResult.missing.length === 0 &&
-                          (reconciliationResult.wrongLocation || []).length === 0 &&
-                          reconciliationResult.extra.length === 0 && (
-                          <div className="mx-5 mt-4 rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 flex items-center gap-3">
-                            <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <div>
-                              <p className="font-bold text-emerald-900 dark:text-emerald-100">All clear</p>
-                              <p className="text-sm text-emerald-700 dark:text-emerald-300">No missing items, no wrong-room tags, no unknown scans.</p>
-                            </div>
-                          </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-white leading-snug">
+                            {reconciliationResult.locationDisplay
+                              ? `Floor ${reconciliationResult.locationDisplay.split(',')[0]?.trim()}, Room ${reconciliationResult.locationDisplay.split(',')[1]?.trim() || reconciliationResult.locationDisplay}`
+                              : 'Full inventory reconciliation'}
+                          </p>
+                          <p className="text-[11px] text-violet-200 mt-0.5">
+                            {countScansForReconciliation.length} scanned · {reconciliationResult.expectedCount} expected in system
+                          </p>
+                        </div>
+                        {/* status pill */}
+                        {!hasIssues ? (
+                          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-400/25 text-emerald-100 text-[11px] font-bold">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> All clear
+                          </span>
+                        ) : (
+                          <span className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-400/25 text-amber-100 text-[11px] font-bold">
+                            <AlertCircle className="h-3.5 w-3.5" /> {reconciliationResult.missing.length + wrongLoc.length + reconciliationResult.extra.length} issues
+                          </span>
                         )}
+                      </div>
 
-                        <section className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-                          <h4 className="text-[11px] font-bold uppercase tracking-wider text-amber-900 dark:text-amber-100 mb-2 flex items-center gap-2">
-                            <span className="inline-flex h-6 min-w-[1.5rem] px-1 items-center justify-center rounded-lg bg-amber-500 text-white text-xs font-bold tabular-nums">{reconciliationResult.missing.length}</span>
-                            Missing from this room
-                          </h4>
-                          {reconciliationResult.missing.length === 0 ? (
-                            <p className="text-sm text-emerald-700 dark:text-emerald-300">None — every asset expected here was scanned.</p>
-                          ) : (
-                            <ul className="space-y-2 max-h-52 overflow-y-auto">
-                              {reconciliationResult.missing.map((m) => (
-                                <li key={m.id} className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/90 dark:bg-amber-950/25 px-3 py-2.5 flex justify-between gap-2">
-                                  <span className="text-sm font-medium text-amber-950 dark:text-amber-50 truncate">{m.name || m.barcode || m.id}</span>
-                                  <span className="text-xs text-amber-800 dark:text-amber-200 shrink-0 tabular-nums">Fl {m.floorNumber ?? '—'} · Rm {m.roomNumber ?? '—'}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </section>
+                      {/* ── All-clear banner ─────────────────────────── */}
+                      {!hasIssues && (
+                        <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-50/40 dark:from-emerald-950/40 dark:to-emerald-950/10 px-4 py-3.5 flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-emerald-900 dark:text-emerald-100 text-sm">Perfect — every asset accounted for</p>
+                            <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">No missing items, no wrong-room tags, no unknown scans.</p>
+                          </div>
+                        </div>
+                      )}
 
-                        <section className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-                          <h4 className="text-[11px] font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-100 mb-2 flex items-center gap-2">
-                            <span className="inline-flex h-6 min-w-[1.5rem] px-1 items-center justify-center rounded-lg bg-emerald-500 text-white text-xs font-bold tabular-nums">{(reconciliationResult.correctInRoom || []).length}</span>
-                            Scanned & registered in this room
-                          </h4>
-                          {(reconciliationResult.correctInRoom || []).length === 0 ? (
-                            <p className="text-sm text-slate-500 dark:text-slate-400">None</p>
-                          ) : (
-                            <ul className="space-y-2 max-h-52 overflow-y-auto">
-                              {(reconciliationResult.correctInRoom || []).map((c) => (
-                                <li key={c.id} className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/20 px-3 py-2.5 flex items-center gap-2">
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                                  <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </section>
+                      {/* ── MISSING section ──────────────────────────── */}
+                      {reconciliationResult.missing.length > 0 && (
+                        <div className="rounded-2xl overflow-hidden border border-amber-200 dark:border-amber-800 shadow-sm">
+                          {/* section header */}
+                          <div className="flex items-center gap-2.5 px-4 py-2.5 bg-amber-500 dark:bg-amber-600">
+                            <AlertCircle className="h-4 w-4 text-white shrink-0" />
+                            <p className="text-xs font-bold text-white uppercase tracking-wider flex-1">Missing from this room</p>
+                            <span className="h-6 min-w-[1.5rem] px-1.5 rounded-lg bg-white/25 text-white text-xs font-black flex items-center justify-center tabular-nums">
+                              {reconciliationResult.missing.length}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-amber-900 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 border-b border-amber-100 dark:border-amber-900">
+                            System expects these assets in this room — RFID did not read them.
+                          </p>
+                          <ul className="divide-y divide-amber-100 dark:divide-amber-900/40 bg-white dark:bg-slate-900 max-h-64 overflow-y-auto">
+                            {reconciliationResult.missing.map((m) => (
+                              <li key={m.id} className="flex items-center gap-3 px-4 py-3">
+                                <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+                                  <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{m.name || m.barcode || m.id}</p>
+                                  {m.barcode && <p className="text-[11px] text-slate-500 font-mono mt-0.5">{m.barcode}</p>}
+                                </div>
+                                <span className="shrink-0 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg px-2 py-0.5 tabular-nums">
+                                  Fl {m.floorNumber ?? '—'} · {m.roomNumber ?? '—'}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
-                        {(reconciliationResult.wrongLocation || []).length > 0 && (
-                        <section className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-                          <h4 className="text-[11px] font-bold uppercase tracking-wider text-orange-950 dark:text-orange-100 mb-2 flex items-center gap-2">
-                            <span className="inline-flex h-6 min-w-[1.5rem] px-1 items-center justify-center rounded-lg bg-orange-500 text-white text-xs font-bold tabular-nums">{(reconciliationResult.wrongLocation || []).length}</span>
-                            Scanned here · registered in another room
-                          </h4>
-                          <ul className="space-y-3 max-h-72 overflow-y-auto">
-                            {(reconciliationResult.wrongLocation || []).map((w) => (
-                              <li key={w.id} className="rounded-xl border-2 border-orange-300 dark:border-orange-700 bg-gradient-to-br from-orange-50 to-amber-50/80 dark:from-orange-950/40 dark:to-amber-950/20 p-3 shadow-sm">
-                                <p className="text-sm font-semibold text-orange-950 dark:text-orange-50">{w.name || w.barcode || w.id}</p>
-                                <div className="mt-2 rounded-lg bg-white/80 dark:bg-slate-900/50 border border-orange-200/80 dark:border-orange-800/80 px-3 py-2 space-y-1">
-                                  <p className="text-xs text-orange-900 dark:text-orange-100">
-                                    <span className="font-bold">Registered location</span>
-                                    <span className="block mt-0.5">Floor {w.systemFloor ?? '—'}, Room {w.systemRoom ?? '—'}</span>
-                                  </p>
-                                  <p className="text-[11px] text-orange-700 dark:text-orange-300">
-                                    You scanned in: {reconciliationResult.locationDisplay || [inventorySessionFloor, inventorySessionRoom].filter(Boolean).join(', ') || 'this count'}
-                                  </p>
+                      {/* ── CORRECT IN ROOM section ──────────────────── */}
+                      {inRoom.length > 0 && (
+                        <div className="rounded-2xl overflow-hidden border border-emerald-200 dark:border-emerald-800 shadow-sm">
+                          <div className="flex items-center gap-2.5 px-4 py-2.5 bg-emerald-500 dark:bg-emerald-600">
+                            <CheckCircle2 className="h-4 w-4 text-white shrink-0" />
+                            <p className="text-xs font-bold text-white uppercase tracking-wider flex-1">Scanned &amp; registered here</p>
+                            <span className="h-6 min-w-[1.5rem] px-1.5 rounded-lg bg-white/25 text-white text-xs font-black flex items-center justify-center tabular-nums">
+                              {inRoom.length}
+                            </span>
+                          </div>
+                          <ul className="divide-y divide-emerald-100 dark:divide-emerald-900/30 bg-white dark:bg-slate-900 max-h-56 overflow-y-auto">
+                            {inRoom.map((c) => (
+                              <li key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name}</p>
+                                  {c.barcode && <p className="text-[11px] text-slate-400 font-mono">{c.barcode}</p>}
+                                </div>
+                                <span className="shrink-0 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 uppercase tracking-wide">
+                                  In room
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* ── WRONG LOCATION section ───────────────────── */}
+                      {wrongLoc.length > 0 && (
+                        <div className="rounded-2xl overflow-hidden border-2 border-orange-300 dark:border-orange-700 shadow-md">
+                          <div className="flex items-center gap-2.5 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500">
+                            <MapPin className="h-4 w-4 text-white shrink-0" />
+                            <p className="text-xs font-bold text-white uppercase tracking-wider flex-1">Scanned here — registered elsewhere</p>
+                            <span className="h-6 min-w-[1.5rem] px-1.5 rounded-lg bg-white/25 text-white text-xs font-black flex items-center justify-center tabular-nums">
+                              {wrongLoc.length}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-orange-900 dark:text-orange-100 bg-orange-50 dark:bg-orange-950/40 px-4 py-2 border-b border-orange-100 dark:border-orange-900">
+                            These tags were read in this room but their registered location in the system is different.
+                          </p>
+                          <ul className="divide-y divide-orange-100 dark:divide-orange-900/40 bg-white dark:bg-slate-900 max-h-80 overflow-y-auto">
+                            {wrongLoc.map((w) => (
+                              <li key={w.id} className="px-4 py-3 space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{w.name || w.barcode || w.id}</p>
+                                    {w.barcode && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{w.barcode}</p>}
+                                  </div>
+                                </div>
+                                {/* location comparison pill */}
+                                <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                                  <div className="flex items-center gap-1 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-lg px-2 py-1">
+                                    <MapPin className="h-3 w-3 text-orange-600 shrink-0" />
+                                    <span className="text-orange-900 dark:text-orange-100 font-medium">
+                                      Registered: Fl {w.systemFloor ?? '—'}, Rm {w.systemRoom ?? '—'}
+                                    </span>
+                                  </div>
+                                  <span className="text-slate-400">→</span>
+                                  <div className="flex items-center gap-1 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800 rounded-lg px-2 py-1">
+                                    <Radio className="h-3 w-3 text-violet-600 shrink-0" />
+                                    <span className="text-violet-900 dark:text-violet-100 font-medium">
+                                      Scanned: {reconciliationResult.locationDisplay || [inventorySessionFloor, inventorySessionRoom].filter(Boolean).join(', ') || 'here'}
+                                    </span>
+                                  </div>
                                 </div>
                                 <Button
                                   type="button"
                                   size="sm"
                                   variant="outline"
-                                  className="w-full mt-2 rounded-lg h-9 border-orange-500 text-orange-900 dark:text-orange-100 font-medium"
+                                  className="w-full h-8 rounded-xl border-orange-400 text-orange-800 dark:text-orange-200 text-xs font-semibold gap-1.5"
                                   onClick={() => {
                                     setReconcileEditLocationAsset({ id: w.id, name: w.name, floorNumber: w.systemFloor, roomNumber: w.systemRoom });
                                     reconcileEditLocationForm.reset({ floorNumber: w.systemFloor || '', roomNumber: w.systemRoom || '' });
                                   }}
                                 >
-                                  <MapPin className="h-3.5 w-3.5 mr-1.5" /> Change registered room
+                                  <MapPin className="h-3.5 w-3.5" /> Update registered room
                                 </Button>
                               </li>
                             ))}
                           </ul>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full mt-3 rounded-xl border-orange-400 text-orange-900 dark:text-orange-100"
-                            onClick={async () => {
-                              const sessionFloor = inventorySessionFloor.trim();
-                              const sessionRoom = inventorySessionRoom.trim();
-                              if (!sessionFloor || !sessionRoom) { toast({ title: 'Set count floor & room first', variant: 'destructive' }); return; }
-                              let moved = 0;
-                              for (const e of (reconciliationResult.wrongLocation || [])) {
-                                try {
-                                  const r = await fetch(`/api/assets/${e.id}/move`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ floorNumber: sessionFloor, roomNumber: sessionRoom }) });
-                                  if (r.ok) moved++;
-                                } catch { /* skip */ }
-                              }
-                              if (moved > 0) {
-                                toast({ title: 'Locations updated', description: `${moved} item(s) now registered to Floor ${sessionFloor}, Room ${sessionRoom}.` });
-                                void runReconciliation();
-                              } else toast({ title: 'Could not move items', variant: 'destructive' });
-                            }}
-                          >
-                            Register all listed above to this count room
-                          </Button>
-                        </section>
-                        )}
+                          {/* bulk move */}
+                          {(inventorySessionFloor.trim() || inventorySessionRoom.trim()) && (
+                            <div className="bg-orange-50/80 dark:bg-orange-950/20 border-t border-orange-200 dark:border-orange-800 px-4 py-3">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full rounded-xl border-orange-400 text-orange-900 dark:text-orange-100 font-semibold text-xs h-9 gap-1.5"
+                                onClick={async () => {
+                                  const sessionFloor = inventorySessionFloor.trim();
+                                  const sessionRoom = inventorySessionRoom.trim();
+                                  if (!sessionFloor || !sessionRoom) { toast({ title: 'Set count floor & room first', variant: 'destructive' }); return; }
+                                  let moved = 0;
+                                  for (const e of wrongLoc) {
+                                    try {
+                                      const r = await fetch(`/api/assets/${e.id}/move`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ floorNumber: sessionFloor, roomNumber: sessionRoom }) });
+                                      if (r.ok) moved++;
+                                    } catch { /* skip */ }
+                                  }
+                                  if (moved > 0) {
+                                    toast({ title: 'Locations updated', description: `${moved} item(s) now registered to Floor ${sessionFloor}, Room ${sessionRoom}.` });
+                                    void runReconciliation();
+                                  } else toast({ title: 'Could not move items', variant: 'destructive' });
+                                }}
+                              >
+                                <MapPin className="h-3.5 w-3.5" /> Move all {wrongLoc.length} to this count room
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                        {reconciliationResult.extra.length > 0 && (
-                        <section className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-                          <h4 className="text-[11px] font-bold uppercase tracking-wider text-red-900 dark:text-red-100 mb-2">Not in system ({reconciliationResult.extra.length})</h4>
-                          <p className="text-xs text-red-800 dark:text-red-200 mb-2">Tag read but no matching asset — register or ignore.</p>
-                          <ul className="space-y-2 max-h-40 overflow-y-auto">
+                      {/* ── NOT IN SYSTEM section ────────────────────── */}
+                      {reconciliationResult.extra.length > 0 && (
+                        <div className="rounded-2xl overflow-hidden border border-red-200 dark:border-red-900 shadow-sm">
+                          <div className="flex items-center gap-2.5 px-4 py-2.5 bg-red-500 dark:bg-red-600">
+                            <AlertCircle className="h-4 w-4 text-white shrink-0" />
+                            <p className="text-xs font-bold text-white uppercase tracking-wider flex-1">Unknown tags</p>
+                            <span className="h-6 min-w-[1.5rem] px-1.5 rounded-lg bg-white/25 text-white text-xs font-black flex items-center justify-center tabular-nums">
+                              {reconciliationResult.extra.length}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-red-900 dark:text-red-100 bg-red-50/80 dark:bg-red-950/30 px-4 py-2 border-b border-red-100 dark:border-red-900">
+                            Tag read but no matching asset found — may need to be registered.
+                          </p>
+                          <ul className="divide-y divide-red-100 dark:divide-red-900/30 bg-white dark:bg-slate-900 max-h-40 overflow-y-auto">
                             {reconciliationResult.extra.map((e) => (
-                              <li key={e.id} className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50/90 dark:bg-red-950/25 px-3 py-2 text-sm font-medium text-red-950 dark:text-red-50">{e.name || e.barcode || e.id}</li>
+                              <li key={e.id} className="flex items-center gap-3 px-4 py-2.5">
+                                <div className="h-7 w-7 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center shrink-0">
+                                  <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                                </div>
+                                <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{e.name || e.barcode || e.id}</span>
+                              </li>
                             ))}
                           </ul>
-                        </section>
-                        )}
+                        </div>
+                      )}
 
-                        {!reconciliationResult.submittedForReview ? (
-                          <div className="px-5 py-4 space-y-3 bg-slate-50/95 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800">
+                      {/* ── Submit / Submitted ───────────────────────── */}
+                      {!reconciliationResult.submittedForReview ? (
+                        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+                          <div className="px-4 pt-4 pb-3 space-y-3">
                             <div>
-                              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Note (optional)</label>
+                              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Note for managers (optional)</label>
                               <Textarea
-                                placeholder="Add context for managers…"
+                                placeholder="e.g. South-west corner not reached; re-count needed for aisle 3"
                                 value={countReviewNote}
                                 onChange={(e) => setCountReviewNote(e.target.value)}
-                                className="mt-1 min-h-[72px] rounded-xl resize-none text-sm"
+                                className="mt-1.5 min-h-[64px] rounded-xl resize-none text-sm border-slate-200 dark:border-slate-700"
                               />
                             </div>
-                            <Button className="w-full h-12 rounded-xl gap-2 font-bold bg-violet-600 hover:bg-violet-700 shadow-lg text-white" onClick={submitCountForReview}>
-                              <ClipboardList className="h-5 w-5 shrink-0" /> Submit inventory report
+                            <Button
+                              className="w-full h-13 rounded-xl gap-2.5 font-bold bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 shadow-lg shadow-violet-500/30 text-white text-sm"
+                              onClick={submitCountForReview}
+                            >
+                              <ClipboardList className="h-5 w-5 shrink-0" />
+                              Submit inventory report
                             </Button>
-                            <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 leading-relaxed">
-                              Report includes missing items, items OK in this room, wrong-room items (with registered locations), and unknown scans.
+                          </div>
+                          <div className="px-4 pb-3">
+                            <div className="flex gap-3 flex-wrap">
+                              {[
+                                { color: 'amber', label: `${reconciliationResult.missing.length} missing` },
+                                { color: 'emerald', label: `${inRoom.length} verified` },
+                                { color: 'orange', label: `${wrongLoc.length} wrong room` },
+                                { color: 'red', label: `${reconciliationResult.extra.length} unknown` },
+                              ].map(({ color, label }) => (
+                                <span key={label} className={`text-[11px] font-medium px-2 py-0.5 rounded-full bg-${color}-100 dark:bg-${color}-950/40 text-${color}-800 dark:text-${color}-200`}>
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-slate-900 px-4 py-4 flex items-start gap-3 shadow-sm">
+                          <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100">Report submitted</p>
+                            <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                              Missing items now appear on the dashboard and manager report page.
                             </p>
                           </div>
-                        ) : (
-                          <div className="px-5 py-4 flex items-start gap-3 bg-emerald-50/90 dark:bg-emerald-950/30 border-t border-emerald-200 dark:border-emerald-800">
-                            <CheckCircle2 className="h-6 w-6 text-emerald-600 shrink-0 mt-0.5" />
-                            <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">Report submitted. Missing items appear on the dashboard and asset pages.</p>
-                          </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </section>
               </div>
             )}

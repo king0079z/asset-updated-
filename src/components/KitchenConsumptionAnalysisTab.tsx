@@ -265,8 +265,8 @@ export function KitchenConsumptionAnalysisTab() {
     fetch("/api/kitchens")
       .then(r => r.json())
       .then(data => {
-        setKitchens(data);
-        if (data.length > 0) setActiveKitchenId(data[0].id);
+      setKitchens(data);
+      if (data.length > 0) setActiveKitchenId(data[0].id);
       });
   }, []);
 
@@ -274,7 +274,7 @@ export function KitchenConsumptionAnalysisTab() {
   useEffect(() => {
     if (!activeKitchenId) return;
     if (analyticsMap[activeKitchenId] && refreshKey === 0) { setLoading(false); return; }
-    setLoading(true);
+      setLoading(true);
 
     fetch(`/api/kitchens/consumption-details?kitchenId=${activeKitchenId}`)
       .then(r => r.ok ? r.json() : null)
@@ -312,7 +312,7 @@ export function KitchenConsumptionAnalysisTab() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKitchenId, kitchens, refreshKey]);
 
   /* ── Fetch AI analysis ──────────────────────────────────────────────────── */
@@ -359,7 +359,7 @@ export function KitchenConsumptionAnalysisTab() {
     );
   }
 
-  return (
+    return (
     <div className="space-y-6">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
@@ -372,7 +372,7 @@ export function KitchenConsumptionAnalysisTab() {
             <div className="flex items-center gap-2 mb-1.5">
               <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center">
                 <BarChart3 className="h-4 w-4 text-white" />
-              </div>
+      </div>
               <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/70">Kitchen Analytics</span>
               <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-emerald-200 bg-emerald-900/40 px-2 py-0.5 rounded-full border border-emerald-500/30">
                 <span className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse" /> Live
@@ -530,10 +530,10 @@ export function KitchenConsumptionAnalysisTab() {
               <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                 {a.recipes.length} recipe{a.recipes.length !== 1 ? 's' : ''}
               </span>
-            </div>
-            <PrintKitchenConsumptionReportButton
-              kitchenId={a.kitchen.id}
-              kitchenName={a.kitchen.name}
+      </div>
+              <PrintKitchenConsumptionReportButton
+                kitchenId={a.kitchen.id}
+                kitchenName={a.kitchen.name}
               details={[
                 ...a.mostUsedIngredients.map(ing => ({ name: ing.name, unit: ing.unit, totalQuantity: ing.totalUsed, consumptions: [] })),
                 ...a.leastUsedIngredients.filter(ing => !a.mostUsedIngredients.some(m => m.name === ing.name)).map(ing => ({ name: ing.name, unit: ing.unit, totalQuantity: ing.totalUsed, consumptions: [] })),
@@ -638,7 +638,7 @@ export function KitchenConsumptionAnalysisTab() {
                   <InsightCard key={i.id} insight={i} />
                 ))}
               </div>
-            </div>
+              </div>
 
             {/* API-based AI insights */}
             {aiLoading && (
@@ -729,14 +729,14 @@ export function KitchenConsumptionAnalysisTab() {
                 )}
               </div>
             )}
-          </div>
+              </div>
 
           {/* ── Ingredient Usage ──────────────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Most used */}
             <div className="rounded-2xl border border-border bg-card p-4">
               <SectionHdr icon={TrendingUp} title="Top Used Ingredients" badge={`${a.mostUsedIngredients.length}`} color="emerald" />
-              {a.mostUsedIngredients.length === 0 ? (
+                    {a.mostUsedIngredients.length === 0 ? (
                 <div className="flex flex-col items-center py-8 text-muted-foreground">
                   <Package className="h-8 w-8 mb-2 opacity-20" />
                   <p className="text-sm">No ingredient data</p>
@@ -808,9 +808,9 @@ export function KitchenConsumptionAnalysisTab() {
                 <p className="text-xs mt-1 opacity-60">Use recipes in kitchens to see performance metrics</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+                    <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
+                        <thead>
                     <tr className="border-b-2 border-border">
                       <th className="text-left py-2.5 pr-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Recipe</th>
                       <th className="text-center py-2.5 px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Servings</th>
@@ -819,9 +819,9 @@ export function KitchenConsumptionAnalysisTab() {
                       <th className="text-right py-2.5 px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Profit</th>
                       <th className="text-center py-2.5 px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Margin</th>
                       <th className="text-right py-2.5 pl-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Waste</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                          </tr>
+                        </thead>
+                        <tbody>
                     {[...a.recipes].sort((x, y) => y.totalProfit - x.totalProfit).map((r, idx) => {
                       const mg = (r.totalCost + r.totalProfit) > 0 ? (r.totalProfit / (r.totalCost + r.totalProfit)) * 100 : 0;
                       const isTop = idx === 0 && r.totalProfit > 0;
@@ -850,12 +850,12 @@ export function KitchenConsumptionAnalysisTab() {
                               </div>
                               <span className="text-[10px] font-bold">{mg.toFixed(1)}%</span>
                             </div>
-                          </td>
+                              </td>
                           <td className="py-3 pl-3 text-right">
                             <span className={`text-xs ${r.totalWaste > 0 ? 'text-red-500 font-semibold' : 'text-muted-foreground'}`}>
                               {r.totalWaste?.toFixed(2) ?? '0.00'}
-                            </span>
-                          </td>
+                                  </span>
+                                </td>
                         </tr>
                       );
                     })}
@@ -870,10 +870,10 @@ export function KitchenConsumptionAnalysisTab() {
                         <td className="py-2 px-3 text-right text-xs font-bold text-emerald-600">QAR {a.recipes.reduce((s, r) => s + r.totalProfit, 0).toFixed(2)}</td>
                         <td className="py-2 px-3" />
                         <td className="py-2 pl-3 text-right text-xs font-bold text-red-500">{a.recipes.reduce((s, r) => s + (r.totalWaste ?? 0), 0).toFixed(2)}</td>
-                      </tr>
+                              </tr>
                     </tfoot>
-                  )}
-                </table>
+                          )}
+                      </table>
               </div>
             )}
           </div>
@@ -889,7 +889,7 @@ export function KitchenConsumptionAnalysisTab() {
           </div>
           <p className="font-semibold">No data for this kitchen</p>
           <p className="text-xs mt-1 opacity-60">Record some consumption or recipe usage to see analytics</p>
-        </div>
+            </div>
       )}
 
     </div>
