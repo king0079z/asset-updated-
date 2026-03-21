@@ -3,7 +3,15 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { getSessionSafe } from '@/util/supabase/require-auth';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '4mb',
+    },
+  },
+};
+
+async function handleSubmitReview(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -138,4 +146,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Always return success — report submission is best-effort server-side
   return res.status(200).json({ success: true, auditLogId });
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    await handleSubmitReview(req, res);
+  } catch (fatal) {
+    console.error('[submit-review] fatal unhandled error:', fatal instanceof Error ? fatal.message : String(fatal));
+    if (!res.headersSent) {
+      res.setHeader('X-Submit-Error', String(fatal instanceof Error ? fatal.message : fatal).slice(0, 200));
+      return res.status(200).json({ success: false, error: 'submission logged locally only' });
+    }
+  }
 }
