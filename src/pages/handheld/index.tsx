@@ -333,6 +333,20 @@ export default function HandheldHubPage() {
   } | null>(null);
   const [reconcileEditLocationAsset, setReconcileEditLocationAsset] = useState<{ id: string; name: string; floorNumber?: string | null; roomNumber?: string | null } | null>(null);
   const [reconcileEditLocationSaving, setReconcileEditLocationSaving] = useState(false);
+  /** Missing-item movement history (reconciliation) */
+  const [reconcileMissingMoveDialog, setReconcileMissingMoveDialog] = useState<{ id: string; name: string } | null>(null);
+  const [reconcileMoveHistoryLoading, setReconcileMoveHistoryLoading] = useState(false);
+  const [reconcileMoveHistoryItems, setReconcileMoveHistoryItems] = useState<
+    Array<{
+      id: string;
+      movedAt: Date | string;
+      fromFloor?: string | null;
+      toFloor?: string | null;
+      fromRoom?: string | null;
+      toRoom?: string | null;
+      reason?: string | null;
+    }>
+  >([]);
   const reconcileEditLocationForm = useForm<z.infer<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),
     defaultValues: { floorNumber: '', roomNumber: '' },
@@ -1740,8 +1754,22 @@ export default function HandheldHubPage() {
       if (from !== to) locationOverrideApplied = `Location corrected: ${from} → ${to}`;
     }
     try {
-      const res = await fetch('/api/assets?limit=5000', { credentials: 'include', cache: 'no-store', headers: { 'cache-control': 'no-cache' } });
-      const list: { id: string; name?: string; barcode?: string; assetId?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }[] = res.ok ? await res.json() : [];
+      // Load FULL org catalogue: /api/assets caps limit at 2000 — paginate until exhausted.
+      const PAGE = 2000;
+      const list: { id: string; name?: string; barcode?: string; assetId?: string; floorNumber?: string | null; roomNumber?: string | null; lastMovedAt?: string | null }[] = [];
+      for (let off = 0, guard = 0; guard < 100; guard++) {
+        const res = await fetch(`/api/assets?limit=${PAGE}&offset=${off}&refresh=1`, {
+          credentials: 'include',
+          cache: 'no-store',
+          headers: { 'cache-control': 'no-cache' },
+        });
+        if (!res.ok) break;
+        const chunk = await res.json();
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        list.push(...chunk);
+        if (chunk.length < PAGE) break;
+        off += PAGE;
+      }
       const normF = normalizeLoc(sessionFloor || undefined);
       const normR = normalizeLoc(sessionRoom || undefined);
       const inLocation = (f: string | null | undefined, r: string | null | undefined) =>
@@ -1767,25 +1795,44 @@ export default function HandheldHubPage() {
         if (!scannedByKey.has(key)) scannedByKey.set(key, s);
       });
 
-      // Helper: is a scanned item "in system"? — check UUID first, then barcode fallback
+      // In system: UUID in catalogue, or raw/barcode match, or barcode confirms same asset id
       const isInSystem = (s: CountScanItem): boolean => {
         if (s.id.startsWith('raw-')) {
-          // Raw scan: check if barcode matches a known asset
           const bk = (s.barcode || s.name || '').toLowerCase();
           return bk ? expectedByBarcode.has(bk) : false;
         }
-        return expectedIds.has(s.id);
+        if (expectedIds.has(s.id)) return true;
+        if (s.barcode) {
+          const row = expectedByBarcode.get(s.barcode.toLowerCase());
+          if (row && row.id === s.id) return true;
+        }
+        return false;
       };
 
-      // Resolve a scanned item to its system record (barcode fallback for raw scans)
+      /** System row for location checks — always prefer DB row over scan cache */
       const resolveSystemAsset = (s: CountScanItem) => {
-        if (!s.id.startsWith('raw-')) return null; // UUID already resolved
-        const bk = (s.barcode || s.name || '').toLowerCase();
-        return bk ? (expectedByBarcode.get(bk) ?? null) : null;
+        if (s.id.startsWith('raw-')) {
+          const bk = (s.barcode || s.name || '').toLowerCase();
+          return bk ? (expectedByBarcode.get(bk) ?? null) : null;
+        }
+        const direct = list.find((a) => a.id === s.id);
+        if (direct) return direct;
+        if (s.barcode) {
+          const b = expectedByBarcode.get(s.barcode.toLowerCase());
+          if (b && b.id === s.id) return b;
+        }
+        return null;
       };
 
+      // Count scans whose *registered* system location matches this room (not stale UI cache)
       const actualInLoc = scopeByLocation
-        ? Array.from(scannedByKey.values()).filter((s) => inLocation(s.floorNumber, s.roomNumber)).length
+        ? Array.from(scannedByKey.values()).filter((s) => {
+            if (!isInSystem(s)) return false;
+            const sys = resolveSystemAsset(s);
+            const fl = sys?.floorNumber ?? s.floorNumber;
+            const rm = sys?.roomNumber ?? s.roomNumber;
+            return inLocation(fl, rm);
+          }).length
         : scannedByKey.size;
       const expectedInLoc = listForScope.length;
 
@@ -1868,8 +1915,8 @@ export default function HandheldHubPage() {
       pushInventoryAudit(
         'reconciliation',
         scopeByLocation
-          ? `loc=${locationDisplay || ''} sys=${expectedInLoc} scan=${actualInLoc} missing=${missingList.length} wrong_loc=${wrongLocation.length} unknown=${trulyExtra.length}`
-          : `all sys=${list.length} scan=${scannedByKey.size} missing=${missing.length} unknown=${trulyExtra.length}`,
+          ? `loc=${locationDisplay || ''} catalog=${list.length} sys=${expectedInLoc} scan=${actualInLoc} missing=${missingList.length} wrong_loc=${wrongLocation.length} unknown=${trulyExtra.length}`
+          : `catalog=${list.length} all sys=${list.length} scan=${scannedByKey.size} missing=${missing.length} unknown=${trulyExtra.length}`,
       );
       toast({
         title: 'Reconciliation complete',
@@ -2001,6 +2048,31 @@ export default function HandheldHubPage() {
       setReconcileEditLocationSaving(false);
     }
   }, [reconcileEditLocationAsset, reconcileEditLocationForm, toast]);
+
+  const openReconcileMissingMoveHistory = useCallback(
+    async (asset: { id: string; name: string }) => {
+      setReconcileMissingMoveDialog(asset);
+      setReconcileMoveHistoryLoading(true);
+      setReconcileMoveHistoryItems([]);
+      try {
+        const res = await fetch(`/api/assets/${encodeURIComponent(asset.id)}/movement-history`, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (!res.ok) {
+          toast({ title: 'Could not load movement history', variant: 'destructive' });
+          return;
+        }
+        const data = await res.json();
+        setReconcileMoveHistoryItems(Array.isArray(data) ? data : []);
+      } catch {
+        toast({ title: 'Could not load movement history', variant: 'destructive' });
+      } finally {
+        setReconcileMoveHistoryLoading(false);
+      }
+    },
+    [toast],
+  );
 
   const endCountSession = useCallback(() => {
     const total = unifiedInventory.length;
@@ -2957,21 +3029,33 @@ export default function HandheldHubPage() {
                             </span>
                           </div>
                           <p className="text-[11px] text-amber-900 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 border-b border-amber-100 dark:border-amber-900">
-                            System expects these assets in this room — RFID did not read them.
+                            Registered to this room in the system but not picked up by RFID this session — may have moved or been blocked.
                           </p>
-                          <ul className="divide-y divide-amber-100 dark:divide-amber-900/40 bg-white dark:bg-slate-900 max-h-64 overflow-y-auto">
+                          <ul className="divide-y divide-amber-100 dark:divide-amber-900/40 bg-white dark:bg-slate-900 max-h-72 overflow-y-auto">
                             {reconciliationResult.missing.map((m) => (
-                              <li key={m.id} className="flex items-center gap-3 px-4 py-3">
-                                <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
-                                  <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                              <li key={m.id} className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-3">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+                                    <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{m.name || m.barcode || m.id}</p>
+                                    {m.barcode && <p className="text-[11px] text-slate-500 font-mono mt-0.5">{m.barcode}</p>}
+                                  </div>
+                                  <span className="shrink-0 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg px-2 py-0.5 tabular-nums">
+                                    Fl {m.floorNumber ?? '—'} · {m.roomNumber ?? '—'}
+                                  </span>
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{m.name || m.barcode || m.id}</p>
-                                  {m.barcode && <p className="text-[11px] text-slate-500 font-mono mt-0.5">{m.barcode}</p>}
-                                </div>
-                                <span className="shrink-0 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg px-2 py-0.5 tabular-nums">
-                                  Fl {m.floorNumber ?? '—'} · {m.roomNumber ?? '—'}
-                                </span>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="shrink-0 rounded-xl h-9 gap-1.5 border-amber-300 text-amber-900 dark:text-amber-100 w-full sm:w-auto"
+                                  onClick={() => void openReconcileMissingMoveHistory({ id: m.id, name: m.name || m.barcode || m.id })}
+                                >
+                                  <History className="h-3.5 w-3.5" />
+                                  Movement history
+                                </Button>
                               </li>
                             ))}
                           </ul>
@@ -3130,7 +3214,7 @@ export default function HandheldHubPage() {
                               />
                             </div>
                             <Button
-                              className="w-full h-13 rounded-xl gap-2.5 font-bold bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 shadow-lg shadow-violet-500/30 text-white text-sm"
+                              className="w-full h-12 rounded-xl gap-2.5 font-bold bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 shadow-lg shadow-violet-500/30 text-white text-sm"
                               onClick={submitCountForReview}
                             >
                               <ClipboardList className="h-5 w-5 shrink-0" />
@@ -3138,17 +3222,20 @@ export default function HandheldHubPage() {
                             </Button>
                           </div>
                           <div className="px-4 pb-3">
-                            <div className="flex gap-3 flex-wrap">
-                              {[
-                                { color: 'amber', label: `${reconciliationResult.missing.length} missing` },
-                                { color: 'emerald', label: `${inRoom.length} verified` },
-                                { color: 'orange', label: `${wrongLoc.length} wrong room` },
-                                { color: 'red', label: `${reconciliationResult.extra.length} unknown` },
-                              ].map(({ color, label }) => (
-                                <span key={label} className={`text-[11px] font-medium px-2 py-0.5 rounded-full bg-${color}-100 dark:bg-${color}-950/40 text-${color}-800 dark:text-${color}-200`}>
-                                  {label}
-                                </span>
-                              ))}
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Included in this report</p>
+                            <div className="flex gap-2 flex-wrap">
+                              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-100 border border-amber-200/80 dark:border-amber-800">
+                                {reconciliationResult.missing.length} missing
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 border border-emerald-200/80 dark:border-emerald-800">
+                                {inRoom.length} verified in room
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-950/50 text-orange-900 dark:text-orange-100 border border-orange-200/80 dark:border-orange-800">
+                                {wrongLoc.length} wrong room
+                              </span>
+                              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-950/50 text-red-900 dark:text-red-100 border border-red-200/80 dark:border-red-800">
+                                {reconciliationResult.extra.length} unknown tag
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -4024,6 +4111,77 @@ export default function HandheldHubPage() {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reconciliation: movement history for a missing (expected) item */}
+      <Dialog
+        open={!!reconcileMissingMoveDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReconcileMissingMoveDialog(null);
+            setReconcileMoveHistoryItems([]);
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-md w-[95vw] max-h-[85vh] overflow-hidden flex flex-col rounded-2xl shadow-2xl border-slate-200 dark:border-slate-700"
+          onPointerDownOutside={preventHandheldDialogOutsideClose}
+          onInteractOutside={preventHandheldDialogOutsideClose}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/50">
+                <History className="h-5 w-5 text-amber-700 dark:text-amber-300" />
+              </span>
+              Movement history
+            </DialogTitle>
+            <DialogDescription className="text-sm line-clamp-2">
+              {reconcileMissingMoveDialog ? (
+                <>
+                  Recent moves for <span className="font-semibold text-slate-800 dark:text-slate-200">{reconcileMissingMoveDialog.name}</span>
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
+            {reconcileMoveHistoryLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+                <p className="text-sm text-slate-500">Loading history…</p>
+              </div>
+            ) : reconcileMoveHistoryItems.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">No movement records yet for this asset.</p>
+            ) : (
+              <ul className="space-y-2 pb-2">
+                {reconcileMoveHistoryItems.map((mv) => {
+                  const when = typeof mv.movedAt === 'string' ? mv.movedAt : new Date(mv.movedAt).toISOString();
+                  const pretty = new Date(when).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+                  return (
+                    <li
+                      key={mv.id}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 px-3 py-2.5"
+                    >
+                      <p className="text-[11px] font-semibold text-violet-600 dark:text-violet-400 tabular-nums">{pretty}</p>
+                      <p className="text-sm text-slate-900 dark:text-white mt-1">
+                        Fl {mv.fromFloor ?? '—'} Rm {mv.fromRoom ?? '—'}
+                        <span className="text-slate-400 mx-1">→</span>
+                        Fl {mv.toFloor ?? '—'} Rm {mv.toRoom ?? '—'}
+                      </p>
+                      {mv.reason ? (
+                        <p className="text-xs text-slate-500 mt-1">{mv.reason}</p>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-xl w-full sm:w-auto" onClick={() => setReconcileMissingMoveDialog(null)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
