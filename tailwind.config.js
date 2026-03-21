@@ -128,6 +128,15 @@ module.exports = {
           '80%': { transform: 'translateY(5px)' },
           '100%': { transform: 'translateY(0)' },
         },
+        /** Handheld reconciliation AI progress bar (indeterminate sweep) */
+        "reconcile-indeterminate": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(280%)" },
+        },
+        "reconcile-ai-glow": {
+          "0%, 100%": { opacity: 0.65, filter: "blur(0px)" },
+          "50%": { opacity: 1, filter: "blur(0.5px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -139,6 +148,8 @@ module.exports = {
         "scale-in": "scale-in 0.3s ease-out",
         "glow": "glow 2s ease-in-out infinite",
         "bounce-in": "bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+        "reconcile-indeterminate": "reconcile-indeterminate 1.35s ease-in-out infinite",
+        "reconcile-ai-glow": "reconcile-ai-glow 2.2s ease-in-out infinite",
       },
     },
   },

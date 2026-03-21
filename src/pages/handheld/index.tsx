@@ -385,6 +385,8 @@ export default function HandheldHubPage() {
     { value: 'OTHER', label: 'Other' },
   ];
   const [reconciliationLoading, setReconciliationLoading] = useState(false);
+  /** Rotating status line in the reconciliation AI progress overlay */
+  const [reconcileAiStep, setReconcileAiStep] = useState(0);
   const [reconcileShowMissing, setReconcileShowMissing] = useState(false);
   const [reconcileShowExtra, setReconcileShowExtra] = useState(false);
   const [showReconcileConfirmDialog, setShowReconcileConfirmDialog] = useState(false);
@@ -412,6 +414,17 @@ export default function HandheldHubPage() {
     resolver: zodResolver(transferSchema),
     defaultValues: { floorNumber: '', roomNumber: '' },
   });
+
+  /** Cycle status copy in the reconciliation AI overlay while comparing runs */
+  useEffect(() => {
+    if (!reconciliationLoading) {
+      setReconcileAiStep(0);
+      return;
+    }
+    setReconcileAiStep(0);
+    const id = setInterval(() => setReconcileAiStep((s) => (s + 1) % 3), 2400);
+    return () => clearInterval(id);
+  }, [reconciliationLoading]);
 
   // Resume inventory session from device (crash / tab close recovery)
   useEffect(() => {
@@ -4311,6 +4324,69 @@ export default function HandheldHubPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Reconciliation: AI analysis progress — compact modal overlay */}
+      {reconciliationLoading && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6"
+          role="alertdialog"
+          aria-modal="true"
+          aria-busy="true"
+          aria-labelledby="reconcile-ai-progress-title"
+          aria-describedby="reconcile-ai-progress-desc"
+        >
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200" />
+          <div className="relative w-full max-w-[min(22rem,92vw)] animate-in zoom-in-95 fade-in duration-300">
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 shadow-2xl shadow-violet-500/20 ring-1 ring-violet-500/25 overflow-hidden">
+              {/* Top gradient strip */}
+              <div className="h-1 w-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-indigo-500 animate-reconcile-ai-glow" />
+              <div className="px-5 pt-5 pb-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="relative shrink-0">
+                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-500/30 to-fuchsia-600/20 flex items-center justify-center ring-1 ring-white/10">
+                      <Sparkles className="h-6 w-6 text-violet-200 animate-pulse" />
+                    </div>
+                    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-slate-900">
+                      <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <p id="reconcile-ai-progress-title" className="text-[11px] font-bold uppercase tracking-[0.2em] text-violet-300/90">
+                      AI analysis
+                    </p>
+                    <h3 className="mt-1 text-lg font-bold text-white leading-tight tracking-tight">
+                      Comparing your count
+                    </h3>
+                    <p
+                      id="reconcile-ai-progress-desc"
+                      key={reconcileAiStep}
+                      className="mt-2 text-sm text-slate-300/95 leading-snug min-h-[2.75rem] animate-in fade-in slide-in-from-bottom-1 duration-300"
+                    >
+                      {[
+                        'Loading your org catalog and room roster…',
+                        'Cross-referencing RFID scans with registered floor & room…',
+                        'AI is analyzing gaps, wrong-room tags, and confidence…',
+                      ][reconcileAiStep]}
+                    </p>
+                  </div>
+                </div>
+                {/* Indeterminate progress */}
+                <div className="mt-4 space-y-2">
+                  <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-800/90 ring-1 ring-white/5">
+                    <div
+                      className="absolute inset-y-0 w-[38%] rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-400 to-indigo-500 shadow-[0_0_14px_rgba(139,92,246,0.45)] animate-reconcile-indeterminate"
+                      aria-hidden
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 text-center font-medium tabular-nums">
+                    This may take a few seconds on large sites
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Missing items popup: available vs missing, recently moved — world-class */}
       {reconciliationResult && reconciliationResult.missing.length > 0 && (
