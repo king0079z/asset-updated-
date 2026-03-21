@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { getSessionSafe } from '@/util/supabase/require-auth';
 import { getUserRoleData } from '@/util/roleCheck';
@@ -22,6 +23,77 @@ function looseMatch(
   const a = String(floorDb ?? '').trim().toLowerCase();
   const b = String(roomDb ?? '').trim().toLowerCase();
   return a === floorQ.trim().toLowerCase() && b === roomQ.trim().toLowerCase();
+}
+
+/**
+ * String variants for floors so DB values like "03" / "3" still match session "3"
+ * (same idea as handheld normalizeLoc for pure numeric floors).
+ */
+function addNumericFloorVariants(raw: string, into: Set<string>) {
+  const t = raw.trim();
+  into.add(t);
+  if (/^\s*0*\d+\s*$/.test(t)) {
+    const n = parseInt(t, 10);
+    if (!Number.isNaN(n)) {
+      into.add(String(n));
+      for (let w = 2; w <= 5; w++) into.add(String(n).padStart(w, '0'));
+    }
+  }
+}
+
+/**
+ * Build Prisma OR of (floor × room) exact pairs for DB-side filtering.
+ * Previously we loaded only the first 12k assets by name and filtered in memory — rooms
+ * whose assets sorted after that cap never appeared (0 results while UI showed "in room").
+ */
+function buildFloorRoomWhere(floorQ: string, roomQ: string): Prisma.AssetWhereInput {
+  const fTrim = floorQ.trim();
+  const rTrim = roomQ.trim();
+  const nf = normLoc(floorQ);
+  const nr = normLoc(roomQ);
+
+  const floors = new Set<string>();
+  addNumericFloorVariants(fTrim, floors);
+  addNumericFloorVariants(nf, floors);
+
+  const rooms = new Set<string>([rTrim, nr]);
+  rooms.add(rTrim.toLowerCase());
+  rooms.add(rTrim.toUpperCase());
+
+  const orList: Prisma.AssetWhereInput[] = [];
+  for (const f of floors) {
+    for (const r of rooms) {
+      orList.push({
+        AND: [
+          { floorNumber: { equals: f, mode: 'insensitive' } },
+          { roomNumber: { equals: r, mode: 'insensitive' } },
+        ],
+      });
+    }
+  }
+  return { OR: orList };
+}
+
+function buildAccessWhere(
+  user: { id: string },
+  roleData: Awaited<ReturnType<typeof getUserRoleData>>,
+  organizationId: string | null,
+  isAdminOrManagerUser: boolean,
+  includeNullOrg: boolean,
+): Prisma.AssetWhereInput | null {
+  if (roleData && (roleData.isAdmin === true || roleData.email === 'admin@example.com')) {
+    return {};
+  }
+  if (isAdminOrManagerUser && organizationId) {
+    return includeNullOrg ? { OR: [{ organizationId }, { organizationId: null }] } : { organizationId };
+  }
+  if (user && organizationId) {
+    return { userId: user.id, OR: [{ organizationId }, { organizationId: null }] };
+  }
+  if (user) {
+    return { userId: user.id };
+  }
+  return null;
 }
 
 /**
@@ -50,10 +122,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const roleData = await getUserRoleData(user.id);
+
     const role = roleData?.role ?? '';
     const isAdminOrManagerUser =
       role === 'ADMIN' || role === 'MANAGER' || role === 'HANDHELD' || roleData?.isAdmin === true;
-    const organizationId = roleData?.organizationId ?? null;
+    const organizationId = roleData.organizationId ?? null;
+
+    /** Legacy rows (no org) are visible to HANDHELD like /api/assets/scan fallback */
+    const includeNullOrg = role === 'HANDHELD';
+
+    const accessWhere = buildAccessWhere(user, roleData, organizationId, isAdminOrManagerUser, includeNullOrg);
+    if (!accessWhere) {
+      return res.status(200).json([]);
+    }
+
+    const locationWhere = buildFloorRoomWhere(fTrim, rTrim);
 
     const assetSelect = {
       id: true,
@@ -67,44 +150,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       organizationId: true,
     } as const;
 
-    let assets: Awaited<ReturnType<typeof prisma.asset.findMany>> = [];
+    let assets = await prisma.asset.findMany({
+      where: {
+        AND: [accessWhere, locationWhere],
+      },
+      select: assetSelect,
+      orderBy: { name: 'asc' },
+      take: 25000,
+    });
 
-    /** Legacy rows (no org) are visible to HANDHELD like /api/assets/scan fallback */
-    const includeNullOrg = role === 'HANDHELD';
-
-    if (roleData && (roleData.isAdmin === true || roleData.email === 'admin@example.com')) {
-      assets = await prisma.asset.findMany({
-        where: {},
-        select: assetSelect,
-        orderBy: { name: 'asc' },
-        take: 12000,
-      });
-    } else if (isAdminOrManagerUser && organizationId) {
-      assets = await prisma.asset.findMany({
-        where: includeNullOrg ? { OR: [{ organizationId }, { organizationId: null }] } : { organizationId },
-        select: assetSelect,
-        orderBy: { name: 'asc' },
-        take: 12000,
-      });
-    } else if (user && organizationId) {
-      assets = await prisma.asset.findMany({
-        where: { userId: user.id, OR: [{ organizationId }, { organizationId: null }] },
-        select: assetSelect,
-        orderBy: { name: 'asc' },
-        take: 12000,
-      });
-    } else if (user) {
-      assets = await prisma.asset.findMany({
-        where: { userId: user.id },
-        select: assetSelect,
-        orderBy: { name: 'asc' },
-        take: 12000,
-      });
-    }
-
+    /** Final pass: handheld-normalized equality (handles edge cases Prisma equals might miss) */
     let filtered = assets.filter((a) => looseMatch(fTrim, rTrim, a.floorNumber, a.roomNumber));
 
-    if (filtered.length === 0) {
+    if (filtered.length === 0 && assets.length > 0) {
       const nf = normLoc(fTrim);
       const nr = normLoc(rTrim);
       filtered = assets.filter((a) => normLoc(a.floorNumber) === nf && normLoc(a.roomNumber) === nr);
