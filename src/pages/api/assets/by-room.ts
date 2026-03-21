@@ -79,13 +79,16 @@ function buildAccessWhere(
   roleData: Awaited<ReturnType<typeof getUserRoleData>>,
   organizationId: string | null,
   isAdminOrManagerUser: boolean,
-  includeNullOrg: boolean,
+  role: string,
 ): Prisma.AssetWhereInput | null {
-  if (roleData && (roleData.isAdmin === true || roleData.email === 'admin@example.com')) {
+  // HANDHELD and ADMIN/MANAGER get the same scan-level broad access — no org filter.
+  // This mirrors the scan API fallback that lets HANDHELD read assets from any org,
+  // ensuring the room roster shows the same assets that appear as "In this room" in the UI.
+  if (role === 'HANDHELD' || (roleData && (roleData.isAdmin === true || roleData.email === 'admin@example.com'))) {
     return {};
   }
   if (isAdminOrManagerUser && organizationId) {
-    return includeNullOrg ? { OR: [{ organizationId }, { organizationId: null }] } : { organizationId };
+    return { organizationId };
   }
   if (user && organizationId) {
     return { userId: user.id, OR: [{ organizationId }, { organizationId: null }] };
@@ -126,12 +129,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const role = roleData?.role ?? '';
     const isAdminOrManagerUser =
       role === 'ADMIN' || role === 'MANAGER' || role === 'HANDHELD' || roleData?.isAdmin === true;
-    const organizationId = roleData.organizationId ?? null;
+    const organizationId = roleData?.organizationId ?? null;
 
-    /** Legacy rows (no org) are visible to HANDHELD like /api/assets/scan fallback */
-    const includeNullOrg = role === 'HANDHELD';
-
-    const accessWhere = buildAccessWhere(user, roleData, organizationId, isAdminOrManagerUser, includeNullOrg);
+    const accessWhere = buildAccessWhere(user, roleData, organizationId, isAdminOrManagerUser, role);
     if (!accessWhere) {
       return res.status(200).json([]);
     }
@@ -150,6 +150,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       organizationId: true,
     } as const;
 
+    // debug=1: return raw DB matches without client-side re-filter so caller can see exact stored values
+    const debugMode = req.query.debug === '1';
+
     let assets = await prisma.asset.findMany({
       where: {
         AND: [accessWhere, locationWhere],
@@ -162,15 +165,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     /** Final pass: handheld-normalized equality (handles edge cases Prisma equals might miss) */
     let filtered = assets.filter((a) => looseMatch(fTrim, rTrim, a.floorNumber, a.roomNumber));
 
+    // If DB-side filter returned rows but normalized pass is empty, skip normalization filter
+    // (shouldn't happen, but guard against edge case)
     if (filtered.length === 0 && assets.length > 0) {
       const nf = normLoc(fTrim);
       const nr = normLoc(rTrim);
       filtered = assets.filter((a) => normLoc(a.floorNumber) === nf && normLoc(a.roomNumber) === nr);
+      // Last resort — return all DB-matched assets (the DB Prisma OR already filtered by floor/room)
+      if (filtered.length === 0) filtered = assets;
+    }
+
+    if (debugMode) {
+      // Return raw result with org info for diagnosis
+      console.log(`[by-room debug] floor="${fTrim}" room="${rTrim}" accessWhere=${JSON.stringify(accessWhere)} dbHits=${assets.length} filtered=${filtered.length}`);
+      return res.status(200).json({
+        _debug: true,
+        query: { floor: fTrim, room: rTrim },
+        accessWhere,
+        locationWhere,
+        dbHits: assets.length,
+        filtered: filtered.length,
+        sample: assets.slice(0, 5).map((a) => ({ id: a.id, name: a.name, floorNumber: a.floorNumber, roomNumber: a.roomNumber, organizationId: a.organizationId })),
+      });
     }
 
     const out = filtered.map(({ organizationId: _o, ...rest }) => rest);
 
-    res.setHeader('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
+    res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json(out);
   } catch (e) {
     console.error('by-room error:', e);
