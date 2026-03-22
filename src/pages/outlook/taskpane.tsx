@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Head from 'next/head';
 import Script from 'next/script';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import {
   Ticket, Send, Loader2, LogIn, AlertCircle, CheckCircle2,
   ArrowUp, Minus, ArrowDown, Mail, Wrench, HelpCircle, FileText,
@@ -415,8 +416,8 @@ export default function OutlookTaskPane() {
       <>
         <Head><title>Asset AI — Outlook</title></Head>
         {officeScript}
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+        <div className="min-h-screen bg-slate-50 dark:bg-background flex items-center justify-center">
+          <Loader2 className="h-8 w-8 text-indigo-600 dark:text-indigo-400 animate-spin" />
         </div>
       </>
     );
@@ -428,12 +429,12 @@ export default function OutlookTaskPane() {
       <>
         <Head><title>Sign In — Asset AI</title></Head>
         {officeScript}
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center shadow-lg shadow-indigo-200 mb-5">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-indigo-900/40 mb-5">
             <Ticket className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-xl font-black text-slate-900 mb-1">Asset AI</h1>
-          <p className="text-slate-500 text-sm mb-7 max-w-[260px]">Sign in to submit tickets, request clearance, and manage your assets.</p>
+          <h1 className="text-xl font-black text-slate-900 dark:text-foreground mb-1">Asset AI</h1>
+          <p className="text-slate-500 dark:text-muted-foreground text-sm mb-7 max-w-[260px]">Sign in to submit tickets, request clearance, and manage your assets.</p>
           <button onClick={openLoginDialog}
             className="inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-sm hover:from-indigo-700 hover:to-violet-700 transition-all">
             <LogIn className="h-4 w-4" /> Sign In
@@ -445,10 +446,10 @@ export default function OutlookTaskPane() {
 
   /* ══ SHARED CHROME ════════════════════════════════════════════════════════ */
   const Header = ({ title, onBack }: { title: string; onBack?: () => void }) => (
-    <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200/80 bg-white/80 backdrop-blur-sm shrink-0">
+    <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200/80 dark:border-border bg-white/80 dark:bg-card/90 backdrop-blur-sm shrink-0">
       <div className="flex items-center gap-2.5">
         {onBack ? (
-          <button onClick={onBack} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors">
+          <button onClick={onBack} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-500 dark:text-muted-foreground hover:text-slate-800 dark:hover:text-foreground hover:bg-slate-100 dark:hover:bg-muted transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" />
           </button>
         ) : (
@@ -456,11 +457,16 @@ export default function OutlookTaskPane() {
             <Ticket className="h-4 w-4 text-white" />
           </div>
         )}
-        <p className="text-sm font-bold text-slate-900">{title}</p>
+        <p className="text-sm font-bold text-slate-900 dark:text-foreground">{title}</p>
       </div>
-      <button onClick={signOut} title="Sign out" className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
-        <LogOut className="h-3.5 w-3.5" />
-      </button>
+      <div className="flex items-center gap-1">
+        <div className="rounded-md border border-slate-200/80 dark:border-border bg-slate-50/80 dark:bg-muted/50 p-0.5">
+          <ThemeToggle />
+        </div>
+        <button onClick={signOut} title="Sign out" className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-foreground hover:bg-slate-100 dark:hover:bg-muted transition-colors">
+          <LogOut className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </header>
   );
 
@@ -476,7 +482,7 @@ export default function OutlookTaskPane() {
       <>
         <Head><title>Asset AI — Outlook</title></Head>
         {officeScript}
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
           <Header title="Asset AI" />
           <main className="flex-1 p-4 space-y-3">
             {/* Welcome */}
@@ -493,7 +499,7 @@ export default function OutlookTaskPane() {
                 const showBadge = a.key === 'mytickets' && totalTicketUpdates > 0;
                 return (
                   <button key={a.key} onClick={() => setScreen(a.key as Screen)}
-                    className="group relative flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm hover:shadow-md hover:border-slate-200 transition-all">
+                    className="group relative flex flex-col gap-3 rounded-2xl border border-slate-100 dark:border-border bg-white dark:bg-card p-4 text-left shadow-sm hover:shadow-md hover:border-slate-200 dark:hover:border-border transition-all">
                     {showBadge && (
                       <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse z-10">
                         {totalTicketUpdates}
@@ -503,8 +509,8 @@ export default function OutlookTaskPane() {
                       <Icon className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-900 leading-snug group-hover:text-indigo-700 transition-colors">{a.label}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{a.desc}</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-foreground leading-snug group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">{a.label}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-muted-foreground mt-0.5 leading-snug">{a.desc}</p>
                     </div>
                   </button>
                 );
@@ -513,7 +519,7 @@ export default function OutlookTaskPane() {
 
             {/* Email context notice */}
             {mailContext?.subject && (
-              <div className="flex items-center gap-2 rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-indigo-700">
+              <div className="flex items-center gap-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 px-3 py-2 text-xs text-indigo-700 dark:text-indigo-300">
                 <Mail className="h-3.5 w-3.5 shrink-0" />
                 <span className="line-clamp-1">Email context: <strong>{mailContext.subject}</strong></span>
               </div>
@@ -532,7 +538,7 @@ export default function OutlookTaskPane() {
     const DetailsForm = () => (
       <div className="space-y-4">
         {mailContext && (
-          <div className="flex items-center gap-2 rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-indigo-700">
+          <div className="flex items-center gap-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 px-3 py-2 text-xs text-indigo-700 dark:text-indigo-300">
             <Mail className="h-3.5 w-3.5 shrink-0" /> Prefilled from current email
           </div>
         )}
@@ -549,24 +555,24 @@ export default function OutlookTaskPane() {
         )}
         <form onSubmit={submitTicket} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Summary <span className="text-red-400">*</span></label>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-muted-foreground uppercase tracking-wider mb-1.5">Summary <span className="text-red-400">*</span></label>
             <input type="text" value={ticketForm.title} onChange={e => setTicketForm(f => ({ ...f, title: e.target.value }))} placeholder="Brief one-line summary"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition" />
+              className="w-full rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-background px-3.5 py-2.5 text-sm text-slate-800 dark:text-foreground placeholder:text-slate-400 focus:border-indigo-500 dark:focus:border-primary focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-primary/30 outline-none transition" />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Description <span className="text-red-400">*</span></label>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-muted-foreground uppercase tracking-wider mb-1.5">Description <span className="text-red-400">*</span></label>
             <textarea value={ticketForm.description} onChange={e => setTicketForm(f => ({ ...f, description: e.target.value }))} placeholder="Provide as much detail as possible…" rows={4}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none transition" />
-            <p className="mt-1 text-[10px] text-slate-400 text-right">{ticketForm.description.length} chars</p>
+              className="w-full rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-background px-3.5 py-2.5 text-sm text-slate-800 dark:text-foreground placeholder:text-slate-400 focus:border-indigo-500 dark:focus:border-primary focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-primary/30 outline-none resize-none transition" />
+            <p className="mt-1 text-[10px] text-slate-400 dark:text-muted-foreground text-right">{ticketForm.description.length} chars</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Priority</label>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-muted-foreground uppercase tracking-wider mb-2">Priority</label>
             <div className="grid grid-cols-2 gap-2">
               {PRIORITIES.map(p => {
                 const Icon = p.icon;
                 return (
                   <button key={p.value} type="button" onClick={() => setTicketForm(f => ({ ...f, priority: p.value }))}
-                    className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-sm font-semibold transition-all ${ticketForm.priority === p.value ? p.color + ' border-current shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}>
+                    className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-sm font-semibold transition-all ${ticketForm.priority === p.value ? p.color + ' border-current shadow-sm' : 'border-slate-200 dark:border-border bg-white dark:bg-card text-slate-500 dark:text-muted-foreground hover:border-slate-300 dark:hover:border-border'}`}>
                     <Icon className="h-4 w-4 shrink-0" /> {p.label}
                   </button>
                 );
@@ -586,7 +592,7 @@ export default function OutlookTaskPane() {
       <>
         <Head><title>Submit Ticket — Asset AI</title></Head>
         {officeScript}
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
           <Header title="Submit Ticket" onBack={() => { setScreen('home'); resetAll(); }} />
 
           <main className="flex-1 overflow-auto p-4">
@@ -594,32 +600,32 @@ export default function OutlookTaskPane() {
             {/* ── Step: Choose mode ── */}
             {ticketStep === 'mode' && (
               <div className="space-y-3">
-                <p className="text-sm font-bold text-slate-900 mb-4">What kind of ticket do you want to submit?</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-foreground mb-4">What kind of ticket do you want to submit?</p>
 
                 {/* Normal ticket */}
                 <button type="button" onClick={() => { setTicketMode('normal'); setTicketStep('type'); setTicketResult('idle'); }}
-                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-4 text-left hover:border-indigo-400 hover:bg-indigo-50/40 hover:shadow-md transition-all group">
+                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 dark:border-border bg-white dark:bg-card px-4 py-4 text-left hover:border-indigo-400 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/30 hover:shadow-md transition-all group">
                   <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform">
                     <Ticket className="h-6 w-6 text-white" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-slate-900">Normal Ticket</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Report an issue, submit a request, ask a question, or management task</p>
+                    <p className="font-bold text-slate-900 dark:text-foreground">Normal Ticket</p>
+                    <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">Report an issue, submit a request, ask a question, or management task</p>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-indigo-500 shrink-0 transition-colors" />
+                  <ChevronRight className="h-5 w-5 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 shrink-0 transition-colors" />
                 </button>
 
                 {/* HW/SW ticket */}
                 <button type="button" onClick={() => { setTicketMode('hwsw'); setTicketStep('hwcat'); setTicketResult('idle'); }}
-                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 bg-white px-4 py-4 text-left hover:border-blue-400 hover:bg-blue-50/40 hover:shadow-md transition-all group">
+                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-slate-200 dark:border-border bg-white dark:bg-card px-4 py-4 text-left hover:border-blue-400 hover:bg-blue-50/40 dark:hover:bg-blue-950/30 hover:shadow-md transition-all group">
                   <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform">
                     <Wrench className="h-6 w-6 text-white" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-slate-900">HW/SW Ticket</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Hardware, software, access, deployments, SAP and IT service requests</p>
+                    <p className="font-bold text-slate-900 dark:text-foreground">HW/SW Ticket</p>
+                    <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">Hardware, software, access, deployments, SAP and IT service requests</p>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-blue-500 shrink-0 transition-colors" />
+                  <ChevronRight className="h-5 w-5 text-slate-300 dark:text-slate-600 group-hover:text-blue-500 shrink-0 transition-colors" />
                 </button>
 
                 {ticketResult === 'success' && (
@@ -644,7 +650,7 @@ export default function OutlookTaskPane() {
                   const Icon = t.icon; const sel = ticketForm.ticketType === t.value;
                   return (
                     <button key={t.value} type="button" onClick={() => { setTicketForm(f => ({ ...f, ticketType: t.value })); setTicketResult('idle'); }}
-                      className={`w-full flex items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition-all ${sel ? `${t.selBg} shadow-sm` : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}`}>
+                      className={`w-full flex items-center gap-3 rounded-2xl border-2 px-4 py-3.5 text-left transition-all ${sel ? `${t.selBg} shadow-sm` : 'border-slate-200 dark:border-border bg-white dark:bg-card hover:border-slate-300 dark:hover:border-border hover:shadow-sm'}`}>
                       <div className={`h-10 w-10 rounded-xl ${sel ? t.iconBg : 'bg-slate-100'} flex items-center justify-center shrink-0 transition-colors`}>
                         <Icon className={`h-5 w-5 ${sel ? t.color : 'text-slate-400'} transition-colors`} />
                       </div>
@@ -696,7 +702,7 @@ export default function OutlookTaskPane() {
                     return (
                       <button key={cat.key} type="button"
                         onClick={() => { setHwCategory(cat.key); setHwSubcategory(''); setTicketStep('hwsub'); }}
-                        className={`flex items-center gap-2.5 rounded-2xl border-2 px-3 py-3 text-left transition-all hover:shadow-sm ${sel ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                        className={`flex items-center gap-2.5 rounded-2xl border-2 px-3 py-3 text-left transition-all hover:shadow-sm ${sel ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/40' : 'border-slate-200 dark:border-border bg-white dark:bg-card hover:border-slate-300 dark:hover:border-border'}`}>
                         <span className="text-xl shrink-0">{cat.icon}</span>
                         <p className={`text-xs font-bold leading-tight ${sel ? 'text-blue-700' : 'text-slate-700'}`}>{cat.label}</p>
                       </button>
@@ -729,7 +735,7 @@ export default function OutlookTaskPane() {
                           setTicketStep('hwdetails');
                           setTicketResult('idle');
                         }}
-                        className={`w-full flex items-center justify-between rounded-xl border-2 px-4 py-3 text-left text-sm font-semibold transition-all ${sel ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'}`}>
+                        className={`w-full flex items-center justify-between rounded-xl border-2 px-4 py-3 text-left text-sm font-semibold transition-all ${sel ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' : 'border-slate-200 dark:border-border bg-white dark:bg-card text-slate-700 dark:text-foreground hover:border-slate-300 dark:hover:border-border hover:bg-slate-50 dark:hover:bg-muted/50'}`}>
                         {sub}
                         <ChevronRight className={`h-4 w-4 shrink-0 ${sel ? 'text-blue-500' : 'text-slate-300'}`} />
                       </button>
@@ -773,7 +779,7 @@ export default function OutlookTaskPane() {
       <>
         <Head><title>Request Clearance — Asset AI</title></Head>
         {officeScript}
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
           <Header title="Request Clearance" onBack={() => { setScreen('home'); setClResult('idle'); }} />
           <main className="flex-1 overflow-auto p-4">
             {/* Info banner */}
@@ -872,46 +878,46 @@ export default function OutlookTaskPane() {
             <div className="flex-1 overflow-auto">
 
               {/* Ticket hero card */}
-              <div className="bg-white border-b border-slate-100 px-4 py-4">
+              <div className="bg-white dark:bg-card border-b border-slate-100 dark:border-border px-4 py-4">
                 <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                  <span className="font-mono text-[10px] font-bold text-slate-400 bg-slate-100 rounded-md px-2 py-0.5">{t.displayId || '#' + t.id.slice(0, 8)}</span>
+                  <span className="font-mono text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-muted rounded-md px-2 py-0.5">{t.displayId || '#' + t.id.slice(0, 8)}</span>
                   <span className={`text-[10px] font-bold ${pc.color}`}>{pc.label} Priority</span>
-                  {t.category && <span className="text-[10px] font-medium text-slate-400 bg-slate-50 border border-slate-200 rounded-md px-1.5 py-0.5">{t.category}</span>}
-                  {t.subcategory && <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-md px-1.5 py-0.5">{t.subcategory}</span>}
+                  {t.category && <span className="text-[10px] font-medium text-slate-400 dark:text-muted-foreground bg-slate-50 dark:bg-muted border border-slate-200 dark:border-border rounded-md px-1.5 py-0.5">{t.category}</span>}
+                  {t.subcategory && <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900 rounded-md px-1.5 py-0.5">{t.subcategory}</span>}
                 </div>
-                <h2 className="text-base font-black text-slate-900 leading-snug">{t.title}</h2>
-                {t.description && <p className="mt-1.5 text-xs leading-relaxed text-slate-500 line-clamp-3">{t.description}</p>}
+                <h2 className="text-base font-black text-slate-900 dark:text-foreground leading-snug">{t.title}</h2>
+                {t.description && <p className="mt-1.5 text-xs leading-relaxed text-slate-500 dark:text-muted-foreground line-clamp-3">{t.description}</p>}
 
                 {/* Meta */}
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
+                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 dark:bg-muted/50 border border-slate-100 dark:border-border px-3 py-2">
                     <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                    <div><p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">Created</p><p className="text-xs font-semibold text-slate-700">{timeAgo(t.createdAt)}</p></div>
+                    <div><p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">Created</p><p className="text-xs font-semibold text-slate-700 dark:text-foreground">{timeAgo(t.createdAt)}</p></div>
                   </div>
                   {t.assignedTo?.email ? (
-                    <div className="flex items-center gap-1.5 rounded-xl bg-violet-50 border border-violet-100 px-3 py-2">
+                    <div className="flex items-center gap-1.5 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-100 dark:border-violet-900 px-3 py-2">
                       <Users className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                      <div><p className="text-[9px] uppercase tracking-wider font-bold text-violet-400">Assigned To</p><p className="text-xs font-semibold text-violet-700 truncate">{t.assignedTo.email.split('@')[0]}</p></div>
+                      <div><p className="text-[9px] uppercase tracking-wider font-bold text-violet-400">Assigned To</p><p className="text-xs font-semibold text-violet-700 dark:text-violet-300 truncate">{t.assignedTo.email.split('@')[0]}</p></div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
-                      <Users className="h-3.5 w-3.5 text-slate-300 shrink-0" />
-                      <div><p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">Assigned To</p><p className="text-xs text-slate-400">Unassigned</p></div>
+                    <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 dark:bg-muted/50 border border-slate-100 dark:border-border px-3 py-2">
+                      <Users className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 shrink-0" />
+                      <div><p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">Assigned To</p><p className="text-xs text-slate-400 dark:text-muted-foreground">Unassigned</p></div>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Progress tracker */}
-              <div className="bg-white border-b border-slate-100 px-4 py-3">
-                <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400 mb-2.5">Ticket Progress</p>
+              <div className="bg-white dark:bg-card border-b border-slate-100 dark:border-border px-4 py-3">
+                <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-2.5">Ticket Progress</p>
                 <div className="flex items-center gap-1">
                   {STEPS.map((step, i) => {
                     const done = i <= stepIdx; const active = i === stepIdx;
                     return (
                       <div key={step} className="flex flex-1 flex-col items-center gap-1">
-                        <div className={`h-1.5 w-full rounded-full transition-all duration-500 ${done ? stepColors[step] : 'bg-slate-100'} ${active ? 'ring-1 ring-offset-1 ring-current opacity-100' : ''}`} />
-                        <span className={`text-[9px] font-bold text-center leading-tight ${done ? (step === 'OPEN' ? 'text-blue-600' : step === 'IN_PROGRESS' ? 'text-amber-600' : step === 'RESOLVED' ? 'text-emerald-600' : 'text-slate-500') : 'text-slate-300'}`}>
+                        <div className={`h-1.5 w-full rounded-full transition-all duration-500 ${done ? stepColors[step] : 'bg-slate-100 dark:bg-slate-800'} ${active ? 'ring-1 ring-offset-1 ring-current dark:ring-offset-background opacity-100' : ''}`} />
+                        <span className={`text-[9px] font-bold text-center leading-tight ${done ? (step === 'OPEN' ? 'text-blue-600 dark:text-blue-400' : step === 'IN_PROGRESS' ? 'text-amber-600 dark:text-amber-400' : step === 'RESOLVED' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400') : 'text-slate-300 dark:text-slate-600'}`}>
                           {stepLabels[step]}
                         </span>
                       </div>
@@ -923,8 +929,8 @@ export default function OutlookTaskPane() {
               {/* Activity timeline */}
               <div className="px-4 py-4">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">Activity & Messages</p>
-                  <button onClick={() => openTicketDetail(t)} className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">Refresh</button>
+                  <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">Activity & Messages</p>
+                  <button onClick={() => openTicketDetail(t)} className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors">Refresh</button>
                 </div>
 
                 {historyLoading ? (
@@ -940,20 +946,20 @@ export default function OutlookTaskPane() {
                     ))}
                   </div>
                 ) : ticketHistory.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-8 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200">
-                    <MessageCircle className="h-8 w-8 text-slate-200" />
-                    <p className="text-xs font-semibold text-slate-400">No activity yet</p>
-                    <p className="text-[10px] text-slate-300">Comments from the support team will appear here</p>
+                  <div className="flex flex-col items-center gap-2 py-8 text-center rounded-2xl bg-slate-50 dark:bg-muted/30 border border-dashed border-slate-200 dark:border-border">
+                    <MessageCircle className="h-8 w-8 text-slate-200 dark:text-slate-600" />
+                    <p className="text-xs font-semibold text-slate-400 dark:text-muted-foreground">No activity yet</p>
+                    <p className="text-[10px] text-slate-300 dark:text-slate-600">Comments from the support team will appear here</p>
                   </div>
                 ) : (
                   <div className="relative space-y-0">
-                    <div className="absolute bottom-2 left-3.5 top-2 w-px bg-slate-100" />
+                    <div className="absolute bottom-2 left-3.5 top-2 w-px bg-slate-100 dark:bg-border" />
                     {[...ticketHistory].reverse().map((h: any, idx: number) => {
                       const isStaff = h.user?.email && h.user.email !== t.userId;
                       return (
                         <div key={h.id} className="relative flex gap-2.5 pb-4 last:pb-0">
                           {/* Avatar dot */}
-                          <div className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-2 ring-white text-[10px] font-black shadow-sm ${isStaff ? 'bg-gradient-to-br from-violet-500 to-indigo-600 text-white' : 'bg-gradient-to-br from-slate-200 to-slate-300 text-slate-600'}`}>
+                          <div className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-2 ring-white dark:ring-card text-[10px] font-black shadow-sm ${isStaff ? 'bg-gradient-to-br from-violet-500 to-indigo-600 text-white' : 'bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-slate-600 dark:text-slate-200'}`}>
                             {(h.user?.email?.[0] || '?').toUpperCase()}
                           </div>
                           <div className="min-w-0 flex-1 pt-0.5">
@@ -988,7 +994,7 @@ export default function OutlookTaskPane() {
             </div>
 
             {/* Fixed comment box */}
-            <div className="border-t border-slate-200 bg-white/95 backdrop-blur-sm px-4 py-3 shrink-0">
+            <div className="border-t border-slate-200 dark:border-border bg-white/95 dark:bg-card/95 backdrop-blur-sm px-4 py-3 shrink-0">
               {commentResult === 'success' && (
                 <div className="mb-2 flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-xs text-emerald-700 font-semibold">
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Comment sent!
@@ -1005,7 +1011,7 @@ export default function OutlookTaskPane() {
                   onChange={e => setComment(e.target.value)}
                   placeholder="Add a message or provide more info…"
                   rows={2}
-                  className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 outline-none transition"
+                  className="flex-1 resize-none rounded-xl border border-slate-200 dark:border-border bg-slate-50 dark:bg-background px-3 py-2 text-xs text-slate-800 dark:text-foreground placeholder:text-slate-400 focus:border-indigo-400 dark:focus:border-primary focus:ring-2 focus:ring-indigo-400/20 dark:focus:ring-primary/30 outline-none transition"
                   onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) postComment(e as any); }}
                 />
                 <button type="submit" disabled={commentSending || !comment.trim()}
@@ -1025,7 +1031,7 @@ export default function OutlookTaskPane() {
       <>
         <Head><title>My Tickets — Asset AI</title></Head>
         {officeScript}
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
           <Header title="My Tickets" onBack={() => setScreen('home')} />
           <main className="flex-1 overflow-auto p-4">
             <div className="flex items-center justify-between mb-4">
@@ -1066,7 +1072,7 @@ export default function OutlookTaskPane() {
                   const unread = ticketUnreads[t.id] || 0;
                   return (
                     <button key={t.id} type="button" onClick={() => openTicketDetail(t)}
-                      className={`relative w-full text-left rounded-2xl border px-4 py-3.5 shadow-sm hover:shadow-md transition-all group ${unread > 0 ? 'border-blue-300 bg-blue-50/40 hover:border-blue-400' : 'border-slate-100 bg-white hover:border-indigo-200 hover:bg-indigo-50/20'}`}>
+                      className={`relative w-full text-left rounded-2xl border px-4 py-3.5 shadow-sm hover:shadow-md transition-all group ${unread > 0 ? 'border-blue-300 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/30 hover:border-blue-400' : 'border-slate-100 dark:border-border bg-white dark:bg-card hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20'}`}>
                       {unread > 0 && (
                         <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse z-10">
                           {unread}
@@ -1116,7 +1122,7 @@ export default function OutlookTaskPane() {
       <>
         <Head><title>My Assets — Asset AI</title></Head>
         {officeScript}
-        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col">
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
           <Header title="My Assets" onBack={() => setScreen('home')} />
           <main className="flex-1 overflow-auto p-4">
             <div className="flex items-center justify-between mb-4">
@@ -1139,7 +1145,7 @@ export default function OutlookTaskPane() {
             ) : (
               <div className="space-y-2">
                 {myAssets.map((a: any) => (
-                  <div key={a.id} className="rounded-xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+                  <div key={a.id} className="rounded-xl border border-slate-100 dark:border-border bg-white dark:bg-card overflow-hidden shadow-sm">
                     <div className="flex items-center gap-3 px-3 py-3">
                       {/* thumbnail */}
                       <div className="h-12 w-12 shrink-0 rounded-xl bg-slate-100 overflow-hidden">

@@ -7,6 +7,7 @@ import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/router';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { Scan, Wifi, WifiOff, LogOut, RefreshCw } from 'lucide-react';
 
 interface HandheldLayoutProps {
@@ -84,6 +85,9 @@ export function HandheldLayout({ title = 'Field Assistant', subtitle, children, 
             </Button>
           )}
           {headerRight}
+          <div className="flex items-center rounded-xl border border-slate-200/80 dark:border-slate-600/80 bg-slate-50/80 dark:bg-slate-800/80 p-0.5">
+            <ThemeToggle />
+          </div>
           <Button
             variant="ghost"
             size="icon"

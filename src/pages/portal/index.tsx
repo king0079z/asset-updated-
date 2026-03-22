@@ -16,6 +16,7 @@ import {
   MessageSquare, Hash, Calendar, Tag, User, Building, Boxes,
 } from "lucide-react";
 import Head from "next/head";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 interface PortalTicket {
@@ -166,7 +167,7 @@ function timeAgo(d: string) {
 }
 
 /* ── Skeleton ─────────────────────────────────────────────────────────────── */
-function Sk({ className = "" }) { return <div className={`animate-pulse rounded-lg bg-slate-200 ${className}`} />; }
+function Sk({ className = "" }) { return <div className={`animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700 ${className}`} />; }
 
 /* ── Ticket Drawer ──────────────────────────────────────────────────────── */
 function TicketDrawer({ ticket, onClose, onRefresh }: { ticket: PortalTicket; onClose: () => void; onRefresh: () => void }) {
@@ -211,69 +212,69 @@ function TicketDrawer({ ticket, onClose, onRefresh }: { ticket: PortalTicket; on
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl" style={{ animation: "slideIn .22s cubic-bezier(.22,1,.36,1)" }}>
+      <div className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-white dark:bg-card shadow-2xl border-l dark:border-border" style={{ animation: "slideIn .22s cubic-bezier(.22,1,.36,1)" }}>
         {/* Header */}
-        <div className="flex items-center justify-between border-b bg-gradient-to-r from-slate-50 to-white px-6 py-4">
+        <div className="flex items-center justify-between border-b dark:border-border bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-950 px-6 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${tc.color}`}>
               <TypeIcon className="h-4 w-4 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-bold text-slate-500">{ticket.displayId || "#" + ticket.id.slice(0, 8)}</span>
+                <span className="font-mono text-sm font-bold text-slate-500 dark:text-slate-400">{ticket.displayId || "#" + ticket.id.slice(0, 8)}</span>
                 <SBadge s={ticket.status} /><PBadge p={ticket.priority} />
               </div>
-              {ticket.category && <p className="text-xs text-slate-400">{ticket.category} {ticket.subcategory ? `· ${ticket.subcategory}` : ""}</p>}
+              {ticket.category && <p className="text-xs text-slate-400 dark:text-slate-500">{ticket.category} {ticket.subcategory ? `· ${ticket.subcategory}` : ""}</p>}
             </div>
           </div>
-          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-muted hover:text-slate-600 dark:hover:text-foreground transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {/* Details */}
-          <div className="border-b px-6 py-5">
-            <h2 className="text-lg font-bold text-slate-900">{ticket.title}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">{ticket.description}</p>
+          <div className="border-b dark:border-border px-6 py-5">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-foreground">{ticket.title}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-muted-foreground">{ticket.description}</p>
             
             {/* Meta grid */}
             <div className="mt-4 grid grid-cols-2 gap-3">
               {ticket.location && (
-                <div className="flex items-start gap-2 rounded-xl bg-slate-50 p-3">
+                <div className="flex items-start gap-2 rounded-xl bg-slate-50 dark:bg-muted/60 p-3">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                  <div><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Location</p><p className="text-sm font-medium text-slate-700">{ticket.location}</p></div>
+                  <div><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Location</p><p className="text-sm font-medium text-slate-700 dark:text-foreground">{ticket.location}</p></div>
                 </div>
               )}
               {ticket.contactDetails && (
-                <div className="flex items-start gap-2 rounded-xl bg-slate-50 p-3">
+                <div className="flex items-start gap-2 rounded-xl bg-slate-50 dark:bg-muted/60 p-3">
                   <Phone className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                  <div><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Contact</p><p className="text-sm font-medium text-slate-700">{ticket.contactDetails}</p></div>
+                  <div><p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Contact</p><p className="text-sm font-medium text-slate-700 dark:text-foreground">{ticket.contactDetails}</p></div>
                 </div>
               )}
               {ticket.assignedTo?.email && (
-                <div className="flex items-start gap-2 rounded-xl bg-violet-50 p-3 col-span-2">
+                <div className="flex items-start gap-2 rounded-xl bg-violet-50 dark:bg-violet-950/40 p-3 col-span-2">
                   <User className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />
-                  <div><p className="text-[10px] font-semibold uppercase tracking-wider text-violet-400">Assigned To</p><p className="text-sm font-medium text-violet-700">{ticket.assignedTo.email}</p></div>
+                  <div><p className="text-[10px] font-semibold uppercase tracking-wider text-violet-400">Assigned To</p><p className="text-sm font-medium text-violet-700 dark:text-violet-300">{ticket.assignedTo.email}</p></div>
                 </div>
               )}
             </div>
-            <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
+            <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400 dark:text-slate-500">
               <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Created {timeAgo(ticket.createdAt)}</span>
               <span className="flex items-center gap-1"><RefreshCw className="h-3.5 w-3.5" /> Updated {timeAgo(ticket.updatedAt)}</span>
             </div>
           </div>
 
           {/* Progress tracker */}
-          <div className="border-b px-6 py-5">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Ticket Progress</p>
+          <div className="border-b dark:border-border px-6 py-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Ticket Progress</p>
             <div className="flex items-start gap-1">
               {steps.map((step, i) => {
                 const sc = STATUS_CFG[step]; const done = i <= stepIdx; const active = i === stepIdx;
                 return (
                   <div key={step} className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className={`h-2 w-full rounded-full transition-all duration-700 ${done ? sc.dot : "bg-slate-100"} ${active ? "ring-2 ring-offset-1 ring-current" : ""}`} />
-                    <span className={`text-center text-[10px] font-semibold leading-tight ${done ? sc.color : "text-slate-300"}`}>{sc.label}</span>
+                    <div className={`h-2 w-full rounded-full transition-all duration-700 ${done ? sc.dot : "bg-slate-100 dark:bg-slate-800"} ${active ? "ring-2 ring-offset-1 ring-current dark:ring-offset-background" : ""}`} />
+                    <span className={`text-center text-[10px] font-semibold leading-tight ${done ? sc.color : "text-slate-300 dark:text-slate-600"}`}>{sc.label}</span>
                   </div>
                 );
               })}
@@ -282,31 +283,31 @@ function TicketDrawer({ ticket, onClose, onRefresh }: { ticket: PortalTicket; on
 
           {/* Activity timeline */}
           <div className="px-6 py-5">
-            <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">Activity Timeline</p>
+            <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Activity Timeline</p>
             {loading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-slate-300" /></div>
             ) : history.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
-                <Activity className="h-8 w-8 text-slate-200" />
-                <p className="text-sm text-slate-400">No activity yet. Comments from the support team will appear here.</p>
+                <Activity className="h-8 w-8 text-slate-200 dark:text-slate-600" />
+                <p className="text-sm text-slate-400 dark:text-muted-foreground">No activity yet. Comments from the support team will appear here.</p>
               </div>
             ) : (
               <div className="relative space-y-0">
-                <div className="absolute bottom-2 left-4 top-2 w-px bg-slate-100" />
+                <div className="absolute bottom-2 left-4 top-2 w-px bg-slate-100 dark:bg-border" />
                 {[...history].reverse().map(h => (
                   <div key={h.id} className="relative flex gap-3 pb-5 last:pb-0">
-                    <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200 ring-2 ring-white shadow-sm">
+                    <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 ring-2 ring-white dark:ring-card shadow-sm">
                       <Activity className="h-3.5 w-3.5 text-slate-500" />
                     </div>
                     <div className="min-w-0 flex-1 pt-0.5">
-                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                        <span className="font-semibold text-slate-700">{h.user.email.split("@")[0]}</span>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-muted-foreground">
+                        <span className="font-semibold text-slate-700 dark:text-foreground">{h.user.email.split("@")[0]}</span>
                         <span className="text-slate-300">·</span>
                         <span>{timeAgo(h.createdAt)}</span>
                         {h.status && <><span className="text-slate-300">·</span><SBadge s={h.status} /></>}
                         {h.priority && <><span className="text-slate-300">·</span><PBadge p={h.priority} /></>}
                       </div>
-                      <div className="mt-1.5 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700">{h.comment}</div>
+                      <div className="mt-1.5 rounded-xl border border-slate-100 dark:border-border bg-slate-50 dark:bg-muted/50 px-3.5 py-2.5 text-sm text-slate-700 dark:text-foreground">{h.comment}</div>
                     </div>
                   </div>
                 ))}
@@ -317,20 +318,20 @@ function TicketDrawer({ ticket, onClose, onRefresh }: { ticket: PortalTicket; on
         </div>
 
         {/* Comment box */}
-        <div className="border-t bg-slate-50/80 px-6 py-4">
+        <div className="border-t dark:border-border bg-slate-50/80 dark:bg-muted/30 px-6 py-4">
           <form onSubmit={postComment} className="flex flex-col gap-2.5">
             <textarea
               placeholder="Add a comment or provide additional information…"
               value={comment}
               onChange={e => setComment(e.target.value)}
               rows={3}
-              className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="w-full resize-none rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-background px-3.5 py-2.5 text-sm text-slate-800 dark:text-foreground placeholder:text-slate-400 focus:border-slate-400 dark:focus:border-primary focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-primary/30"
               onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postComment(e as any); }}
             />
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400">Ctrl + Enter to submit</span>
+              <span className="text-xs text-slate-400 dark:text-muted-foreground">Ctrl + Enter to submit</span>
               <button type="submit" disabled={posting || !comment.trim()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 dark:bg-primary dark:text-primary-foreground px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:hover:bg-primary/90 disabled:opacity-40 transition-colors">
                 {posting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 Post Comment
               </button>
@@ -409,7 +410,7 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex w-full max-w-2xl flex-col bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[92vh]" style={{ animation: "fadeUp .2s ease-out" }}>
+      <div className="relative flex w-full max-w-2xl flex-col bg-white dark:bg-card rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] border dark:border-border" style={{ animation: "fadeUp .2s ease-out" }}>
         {/* Dialog header */}
         <div className="flex items-center justify-between border-b bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4">
           <div className="flex items-center gap-3">
@@ -442,19 +443,19 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
           {step === 1 ? (
             /* Step 1: Select type */
             <div className="p-6">
-              <p className="mb-5 text-sm text-slate-500">What type of request are you submitting?</p>
+              <p className="mb-5 text-sm text-slate-500 dark:text-muted-foreground">What type of request are you submitting?</p>
               <div className="grid grid-cols-2 gap-3">
                 {Object.entries(TICKET_TYPES).map(([key, tc]) => {
                   const Icon = tc.icon;
                   return (
                     <button key={key} onClick={() => { setSelectedType(key); setStep(2); }}
-                      className="group flex items-start gap-3.5 rounded-2xl border-2 border-transparent bg-slate-50 p-4 text-left transition-all hover:border-slate-300 hover:bg-white hover:shadow-md">
+                      className="group flex items-start gap-3.5 rounded-2xl border-2 border-transparent bg-slate-50 dark:bg-muted/50 p-4 text-left transition-all hover:border-slate-300 dark:hover:border-border hover:bg-white dark:hover:bg-card hover:shadow-md">
                       <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tc.color} shadow-sm`}>
                         <Icon className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <p className="font-semibold text-slate-900">{tc.label}</p>
-                        <p className="mt-0.5 text-xs leading-snug text-slate-500">{tc.desc}</p>
+                        <p className="font-semibold text-slate-900 dark:text-foreground">{tc.label}</p>
+                        <p className="mt-0.5 text-xs leading-snug text-slate-500 dark:text-muted-foreground">{tc.desc}</p>
                       </div>
                     </button>
                   );
@@ -463,13 +464,13 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
 
               {/* Category quick select */}
               <div className="mt-6">
-                <p className="mb-3 text-sm font-semibold text-slate-600">Or browse by category:</p>
+                <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-foreground">Or browse by category:</p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(CATEGORIES).map(([key, cat]) => {
                     const Icon = cat.icon;
                     return (
                       <button key={key} onClick={() => { setActiveCatTab(key); setSelectedCat(key); setStep(2); }}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors">
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-border bg-slate-50 dark:bg-muted/50 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-foreground hover:bg-slate-100 dark:hover:bg-muted hover:border-slate-300 transition-colors">
                         <Icon className="h-3.5 w-3.5" />{cat.label}
                       </button>
                     );
@@ -479,25 +480,25 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
             </div>
           ) : (
             /* Step 2: Form */
-            <form onSubmit={submit} className="divide-y">
+            <form onSubmit={submit} className="divide-y dark:divide-border">
               {/* Category & subcategory selector */}
               <div className="px-6 pt-5 pb-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <button type="button" onClick={() => setStep(1)} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+                  <button type="button" onClick={() => setStep(1)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-foreground flex items-center gap-1">
                     <ArrowLeft className="h-3.5 w-3.5" /> Back
                   </button>
-                  <span className="text-xs text-slate-300">/</span>
-                  <span className="text-xs text-slate-500 font-medium">Request Details</span>
+                  <span className="text-xs text-slate-300 dark:text-slate-600">/</span>
+                  <span className="text-xs text-slate-500 dark:text-muted-foreground font-medium">Request Details</span>
                 </div>
 
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Category</p>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Category</p>
                 <div className="flex gap-2 flex-wrap mb-3">
                   {Object.entries(CATEGORIES).map(([key, cat]) => {
                     const Icon = cat.icon;
                     return (
                       <button key={key} type="button"
                         onClick={() => { setActiveCatTab(key); setSelectedCat(key); setSelectedSub(""); }}
-                        className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${activeCatTab === key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                        className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${activeCatTab === key ? "bg-slate-900 dark:bg-primary text-white dark:text-primary-foreground" : "bg-slate-100 dark:bg-muted text-slate-600 dark:text-foreground hover:bg-slate-200 dark:hover:bg-muted/80"}`}>
                         <Icon className="h-3.5 w-3.5" />{cat.label}
                       </button>
                     );
@@ -506,15 +507,15 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
 
                 {activeCatTab && (
                   <>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Service Type</p>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Service Type</p>
                     <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-1">
                       {CATEGORIES[activeCatTab as keyof typeof CATEGORIES]?.items.map(item => {
                         const Icon = item.icon;
                         return (
                           <button key={item.key} type="button"
                             onClick={() => { setSelectedSub(item.key); setForm(f => ({ ...f, title: item.label })); }}
-                            className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-2.5 text-center transition-all ${selectedSub === item.key ? "border-slate-900 bg-slate-900 text-white" : "border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-200 hover:bg-white"}`}>
-                            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${selectedSub === item.key ? "bg-white/20" : "bg-slate-200/60"}`}>
+                            className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-2.5 text-center transition-all ${selectedSub === item.key ? "border-slate-900 dark:border-primary bg-slate-900 dark:bg-primary text-white" : "border-slate-100 dark:border-border bg-slate-50 dark:bg-muted/50 text-slate-600 dark:text-foreground hover:border-slate-200 dark:hover:border-border hover:bg-white dark:hover:bg-card"}`}>
+                            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${selectedSub === item.key ? "bg-white/20" : "bg-slate-200/60 dark:bg-slate-600/60"}`}>
                               <Icon className="h-4 w-4" />
                             </div>
                             <span className="text-[10px] font-semibold leading-tight">{item.label}</span>
@@ -529,7 +530,7 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
               {/* Required fields */}
               <div className="px-6 py-4 space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-muted-foreground">
                     Summary <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -538,22 +539,22 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
                     value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                     placeholder="Brief description of your request…"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors"
+                    className="w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50 dark:bg-background px-3.5 py-2.5 text-sm text-slate-800 dark:text-foreground placeholder:text-slate-400 focus:border-slate-400 dark:focus:border-primary focus:bg-white dark:focus:bg-background focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-primary/30 transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-muted-foreground">
                     Description <span className="text-red-500">*</span>
                   </label>
                   {/* Formatting toolbar */}
-                  <div className="flex items-center gap-1 rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 px-2 py-1.5">
+                  <div className="flex items-center gap-1 rounded-t-xl border border-b-0 border-slate-200 dark:border-border bg-slate-50 dark:bg-muted/50 px-2 py-1.5">
                     {["Aa", "B", "I", "·"].map(tool => (
-                      <button key={tool} type="button" className="rounded px-2 py-0.5 text-xs font-medium text-slate-500 hover:bg-slate-200 transition-colors">{tool}</button>
+                      <button key={tool} type="button" className="rounded px-2 py-0.5 text-xs font-medium text-slate-500 dark:text-muted-foreground hover:bg-slate-200 dark:hover:bg-muted transition-colors">{tool}</button>
                     ))}
-                    <div className="mx-1 h-4 w-px bg-slate-200" />
+                    <div className="mx-1 h-4 w-px bg-slate-200 dark:bg-border" />
                     {["≡", "→", "<>", "❝"].map(tool => (
-                      <button key={tool} type="button" className="rounded px-2 py-0.5 text-xs font-medium text-slate-500 hover:bg-slate-200 transition-colors">{tool}</button>
+                      <button key={tool} type="button" className="rounded px-2 py-0.5 text-xs font-medium text-slate-500 dark:text-muted-foreground hover:bg-slate-200 dark:hover:bg-muted transition-colors">{tool}</button>
                     ))}
                   </div>
                   <textarea
@@ -562,13 +563,13 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
                     onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                     rows={4}
                     placeholder="Describe the issue or request in detail…"
-                    className="w-full resize-none rounded-b-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors"
+                    className="w-full resize-none rounded-b-xl border border-slate-200 dark:border-border bg-white dark:bg-background px-3.5 py-2.5 text-sm text-slate-800 dark:text-foreground placeholder:text-slate-400 focus:border-slate-400 dark:focus:border-primary focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-primary/30 transition-colors"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-muted-foreground">
                       Location <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -578,13 +579,13 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
                         value={form.location}
                         onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
                         placeholder="Your current location"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors"
+                        className="w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50 dark:bg-background pl-9 pr-3.5 py-2.5 text-sm text-slate-800 dark:text-foreground placeholder:text-slate-400 focus:border-slate-400 dark:focus:border-primary focus:bg-white dark:focus:bg-background focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-primary/30 transition-colors"
                       />
                     </div>
-                    <p className="mt-1 text-[10px] text-slate-400">Your current Location</p>
+                    <p className="mt-1 text-[10px] text-slate-400 dark:text-muted-foreground">Your current Location</p>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-muted-foreground">
                       Contact Details <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -594,23 +595,23 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
                         value={form.contactDetails}
                         onChange={e => setForm(f => ({ ...f, contactDetails: e.target.value }))}
                         placeholder="Phone & extension"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors"
+                        className="w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50 dark:bg-background pl-9 pr-3.5 py-2.5 text-sm text-slate-800 dark:text-foreground placeholder:text-slate-400 focus:border-slate-400 dark:focus:border-primary focus:bg-white dark:focus:bg-background focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-primary/30 transition-colors"
                       />
                     </div>
-                    <p className="mt-1 text-[10px] text-slate-400">Your phone and extension</p>
+                    <p className="mt-1 text-[10px] text-slate-400 dark:text-muted-foreground">Your phone and extension</p>
                   </div>
                 </div>
 
                 {/* Priority */}
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Priority</label>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-muted-foreground">Priority</label>
                   <div className="grid grid-cols-4 gap-2">
                     {priorityOpts.map(opt => {
                       const pc = PRIORITY_CFG[opt.v];
                       return (
                         <button key={opt.v} type="button"
                           onClick={() => setForm(f => ({ ...f, priority: opt.v }))}
-                          className={`rounded-xl border-2 p-2 text-center transition-all ${form.priority === opt.v ? `${pc.bg} ${pc.border} ${pc.color}` : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200"}`}>
+                          className={`rounded-xl border-2 p-2 text-center transition-all ${form.priority === opt.v ? `${pc.bg} ${pc.border} ${pc.color}` : "border-slate-100 dark:border-border bg-slate-50 dark:bg-muted/50 text-slate-500 dark:text-muted-foreground hover:border-slate-200 dark:hover:border-border"}`}>
                           <div className="flex justify-center mb-0.5">{pc.icon}</div>
                           <p className="text-xs font-bold">{opt.label}</p>
                           <p className="text-[9px] leading-tight">{opt.desc}</p>
@@ -622,29 +623,29 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
 
                 {/* Attachment */}
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500">Attachment</label>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-muted-foreground">Attachment</label>
                   <div
                     onDragOver={e => { e.preventDefault(); setDragging(true); }}
                     onDragLeave={() => setDragging(false)}
                     onDrop={handleDrop}
                     onClick={() => fileRef.current?.click()}
-                    className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-6 cursor-pointer transition-all ${dragging ? "border-slate-400 bg-slate-50" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"}`}
+                    className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-6 cursor-pointer transition-all ${dragging ? "border-slate-400 dark:border-primary bg-slate-50 dark:bg-muted/50" : "border-slate-200 dark:border-border hover:border-slate-300 dark:hover:border-muted-foreground/40 hover:bg-slate-50 dark:hover:bg-muted/30"}`}
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-muted">
                       <Paperclip className="h-5 w-5 text-slate-400" />
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-medium text-slate-600">Drag and drop files, paste screenshots, or <span className="text-blue-600 underline cursor-pointer">browse</span></p>
-                      <p className="text-xs text-slate-400 mt-0.5">PNG, JPG, PDF up to 10MB</p>
+                      <p className="text-sm font-medium text-slate-600 dark:text-foreground">Drag and drop files, paste screenshots, or <span className="text-blue-600 dark:text-blue-400 underline cursor-pointer">browse</span></p>
+                      <p className="text-xs text-slate-400 dark:text-muted-foreground mt-0.5">PNG, JPG, PDF up to 10MB</p>
                     </div>
                     <input ref={fileRef} type="file" multiple className="hidden" onChange={e => setFiles(prev => [...prev, ...Array.from(e.target.files || [])])} />
                   </div>
                   {files.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {files.map((f, i) => (
-                        <div key={i} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5">
+                        <div key={i} className="flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-muted/50 px-3 py-1.5">
                           <Paperclip className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="flex-1 text-xs text-slate-600 truncate">{f.name}</span>
+                          <span className="flex-1 text-xs text-slate-600 dark:text-foreground truncate">{f.name}</span>
                           <button type="button" onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500">
                             <X className="h-3.5 w-3.5" />
                           </button>
@@ -660,19 +661,19 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
 
         {/* Footer */}
         {step === 2 && (
-          <div className="flex items-center justify-between border-t bg-slate-50 px-6 py-4">
-            <button type="button" className="text-sm text-slate-500 hover:text-slate-700 transition-colors">
+          <div className="flex items-center justify-between border-t dark:border-border bg-slate-50 dark:bg-muted/30 px-6 py-4">
+            <button type="button" className="text-sm text-slate-500 dark:text-muted-foreground hover:text-slate-700 dark:hover:text-foreground transition-colors">
               Formatting Help
             </button>
             <div className="flex items-center gap-2.5">
               <button type="button" onClick={onClose}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                className="rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card px-4 py-2 text-sm font-semibold text-slate-700 dark:text-foreground hover:bg-slate-50 dark:hover:bg-muted transition-colors">
                 Cancel
               </button>
               <button
                 onClick={submit}
                 disabled={submitting || !form.title.trim() || !form.description.trim()}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-primary dark:text-primary-foreground px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:hover:bg-primary/90 disabled:opacity-40 transition-colors">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Create
               </button>
@@ -692,7 +693,7 @@ function TicketRow({ t, onClick, assigned, unreadCount = 0 }: { t: PortalTicket;
   const hasUpdate = unreadCount > 0;
   return (
     <button type="button" onClick={onClick}
-      className={`group w-full text-left rounded-2xl border transition-all hover:shadow-md ${hasUpdate ? "border-blue-300 bg-gradient-to-r from-blue-50/60 to-white hover:border-blue-400 shadow-sm" : assigned ? "border-violet-200 bg-gradient-to-r from-violet-50 to-white hover:border-violet-300" : "border-slate-100 bg-white hover:border-slate-200"}`}>
+      className={`group w-full text-left rounded-2xl border transition-all hover:shadow-md ${hasUpdate ? "border-blue-300 dark:border-blue-700 bg-gradient-to-r from-blue-50/60 to-white dark:from-blue-950/40 dark:to-card hover:border-blue-400 shadow-sm" : assigned ? "border-violet-200 dark:border-violet-800 bg-gradient-to-r from-violet-50 to-white dark:from-violet-950/30 dark:to-card hover:border-violet-300" : "border-slate-100 dark:border-border bg-white dark:bg-card hover:border-slate-200 dark:hover:border-border"}`}>
       <div className="flex items-center gap-3.5 p-4">
         <div className="relative shrink-0">
           <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${sc.bg} border ${sc.border}`}>
@@ -708,22 +709,22 @@ function TicketRow({ t, onClick, assigned, unreadCount = 0 }: { t: PortalTicket;
         </div>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[11px] font-bold text-slate-400">{t.displayId || "#" + t.id.slice(0, 8)}</span>
+            <span className="font-mono text-[11px] font-bold text-slate-400 dark:text-slate-500">{t.displayId || "#" + t.id.slice(0, 8)}</span>
             <SBadge s={t.status} />
             <PBadge p={t.priority} />
-            {t.subcategory && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{t.subcategory}</span>}
-            {hasUpdate && <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">New update</span>}
+            {t.subcategory && <span className="rounded-md bg-slate-100 dark:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:text-muted-foreground">{t.subcategory}</span>}
+            {hasUpdate && <span className="rounded-md bg-blue-100 dark:bg-blue-950/50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:text-blue-300">New update</span>}
           </div>
-          <h3 className="font-semibold leading-snug text-slate-900 line-clamp-1">{t.title}</h3>
-          <p className="mt-0.5 text-xs text-slate-500 line-clamp-1">{t.description}</p>
-          <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-400">
+          <h3 className="font-semibold leading-snug text-slate-900 dark:text-foreground line-clamp-1">{t.title}</h3>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-muted-foreground line-clamp-1">{t.description}</p>
+          <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
             <span>{timeAgo(t.updatedAt)}</span>
             {t.assignedTo?.email && <span className="flex items-center gap-1"><User className="h-3 w-3" />{t.assignedTo.email.split("@")[0]}</span>}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {assigned && <span className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs font-bold text-white">Action →</span>}
-          <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
+          <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors" />
         </div>
       </div>
     </button>
@@ -846,17 +847,17 @@ export default function PortalPage() {
       `}</style>
       <Toaster />
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-background text-foreground transition-colors">
         {/* ── TOP NAV ── */}
-        <nav className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm">
+        <nav className="sticky top-0 z-40 border-b border-slate-200 dark:border-border bg-white/95 dark:bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-card/80 shadow-sm">
           <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 shadow">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 dark:from-slate-700 dark:to-slate-800 shadow">
                 <Zap className="h-5 w-5 text-white" />
               </div>
               <div>
-                <span className="text-lg font-bold text-slate-900">Service Portal</span>
-                <span className="ml-2 hidden text-xs font-medium text-slate-400 sm:inline">IT Support & Requests</span>
+                <span className="text-lg font-bold text-slate-900 dark:text-foreground">Service Portal</span>
+                <span className="ml-2 hidden text-xs font-medium text-slate-400 dark:text-muted-foreground sm:inline">IT Support & Requests</span>
               </div>
             </div>
 
@@ -869,15 +870,18 @@ export default function PortalPage() {
               )}
               {canDash && (
                 <button onClick={() => router.push("/dashboard")}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card px-3 py-2 text-sm font-semibold text-slate-700 dark:text-foreground hover:bg-slate-50 dark:hover:bg-muted transition-colors">
                   <LayoutDashboard className="h-4 w-4" />
                   <span className="hidden sm:inline">Dashboard</span>
                 </button>
               )}
+              <div className="rounded-lg border border-slate-200/80 dark:border-border bg-slate-50/80 dark:bg-muted/50 p-0.5">
+                <ThemeToggle />
+              </div>
               <div className="relative">
                 <button
                   onClick={() => { setShowNotif(!showNotif); if (!showNotif) markRead(); }}
-                  className="relative rounded-xl p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+                  className="relative rounded-xl p-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-muted hover:text-slate-700 dark:hover:text-foreground transition-colors">
                   <Bell className="h-5 w-5" />
                   {unread > 0 && (
                     <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
@@ -886,26 +890,26 @@ export default function PortalPage() {
                   )}
                 </button>
                 {showNotif && (
-                  <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-slate-100 bg-white shadow-xl" style={{ animation: "fadeUp .15s ease-out" }}>
-                    <div className="flex items-center justify-between border-b px-4 py-3">
-                      <p className="font-semibold text-slate-800">Notifications</p>
-                      <button onClick={() => setShowNotif(false)} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+                  <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-slate-100 dark:border-border bg-white dark:bg-card shadow-xl" style={{ animation: "fadeUp .15s ease-out" }}>
+                    <div className="flex items-center justify-between border-b dark:border-border px-4 py-3">
+                      <p className="font-semibold text-slate-800 dark:text-foreground">Notifications</p>
+                      <button onClick={() => setShowNotif(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X className="h-4 w-4" /></button>
                     </div>
                     <div className="max-h-80 overflow-y-auto">
                       {notifications.length === 0 ? (
                         <div className="flex flex-col items-center gap-2 py-8 text-center">
-                          <Bell className="h-8 w-8 text-slate-200" />
-                          <p className="text-sm text-slate-400">No notifications yet</p>
+                          <Bell className="h-8 w-8 text-slate-200 dark:text-slate-600" />
+                          <p className="text-sm text-slate-400 dark:text-muted-foreground">No notifications yet</p>
                         </div>
                       ) : notifications.slice(0, 10).map(n => (
-                        <div key={n.id} className={`border-b border-slate-50 px-4 py-3 transition-colors ${!n.readAt ? "bg-blue-50/50" : "hover:bg-slate-50"}`}>
+                        <div key={n.id} className={`border-b border-slate-50 dark:border-border px-4 py-3 transition-colors ${!n.readAt ? "bg-blue-50/50 dark:bg-blue-950/30" : "hover:bg-slate-50 dark:hover:bg-muted/50"}`}>
                           <div className="flex items-start gap-2.5">
                             {!n.readAt && <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" />}
                             {n.readAt && <div className="mt-1.5 h-2 w-2 shrink-0" />}
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-slate-800">{n.title}</p>
-                              <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
-                              <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.createdAt)}</p>
+                              <p className="text-sm font-semibold text-slate-800 dark:text-foreground">{n.title}</p>
+                              <p className="text-xs text-slate-500 dark:text-muted-foreground mt-0.5">{n.message}</p>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{timeAgo(n.createdAt)}</p>
                             </div>
                           </div>
                         </div>
@@ -918,7 +922,7 @@ export default function PortalPage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-slate-600 to-slate-800 text-sm font-bold text-white shadow">
                 {user?.email?.[0]?.toUpperCase() || "U"}
               </div>
-              <button onClick={handleSignOut} className="rounded-xl p-2.5 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+              <button onClick={handleSignOut} className="rounded-xl p-2.5 text-slate-400 dark:text-slate-500 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 transition-colors">
                 <LogOut className="h-5 w-5" />
               </button>
             </div>
@@ -926,7 +930,7 @@ export default function PortalPage() {
         </nav>
 
         {/* ── VIEW TABS ── */}
-        <div className="border-b border-slate-200 bg-white">
+        <div className="border-b border-slate-200 dark:border-border bg-white dark:bg-card/50">
           <div className="mx-auto max-w-7xl px-4">
             <div className="flex gap-0">
               {[
@@ -937,10 +941,10 @@ export default function PortalPage() {
                 const Icon = tab.icon;
                 return (
                   <button key={tab.key} onClick={() => setView(tab.key as any)}
-                    className={`flex items-center gap-2 border-b-2 px-5 py-3.5 text-sm font-semibold transition-colors ${view === tab.key ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+                    className={`flex items-center gap-2 border-b-2 px-5 py-3.5 text-sm font-semibold transition-colors ${view === tab.key ? "border-slate-900 dark:border-primary text-slate-900 dark:text-foreground" : "border-transparent text-slate-500 dark:text-muted-foreground hover:text-slate-700 dark:hover:text-foreground"}`}>
                     <Icon className="h-4 w-4" />{tab.label}
                     {tab.key === "my-tickets" && myTickets.length > 0 && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">{myTickets.length}</span>
+                      <span className="rounded-full bg-slate-100 dark:bg-muted px-2 py-0.5 text-xs font-bold text-slate-600 dark:text-foreground">{myTickets.length}</span>
                     )}
                     {tab.key === "my-tickets" && myTicketsWithUpdates > 0 && (
                       <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white animate-pulse">
@@ -981,39 +985,39 @@ export default function PortalPage() {
 
               {/* Quick actions */}
               <div>
-                <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-400">Quick Actions</h2>
+                <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-muted-foreground">Quick Actions</h2>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   {Object.entries(TICKET_TYPES).map(([key, tc]) => {
                     const Icon = tc.icon;
                     return (
                       <button key={key} onClick={() => openCreate({ type: key })}
-                        className="group flex flex-col items-center gap-3 rounded-2xl border border-slate-100 bg-white p-5 text-center shadow-sm transition-all hover:border-slate-200 hover:shadow-md active:scale-[0.98]">
+                        className="group flex flex-col items-center gap-3 rounded-2xl border border-slate-100 dark:border-border bg-white dark:bg-card p-5 text-center shadow-sm transition-all hover:border-slate-200 dark:hover:border-border hover:shadow-md active:scale-[0.98]">
                         <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${tc.color} shadow-md group-hover:scale-105 transition-transform`}>
                           <Icon className="h-7 w-7 text-white" />
                         </div>
-                        <span className="text-sm font-semibold text-slate-800">{tc.label}</span>
+                        <span className="text-sm font-semibold text-slate-800 dark:text-foreground">{tc.label}</span>
                       </button>
                     );
                   })}
                   {/* View My Assets quick tile */}
                   <button onClick={() => setView("my-assets")}
-                    className="group flex flex-col items-center gap-3 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 text-center shadow-sm transition-all hover:border-emerald-200 hover:shadow-md active:scale-[0.98]">
+                    className="group flex flex-col items-center gap-3 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 p-5 text-center shadow-sm transition-all hover:border-emerald-200 dark:hover:border-emerald-800 hover:shadow-md active:scale-[0.98]">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md group-hover:scale-105 transition-transform">
                       <Package className="h-7 w-7 text-white" />
                     </div>
-                    <span className="text-sm font-semibold text-emerald-800">View My Assets</span>
+                    <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">View My Assets</span>
                   </button>
                 </div>
               </div>
 
               {/* Category tabs */}
               <div>
-                <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-1 overflow-x-auto">
+                <div className="mb-4 flex items-center gap-2 border-b border-slate-100 dark:border-border pb-1 overflow-x-auto">
                   {Object.entries(CATEGORIES).map(([key, cat]) => {
                     const Icon = cat.icon;
                     return (
                       <button key={key} onClick={() => setActiveCatTab(key)}
-                        className={`flex shrink-0 items-center gap-1.5 rounded-t-lg border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${activeCatTab === key ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+                        className={`flex shrink-0 items-center gap-1.5 rounded-t-lg border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${activeCatTab === key ? "border-slate-900 dark:border-primary text-slate-900 dark:text-foreground" : "border-transparent text-slate-500 dark:text-muted-foreground hover:text-slate-700 dark:hover:text-foreground"}`}>
                         <Icon className="h-4 w-4" />{cat.label}
                       </button>
                     );
@@ -1029,11 +1033,11 @@ export default function PortalPage() {
                       return (
                         <button key={item.key}
                           onClick={() => openCreate({ type: "ISSUE", category: activeCatTab, subcategory: item.key })}
-                          className="group flex flex-col items-center gap-2.5 rounded-2xl bg-white border border-slate-100 p-4 text-center shadow-sm transition-all hover:border-slate-200 hover:shadow-md active:scale-[0.97]">
-                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800 shadow-md group-hover:bg-slate-700 group-hover:scale-105 transition-all">
+                          className="group flex flex-col items-center gap-2.5 rounded-2xl bg-white dark:bg-card border border-slate-100 dark:border-border p-4 text-center shadow-sm transition-all hover:border-slate-200 dark:hover:border-border hover:shadow-md active:scale-[0.97]">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800 dark:bg-slate-700 shadow-md group-hover:bg-slate-700 dark:group-hover:bg-slate-600 group-hover:scale-105 transition-all">
                             <Icon className="h-7 w-7 text-white" />
                           </div>
-                          <span className="text-xs font-semibold leading-snug text-slate-700">{item.label}</span>
+                          <span className="text-xs font-semibold leading-snug text-slate-700 dark:text-foreground">{item.label}</span>
                         </button>
                       );
                     })}
@@ -1044,10 +1048,10 @@ export default function PortalPage() {
               {isStaff && assignedTickets.length > 0 && (
                 <div>
                   <div className="mb-3 flex items-center justify-between">
-                    <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-violet-600">
+                    <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">
                       <Zap className="h-4 w-4" /> Assigned to You ({assignedTickets.length})
                     </h2>
-                    <button onClick={() => setView("my-tickets")} className="text-xs font-semibold text-violet-600 hover:text-violet-700">View all →</button>
+                    <button onClick={() => setView("my-tickets")} className="text-xs font-semibold text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300">View all →</button>
                   </div>
                   <div className="space-y-2">
                     {loading ? [1,2].map(i => <Sk key={i} className="h-20 rounded-2xl" />) :
@@ -1066,13 +1070,13 @@ export default function PortalPage() {
               {/* Stats */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                  { label: "Total",       value: stats.total,      color: "from-slate-50 to-slate-100",   text: "text-slate-700",   badge: "bg-slate-200 text-slate-700" },
-                  { label: "Open",        value: stats.open,       color: "from-blue-50 to-blue-100",     text: "text-blue-700",    badge: "bg-blue-200 text-blue-700" },
-                  { label: "In Progress", value: stats.inProgress, color: "from-amber-50 to-amber-100",   text: "text-amber-700",   badge: "bg-amber-200 text-amber-700" },
-                  { label: "Resolved",    value: stats.resolved,   color: "from-emerald-50 to-emerald-100",text: "text-emerald-700", badge: "bg-emerald-200 text-emerald-700" },
+                  { label: "Total",       value: stats.total,      color: "from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800",   text: "text-slate-700 dark:text-foreground",   badge: "bg-slate-200 text-slate-700" },
+                  { label: "Open",        value: stats.open,       color: "from-blue-50 to-blue-100 dark:from-blue-950/50 dark:to-blue-900/30",     text: "text-blue-700 dark:text-blue-300",    badge: "bg-blue-200 text-blue-700" },
+                  { label: "In Progress", value: stats.inProgress, color: "from-amber-50 to-amber-100 dark:from-amber-950/40 dark:to-amber-900/20",   text: "text-amber-700 dark:text-amber-300",   badge: "bg-amber-200 text-amber-700" },
+                  { label: "Resolved",    value: stats.resolved,   color: "from-emerald-50 to-emerald-100 dark:from-emerald-950/40 dark:to-emerald-900/20",text: "text-emerald-700 dark:text-emerald-300", badge: "bg-emerald-200 text-emerald-700" },
                 ].map(s => (
-                  <div key={s.label} className={`rounded-2xl bg-gradient-to-br ${s.color} border border-slate-100 p-4`}>
-                    <p className="text-xs font-semibold text-slate-500">{s.label}</p>
+                  <div key={s.label} className={`rounded-2xl bg-gradient-to-br ${s.color} border border-slate-100 dark:border-border p-4`}>
+                    <p className="text-xs font-semibold text-slate-500 dark:text-muted-foreground">{s.label}</p>
                     <p className={`mt-1 text-3xl font-black ${s.text}`}>{s.value}</p>
                   </div>
                 ))}
@@ -1080,7 +1084,7 @@ export default function PortalPage() {
 
               {/* Filters + search */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex gap-2 rounded-xl bg-slate-100 p-1">
+                <div className="flex gap-2 rounded-xl bg-slate-100 dark:bg-muted p-1">
                   {[
                     { key: "all",         label: "All" },
                     { key: "open",        label: "Open" },
@@ -1088,7 +1092,7 @@ export default function PortalPage() {
                     { key: "resolved",    label: "Resolved" },
                   ].map(f => (
                     <button key={f.key} onClick={() => setActiveFilter(f.key as any)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${activeFilter === f.key ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${activeFilter === f.key ? "bg-white dark:bg-card shadow text-slate-900 dark:text-foreground" : "text-slate-500 dark:text-muted-foreground hover:text-slate-700 dark:hover:text-foreground"}`}>
                       {f.label}
                     </button>
                   ))}
@@ -1098,14 +1102,14 @@ export default function PortalPage() {
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input value={search} onChange={e => setSearch(e.target.value)}
                       placeholder="Search tickets…"
-                      className="w-full sm:w-56 rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors" />
+                      className="w-full sm:w-56 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-background pl-9 pr-3 py-2 text-sm text-foreground focus:border-slate-400 dark:focus:border-primary focus:outline-none focus:ring-2 focus:ring-slate-200 dark:focus:ring-primary/30 transition-colors" />
                   </div>
                   <button onClick={() => loadData(true)} disabled={loading}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors" title="Refresh tickets">
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card px-3 py-2 text-sm font-semibold text-slate-700 dark:text-foreground hover:bg-slate-50 dark:hover:bg-muted disabled:opacity-50 transition-colors" title="Refresh tickets">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   </button>
                   <button onClick={() => openCreate()}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition-colors whitespace-nowrap">
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 dark:bg-primary dark:text-primary-foreground px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:hover:bg-primary/90 transition-colors whitespace-nowrap">
                     <Plus className="h-4 w-4" /> New
                   </button>
                 </div>
@@ -1115,16 +1119,16 @@ export default function PortalPage() {
               {loading ? (
                 <div className="space-y-2">{[1,2,3].map(i => <Sk key={i} className="h-24 rounded-2xl" />)}</div>
               ) : filteredMyTickets.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-100 bg-white py-16 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
-                    <Ticket className="h-8 w-8 text-slate-300" />
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-100 dark:border-border bg-white dark:bg-card py-16 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-muted">
+                    <Ticket className="h-8 w-8 text-slate-300 dark:text-slate-600" />
                   </div>
                   <div>
-                    <p className="font-semibold text-slate-700">No tickets found</p>
-                    <p className="mt-1 text-sm text-slate-400">Create your first ticket to get started</p>
+                    <p className="font-semibold text-slate-700 dark:text-foreground">No tickets found</p>
+                    <p className="mt-1 text-sm text-slate-400 dark:text-muted-foreground">Create your first ticket to get started</p>
                   </div>
                   <button onClick={() => openCreate()}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition-colors">
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 dark:bg-primary dark:text-primary-foreground px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 dark:hover:bg-primary/90 transition-colors">
                     <Plus className="h-4 w-4" /> Create Ticket
                   </button>
                 </div>
@@ -1143,11 +1147,11 @@ export default function PortalPage() {
             <div className="space-y-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-black tracking-tight text-slate-900">My Assets</h2>
-                  <p className="mt-1 text-sm text-slate-500">Assets currently assigned to you</p>
+                  <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-foreground">My Assets</h2>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-muted-foreground">Assets currently assigned to you</p>
                 </div>
                 <button onClick={loadMyAssets} disabled={assetsLoading}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors">
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card px-3.5 py-2 text-sm font-semibold text-slate-700 dark:text-foreground hover:bg-slate-50 dark:hover:bg-muted disabled:opacity-50 transition-colors">
                   {assetsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   Refresh
                 </button>
@@ -1156,13 +1160,13 @@ export default function PortalPage() {
               {/* Stats */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                  { label: "Total",       value: myAssets.length,                                         from: "from-slate-50",   to: "to-slate-100",   text: "text-slate-700" },
-                  { label: "Active",      value: myAssets.filter(a => a.status === "ACTIVE").length,      from: "from-emerald-50", to: "to-emerald-100", text: "text-emerald-700" },
-                  { label: "Maintenance", value: myAssets.filter(a => a.status === "MAINTENANCE").length, from: "from-amber-50",   to: "to-amber-100",   text: "text-amber-700" },
-                  { label: "Inactive",    value: myAssets.filter(a => a.status === "INACTIVE").length,    from: "from-slate-50",   to: "to-slate-100",   text: "text-slate-500" },
+                  { label: "Total",       value: myAssets.length,                                         from: "from-slate-50 dark:from-slate-900",   to: "to-slate-100 dark:to-slate-800",   text: "text-slate-700 dark:text-foreground" },
+                  { label: "Active",      value: myAssets.filter(a => a.status === "ACTIVE").length,      from: "from-emerald-50 dark:from-emerald-950/40", to: "to-emerald-100 dark:to-emerald-900/20", text: "text-emerald-700 dark:text-emerald-300" },
+                  { label: "Maintenance", value: myAssets.filter(a => a.status === "MAINTENANCE").length, from: "from-amber-50 dark:from-amber-950/40",   to: "to-amber-100 dark:to-amber-900/20",   text: "text-amber-700 dark:text-amber-300" },
+                  { label: "Inactive",    value: myAssets.filter(a => a.status === "INACTIVE").length,    from: "from-slate-50 dark:from-slate-900",   to: "to-slate-100 dark:to-slate-800",   text: "text-slate-500 dark:text-muted-foreground" },
                 ].map(s => (
-                  <div key={s.label} className={`rounded-2xl bg-gradient-to-br ${s.from} ${s.to} border border-slate-100 p-4`}>
-                    <p className="text-xs font-semibold text-slate-500">{s.label}</p>
+                  <div key={s.label} className={`rounded-2xl bg-gradient-to-br ${s.from} ${s.to} border border-slate-100 dark:border-border p-4`}>
+                    <p className="text-xs font-semibold text-slate-500 dark:text-muted-foreground">{s.label}</p>
                     <p className={`mt-1 text-3xl font-black ${s.text}`}>{s.value}</p>
                   </div>
                 ))}
@@ -1173,12 +1177,12 @@ export default function PortalPage() {
                   {[1,2,3,4,5,6].map(i => <Sk key={i} className="h-52 rounded-2xl" />)}
                 </div>
               ) : myAssets.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-100 bg-white py-20 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50">
+                <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-100 dark:border-border bg-white dark:bg-card py-20 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/40">
                     <Package className="h-8 w-8 text-emerald-400" />
                   </div>
-                  <p className="font-semibold text-slate-700">No assets assigned to you</p>
-                  <p className="text-sm text-slate-400">Contact your IT department to get assets assigned</p>
+                  <p className="font-semibold text-slate-700 dark:text-foreground">No assets assigned to you</p>
+                  <p className="text-sm text-slate-400 dark:text-muted-foreground">Contact your IT department to get assets assigned</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1191,18 +1195,18 @@ export default function PortalPage() {
                     };
                     const sc = statusCfg[asset.status] ?? statusCfg.INACTIVE;
                     return (
-                      <div key={asset.id} className="group flex flex-col rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-emerald-200 transition-all overflow-hidden">
+                      <div key={asset.id} className="group flex flex-col rounded-2xl border border-slate-100 dark:border-border bg-white dark:bg-card shadow-sm hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-800 transition-all overflow-hidden">
                         {/* Image */}
-                        <div className="relative h-36 bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden">
+                        <div className="relative h-36 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 overflow-hidden">
                           {asset.imageUrl
                             ? <img src={asset.imageUrl} alt={asset.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                            : <div className="flex h-full items-center justify-center"><Package className="h-12 w-12 text-slate-200" /></div>
+                            : <div className="flex h-full items-center justify-center"><Package className="h-12 w-12 text-slate-200 dark:text-slate-600" /></div>
                           }
                           <span className={`absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold ${sc.color} ${sc.bg}`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} /> {sc.label}
                           </span>
                           {asset.type && (
-                            <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-white/90 border border-slate-200 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+                            <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-white/90 dark:bg-card/90 border border-slate-200 dark:border-border px-2.5 py-1 text-[10px] font-semibold text-slate-600 dark:text-foreground">
                               <Tag className="h-2.5 w-2.5" /> {asset.type}
                             </span>
                           )}
@@ -1210,24 +1214,24 @@ export default function PortalPage() {
                         {/* Details */}
                         <div className="flex flex-1 flex-col p-4 gap-3">
                           <div>
-                            <p className="font-bold text-slate-900 line-clamp-1">{asset.name}</p>
-                            <p className="text-xs text-slate-400 font-mono mt-0.5">{asset.assetId || asset.id?.slice(0, 8)}</p>
+                            <p className="font-bold text-slate-900 dark:text-foreground line-clamp-1">{asset.name}</p>
+                            <p className="text-xs text-slate-400 dark:text-muted-foreground font-mono mt-0.5">{asset.assetId || asset.id?.slice(0, 8)}</p>
                           </div>
                           <div className="space-y-1.5 mt-auto">
                             {(asset.floorNumber || asset.roomNumber) && (
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-muted-foreground">
                                 <MapPin className="h-3.5 w-3.5 shrink-0" />
                                 Floor {asset.floorNumber}{asset.roomNumber ? ` · Room ${asset.roomNumber}` : ""}
                               </div>
                             )}
                             {asset.assignedAt && (
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-muted-foreground">
                                 <Calendar className="h-3.5 w-3.5 shrink-0" />
                                 Assigned {timeAgo(asset.assignedAt)}
                               </div>
                             )}
                             {asset.vendor?.name && (
-                              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-muted-foreground">
                                 <User className="h-3.5 w-3.5 shrink-0" />
                                 <span className="truncate">{asset.vendor.name}</span>
                               </div>
@@ -1235,7 +1239,7 @@ export default function PortalPage() {
                           </div>
                           <button
                             onClick={() => openCreate({ type: "REQUEST", category: "ASSET_MANAGEMENT", subcategory: "Report Lost/Stolen" })}
-                            className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:border-slate-300 transition-colors">
+                            className="mt-1 w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50 dark:bg-muted/50 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-foreground hover:bg-slate-100 dark:hover:bg-muted hover:border-slate-300 transition-colors">
                             Report Issue with this Asset
                           </button>
                         </div>
