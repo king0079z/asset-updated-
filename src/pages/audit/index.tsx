@@ -118,7 +118,7 @@ function AssetListModal({ open, onClose, report }: { open: boolean; onClose: ()=
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 bg-white/20 rounded-xl"><ScanLine className="h-5 w-5"/></div>
             <div>
-              <h2 className="text-xl font-bold">Asset Inventory Detail</h2>
+              <DialogTitle className="text-xl font-bold text-white">Asset Inventory Detail</DialogTitle>
               <p className="text-indigo-200 text-sm">{d?.floorNumber||d?.roomNumber ? `Floor ${d?.floorNumber||'?'} · Room ${d?.roomNumber||'?'}` : 'All locations'} · {fmtDate(d?.submittedAt||report?.timestamp)}</p>
             </div>
           </div>
@@ -222,7 +222,7 @@ function CreateTicketModal({ open, onClose, report, staffUsers, onCreated }: {
         <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-white">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl"><TicketIcon className="h-5 w-5"/></div>
-            <div><h2 className="text-xl font-bold">Create Ticket from Report</h2><p className="text-indigo-200 text-sm mt-0.5">Raise an action ticket for this inventory discrepancy</p></div>
+            <div><DialogTitle className="text-xl font-bold text-white">Create Ticket from Report</DialogTitle><p className="text-indigo-200 text-sm mt-0.5">Raise an action ticket for this inventory discrepancy</p></div>
           </div>
           {d && <div className="flex flex-wrap gap-2 mt-4">
             <div className="bg-white/15 rounded-full px-3 py-1 text-xs flex items-center gap-1.5"><ScanLine className="h-3 w-3"/> {d.totalScanned} scanned</div>
@@ -315,7 +315,7 @@ function StaffPerformanceDialog({ open, onClose, userId, staffName, staffEmail }
               </Avatar>
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-xl font-bold">{staffName||staffEmail||'Staff Member'}</h2>
+                  <DialogTitle className="text-xl font-bold text-white">{staffName||staffEmail||'Staff Member'}</DialogTitle>
                   {perf?.staffUser?.role && <Badge className="bg-white/20 text-white border-white/20 text-xs">{perf.staffUser.role}</Badge>}
                 </div>
                 <p className="text-indigo-200 text-sm">{staffEmail}</p>
