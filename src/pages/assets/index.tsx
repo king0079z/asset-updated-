@@ -1037,12 +1037,12 @@ export default function AssetsPage() {
                       </div>
 
                       {/* User selector */}
-                      <Select value={assignToUserId} onValueChange={handleAssignUserSelect}>
+                      <Select value={assignToUserId || "__none__"} onValueChange={(v) => handleAssignUserSelect(v === "__none__" ? "" : v)}>
                         <SelectTrigger className="bg-white">
                           <SelectValue placeholder={orgUsers.length === 0 ? "Loading users…" : "Select a user to assign this asset to"} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">— No assignment —</SelectItem>
+                          <SelectItem value="__none__">— No assignment —</SelectItem>
                           {orgUsers.map((u: any) => (
                             <SelectItem key={u.id} value={u.id}>
                               <span className="flex items-center gap-2">
@@ -1062,7 +1062,7 @@ export default function AssetsPage() {
                             Link to one of their tickets
                             <span className="font-normal text-slate-400">(optional — triggers notification)</span>
                           </div>
-                          <Select value={linkedTicketId} onValueChange={setLinkedTicketId} disabled={loadingUserTickets}>
+                          <Select value={linkedTicketId || "__none__"} onValueChange={(v) => setLinkedTicketId(v === "__none__" ? "" : v)} disabled={loadingUserTickets}>
                             <SelectTrigger className="bg-white">
                               {loadingUserTickets
                                 ? <span className="flex items-center gap-2 text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading tickets…</span>
@@ -1070,7 +1070,7 @@ export default function AssetsPage() {
                               }
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">— No ticket link —</SelectItem>
+                              <SelectItem value="__none__">— No ticket link —</SelectItem>
                               {userTickets.map((t: any) => (
                                 <SelectItem key={t.id} value={t.id}>
                                   <span className="flex items-center gap-2">
