@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import TicketCardView from "@/components/TicketCardView";
 import TicketListView from "@/components/TicketListView";
+import { isUserSubmittedTicketSource } from "@/lib/ticketScope";
 
 const TICKETS_KEY = "/api/tickets";
 const TICKETS_TTL = 60_000;
@@ -782,10 +783,10 @@ function TicketsContent() {
     inProgress: tickets.filter(t => t.status === TicketStatus.IN_PROGRESS).length,
     resolved: tickets.filter(t => t.status === TicketStatus.RESOLVED || t.status === TicketStatus.CLOSED).length,
     critical: tickets.filter(t => t.priority === TicketPriority.CRITICAL).length,
-    portal: tickets.filter(t => t.source === "PORTAL").length,
+    portal: tickets.filter(t => isUserSubmittedTicketSource(t.source)).length,
   };
 
-  const portalTickets = tickets.filter(t => t.source === "PORTAL");
+  const portalTickets = tickets.filter(t => isUserSubmittedTicketSource(t.source));
 
   const filteredTickets = tickets.filter(t => {
     if (activeTab === "open") return t.status === TicketStatus.OPEN;
@@ -817,7 +818,7 @@ function TicketsContent() {
     { key: "in-progress", label: "In Progress",  count: stats.inProgress, dot: "bg-amber-500" },
     { key: "resolved",    label: "Resolved",     count: stats.resolved,   dot: "bg-emerald-500" },
     { key: "critical",    label: "Critical",     count: stats.critical,   dot: "bg-red-500" },
-    { key: "portal",      label: "Portal",       count: stats.portal },
+    { key: "portal",      label: "User requests", count: stats.portal },
     { key: "staff",       label: "Staff",        icon: Users },
     { key: "ai",          label: "AI Intel",     icon: Brain },
   ];
@@ -862,7 +863,7 @@ function TicketsContent() {
           { label: "In Progress", value: stats.inProgress, icon: Clock,       grad: "from-amber-500 to-amber-600", bg: "bg-amber-500/10", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" },
           { label: "Resolved",    value: stats.resolved,  icon: CheckCircle2, grad: "from-emerald-500 to-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" },
           { label: "Critical",    value: stats.critical,   icon: Zap,          grad: "from-red-500 to-red-600",   bg: "bg-red-500/10",  border: "border-red-200 dark:border-red-800", text: "text-red-700 dark:text-red-300" },
-          { label: "Portal",      value: stats.portal,    icon: Users,        grad: "from-violet-500 to-violet-600", bg: "bg-violet-500/10", border: "border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
+          { label: "User requests", value: stats.portal, icon: Users,        grad: "from-violet-500 to-violet-600", bg: "bg-violet-500/10", border: "border-violet-200 dark:border-violet-800", text: "text-violet-700 dark:text-violet-300" },
         ].map(s => {
           const Icon = s.icon;
           return (
@@ -935,8 +936,8 @@ function TicketsContent() {
         <div>
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">User Portal Tickets</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Review, approve and assign tickets submitted by users</p>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">User-submitted tickets</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Portal, Outlook, and other user-raised requests — review, approve and assign</p>
             </div>
           </div>
           {isLoading ? (
@@ -946,8 +947,8 @@ function TicketsContent() {
           ) : filteredPortalTickets.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 py-16 text-center">
               <Ticket className="h-12 w-12 text-slate-300 dark:text-slate-600" />
-              <p className="font-semibold text-slate-700 dark:text-slate-200">No portal tickets found</p>
-              <p className="text-sm text-slate-400 dark:text-slate-500">Portal tickets raised by users will appear here</p>
+              <p className="font-semibold text-slate-700 dark:text-slate-200">No user-submitted tickets found</p>
+              <p className="text-sm text-slate-400 dark:text-slate-500">Tickets from the portal or Outlook add-in will appear here</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

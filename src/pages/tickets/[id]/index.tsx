@@ -402,6 +402,7 @@ function TicketDetailsContent() {
               <SBadge s={ticket.status} />
               <PBadge p={ticket.priority} />
               {ticket.source === "PORTAL" && <span className="rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/50 px-2.5 py-0.5 text-xs font-semibold text-violet-700 dark:text-violet-300">Portal</span>}
+              {ticket.source === "OUTLOOK" && <span className="rounded-full border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 px-2.5 py-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">Outlook</span>}
               {ticket.ticketType && (
                 <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tc.color} ${tc.bg} ${tc.border}`}>
                   <TypeIcon className="h-3 w-3" />{tc.label}

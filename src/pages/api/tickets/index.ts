@@ -3,8 +3,9 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth } from '@/util/supabase/require-auth';
 import prisma from '@/lib/prisma';
 import { TicketPriority, TicketStatus, AuditLogType } from '@prisma/client';
-import { isAdminOrManager, getUserRoleData } from '@/util/roleCheck';
+import { getUserRoleData } from '@/util/roleCheck';
 import { ensureUserProvisioned } from '@/lib/ensureUserProvisioned';
+import { buildTicketListWhere } from '@/lib/ticketScope';
 import { withAuditLog } from '../middleware/audit-middleware';
 import { logUserActivity } from '@/lib/audit';
 
@@ -95,27 +96,11 @@ async function ticketsHandler(
           return res.status(200).json(cached.data);
         }
 
-        // Check if user is admin or manager — uses cached role data
         const roleData = await getUserRoleData(user.id);
         const userIsAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
-        const orgId = roleData?.organizationId ?? null;
         logApiEvent(`User role check: isAdminOrManager=${userIsAdminOrManager}`);
 
-        // Build scoped where: staff see tickets they created OR assigned to them; admin/manager see org tickets
-        let ticketWhere: any = { OR: [{ userId: user.id }, { assignedToId: user.id }] };
-        if (userIsAdminOrManager && orgId) {
-          // Include legacy rows where ticket.organizationId was null but requester belongs to this org (RLS signup failures)
-          ticketWhere = {
-            OR: [
-              { organizationId: orgId },
-              {
-                AND: [{ organizationId: null }, { user: { organizationId: orgId } }],
-              },
-            ],
-          };
-        } else if (userIsAdminOrManager && !orgId) {
-          ticketWhere = { OR: [{ organizationId: null }, { userId: user.id }] };
-        }
+        const ticketWhere: any = buildTicketListWhere(user.id, roleData);
 
         let tickets: any[];
         try {
