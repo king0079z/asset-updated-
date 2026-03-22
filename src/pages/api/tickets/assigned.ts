@@ -16,24 +16,12 @@ export default async function handler(
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Resolve DB user to scope by organization (same-org tickets only)
-    const dbUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { organizationId: true },
-    });
-    const orgId = dbUser?.organizationId ?? undefined;
-
+    // No org restriction here — a ticket explicitly assigned to you is yours
+    // regardless of which organization it came from (cross-org assignment is valid).
     const whereClause: any = {
       assignedToId: user.id,
       status: { in: ["OPEN", "IN_PROGRESS"] },
     };
-    if (orgId) {
-      whereClause.OR = [
-        { organizationId: orgId },
-        { organizationId: null },
-      ];
-      delete whereClause.organizationId;
-    }
 
     const tickets = await prisma.ticket.findMany({
       where: whereClause,

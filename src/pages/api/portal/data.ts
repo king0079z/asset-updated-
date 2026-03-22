@@ -9,9 +9,9 @@ import prisma from '@/lib/prisma';
 import { TicketStatus, TicketPriority } from '@prisma/client';
 import { getUserRoleData } from '@/util/roleCheck';
 
-// Server-side cache keyed by userId — 45 s TTL
+// Server-side cache keyed by userId — 20 s TTL (short so newly-assigned tickets appear quickly)
 const cache = new Map<string, { data: any; ts: number }>();
-const TTL = 45_000;
+const TTL = 20_000;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -34,14 +34,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // ── 3. Role data (cached in memory by roleCheck util) ───────────────────
   const roleData = await getUserRoleData(user.id);
   const isAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
+  const isSuperAdmin = roleData?.isAdmin === true;
   const orgId = roleData?.organizationId ?? null;
 
-  // ── 4. Three DB queries in parallel ─────────────────────────────────────
-  const ticketWhere: any = isAdminOrManager && orgId
-    ? { organizationId: orgId }
-    : isAdminOrManager
-    ? { OR: [{ organizationId: null }, { userId: user.id }] }
-    : { OR: [{ userId: user.id }, { assignedToId: user.id }] };
+  // ── 4. Build ticket query ────────────────────────────────────────────────
+  // Rule: ALWAYS include tickets where assignedToId === me (cross-org support).
+  // Super-admins see everything. Admin/Manager see their org. Staff see own + assigned.
+  let ticketWhere: any;
+  if (isSuperAdmin) {
+    ticketWhere = {}; // all tickets
+  } else if (isAdminOrManager && orgId) {
+    ticketWhere = {
+      OR: [
+        { organizationId: orgId },
+        { organizationId: null },
+        { assignedToId: user.id }, // cross-org assignments always visible
+      ],
+    };
+  } else if (isAdminOrManager) {
+    ticketWhere = { OR: [{ organizationId: null }, { userId: user.id }, { assignedToId: user.id }] };
+  } else {
+    ticketWhere = { OR: [{ userId: user.id }, { assignedToId: user.id }] };
+  }
 
   const [rawTickets, rawNotifications] = await Promise.all([
     prisma.ticket.findMany({
@@ -93,6 +107,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Store in cache
   cache.set(user.id, { data: payload, ts: Date.now() });
   res.setHeader('X-Cache', 'MISS');
-  res.setHeader('Cache-Control', 'private, max-age=45, stale-while-revalidate=30');
+  res.setHeader('Cache-Control', 'private, max-age=20, stale-while-revalidate=10');
   return res.status(200).json(payload);
 }
