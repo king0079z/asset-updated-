@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 import { TicketPriority, TicketStatus, AuditLogType } from '@prisma/client';
 import { getUserRoleData } from '@/util/roleCheck';
 import { ensureUserProvisioned } from '@/lib/ensureUserProvisioned';
-import { buildTicketListWhere } from '@/lib/ticketScope';
+import { buildTicketListWhere, computeTicketOrgWideAccess } from '@/lib/ticketScope';
 import { withAuditLog } from '../middleware/audit-middleware';
 import { logUserActivity } from '@/lib/audit';
 
@@ -96,11 +96,10 @@ async function ticketsHandler(
           return res.status(200).json(cached.data);
         }
 
-        const roleData = await getUserRoleData(user.id);
-        const userIsAdminOrManager = roleData?.role === 'ADMIN' || roleData?.role === 'MANAGER';
-        logApiEvent(`User role check: isAdminOrManager=${userIsAdminOrManager}`);
+        const { roleData, orgWideView } = await computeTicketOrgWideAccess(user.id);
+        logApiEvent(`User ticket scope: orgWideView=${orgWideView}`);
 
-        const ticketWhere: any = buildTicketListWhere(user.id, roleData);
+        const ticketWhere: any = buildTicketListWhere(user.id, roleData, orgWideView);
 
         let tickets: any[];
         try {

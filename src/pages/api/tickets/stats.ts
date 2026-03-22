@@ -2,8 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { TicketStatus, TicketPriority } from '@prisma/client';
 import { requireAuth } from '@/util/supabase/require-auth';
-import { getUserRoleData } from '@/util/roleCheck';
-import { buildTicketListWhere } from '@/lib/ticketScope';
+import { buildTicketListWhere, computeTicketOrgWideAccess } from '@/lib/ticketScope';
 
 const logApiEvent = (message: string, data?: any) => {
   try {
@@ -31,8 +30,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   thirtyDaysAgo.setDate(today.getDate() - 30);
 
   try {
-    const roleData = await getUserRoleData(user.id);
-    const scopeWhere = buildTicketListWhere(user.id, roleData);
+    const { roleData, orgWideView } = await computeTicketOrgWideAccess(user.id);
+    const scopeWhere = buildTicketListWhere(user.id, roleData, orgWideView);
 
     const [
       totalTickets,

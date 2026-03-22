@@ -114,7 +114,7 @@ export default function TicketDashboard() {
   const fetchTicketStats = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/tickets/stats");
+      const response = await fetch("/api/tickets/stats", { credentials: "include" });
       if (!response.ok) {
         throw new Error(`Failed to fetch ticket stats: ${response.status}`);
       }
@@ -533,7 +533,9 @@ export default function TicketDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Recent Tickets</CardTitle>
-              <CardDescription>Your 5 most recently created tickets</CardDescription>
+              <CardDescription>
+                Up to 5 most recent tickets you can access (organization-wide for admins/managers; your own and assigned for staff)
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? (
