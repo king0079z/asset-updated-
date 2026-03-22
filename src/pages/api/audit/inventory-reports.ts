@@ -54,7 +54,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Enrich each log with submitter info + linked tickets
     const enriched = await Promise.all(
       logs.map(async (log) => {
-        let submitter = null;
+        const details = (log.details as any) || {};
+
+        // Try DB lookup first, then fall back to what was stored in the details JSON
+        let submitter: any = null;
         if (log.userId) {
           try {
             submitter = await prisma.user.findUnique({
@@ -62,6 +65,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               select: { id: true, name: true, email: true, role: true, imageUrl: true },
             });
           } catch {}
+        }
+
+        // If DB lookup returned nothing, synthesise from the stored details
+        if (!submitter) {
+          submitter = {
+            id: log.userId || null,
+            name: details.submittedByName || null,
+            email: details.submittedByEmail || null,
+            role: null,
+            imageUrl: null,
+          };
+        } else {
+          // Patch in missing name/email from details if DB record is incomplete
+          if (!submitter.name && details.submittedByName) submitter.name = details.submittedByName;
+          if (!submitter.email && details.submittedByEmail) submitter.email = details.submittedByEmail;
         }
 
         // Find tickets whose description embeds this audit log's ID
