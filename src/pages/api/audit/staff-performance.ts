@@ -7,11 +7,11 @@ import PDFDocument from 'pdfkit';
 
 /* ── helpers ── */
 function fmtDate(iso?: string) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  if (!iso) return 'N/A';
+  try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); } catch { return String(iso); }
 }
 function fmtDuration(ms?: number) {
-  if (!ms) return '—';
+  if (!ms) return 'N/A';
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const hr = Math.floor(m / 60);
@@ -98,7 +98,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Missing item frequency
     (d.missingItems || []).forEach((item: any) => {
       const key = item.barcode || item.name || 'unknown';
-      if (!missingItemFreq[key]) missingItemFreq[key] = { name: item.name || '—', barcode: item.barcode || '—', count: 0 };
+      if (!missingItemFreq[key]) missingItemFreq[key] = { name: item.name || 'N/A', barcode: item.barcode || 'N/A', count: 0 };
       missingItemFreq[key].count++;
     });
 
@@ -214,149 +214,157 @@ async function generatePerformancePdf(res: any, data: any) {
   const { staffUser, userId, totalScans, totalMissing, avgCoverage, avgMissingPerScan,
     alertCount, locationBreakdown, topMissingItems, timeline, insights } = data;
 
-  const INDIGO = '#4338ca'; const PURPLE = '#7c3aed'; const SLATE9 = '#0f172a';
-  const SLATE7 = '#334155'; const SLATE5 = '#64748b'; const SLATE3 = '#cbd5e1';
-  const SLATE1 = '#f8fafc'; const WHITE = '#ffffff'; const RED = '#dc2626';
-  const RED_LT = '#fef2f2'; const GREEN = '#16a34a'; const GREEN_LT = '#f0fdf4';
-  const AMBER = '#d97706'; const AMBER_LT = '#fffbeb';
+  // All 6-char hex only — no alpha, no emoji anywhere
+  const INDIGO  = '#4338ca'; const INDIGO_D = '#3730a3'; const INDIGO_LT = '#eef2ff';
+  const SLATE9  = '#0f172a'; const SLATE7   = '#334155'; const SLATE5    = '#64748b';
+  const SLATE3  = '#cbd5e1'; const SLATE1   = '#f8fafc'; const WHITE     = '#ffffff';
+  const RED     = '#dc2626'; const RED_LT   = '#fef2f2'; const GREEN     = '#16a34a';
+  const AMBER   = '#d97706'; const AMBER_LT = '#fffbeb'; const CHIP_BG   = '#4f46e5';
 
   type RGB = [number, number, number];
-  const hex = (h: string): RGB => { const c = h.replace('#',''); return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)]; };
+  const hex = (h: string): RGB => { const c = h.replace('#','').slice(0,6); return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)]; };
   const fill = (doc: any, h: string) => doc.fillColor(hex(h));
   const stroke = (doc: any, h: string) => doc.strokeColor(hex(h));
   const rRect = (doc: any, x: number, y: number, w: number, h: number, r: number, fh: string, sh?: string) => {
-    fill(doc, fh); if (sh) stroke(doc, sh); doc.roundedRect(x, y, w, h, r); if (sh) doc.fillAndStroke(); else doc.fill();
+    fill(doc, fh); if (sh) stroke(doc, sh); doc.roundedRect(x, y, w, h, Math.min(r,w/2,h/2)); if (sh) doc.fillAndStroke(); else doc.fill();
+  };
+  const safeT = (s: any) => String(s ?? '').replace(/[^\x20-\x7E]/g, '');
+  const newPage = (doc: any, pw: number, m: number) => {
+    doc.addPage({ margin:0, size:'A4' });
+    rRect(doc, 0, 0, pw, 26, 0, INDIGO_D);
+    fill(doc, WHITE); doc.font('Helvetica-Bold').fontSize(8).text('STAFF INVENTORY PERFORMANCE REPORT  (continued)', m, 9);
+    return 42;
   };
 
   const doc = new PDFDocument({ margin: 0, size: 'A4', bufferPages: true });
   const chunks: Buffer[] = [];
   doc.on('data', (c: Buffer) => chunks.push(c));
 
-  const PAGE_W = 595.28; const PAGE_H = 841.89; const M = 36; const CW = PAGE_W - M*2;
-  const staffName = staffUser?.name || 'Staff Member';
-  const staffEmail = staffUser?.email || '';
+  const PW = 595.28; const PH = 841.89; const M = 38; const CW = PW - M*2;
+  const staffName  = safeT(staffUser?.name  || 'Staff Member');
+  const staffEmail = safeT(staffUser?.email || '');
+  const staffRole  = safeT(staffUser?.role  || '');
 
-  // Hero
-  rRect(doc, 0, 0, PAGE_W, 175, 0, INDIGO);
-  fill(doc, PURPLE); doc.opacity(0.2).circle(PAGE_W - 40, 20, 110).fill().opacity(1);
+  // ── Hero ────────────────────────────────────────────────────────────────────
+  rRect(doc, 0, 0, PW, 178, 0, INDIGO);
+  rRect(doc, PW - 80, 0, 80, 178, 0, INDIGO_D);  // right accent stripe (no opacity)
+
   fill(doc, WHITE);
-  doc.font('Helvetica-Bold').fontSize(22).text('STAFF INVENTORY PERFORMANCE REPORT', M, 38, { width: CW - 40 });
-  doc.font('Helvetica').fontSize(9).fillColor(hex('#c7d2fe')).text(`${staffName}  ·  ${staffEmail}`, M, 70);
-  doc.font('Helvetica').fontSize(8).fillColor(hex('#c7d2fe')).text(`Generated: ${new Date().toLocaleString()}  ·  User ID: ${userId}`, M, 84);
+  doc.font('Helvetica-Bold').fontSize(20).text('STAFF INVENTORY PERFORMANCE REPORT', M, 30, { width: CW - 60 });
+  doc.font('Helvetica').fontSize(9).fillColor(hex(SLATE3)).text(`Staff: ${staffName}  |  ${staffEmail}`, M, 62);
+  doc.font('Helvetica').fontSize(8).fillColor(hex(SLATE3)).text(`Generated: ${new Date().toLocaleString()}`, M, 76);
 
-  // KPI chips
+  // Role badge
+  if (staffRole) {
+    rRect(doc, M, 90, doc.widthOfString(staffRole) + 18, 18, 6, CHIP_BG);
+    fill(doc, WHITE); doc.font('Helvetica').fontSize(8).text(staffRole, M + 9, 94);
+  }
+
+  // ── KPI chips ────────────────────────────────────────────────────────────
   const kpis = [
-    { l: 'Total Scans', v: totalScans }, { l: 'Total Missing', v: totalMissing },
-    { l: 'Avg Coverage', v: `${avgCoverage}%` }, { l: 'Avg Missing/Scan', v: avgMissingPerScan },
-    { l: 'Alert Sessions', v: alertCount },
+    { l:'Total Scans',      v:totalScans },
+    { l:'Total Missing',    v:totalMissing },
+    { l:'Avg Coverage',     v:`${avgCoverage}%` },
+    { l:'Avg Miss./Scan',   v:avgMissingPerScan },
+    { l:'Alert Sessions',   v:alertCount },
   ];
-  const kW = (CW - 8) / 5;
+  const kW = Math.floor((CW - 4) / 5);
   kpis.forEach((k, i) => {
-    const x = M + i * (kW + 2);
-    rRect(doc, x, 105, kW, 55, 8, '#ffffff18');
-    fill(doc, WHITE); doc.font('Helvetica-Bold').fontSize(18).text(String(k.v), x+4, 116, { width: kW-8, align: 'center' });
-    fill(doc, '#c7d2fe'); doc.font('Helvetica').fontSize(7.5).text(k.l, x+4, 138, { width: kW-8, align: 'center' });
+    const kx = M + i * (kW + 1);
+    rRect(doc, kx, 116, kW, 52, 8, INDIGO_D);
+    fill(doc, WHITE);
+    doc.font('Helvetica-Bold').fontSize(18).text(safeT(String(k.v)), kx+4, 126, { width: kW-8, align:'center' });
+    fill(doc, SLATE3);
+    doc.font('Helvetica').fontSize(7).text(k.l, kx+4, 146, { width: kW-8, align:'center' });
   });
 
   let y = 192;
 
-  // AI Insights section
-  rRect(doc, M, y, CW, 24, 6, '#eef2ff');
-  fill(doc, INDIGO); doc.font('Helvetica-Bold').fontSize(11).text('★  AI Performance Insights', M+10, y+7);
-  y += 30;
+  // ── AI Insights ──────────────────────────────────────────────────────────
+  rRect(doc, M, y, CW, 22, 6, INDIGO_LT);
+  fill(doc, INDIGO);
+  doc.font('Helvetica-Bold').fontSize(10).text('AI Performance Insights', M+10, y+6);
+  y += 28;
 
-  insights.forEach((ins: string, i: number) => {
-    const bullet = `${i+1}. `;
-    const h = Math.ceil(doc.heightOfString(bullet + ins, { width: CW - 24 })) + 10;
-    rRect(doc, M, y, CW, h, 6, i % 2 === 0 ? SLATE1 : WHITE);
-    fill(doc, SLATE7); doc.font('Helvetica').fontSize(9).text(bullet + ins, M+10, y+5, { width: CW - 20 });
-    y += h + 4;
-    if (y > PAGE_H - 80) {
-      doc.addPage({ margin: 0, size: 'A4' });
-      rRect(doc, 0, 0, PAGE_W, 24, 0, INDIGO); fill(doc, WHITE);
-      doc.font('Helvetica-Bold').fontSize(9).text('STAFF PERFORMANCE REPORT  (continued)', M, 8);
-      y = 40;
-    }
+  (insights as string[]).forEach((ins, i) => {
+    const line = safeT(`${i+1}. ${ins}`);
+    const lineH = Math.ceil(doc.heightOfString(line, { width: CW - 24 })) + 10;
+    if (y + lineH > PH - 60) y = newPage(doc, PW, M);
+    rRect(doc, M, y, CW, lineH, 6, i%2===0?SLATE1:WHITE);
+    fill(doc, SLATE7);
+    doc.font('Helvetica').fontSize(9).text(line, M+10, y+5, { width: CW-20 });
+    y += lineH + 4;
   });
 
-  y += 10;
+  y += 8;
 
-  // Location breakdown table
+  // ── Location breakdown ────────────────────────────────────────────────────
   if (locationBreakdown.length > 0) {
-    if (y > PAGE_H - 120) {
-      doc.addPage({ margin: 0, size: 'A4' }); rRect(doc, 0, 0, PAGE_W, 24, 0, INDIGO); fill(doc, WHITE);
-      doc.font('Helvetica-Bold').fontSize(9).text('STAFF PERFORMANCE REPORT  (continued)', M, 8); y = 40;
-    }
-    rRect(doc, M, y, CW, 22, 6, '#eef2ff'); fill(doc, INDIGO);
+    if (y > PH - 130) y = newPage(doc, PW, M);
+    rRect(doc, M, y, CW, 22, 6, INDIGO_LT); fill(doc, INDIGO);
     doc.font('Helvetica-Bold').fontSize(10).text('Location Breakdown', M+10, y+6); y += 28;
-    // header
-    rRect(doc, M, y, CW, 16, 0, SLATE1);
+
+    rRect(doc, M, y, CW, 17, 0, SLATE1);
     fill(doc, SLATE5); doc.font('Helvetica-Bold').fontSize(7.5);
-    const lCols = [
-      {l:'Location', x:M+4, w:140}, {l:'Scans', x:M+146, w:40}, {l:'Scanned', x:M+188, w:50},
-      {l:'In System', x:M+240, w:55}, {l:'Missing', x:M+297, w:50}, {l:'Coverage', x:M+349, w:55},
-    ];
-    lCols.forEach(c => doc.text(c.l, c.x, y+4, { width: c.w }));
-    y += 16;
-    locationBreakdown.slice(0, 25).forEach((loc: any, i: number) => {
-      rRect(doc, M, y, CW, 16, 0, i%2===0?WHITE:SLATE1);
-      fill(doc, loc.missing > 5 ? RED : SLATE7); doc.font('Helvetica').fontSize(8);
-      doc.text(loc.location, lCols[0].x, y+4, { width: lCols[0].w });
+    const lc = [{l:'Location',x:M+4,w:138},{l:'Scans',x:M+144,w:40},{l:'Scanned',x:M+186,w:50},{l:'In System',x:M+238,w:55},{l:'Missing',x:M+295,w:50},{l:'Coverage',x:M+347,w:55}];
+    lc.forEach(c => doc.text(c.l, c.x, y+5, {width:c.w}));
+    y += 17;
+
+    locationBreakdown.slice(0,30).forEach((loc: any, i: number) => {
+      if (y > PH - 50) y = newPage(doc, PW, M);
+      rRect(doc, M, y, CW, 17, 0, i%2===0?WHITE:SLATE1);
+      fill(doc, loc.missing>5?RED:SLATE7); doc.font('Helvetica').fontSize(8);
+      doc.text(safeT(loc.location), lc[0].x, y+5, {width:lc[0].w});
       fill(doc, SLATE7);
-      doc.text(String(loc.scans), lCols[1].x, y+4, { width: lCols[1].w });
-      doc.text(String(loc.scanned), lCols[2].x, y+4, { width: lCols[2].w });
-      doc.text(String(loc.inSystem), lCols[3].x, y+4, { width: lCols[3].w });
-      fill(doc, loc.missing > 0 ? RED : GREEN);
-      doc.text(String(loc.missing), lCols[4].x, y+4, { width: lCols[4].w });
-      const cov = loc.coveragePct;
-      fill(doc, cov>=90?GREEN:cov>=70?AMBER:RED);
-      doc.text(`${cov}%`, lCols[5].x, y+4, { width: lCols[5].w });
-      y += 16;
-      if (y > PAGE_H - 60) {
-        doc.addPage({ margin: 0, size: 'A4' }); rRect(doc, 0, 0, PAGE_W, 24, 0, INDIGO); fill(doc, WHITE);
-        doc.font('Helvetica-Bold').fontSize(9).text('STAFF PERFORMANCE REPORT  (continued)', M, 8); y = 40;
-      }
+      doc.text(String(loc.scans),   lc[1].x, y+5, {width:lc[1].w});
+      doc.text(String(loc.scanned), lc[2].x, y+5, {width:lc[2].w});
+      doc.text(String(loc.inSystem),lc[3].x, y+5, {width:lc[3].w});
+      fill(doc, loc.missing>0?RED:GREEN);
+      doc.text(String(loc.missing), lc[4].x, y+5, {width:lc[4].w});
+      fill(doc, loc.coveragePct>=90?GREEN:loc.coveragePct>=70?AMBER:RED);
+      doc.text(`${loc.coveragePct}%`, lc[5].x, y+5, {width:lc[5].w});
+      y += 17;
     });
     y += 10;
   }
 
-  // Top missing items
+  // ── Top missing items ─────────────────────────────────────────────────────
   if (topMissingItems.length > 0) {
-    if (y > PAGE_H - 120) {
-      doc.addPage({ margin: 0, size: 'A4' }); rRect(doc, 0, 0, PAGE_W, 24, 0, INDIGO); fill(doc, WHITE);
-      doc.font('Helvetica-Bold').fontSize(9).text('STAFF PERFORMANCE REPORT  (continued)', M, 8); y = 40;
-    }
+    if (y > PH - 130) y = newPage(doc, PW, M);
     rRect(doc, M, y, CW, 22, 6, RED_LT); fill(doc, RED);
     doc.font('Helvetica-Bold').fontSize(10).text('Frequently Missing Assets', M+10, y+6); y += 28;
-    rRect(doc, M, y, CW, 16, 0, SLATE1); fill(doc, SLATE5); doc.font('Helvetica-Bold').fontSize(7.5);
-    doc.text('#', M+4, y+4, {width:20}).text('Asset Name', M+26, y+4, {width:180}).text('Barcode', M+208, y+4, {width:110}).text('Times Missing', M+320, y+4, {width:80});
-    y += 16;
+
+    rRect(doc, M, y, CW, 17, 0, SLATE1); fill(doc, SLATE5); doc.font('Helvetica-Bold').fontSize(7.5);
+    doc.text('#', M+4, y+5, {width:20}).text('Asset Name', M+26, y+5, {width:185}).text('Barcode', M+213, y+5, {width:115}).text('Times Missing', M+330, y+5, {width:80});
+    y += 17;
+
     topMissingItems.forEach((item: any, i: number) => {
-      rRect(doc, M, y, CW, 16, 0, i%2===0?WHITE:SLATE1);
+      if (y > PH - 50) y = newPage(doc, PW, M);
+      rRect(doc, M, y, CW, 17, 0, i%2===0?WHITE:SLATE1);
       fill(doc, SLATE7); doc.font('Helvetica').fontSize(8);
-      doc.text(String(i+1), M+4, y+4, {width:20});
-      doc.text(item.name, M+26, y+4, {width:180});
-      doc.text(item.barcode, M+208, y+4, {width:110});
+      doc.text(String(i+1), M+4, y+5, {width:20});
+      doc.text(safeT(item.name), M+26, y+5, {width:185});
+      doc.text(safeT(item.barcode), M+213, y+5, {width:115});
       fill(doc, item.count>=3?RED:AMBER);
-      doc.font('Helvetica-Bold').fontSize(8).text(String(item.count), M+320, y+4, {width:80});
-      y += 16;
+      doc.font('Helvetica-Bold').fontSize(8).text(String(item.count), M+330, y+5, {width:80});
+      y += 17;
     });
   }
 
-  // Footer on each page
+  // ── Footers ───────────────────────────────────────────────────────────────
   const pgCount = (doc as any).bufferedPageRange().count;
   for (let i = 0; i < pgCount; i++) {
     doc.switchToPage(i);
-    rRect(doc, 0, PAGE_H-24, PAGE_W, 24, 0, SLATE9);
-    fill(doc, SLATE5); doc.font('Helvetica').fontSize(7.5).text(`Generated: ${new Date().toLocaleString()}`, M, PAGE_H-14);
-    fill(doc, SLATE3); doc.font('Helvetica').fontSize(7.5).text(`Page ${i+1} of ${pgCount}`, PAGE_W-M-50, PAGE_H-14, {width:50,align:'right'});
-    fill(doc, SLATE5); doc.font('Helvetica').fontSize(7).text('CONFIDENTIAL — Staff Inventory Performance Report', 0, PAGE_H-14, {width:PAGE_W,align:'center'});
+    rRect(doc, 0, PH-24, PW, 24, 0, SLATE9);
+    fill(doc, SLATE5); doc.font('Helvetica').fontSize(7.5).text(`Generated: ${new Date().toLocaleString()}`, M, PH-14);
+    fill(doc, SLATE3); doc.font('Helvetica').fontSize(7.5).text(`Page ${i+1} of ${pgCount}`, PW-M-55, PH-14, {width:55,align:'right'});
+    fill(doc, SLATE5); doc.font('Helvetica').fontSize(7).text('CONFIDENTIAL - Staff Inventory Performance Report', 0, PH-14, {width:PW,align:'center'});
   }
 
   doc.end();
   await new Promise<void>(resolve => doc.on('end', resolve));
   const buf = Buffer.concat(chunks);
-  const safeName = (staffUser?.name || 'staff').replace(/[^a-z0-9]/gi,'_').toLowerCase();
+  const safeName = staffName.replace(/[^a-z0-9]/gi,'_').toLowerCase();
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="staff_performance_${safeName}.pdf"`);
   res.setHeader('Content-Length', buf.length);

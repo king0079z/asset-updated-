@@ -100,12 +100,15 @@ async function handleSubmitReview(req: NextApiRequest, res: NextApiResponse) {
           correctInRoomItems: (Array.isArray(correctInRoomItems) ? correctInRoomItems : []).slice(0, 100),
           extraItems: (Array.isArray(extraItems) ? extraItems : []).slice(0, 50),
           submittedByName: userData?.name ?? null,
-          submittedByEmail: userData?.email ?? null,
+          // Always store email — fall back to Supabase session email if Prisma lookup failed
+          submittedByEmail: userData?.email ?? (user as any)?.email ?? null,
           submittedAt: new Date().toISOString(),
         }),
         type: 'USER_ACTIVITY',
         severity: missing > 0 ? 'WARNING' : 'INFO',
         userId: user.id,
+        // Store email directly on the log so future queries can use it without a user lookup
+        userEmail: userData?.email ?? (user as any)?.email ?? null,
       },
     });
     auditLogId = audit.id;

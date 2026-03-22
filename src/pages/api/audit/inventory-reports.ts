@@ -67,19 +67,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           } catch {}
         }
 
+        // Best-effort email: details JSON > log.userEmail field
+        const bestEmail = details.submittedByEmail || log.userEmail || null;
+        const bestName  = details.submittedByName  || bestEmail || null;
+
         // If DB lookup returned nothing, synthesise from the stored details
         if (!submitter) {
           submitter = {
             id: log.userId || null,
-            name: details.submittedByName || null,
-            email: details.submittedByEmail || null,
+            name: bestName,
+            email: bestEmail,
             role: null,
             imageUrl: null,
           };
         } else {
           // Patch in missing name/email from details if DB record is incomplete
-          if (!submitter.name && details.submittedByName) submitter.name = details.submittedByName;
-          if (!submitter.email && details.submittedByEmail) submitter.email = details.submittedByEmail;
+          if (!submitter.name)  submitter.name  = bestName;
+          if (!submitter.email) submitter.email = bestEmail;
         }
 
         // Find tickets whose description embeds this audit log's ID
