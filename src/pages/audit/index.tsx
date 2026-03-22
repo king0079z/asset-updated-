@@ -512,7 +512,8 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onVie
   const SevIcon = sev.Icon;
   const location = [d.floorNumber&&`Floor ${d.floorNumber}`, d.roomNumber&&`Room ${d.roomNumber}`].filter(Boolean).join(' · ')||'All locations';
   const covPct = pct(d.totalScanned, d.totalInSystem);
-  const staffName = report.submitter?.name || report.submitter?.email || d.submittedByName || d.submittedByEmail || 'Unknown Staff';
+  // User model has no `name` field — email is the identifier; fall through all sources
+  const staffName = report.submitter?.email || report.submitter?.name || d.submittedByEmail || d.submittedByName || log?.userEmail || 'Unknown Staff';
   const staffEmail = report.submitter?.email || d.submittedByEmail || '';
 
   const handlePdf = async () => {

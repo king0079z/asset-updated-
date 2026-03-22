@@ -97,12 +97,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   let submitter: any = null;
   if (log.userId) {
-    try { submitter = await prisma.user.findUnique({ where: { id: log.userId }, select: { name: true, email: true, role: true } }); } catch {}
+    try {
+      // User model has no `name` column — select only fields that exist
+      submitter = await prisma.user.findUnique({ where: { id: log.userId }, select: { email: true, role: true } });
+    } catch (e) {
+      console.warn('[report-pdf] user lookup failed:', (e as any)?.message);
+    }
   }
 
   const details  = (log.details as any) || {};
-  const staffName  = safeText(submitter?.name || details.submittedByName || log.userEmail || 'Unknown Staff');
-  const staffEmail = safeText(submitter?.email || details.submittedByEmail || log.userEmail || '');
+  // Resolve best email from all available sources
+  const resolvedEmail = submitter?.email || details.submittedByEmail || details.submittedByName || log.userEmail || null;
+  const staffName  = safeText(resolvedEmail || 'Unknown Staff');
+  const staffEmail = safeText(resolvedEmail || '');
   const staffRole  = safeText(submitter?.role || '');
 
   const missingItems: any[]  = details.missingItems        || [];

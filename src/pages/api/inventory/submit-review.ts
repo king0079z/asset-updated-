@@ -55,16 +55,18 @@ async function handleSubmitReview(req: NextApiRequest, res: NextApiResponse) {
   const missing = Number(missingCount) || 0;
 
   // ── Get user data ─────────────────────────────────────────────────────────
-  let userData: { organizationId: string | null; name: string | null; email: string | null; role: string } | null = null;
+  // User model has no `name` column — only email, role, organizationId
+  let userData: { organizationId: string | null; email: string | null; role: string } | null = null;
   try {
     userData = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { organizationId: true, name: true, email: true, role: true },
+      select: { organizationId: true, email: true, role: true },
     });
   } catch (userErr) {
     console.error('[submit-review] user.findUnique failed:', userErr);
-    // Non-fatal — continue without user data
   }
+  // Always grab email from Supabase session as the authoritative fallback
+  const sessionEmail: string | null = (user as any)?.email ?? null;
 
   // Safe JSON serialiser: strips undefined/non-serialisable values
   const safeJson = (val: unknown): unknown => {
@@ -99,16 +101,15 @@ async function handleSubmitReview(req: NextApiRequest, res: NextApiResponse) {
           wrongLocationItems: (Array.isArray(wrongLocationItems) ? wrongLocationItems : []).slice(0, 50),
           correctInRoomItems: (Array.isArray(correctInRoomItems) ? correctInRoomItems : []).slice(0, 100),
           extraItems: (Array.isArray(extraItems) ? extraItems : []).slice(0, 50),
-          submittedByName: userData?.name ?? null,
-          // Always store email — fall back to Supabase session email if Prisma lookup failed
-          submittedByEmail: userData?.email ?? (user as any)?.email ?? null,
+          // User model has no `name` column; use email as both name and email identifier
+          submittedByName: userData?.email ?? sessionEmail ?? null,
+          submittedByEmail: userData?.email ?? sessionEmail ?? null,
           submittedAt: new Date().toISOString(),
         }),
         type: 'USER_ACTIVITY',
         severity: missing > 0 ? 'WARNING' : 'INFO',
         userId: user.id,
-        // Store email directly on the log so future queries can use it without a user lookup
-        userEmail: userData?.email ?? (user as any)?.email ?? null,
+        userEmail: userData?.email ?? sessionEmail ?? null,
       },
     });
     auditLogId = audit.id;

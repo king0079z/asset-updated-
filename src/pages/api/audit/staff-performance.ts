@@ -48,11 +48,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Fetch the staff user
   let staffUser: any = null;
   try {
-    staffUser = await prisma.user.findUnique({
+    // User model has no `name` column — only select fields that actually exist
+    const u = await prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true, role: true, createdAt: true },
+      select: { email: true, role: true, createdAt: true },
     });
-  } catch {}
+    if (u) staffUser = { name: u.email, email: u.email, role: u.role, createdAt: u.createdAt };
+  } catch (e) {
+    console.warn('[staff-performance] user lookup failed:', (e as any)?.message);
+  }
 
   // ── Aggregate stats ────────────────────────────────────────────────────────
   let totalScans = logs.length;
