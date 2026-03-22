@@ -21,7 +21,8 @@ import {
   X,
   ChevronUp,
   LogOut,
-  Building2
+  Building2,
+  ClipboardList
 } from "lucide-react";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -392,6 +393,12 @@ export function MobileNavBar() {
       icon: Shield,
       label: t("compliance"),
       href: "/settings/compliance",
+      badge: null
+    },
+    {
+      icon: ClipboardList,
+      label: "Inventory Audit",
+      href: "/audit",
       badge: null
     },
   ];

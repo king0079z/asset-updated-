@@ -20,6 +20,7 @@ import {
   Navigation,
   Building2,
   Radio,
+  ClipboardList,
 } from "lucide-react";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { MobileNavBar } from "./MobileNavBar";
@@ -252,6 +253,11 @@ function Sidebar({ className }: SidebarProps) {
         title: t("tickets"),
         icon: TicketIcon,
         href: "/tickets",
+      },
+      {
+        title: "Inventory Audit",
+        icon: ClipboardList,
+        href: "/audit",
       },
     ],
     system: [
