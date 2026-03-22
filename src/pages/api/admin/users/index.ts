@@ -63,7 +63,11 @@ async function getUsers(req: NextApiRequest, res: NextApiResponse) {
         pageAccess: true,
         canDeleteDocuments: true,
         buttonVisibility: true,
-        createdAt: true
+        createdAt: true,
+        organizationId: true,
+        organization: {
+          select: { id: true, name: true, slug: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 500,

@@ -23,7 +23,11 @@ export async function computeTicketOrgWideAccess(userId: string): Promise<{
 }
 
 /**
- * Same scope as GET /api/tickets — staff see own + assigned; org-wide viewers see full org (+ legacy null-org fix).
+ * Same scope as GET /api/tickets.
+ * - Super-admin (isAdmin === true): ALL tickets in the system, no org restriction.
+ * - ADMIN/MANAGER role or supervisor custom role: org-wide tickets.
+ * - Staff / everyone else: own + assigned tickets only.
+ *
  * @param orgWideView — from {@link computeTicketOrgWideAccess}; when false, only own + assigned tickets.
  */
 export function buildTicketListWhere(
@@ -31,6 +35,11 @@ export function buildTicketListWhere(
   roleData: TicketRoleLite,
   orgWideView: boolean,
 ): Prisma.TicketWhereInput {
+  // Super-admins (isAdmin flag) can see every ticket in the system regardless of org.
+  if (roleData?.isAdmin === true) {
+    return {};
+  }
+
   const orgId = roleData?.organizationId ?? null;
 
   if (orgWideView && orgId) {

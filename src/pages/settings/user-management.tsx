@@ -42,6 +42,7 @@ type User = {
   buttonVisibility?: Record<string, boolean> | null;
   createdAt: string;
   organizationId?: string;
+  organization?: { id: string; name: string; slug: string } | null;
   licenseKey?: string;
 };
 
@@ -444,7 +445,18 @@ export default function UserManagementPage() {
                             <UserAvatar email={user.email} />
                             <div>
                               <p className="font-semibold text-sm">{user.email}</p>
-                              <p className="text-xs text-muted-foreground">Registered {new Date(user.createdAt).toLocaleDateString()}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <p className="text-xs text-muted-foreground">Registered {new Date(user.createdAt).toLocaleDateString()}</p>
+                                {user.organization ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+                                    🏢 {user.organization.name}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300">
+                                    ⚠ No org
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -565,6 +577,15 @@ export default function UserManagementPage() {
                                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${getRoleBadgeClass(user)}`}>
                                   {user.customRoleName ?? user.role}
                                 </span>
+                                {user.organization ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+                                    🏢 {user.organization.name}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300">
+                                    ⚠ No org
+                                  </span>
+                                )}
                               </div>
                               <p className="text-xs text-muted-foreground">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
                             </div>
