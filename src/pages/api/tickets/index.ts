@@ -4,6 +4,7 @@ import { requireAuth } from '@/util/supabase/require-auth';
 import prisma from '@/lib/prisma';
 import { TicketPriority, TicketStatus, AuditLogType } from '@prisma/client';
 import { isAdminOrManager, getUserRoleData } from '@/util/roleCheck';
+import { ensureUserProvisioned } from '@/lib/ensureUserProvisioned';
 import { withAuditLog } from '../middleware/audit-middleware';
 import { logUserActivity } from '@/lib/audit';
 
@@ -103,7 +104,15 @@ async function ticketsHandler(
         // Build scoped where: staff see tickets they created OR assigned to them; admin/manager see org tickets
         let ticketWhere: any = { OR: [{ userId: user.id }, { assignedToId: user.id }] };
         if (userIsAdminOrManager && orgId) {
-          ticketWhere = { organizationId: orgId };
+          // Include legacy rows where ticket.organizationId was null but requester belongs to this org (RLS signup failures)
+          ticketWhere = {
+            OR: [
+              { organizationId: orgId },
+              {
+                AND: [{ organizationId: null }, { user: { organizationId: orgId } }],
+              },
+            ],
+          };
         } else if (userIsAdminOrManager && !orgId) {
           ticketWhere = { OR: [{ organizationId: null }, { userId: user.id }] };
         }
@@ -281,7 +290,16 @@ async function ticketsHandler(
         logApiEvent(`Creating ticket for user ${user.id}`, { title, priority: validPriority });
         
         try {
-          const roleData = await getUserRoleData(user.id);
+          let roleData = await getUserRoleData(user.id);
+          // Outlook / first request: User row may be missing if client-side org creation hit Supabase RLS (42501).
+          if (!roleData) {
+            try {
+              await ensureUserProvisioned(user.id, user.email ?? '');
+              roleData = await getUserRoleData(user.id);
+            } catch (provErr) {
+              logApiEvent('ensureUserProvisioned failed before ticket create', provErr);
+            }
+          }
           const orgId = roleData?.organizationId ?? null;
           const ticketSource = (source === 'PORTAL' ? 'PORTAL' : source === 'OUTLOOK' ? 'OUTLOOK' : 'INTERNAL') as string;
           

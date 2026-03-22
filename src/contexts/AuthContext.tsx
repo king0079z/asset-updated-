@@ -130,131 +130,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const createUser = async (user: User) => {
     try {
-      const { data, error } = await supabase
-        .from('User')
-        .select('id, isAdmin, role, organizationId')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
-      
-      // Special case for admin@example.com - automatically set as admin and approved
-      const isAdminEmail = user.email === 'admin@example.com';
-      
-      if (!data) {
-        let organizationId = null;
-        let userRole = isAdminEmail ? 'ADMIN' : 'STAFF';
-        let memberRole = isAdminEmail ? 'OWNER' : 'MEMBER';
-        
-        // Check if user is invited to an organization
-        const { data: inviteData, error: inviteError } = await supabase
-          .from('OrganizationMember')
-          .select('organizationId, role, inviteAccepted')
-          .eq('invitedEmail', user.email)
-          .maybeSingle();
-          
-        if (inviteError && inviteError.code !== 'PGRST116') {
-          console.error('Error checking for invites:', inviteError);
-        }
-        
-        if (inviteData) {
-          // User was invited to an organization
-          organizationId = inviteData.organizationId;
-          memberRole = inviteData.role;
-        } else {
-          // Create a new organization for the user
-          const orgName = `${user.email.split('@')[0]}'s Organization`;
-          const slug = `${user.email.split('@')[0]}-${Math.random().toString(36).substring(2, 7)}`.toLowerCase();
-          
-          const { data: newOrg, error: orgError } = await supabase
-            .from('Organization')
-            .insert({
-              name: orgName,
-              slug: slug,
-              status: 'ACTIVE',
-            })
-            .select()
-            .single();
-            
-          if (orgError) {
-            console.error('Error creating organization:', orgError);
-            throw orgError;
-          }
-          
-          organizationId = newOrg.id;
-          memberRole = 'OWNER';
-          
-          // Create a subscription for the new organization
-          const { error: subError } = await supabase
-            .from('Subscription')
-            .insert({
-              organizationId: organizationId,
-              plan: 'FREE',
-              isActive: true,
-              maxUsers: 5,
-              maxKitchens: 2,
-              maxRecipes: 50,
-              maxAssets: 100,
-              features: {},
-            });
-            
-          if (subError) {
-            console.error('Error creating subscription:', subError);
-          }
-        }
-        
-        // Create the user with organization
-        const { error: insertError } = await supabase
-          .from('User')
-          .insert({
-            id: user.id,
-            email: user.email,
-            status: isAdminEmail ? 'APPROVED' : 'PENDING',
-            isAdmin: isAdminEmail,
-            role: userRole,
-            pageAccess: isAdminEmail ? {} : null,
-            canDeleteDocuments: isAdminEmail, // Admin can delete documents by default
-            organizationId: organizationId,
-          });
-        if (insertError) {
-          throw insertError;
-        }
-        
-        // Create organization membership
-        const { error: memberError } = await supabase
-          .from('OrganizationMember')
-          .insert({
-            organizationId: organizationId,
-            userId: user.id,
-            role: memberRole,
-            inviteAccepted: true,
-          });
-          
-        if (memberError) {
-          console.error('Error creating organization membership:', memberError);
-        }
-        
-        // If user was invited, update the invitation
-        if (inviteData) {
-          const { error: updateInviteError } = await supabase
-            .from('OrganizationMember')
-            .update({
-              userId: user.id,
-              inviteAccepted: true,
-            })
-            .eq('invitedEmail', user.email);
-            
-          if (updateInviteError) {
-            console.error('Error accepting invitation:', updateInviteError);
-          }
-        }
+      // Prefer server-side Prisma provisioning — Supabase RLS blocks direct inserts on Organization (42501).
+      const res = await fetch('/api/users/provision', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('[createUser] provision failed:', res.status, err);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: err?.error || 'Failed to create user profile. Try again or contact support.',
+        });
+        return;
       }
     } catch (error) {
+      console.error('[createUser]', error);
       toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to create user profile",
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to create user profile',
       });
     }
   };

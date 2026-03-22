@@ -9,6 +9,11 @@ const ROLE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  * Fetches user role, pageAccess, organizationId, isAdmin in a single cached DB query.
  * Returns null if user not found.
  */
+/** Call after provisioning or role/org changes so next getUserRoleData hits DB */
+export function invalidateUserRoleCache(userId: string) {
+  roleCache.delete(userId);
+}
+
 export async function getUserRoleData(userId: string): Promise<Omit<RoleData, 'ts'> | null> {
   const cached = roleCache.get(userId);
   if (cached && Date.now() - cached.ts < ROLE_CACHE_TTL) {

@@ -206,52 +206,22 @@ export const OrganizationProvider: React.FC<{ children: ReactNode }> = ({ childr
     if (!user) throw new Error('User not authenticated');
 
     try {
-      const slug = `${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.random().toString(36).substring(2, 7)}`;
-      
-      // Create organization
-      const { data: newOrg, error: orgError } = await supabase
-        .from('Organization')
-        .insert({
-          name,
-          slug,
-          status: 'ACTIVE',
-        })
-        .select()
-        .single();
-
-      if (orgError) throw orgError;
-
-      // Create subscription
-      const { error: subError } = await supabase
-        .from('Subscription')
-        .insert({
-          organizationId: newOrg.id,
-          plan: 'FREE',
-          isActive: true,
-          maxUsers: 5,
-          maxKitchens: 2,
-          maxRecipes: 50,
-          maxAssets: 100,
-          features: {},
-        });
-
-      if (subError) {
-        console.error('Error creating subscription:', subError);
+      // Server-side Prisma — avoids Supabase RLS blocking inserts on Organization (42501).
+      const res = await fetch('/api/organizations', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || res.statusText || 'Failed to create organization');
+      }
+      const newOrg = data.organization as Organization;
+      if (!newOrg?.id) {
+        throw new Error('Invalid response from server');
       }
 
-      // Create membership for current user as owner
-      const { error: memberError } = await supabase
-        .from('OrganizationMember')
-        .insert({
-          organizationId: newOrg.id,
-          userId: user.id,
-          role: 'OWNER',
-          inviteAccepted: true,
-        });
-
-      if (memberError) throw memberError;
-
-      // Refresh organizations
       await refreshOrganizations();
 
       toast({
