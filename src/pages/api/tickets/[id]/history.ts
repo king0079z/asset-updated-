@@ -125,7 +125,10 @@ export default async function handler(
         }
 
         // Fetch ticket then verify access
-        const ticketPost = await prisma.ticket.findUnique({ where: { id } });
+        const ticketPost = await prisma.ticket.findUnique({
+          where: { id },
+          select: { id: true, userId: true, displayId: true, assignedToId: true },
+        });
         if (!ticketPost) {
           logApiEvent(`Ticket ${id} not found`);
           return res.status(404).json({ error: 'Ticket not found' });
@@ -152,6 +155,22 @@ export default async function handler(
         });
 
         logApiEvent(`Created history entry ${historyEntry.id} for ticket ${id}`);
+
+        // Notify ticket owner about the new activity (if the updater is not the owner)
+        if (ticketPost.userId && ticketPost.userId !== user.id) {
+          try {
+            const summary = status ? `Status: ${status}. ` : priority ? `Priority: ${priority}. ` : '';
+            await prisma.notification.create({
+              data: {
+                userId: ticketPost.userId,
+                ticketId: id,
+                type: 'TICKET_UPDATE',
+                title: 'Ticket updated',
+                message: `${ticketPost.displayId || id}: ${summary}${comment.substring(0, 120)}`,
+              },
+            });
+          } catch { /* notification failure should not block the response */ }
+        }
 
         return res.status(201).json({
           id: historyEntry.id,

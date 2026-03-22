@@ -685,18 +685,26 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
 }
 
 /* ── Ticket row ──────────────────────────────────────────────────────────── */
-function TicketRow({ t, onClick, assigned }: { t: PortalTicket; onClick: () => void; assigned?: boolean }) {
+function TicketRow({ t, onClick, assigned, unreadCount = 0 }: { t: PortalTicket; onClick: () => void; assigned?: boolean; unreadCount?: number }) {
   const sc = STATUS_CFG[t.status] || STATUS_CFG.OPEN;
   const tc = TICKET_TYPES[t.ticketType as keyof typeof TICKET_TYPES];
   const TypeIcon = tc?.icon || Ticket;
+  const hasUpdate = unreadCount > 0;
   return (
     <button type="button" onClick={onClick}
-      className={`group w-full text-left rounded-2xl border transition-all hover:shadow-md ${assigned ? "border-violet-200 bg-gradient-to-r from-violet-50 to-white hover:border-violet-300" : "border-slate-100 bg-white hover:border-slate-200"}`}>
+      className={`group w-full text-left rounded-2xl border transition-all hover:shadow-md ${hasUpdate ? "border-blue-300 bg-gradient-to-r from-blue-50/60 to-white hover:border-blue-400 shadow-sm" : assigned ? "border-violet-200 bg-gradient-to-r from-violet-50 to-white hover:border-violet-300" : "border-slate-100 bg-white hover:border-slate-200"}`}>
       <div className="flex items-center gap-3.5 p-4">
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${sc.bg} border ${sc.border}`}>
-          {t.status === "RESOLVED" || t.status === "CLOSED" ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            : t.status === "IN_PROGRESS" ? <Clock className="h-5 w-5 text-amber-600" />
-            : <Circle className="h-5 w-5 text-blue-500" />}
+        <div className="relative shrink-0">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${sc.bg} border ${sc.border}`}>
+            {t.status === "RESOLVED" || t.status === "CLOSED" ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              : t.status === "IN_PROGRESS" ? <Clock className="h-5 w-5 text-amber-600" />
+              : <Circle className="h-5 w-5 text-blue-500" />}
+          </div>
+          {hasUpdate && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-bold text-white shadow-sm animate-pulse">
+              {unreadCount}
+            </span>
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-1.5">
@@ -704,6 +712,7 @@ function TicketRow({ t, onClick, assigned }: { t: PortalTicket; onClick: () => v
             <SBadge s={t.status} />
             <PBadge p={t.priority} />
             {t.subcategory && <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{t.subcategory}</span>}
+            {hasUpdate && <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">New update</span>}
           </div>
           <h3 className="font-semibold leading-snug text-slate-900 line-clamp-1">{t.title}</h3>
           <p className="mt-0.5 text-xs text-slate-500 line-clamp-1">{t.description}</p>
@@ -746,6 +755,11 @@ export default function PortalPage() {
 
   const unread = notifications.filter(n => !n.readAt).length;
 
+  // Per-ticket unread map: ticketId → count of unread notifications for that ticket
+  const ticketUnreads = notifications
+    .filter(n => !n.readAt && n.ticketId)
+    .reduce((acc, n) => { acc[n.ticketId!] = (acc[n.ticketId!] || 0) + 1; return acc; }, {} as Record<string, number>);
+
   const loadData = useCallback(async (forceRefresh = false) => {
     if (!user) return;
     setLoading(true);
@@ -774,10 +788,20 @@ export default function PortalPage() {
     setNotifications(prev => prev.map(n => ({ ...n, readAt: n.readAt || new Date().toISOString() })));
   };
 
+  // Mark all unread notifications for a specific ticket as read
+  const markTicketRead = async (ticketId: string) => {
+    const ids = notifications.filter(n => !n.readAt && n.ticketId === ticketId).map(n => n.id);
+    if (!ids.length) return;
+    await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) });
+    setNotifications(prev => prev.map(n => n.ticketId === ticketId ? { ...n, readAt: n.readAt || new Date().toISOString() } : n));
+  };
+
   const handleSignOut = async () => { await signOut(); router.replace("/login"); };
 
   const assignedTickets = tickets.filter(t => t.assignedToId === user?.id);
   const myTickets = tickets.filter(t => t.userId === user?.id || t.assignedToId === user?.id);
+  // Number of my tickets that have at least one unread notification (for the tab badge)
+  const myTicketsWithUpdates = myTickets.filter(t => ticketUnreads[t.id] > 0).length;
 
   const filteredMyTickets = myTickets.filter(t => {
     if (search && !(t.title || '').toLowerCase().includes(search.toLowerCase()) && !(t.description || '').toLowerCase().includes(search.toLowerCase())) return false;
@@ -917,6 +941,11 @@ export default function PortalPage() {
                     <Icon className="h-4 w-4" />{tab.label}
                     {tab.key === "my-tickets" && myTickets.length > 0 && (
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">{myTickets.length}</span>
+                    )}
+                    {tab.key === "my-tickets" && myTicketsWithUpdates > 0 && (
+                      <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white animate-pulse">
+                        {myTicketsWithUpdates}
+                      </span>
                     )}
                   </button>
                 );
@@ -1102,7 +1131,7 @@ export default function PortalPage() {
               ) : (
                 <div className="space-y-2">
                   {filteredMyTickets.map(t => (
-                    <TicketRow key={t.id} t={t} onClick={() => setSelectedTicket(t)} assigned={t.assignedToId === user?.id && t.userId !== user?.id} />
+                    <TicketRow key={t.id} t={t} onClick={() => { setSelectedTicket(t); markTicketRead(t.id); }} assigned={t.assignedToId === user?.id && t.userId !== user?.id} unreadCount={ticketUnreads[t.id] || 0} />
                   ))}
                 </div>
               )}

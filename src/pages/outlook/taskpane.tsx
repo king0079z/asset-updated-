@@ -631,7 +631,7 @@ export default function OutlookTaskPane() {
                     </span>
                   )}
                 </div>
-                <DetailsForm />
+                {DetailsForm()}
               </div>
             )}
 
@@ -711,7 +711,7 @@ export default function OutlookTaskPane() {
                     )}
                   </div>
                 </div>
-                <DetailsForm />
+                {DetailsForm()}
               </div>
             )}
 
