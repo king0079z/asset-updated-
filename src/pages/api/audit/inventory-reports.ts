@@ -1,35 +1,46 @@
 // @ts-nocheck
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
-import { requireAuth, getUserRoleData } from '@/util/supabase/require-auth';
+import { requireAuth } from '@/util/supabase/require-auth';
+import { getUserRoleData } from '@/util/roleCheck';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const user = await requireAuth(req, res);
-  if (!user) return;
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const roleData = await getUserRoleData(user.id);
-  const { organizationId, isAdmin, role } = roleData;
+  const authResult = await requireAuth(req, res);
+  if (!authResult) return;
+  const { user } = authResult;
 
-  if (req.method === 'GET') {
-    // ── Fetch all INVENTORY_REVIEW_SUBMITTED audit logs ──────────────────────
-    const page = Math.max(1, parseInt(String(req.query.page || '1')));
-    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '20'))));
-    const skip = (page - 1) * limit;
-    const severityFilter = req.query.severity as string | undefined;
+  let roleData: { organizationId: string | null; isAdmin: boolean; role: string } = {
+    organizationId: null,
+    isAdmin: false,
+    role: 'STAFF',
+  };
+  try {
+    const rd = await getUserRoleData(user.id);
+    if (rd) roleData = rd;
+  } catch {}
 
-    const where: any = {
-      action: 'INVENTORY_REVIEW_SUBMITTED',
-    };
+  const { organizationId, isAdmin } = roleData;
 
-    // Scope to org unless super-admin
-    if (!isAdmin && organizationId) {
-      where.organizationId = organizationId;
-    }
+  const page = Math.max(1, parseInt(String(req.query.page || '1')));
+  const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '15'))));
+  const skip = (page - 1) * limit;
+  const severityFilter = req.query.severity as string | undefined;
 
-    if (severityFilter && ['INFO', 'WARNING', 'ERROR'].includes(severityFilter)) {
-      where.severity = severityFilter;
-    }
+  // ── Base filter: only reconciliation reports ─────────────────────────────
+  const where: any = { action: 'INVENTORY_REVIEW_SUBMITTED' };
 
+  // Non-admins: scope to their own submissions (organizationId may not be set on AuditLog)
+  if (!isAdmin) {
+    where.userId = user.id;
+  }
+
+  if (severityFilter && ['INFO', 'WARNING', 'ERROR'].includes(severityFilter)) {
+    where.severity = severityFilter;
+  }
+
+  try {
     const [total, logs] = await Promise.all([
       prisma.auditLog.count({ where }),
       prisma.auditLog.findMany({
@@ -40,49 +51,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }),
     ]);
 
-    // Enrich each log with user info and linked tickets
+    // Enrich each log with submitter info + linked tickets
     const enriched = await Promise.all(
       logs.map(async (log) => {
         let submitter = null;
         if (log.userId) {
-          submitter = await prisma.user.findUnique({
-            where: { id: log.userId },
-            select: { id: true, name: true, email: true, role: true, imageUrl: true },
-          });
+          try {
+            submitter = await prisma.user.findUnique({
+              where: { id: log.userId },
+              select: { id: true, name: true, email: true, role: true, imageUrl: true },
+            });
+          } catch {}
         }
 
-        // Find tickets that reference this audit log in their metadata/description
-        const linkedTickets = await prisma.ticket.findMany({
-          where: {
-            OR: [
-              { description: { contains: log.id } },
-              { description: { contains: 'INVENTORY_REVIEW' } },
-            ],
-            ...((!isAdmin && organizationId) ? { organizationId } : {}),
-          },
-          select: {
-            id: true,
-            displayId: true,
-            title: true,
-            status: true,
-            priority: true,
-            createdAt: true,
-            assignedToId: true,
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        });
+        // Find tickets whose description embeds this audit log's ID
+        let linkedTickets: any[] = [];
+        try {
+          linkedTickets = await prisma.ticket.findMany({
+            where: { description: { contains: log.id } },
+            select: {
+              id: true,
+              displayId: true,
+              title: true,
+              status: true,
+              priority: true,
+              createdAt: true,
+              assignedToId: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          });
+        } catch {}
 
-        // More precise: tickets whose description contains the auditLogId
-        const preciseLinkedTickets = linkedTickets.filter(
-          (t) => t.description?.includes(log.id)
-        );
-
-        return {
-          ...log,
-          submitter,
-          linkedTickets: preciseLinkedTickets,
-        };
+        return { ...log, submitter, linkedTickets };
       })
     );
 
@@ -92,7 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       page,
       totalPages: Math.ceil(total / limit),
     });
+  } catch (err: any) {
+    console.error('[audit/inventory-reports] error:', err?.message ?? err);
+    return res.status(500).json({ error: 'Failed to load audit reports', detail: err?.message });
   }
-
-  return res.status(405).json({ error: 'Method not allowed' });
 }
