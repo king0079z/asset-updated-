@@ -155,6 +155,9 @@ export default function OutlookTaskPane() {
   const [commentResult, setCommentResult] = useState<'idle' | 'success' | 'error'>('idle');
   const historyEndRef = useRef<HTMLDivElement>(null);
 
+  /* ── notifications ── */
+  const [notifications, setNotifications] = useState<any[]>([]);
+
   /* ── my assets ── */
   const [myAssets, setMyAssets] = useState<any[]>([]);
   const [myAssetsLoading, setMyAssetsLoading] = useState(false);
@@ -238,23 +241,48 @@ export default function OutlookTaskPane() {
     setClResult('idle'); setClError('');
   };
 
+  /* ── Fetch notifications ─────────────────────────────────────────────────── */
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notifications', { credentials: 'include', headers: getAuthHeaders() });
+      if (res.ok) setNotifications(await res.json() || []);
+    } catch { }
+  }, []);
+
+  /* ── Computed: unread count per ticket ───────────────────────────────────── */
+  const ticketUnreads: Record<string, number> = notifications
+    .filter((n: any) => !n.readAt && n.ticketId)
+    .reduce((acc: Record<string, number>, n: any) => {
+      acc[n.ticketId] = (acc[n.ticketId] || 0) + 1;
+      return acc;
+    }, {});
+  const totalTicketUpdates = Object.keys(ticketUnreads).length;
+
   /* ── Fetch my tickets ────────────────────────────────────────────────────── */
   const fetchMyTickets = useCallback(async () => {
     setMyTicketsLoading(true);
     try {
-      const res = await fetch('/api/tickets', { credentials: 'include', headers: getAuthHeaders() });
-      if (res.ok) {
-        const data = await res.json();
+      const [ticketRes] = await Promise.all([
+        fetch('/api/tickets', { credentials: 'include', headers: getAuthHeaders() }),
+        fetchNotifications(),
+      ]);
+      if (ticketRes.ok) {
+        const data = await ticketRes.json();
         // Show most recent 20 tickets
         const all = (data.tickets ?? data ?? []).slice(0, 20);
         setMyTickets(all);
       }
     } catch { } finally { setMyTicketsLoading(false); }
-  }, []);
+  }, [fetchNotifications]);
 
   useEffect(() => {
     if (screen === 'mytickets' && authenticated) { fetchMyTickets(); setSelectedTicket(null); }
   }, [screen, authenticated]);
+
+  // Fetch notifications also when hitting Home so the badge is visible
+  useEffect(() => {
+    if (screen === 'home' && authenticated) fetchNotifications();
+  }, [screen, authenticated, fetchNotifications]);
 
   /* ── Open ticket detail ──────────────────────────────────────────────────── */
   const openTicketDetail = useCallback(async (t: any) => {
@@ -263,11 +291,23 @@ export default function OutlookTaskPane() {
     setComment('');
     setCommentResult('idle');
     setHistoryLoading(true);
+
+    // Mark all unread notifications for this ticket as read (optimistic UI + API call)
+    const unreadIds = notifications.filter((n: any) => !n.readAt && n.ticketId === t.id).map((n: any) => n.id);
+    if (unreadIds.length > 0) {
+      setNotifications((prev: any[]) => prev.map((n: any) => n.ticketId === t.id ? { ...n, readAt: new Date().toISOString() } : n));
+      fetch('/api/notifications', {
+        method: 'PATCH', credentials: 'include',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: unreadIds }),
+      }).catch(() => {});
+    }
+
     try {
       const res = await fetch(`/api/tickets/${t.id}/history`, { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) setTicketHistory(await res.json() || []);
     } catch { } finally { setHistoryLoading(false); }
-  }, []);
+  }, [notifications]);
 
   /* ── Scroll history to end ───────────────────────────────────────────────── */
   useEffect(() => {
@@ -450,9 +490,15 @@ export default function OutlookTaskPane() {
             <div className="grid grid-cols-2 gap-3">
               {actions.map(a => {
                 const Icon = a.icon;
+                const showBadge = a.key === 'mytickets' && totalTicketUpdates > 0;
                 return (
                   <button key={a.key} onClick={() => setScreen(a.key as Screen)}
-                    className="group flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm hover:shadow-md hover:border-slate-200 transition-all">
+                    className="group relative flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm hover:shadow-md hover:border-slate-200 transition-all">
+                    {showBadge && (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse z-10">
+                        {totalTicketUpdates}
+                      </span>
+                    )}
                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${a.grad} flex items-center justify-center shadow-sm ${a.shadow}`}>
                       <Icon className="h-5 w-5 text-white" />
                     </div>
@@ -1017,9 +1063,15 @@ export default function OutlookTaskPane() {
                   const sc = STATUS_CFG[t.status] ?? STATUS_CFG.OPEN;
                   const pc = PRI_CFG[t.priority] ?? PRI_CFG.MEDIUM;
                   const hasAssignee = !!t.assignedTo?.email;
+                  const unread = ticketUnreads[t.id] || 0;
                   return (
                     <button key={t.id} type="button" onClick={() => openTicketDetail(t)}
-                      className="w-full text-left rounded-2xl border border-slate-100 bg-white px-4 py-3.5 shadow-sm hover:shadow-md hover:border-indigo-200 hover:bg-indigo-50/20 transition-all group">
+                      className={`relative w-full text-left rounded-2xl border px-4 py-3.5 shadow-sm hover:shadow-md transition-all group ${unread > 0 ? 'border-blue-300 bg-blue-50/40 hover:border-blue-400' : 'border-slate-100 bg-white hover:border-indigo-200 hover:bg-indigo-50/20'}`}>
+                      {unread > 0 && (
+                        <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse z-10">
+                          {unread}
+                        </span>
+                      )}
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-mono text-[10px] font-bold text-slate-400">{t.displayId || '#' + t.id.slice(0, 8)}</span>
@@ -1027,8 +1079,11 @@ export default function OutlookTaskPane() {
                             <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />{sc.label}
                           </span>
                           <span className={`text-[10px] font-bold ${pc.color}`}>{pc.label}</span>
+                          {unread > 0 && (
+                            <span className="inline-flex items-center rounded-md bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">New update</span>
+                          )}
                         </div>
-                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-400 shrink-0 transition-colors" />
+                        <ChevronRight className={`h-4 w-4 shrink-0 transition-colors ${unread > 0 ? 'text-blue-400' : 'text-slate-300 group-hover:text-indigo-400'}`} />
                       </div>
                       <p className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">{t.title}</p>
                       {t.description && <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{t.description}</p>}
