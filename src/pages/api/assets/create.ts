@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { createClient } from "@/util/supabase/api";
 import { logDataModification, logUserActivity } from "@/lib/audit";
 import { getUserRoleData } from "@/util/roleCheck";
+import { requireAuth } from "@/util/supabase/require-auth";
 
 function generateAssetId(type: string) {
   const prefix = type.substring(0, 2).toUpperCase();
@@ -67,6 +68,11 @@ export default async function handler(
       donorName,
       nextServiceDate,
       isProvisional,
+      // User assignment + ticket link
+      assignedToId,
+      assignedToEmail,
+      assignedToName,
+      linkedTicketId,
     } = req.body;
 
     // Validate required fields (vendorId is optional)
@@ -160,6 +166,11 @@ export default async function handler(
           donorName: donorName && String(donorName).trim() ? String(donorName).trim() : null,
           nextServiceDate: nextServiceDate ? (() => { try { const d = new Date(nextServiceDate); return isNaN(d.getTime()) ? null : d; } catch { return null; } })() : null,
           isProvisional: isProvisional === true || isProvisional === 'true',
+          // Assignment fields
+          assignedToId: assignedToId || null,
+          assignedToEmail: assignedToEmail || null,
+          assignedToName: assignedToName || null,
+          assignedAt: assignedToId ? new Date() : null,
           location: latitude && longitude ? {
             create: {
               latitude: parseFloat(latitude),
@@ -170,18 +181,12 @@ export default async function handler(
           } : undefined,
         },
         include: {
-          vendor: {
-            select: {
-              name: true,
-            },
-          },
+          vendor: { select: { name: true } },
           location: true,
         },
       });
       
-      // Log the created asset's purchase date
       console.log(`Created asset purchase date: ${newAsset.purchaseDate ? new Date(newAsset.purchaseDate).toISOString() : 'null'}`);
-      
 
       // Create history record for asset creation
       await prisma.assetHistory.create({
@@ -195,9 +200,47 @@ export default async function handler(
             type: type,
             vendorId: vendorId,
             purchaseAmount: purchaseAmount ? parseFloat(purchaseAmount) : null,
+            assignedToEmail: assignedToEmail || null,
+            linkedTicketId: linkedTicketId || null,
           },
         },
       });
+
+      // ── Link to ticket + notify user ──────────────────────────────────────
+      if (linkedTicketId) {
+        const ticket = await prisma.ticket.findUnique({
+          where: { id: linkedTicketId },
+          select: { id: true, userId: true, displayId: true, title: true },
+        });
+        if (ticket) {
+          // 1. Attach asset to the ticket
+          await prisma.ticket.update({
+            where: { id: linkedTicketId },
+            data: { assetId: newAsset.id },
+          });
+
+          // 2. Add activity entry in the ticket's timeline
+          const assigneePart = assignedToName ? ` It has been assigned to ${assignedToName}.` : '';
+          await prisma.ticketHistory.create({
+            data: {
+              ticketId: linkedTicketId,
+              userId: user.id,
+              comment: `Asset "${newAsset.name}" (ID: ${newAsset.assetId}) has been registered and linked to this ticket.${assigneePart} You can view the asset details from the ticket.`,
+            },
+          });
+
+          // 3. Notify the ticket owner
+          await prisma.notification.create({
+            data: {
+              userId: ticket.userId,
+              ticketId: linkedTicketId,
+              type: 'ASSET_ASSIGNED',
+              title: `Asset registered for your request`,
+              message: `"${newAsset.name}" (${newAsset.assetId}) has been registered and linked to your ticket ${ticket.displayId || linkedTicketId}. Check the ticket for details.`,
+            },
+          });
+        }
+      }
 
       return newAsset;
     });

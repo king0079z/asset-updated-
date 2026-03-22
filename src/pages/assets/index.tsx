@@ -70,7 +70,11 @@ import {
   Layers,
   ShieldCheck,
   Download,
-  Smartphone
+  Smartphone,
+  Link2,
+  Ticket,
+  UserCheck,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -164,6 +168,16 @@ function isValidImageUrl(url: string | null | undefined): url is string {
 
 export default function AssetsPage() {
   const [isOpen, setIsOpen] = useState(false);
+
+  // ── Assign-to-user state (asset registration) ──────────────────────────────
+  const [orgUsers, setOrgUsers] = useState<any[]>([]);
+  const [assignToUserId, setAssignToUserId] = useState("");
+  const [assignToUserEmail, setAssignToUserEmail] = useState("");
+  const [assignToUserName, setAssignToUserName] = useState("");
+  const [userTickets, setUserTickets] = useState<any[]>([]);
+  const [linkedTicketId, setLinkedTicketId] = useState("");
+  const [loadingUserTickets, setLoadingUserTickets] = useState(false);
+
   // Initialize from module-level cache → no loading flash when navigating back
   const [vendors, setVendors] = useState<Vendor[]>(() => getFromCache<Vendor[]>(VENDORS_KEY, VENDORS_TTL) ?? []);
   const [assets, setAssets] = useState<Asset[]>(() => getFromCache<Asset[]>(ASSETS_KEY, ASSETS_TTL) ?? []);
@@ -200,6 +214,44 @@ export default function AssetsPage() {
     }
   };
 
+  // ── Load organisation users for the "assign to user" dropdown ────────────
+  const loadOrgUsers = async () => {
+    try {
+      const r = await fetch('/api/admin/users');
+      if (r.ok) {
+        const d = await r.json();
+        setOrgUsers(d.users || d || []);
+      }
+    } catch { }
+  };
+
+  // ── When admin selects a user, fetch their raised tickets ─────────────────
+  const handleAssignUserSelect = async (userId: string) => {
+    const u = orgUsers.find((x: any) => x.id === userId);
+    setAssignToUserId(userId);
+    setAssignToUserEmail(u?.email || "");
+    setAssignToUserName(u?.email?.split("@")[0]?.replace(/[._]/g, " ")?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || "");
+    setLinkedTicketId("");
+    setUserTickets([]);
+    if (!userId) return;
+    setLoadingUserTickets(true);
+    try {
+      const r = await fetch("/api/tickets", { credentials: "include" });
+      if (r.ok) {
+        const data = await r.json();
+        const all: any[] = data.tickets || data || [];
+        setUserTickets(all.filter((t: any) => t.userId === userId || t.user?.id === userId));
+      }
+    } catch { }
+    finally { setLoadingUserTickets(false); }
+  };
+
+  // ── Reset assign fields when dialog closes ────────────────────────────────
+  const resetAssignFields = () => {
+    setAssignToUserId(""); setAssignToUserEmail(""); setAssignToUserName("");
+    setLinkedTicketId(""); setUserTickets([]);
+  };
+
   const loadAssets = async (bypassCache = false) => {
     if (!bypassCache && !isLoadingAssets) {
       // Silently revalidate in background
@@ -228,7 +280,7 @@ export default function AssetsPage() {
     if (hasAssets && hasVendors) {
       setTimeout(() => { loadVendors(true); fetchWithCache(ASSETS_KEY, { maxAge: ASSETS_TTL }).then(d => { if (d) setAssets(d as Asset[]); }).catch(() => {}); }, 200);
     } else {
-      Promise.all([loadVendors(), loadAssets()]);
+      Promise.all([loadVendors(), loadAssets(), loadOrgUsers()]);
     }
 
     // Add event listener for dispose asset button
@@ -418,6 +470,10 @@ export default function AssetsPage() {
         imageUrl: imageUrl || null,
         latitude: latitude || null,
         longitude: longitude || null,
+        assignedToId: assignToUserId || null,
+        assignedToEmail: assignToUserEmail || null,
+        assignedToName: assignToUserName || null,
+        linkedTicketId: linkedTicketId || null,
       };
 
       // Create the asset
@@ -449,6 +505,7 @@ export default function AssetsPage() {
       setIsOpen(false);
       form.reset();
       setPreviewImage(null);
+      resetAssignFields();
       loadAssets(true); // bypass cache so new asset appears immediately
 
       toast({
@@ -748,7 +805,7 @@ export default function AssetsPage() {
                   }
                 }}
               />
-              <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <Dialog open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) resetAssignFields(); }}>
                 <DialogTrigger asChild>
                   <Button className="bg-white text-indigo-700 hover:bg-indigo-50 border-0 shadow-lg font-semibold gap-2">
                     <PlusCircle className="h-4 w-4" />
@@ -971,6 +1028,70 @@ export default function AssetsPage() {
                         </div>
                       )}
                     </FormItem>
+                    {/* ── Assign to User + Link to Ticket ── */}
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <UserCheck className="h-4 w-4 text-indigo-600 shrink-0" />
+                        <span className="text-sm font-semibold text-slate-800">Assign to User</span>
+                        <span className="text-xs text-slate-400 font-normal">(optional)</span>
+                      </div>
+
+                      {/* User selector */}
+                      <Select value={assignToUserId} onValueChange={handleAssignUserSelect}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder={orgUsers.length === 0 ? "Loading users…" : "Select a user to assign this asset to"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">— No assignment —</SelectItem>
+                          {orgUsers.map((u: any) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              <span className="flex items-center gap-2">
+                                <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                {u.email}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* Ticket selector — only shown when a user is selected */}
+                      {assignToUserId && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                            <Link2 className="h-3.5 w-3.5 text-indigo-500" />
+                            Link to one of their tickets
+                            <span className="font-normal text-slate-400">(optional — triggers notification)</span>
+                          </div>
+                          <Select value={linkedTicketId} onValueChange={setLinkedTicketId} disabled={loadingUserTickets}>
+                            <SelectTrigger className="bg-white">
+                              {loadingUserTickets
+                                ? <span className="flex items-center gap-2 text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading tickets…</span>
+                                : <SelectValue placeholder={userTickets.length === 0 ? "No open tickets found for this user" : "Select a ticket to link (optional)"} />
+                              }
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">— No ticket link —</SelectItem>
+                              {userTickets.map((t: any) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  <span className="flex items-center gap-2">
+                                    <Ticket className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
+                                    <span className="truncate max-w-[200px]">{t.title}</span>
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {linkedTicketId && (
+                            <p className="text-[11px] text-indigo-600 flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse inline-block" />
+                              A notification will be sent to the user when the asset is created.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <Button type="submit" className="w-full" disabled={isSubmitting}>
                       {isSubmitting ? (
                         <><svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>{t('registering')}</>
