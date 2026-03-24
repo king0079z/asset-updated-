@@ -190,7 +190,7 @@ async function ticketsHandler(
         }
         
         // Extract ticket data from request body
-        const { title, description, priority, assetId, assignedToId, requesterName, source, ticketType, category, subcategory, location, contactDetails, missionName, resolveBy } = req.body;
+        const { title, description, priority, assetId, assignedToId, requesterName, source, ticketType, category, subcategory, location, contactDetails, missionName, resolveBy, inventoryAuditLogId } = req.body;
         
         logApiEvent(`Ticket creation request received`, { 
           title, 
@@ -272,6 +272,23 @@ async function ticketsHandler(
         }
 
         logApiEvent(`Creating ticket for user ${user.id}`, { title, priority: validPriority });
+
+        let descriptionWithAuditRef = description.trim();
+        if (inventoryAuditLogId && typeof inventoryAuditLogId === 'string' && inventoryAuditLogId.length > 8) {
+          try {
+            const auditRow = await prisma.auditLog.findFirst({
+              where: { id: inventoryAuditLogId.trim(), action: 'INVENTORY_REVIEW_SUBMITTED' },
+              select: { id: true },
+            });
+            if (auditRow && !descriptionWithAuditRef.includes(inventoryAuditLogId.trim())) {
+              descriptionWithAuditRef = `${descriptionWithAuditRef}\n\n[Inventory audit report: ${auditRow.id}]`;
+            } else if (auditRow && !descriptionWithAuditRef.includes('[Inventory audit report:')) {
+              descriptionWithAuditRef = `${descriptionWithAuditRef}\n\n[Inventory audit report: ${auditRow.id}]`;
+            }
+          } catch {
+            /* ignore invalid audit id */
+          }
+        }
         
         try {
           let roleData = await getUserRoleData(user.id);
@@ -313,7 +330,7 @@ async function ticketsHandler(
           // Prepare the ticket data
           const ticketData: Record<string, unknown> = {
             title: title.trim(),
-            description: description.trim(),
+            description: descriptionWithAuditRef,
             priority: validPriority,
             status: TicketStatus.OPEN,
             userId: user.id,

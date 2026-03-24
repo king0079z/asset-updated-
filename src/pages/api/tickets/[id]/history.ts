@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth } from '@/util/supabase/require-auth';
 import prisma from '@/lib/prisma';
+import { notifyInventoryAuditReportSubmitter } from '@/lib/inventoryAuditTicketLink';
 
 // Enhanced logging function
 const logApiEvent = (message: string, data?: any) => {
@@ -127,7 +128,7 @@ export default async function handler(
         // Fetch ticket then verify access
         const ticketPost = await prisma.ticket.findUnique({
           where: { id },
-          select: { id: true, userId: true, displayId: true, assignedToId: true },
+          select: { id: true, userId: true, displayId: true, assignedToId: true, description: true },
         });
         if (!ticketPost) {
           logApiEvent(`Ticket ${id} not found`);
@@ -171,6 +172,18 @@ export default async function handler(
             });
           } catch { /* notification failure should not block the response */ }
         }
+
+        try {
+          const summary = status ? `Status: ${status}. ` : priority ? `Priority: ${priority}. ` : '';
+          await notifyInventoryAuditReportSubmitter({
+            prisma,
+            ticketId: id,
+            ticketDescription: ticketPost.description || '',
+            updaterUserId: user.id,
+            ticketCreatorUserId: ticketPost.userId,
+            summaryLine: `${ticketPost.displayId || id}: ${summary}${comment.substring(0, 120)}`,
+          });
+        } catch { /* non-blocking */ }
 
         return res.status(201).json({
           id: historyEntry.id,

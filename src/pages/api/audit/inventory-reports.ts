@@ -126,14 +126,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // If Prisma returned an email but no name, use email as display name (User has no name col)
         // The UI should display email when name is absent — the resolveSubmitter already does this.
 
-        // Linked tickets
+        // Linked tickets: description references this audit log id (Report ID / [Inventory audit report:] / _Audit log ref_)
         let linkedTickets: any[] = [];
         try {
           linkedTickets = await prisma.ticket.findMany({
             where: { description: { contains: log.id } },
-            select: { id: true, displayId: true, title: true, status: true, priority: true, createdAt: true, assignedToId: true },
-            orderBy: { createdAt: 'desc' },
-            take: 10,
+            select: {
+              id: true,
+              displayId: true,
+              title: true,
+              status: true,
+              priority: true,
+              createdAt: true,
+              updatedAt: true,
+              assignedToId: true,
+              _count: { select: { history: true } },
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: 100,
           });
         } catch {}
 

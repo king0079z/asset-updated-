@@ -555,6 +555,8 @@ export default function HandheldHubPage() {
   // Exception/reason codes for count review
   const [countReviewReason, setCountReviewReason] = useState('');
   const [countReviewNote, setCountReviewNote] = useState('');
+  /** Server audit log id after submitting inventory review — links new tickets to that report in Audit Center */
+  const [lastInventoryAuditLogId, setLastInventoryAuditLogId] = useState<string | null>(null);
 
   // Recent actions (audit trail)
   const [recentActions, setRecentActions] = useState<{ type: string; label: string; at: number }[]>([]);
@@ -1364,6 +1366,7 @@ export default function HandheldHubPage() {
       if (vals.missionName?.trim()) body.missionName = vals.missionName.trim();
       if (vals.resolveBy) body.resolveBy = vals.resolveBy;
       if (currentAsset?.id) body.assetId = currentAsset.id;
+      if (lastInventoryAuditLogId) body.inventoryAuditLogId = lastInventoryAuditLogId;
       const r = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2154,7 +2157,7 @@ export default function HandheldHubPage() {
     );
     // Persist to server so managers can view it
     try {
-      await fetch('/api/inventory/submit-review', {
+      const submitRes = await fetch('/api/inventory/submit-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -2185,6 +2188,12 @@ export default function HandheldHubPage() {
           extraItems: r.extra.slice(0, 50).map(e => ({ id: e.id, name: e.name, barcode: e.barcode, floorNumber: e.floorNumber, roomNumber: e.roomNumber })),
         }),
       });
+      try {
+        const data = await submitRes.json();
+        if (data?.auditLogId && typeof data.auditLogId === 'string') setLastInventoryAuditLogId(data.auditLogId);
+      } catch {
+        /* ignore */
+      }
     } catch {
       // Server submission is best-effort; local state already updated
     }
@@ -2333,6 +2342,7 @@ export default function HandheldHubPage() {
     setInventoryRoomTagVerified(false);
     setInventorySessionFloor('');
     setInventorySessionRoom('');
+    setLastInventoryAuditLogId(null);
     toast({ title: 'Session ended', description: `${total} item${total !== 1 ? 's' : ''} in list.` });
   }, [unifiedInventory.length, countLocationLabel, pushRecentAction, toast]);
 

@@ -3,6 +3,7 @@ import { requireAuth } from '@/util/supabase/require-auth';
 import prisma from '@/lib/prisma';
 import { TicketPriority, TicketStatus } from '@prisma/client';
 import { getUserRoleData, isAdminOrManager } from '@/util/roleCheck';
+import { notifyInventoryAuditReportSubmitter } from '@/lib/inventoryAuditTicketLink';
 
 // Enhanced logging function
 const logApiEvent = (message: string, data?: any) => {
@@ -407,6 +408,25 @@ export default async function handler(
           } catch (notifErr) {
             console.error('Failed to create notification for ticket update:', notifErr);
           }
+        }
+
+        const isAssignmentChangeOuter = newAssignedToId !== undefined && newAssignedToId !== existingTicket.assignedToId;
+        if (isStatusChanged || isPriorityChanged || (comment && comment.trim()) || isAssignmentChangeOuter) {
+          const invSummaryParts = [
+            isStatusChanged && `Status: ${validStatus}`,
+            isPriorityChanged && `Priority: ${validPriority}`,
+            (comment && comment.trim()) && 'Comment added',
+            isAssignmentChangeOuter && 'Assignment changed',
+          ].filter(Boolean);
+          const invSummaryLine = `${existingTicket.displayId || id}: ${invSummaryParts.length ? invSummaryParts.join('. ') : 'Ticket was updated.'}`;
+          await notifyInventoryAuditReportSubmitter({
+            prisma,
+            ticketId: id,
+            ticketDescription: existingTicket.description,
+            updaterUserId: user.id,
+            ticketCreatorUserId: existingTicket.userId,
+            summaryLine: invSummaryLine,
+          });
         }
 
         // Ensure dates are properly formatted

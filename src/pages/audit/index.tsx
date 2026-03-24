@@ -48,7 +48,16 @@ interface ReportDetails {
   submittedByName?: string; submittedByEmail?: string; submittedAt?: string;
 }
 interface AssetItem { id?: string; name?: string; barcode?: string; floorNumber?: string; roomNumber?: string; source?: string; }
-interface LinkedTicket { id: string; displayId: string | null; title: string; status: string; priority: string; createdAt: string; }
+interface LinkedTicket {
+  id: string;
+  displayId: string | null;
+  title: string;
+  status: string;
+  priority: string;
+  createdAt: string;
+  updatedAt?: string;
+  _count?: { history?: number };
+}
 interface Report {
   id: string; timestamp: string; userId?: string; severity: "INFO"|"WARNING"|"ERROR";
   details: ReportDetails|null;
@@ -203,14 +212,31 @@ function CreateTicketModal({ open, onClose, report, staffUsers, onCreated }: {
     if (!title.trim()||!description.trim()) { toast({title:'Required fields missing',variant:'destructive'}); return; }
     setSubmitting(true);
     try {
-      const body: any = { title:title.trim(), description:description.trim(), priority, source:'INTERNAL', ticketType:'MANAGEMENT', category:'INVENTORY' };
+      const body: any = {
+        title: title.trim(),
+        description: description.trim(),
+        priority,
+        source: 'INTERNAL',
+        ticketType: 'MANAGEMENT',
+        category: 'INVENTORY',
+        ...(report?.id ? { inventoryAuditLogId: report.id } : {}),
+      };
       if (assignedToId && assignedToId!=='__none__') body.assignedToId = assignedToId;
       const res = await fetch('/api/tickets',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       const ticket = data.ticket||data;
       toast({title:'Ticket created',description:`${ticket.displayId||'Ticket'} has been created.`});
-      onCreated({id:ticket.id,displayId:ticket.displayId||null,title:ticket.title,status:ticket.status||'OPEN',priority:ticket.priority||priority,createdAt:ticket.createdAt||new Date().toISOString()});
+      onCreated({
+        id: ticket.id,
+        displayId: ticket.displayId || null,
+        title: ticket.title,
+        status: ticket.status || 'OPEN',
+        priority: ticket.priority || priority,
+        createdAt: ticket.createdAt || new Date().toISOString(),
+        updatedAt: ticket.updatedAt || ticket.createdAt || new Date().toISOString(),
+        _count: { history: 0 },
+      });
       onClose();
     } catch(e: any) { toast({title:'Failed',description:e.message,variant:'destructive'}); }
     finally { setSubmitting(false); }
@@ -613,20 +639,44 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onVie
                 )}
                 {report.linkedTickets.length > 0 && (
                   <div>
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><TicketIcon className="h-3.5 w-3.5"/> Linked Tickets ({report.linkedTickets.length})</p>
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2"><TicketIcon className="h-3.5 w-3.5"/> Linked tickets ({report.linkedTickets.length})</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">All tickets raised for this inventory report. You get in-app notifications when a linked ticket is updated (if you submitted the report or own the ticket).</p>
                     <div className="space-y-1.5">
-                      {report.linkedTickets.map(t => (
+                      {report.linkedTickets.map(t => {
+                        const hasActivity =
+                          (t._count?.history ?? 0) > 0 ||
+                          Boolean(
+                            t.updatedAt &&
+                              t.createdAt &&
+                              new Date(t.updatedAt).getTime() > new Date(t.createdAt).getTime() + 60_000,
+                          );
+                        return (
                         <a key={t.id} href={`/tickets/${t.id}`} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-card hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 transition-all group">
                           <TicketIcon className="h-3.5 w-3.5 text-indigo-400 flex-shrink-0"/>
-                          <div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{t.title}</p><p className="text-xs text-slate-400 dark:text-slate-500">{t.displayId||t.id.slice(0,8)}</p></div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{t.title}</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">{t.displayId||t.id.slice(0,8)}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                              Updated {fmtDate(t.updatedAt || t.createdAt)}
+                              {(t._count?.history ?? 0) > 0 && (
+                                <span className="ml-1.5">· {(t._count?.history ?? 0)} timeline entr{(t._count?.history ?? 0) === 1 ? 'y' : 'ies'}</span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            {hasActivity && (
+                              <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200 border-amber-200 dark:border-amber-800">Activity</Badge>
+                            )}
+                            <div className="flex items-center gap-1.5">
                             <Badge variant="outline" className={cn('text-xs border', statusCls(t.status))}>{t.status.replace('_',' ')}</Badge>
                             <Badge className={cn('text-xs', prioCls(t.priority))}>{t.priority}</Badge>
                             <ArrowRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-indigo-500 transition-colors"/>
+                            </div>
                           </div>
                         </a>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
