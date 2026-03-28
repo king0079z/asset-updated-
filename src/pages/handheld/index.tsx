@@ -540,7 +540,7 @@ export default function HandheldHubPage() {
   // Sync state (for header and More tab)
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
 
-  const [workMode, setWorkMode] = useState<'tickets' | 'tasks'>('tickets');
+  const [workMode, setWorkMode] = useState<'tickets' | 'tasks' | 'reports'>('tickets');
   const [showPrintTagDialog, setShowPrintTagDialog] = useState(false);
   const [printTagAsset, setPrintTagAsset] = useState<Asset | null>(null);
 
@@ -2266,11 +2266,12 @@ export default function HandheldHubPage() {
     inventoryUndoStackRef.current = [];
     try { localStorage.removeItem(INVENTORY_SESSION_KEY); } catch {}
 
-    // ── Navigate to Work tab so user sees the status tracker ────────────────
+    // ── Navigate to Work tab → Reports view so user sees the status tracker ─
     setTab('work');
+    setWorkMode('reports');
     toast({
       title: '✓ Report submitted',
-      description: 'Inventory session reset. Check your report status in the Work tab.',
+      description: 'Inventory session reset. Your report status is now in the Work tab.',
     });
     setIsSubmittingReport(false);
   }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length, rosterNotReadSnapshot, isSubmittingReport]);
@@ -2703,10 +2704,32 @@ export default function HandheldHubPage() {
         {tab === 'work' && (
           <div className="max-w-lg mx-auto space-y-4">
 
-            {/* ── Latest Audit Report Status Card ─────────────────────────── */}
-            {lastInventoryAuditLogId && (() => {
+            {/* ── Mode selector: Tickets | Tasks | Reports ─────────────────── */}
+            <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+              <button type="button" onClick={() => setWorkMode('tickets')}
+                className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation',
+                  workMode === 'tickets' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
+                <Ticket className="h-4 w-4 inline mr-1.5 align-middle" /> Tickets
+              </button>
+              <button type="button" onClick={() => setWorkMode('tasks')}
+                className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation',
+                  workMode === 'tasks' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
+                <ListTodo className="h-4 w-4 inline mr-1.5 align-middle" /> Tasks
+              </button>
+              <button type="button" onClick={() => setWorkMode('reports')}
+                className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation relative',
+                  workMode === 'reports' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
+                <ClipboardList className="h-4 w-4 inline mr-1.5 align-middle" /> Reports
+                {lastInventoryAuditLogId && workMode !== 'reports' && (
+                  <span className="absolute top-1.5 right-2 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-800 animate-pulse"/>
+                )}
+              </button>
+            </div>
+            {/* ── Reports view ──────────────────────────────────────────── */}
+            {workMode === 'reports' && (() => {
               const rs = submittedReportStatus;
               const refreshStatus = () => {
+                if (!lastInventoryAuditLogId) return;
                 setSubmittedReportStatus(prev => ({ ...prev, loading: true }));
                 if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
                 const id = lastInventoryAuditLogId;
@@ -2721,20 +2744,35 @@ export default function HandheldHubPage() {
                   .catch(() => setSubmittedReportStatus(prev => ({ ...prev, loading: false })));
               };
 
+              if (!lastInventoryAuditLogId) {
+                return (
+                  <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-10 text-center space-y-3">
+                    <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto">
+                      <ClipboardList className="h-7 w-7 text-slate-400 dark:text-slate-500" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-600 dark:text-slate-300">No reports this session</p>
+                      <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+                        Submit an inventory count from the Inventory tab — the report status will appear here.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
               const steps = [
                 {
                   key: 'submitted', label: 'Report Submitted',
-                  desc: 'Your inventory count has been received and logged.',
+                  desc: 'Your inventory count has been received and logged by the system.',
                   done: true, active: false,
-                  Icon: CheckCircle2, iconColor: 'text-white', bg: 'bg-emerald-500',
-                  connectorDone: true,
+                  Icon: CheckCircle2, iconColor: 'text-white', bg: 'bg-emerald-500', connectorDone: true,
                 },
                 {
                   key: 'reviewing',
                   label: rs.state === 'completed' ? 'Management Reviewed' : 'Under Management Review',
                   desc: rs.state === 'completed'
                     ? 'Management has reviewed and approved this report.'
-                    : 'Management is currently reviewing your report. No action needed.',
+                    : 'Management is currently reviewing your report. No action needed from you.',
                   done: rs.state === 'completed',
                   active: rs.state === 'reviewing' || rs.state === 'tickets',
                   Icon: rs.state === 'completed' ? CheckCircle2 : ClipboardList,
@@ -2745,7 +2783,7 @@ export default function HandheldHubPage() {
                 ...(rs.ticketCount > 0 ? [{
                   key: 'tickets',
                   label: `${rs.ticketCount} Action Ticket${rs.ticketCount > 1 ? 's' : ''} Raised`,
-                  desc: `Management raised ${rs.ticketCount} ticket${rs.ticketCount > 1 ? 's' : ''} to resolve discrepancies.`,
+                  desc: `Management raised ${rs.ticketCount} ticket${rs.ticketCount > 1 ? 's' : ''} to resolve discrepancies found in your report.`,
                   done: true, active: false,
                   Icon: TicketIcon, iconColor: 'text-white', bg: 'bg-violet-500',
                   connectorDone: rs.state === 'completed',
@@ -2753,8 +2791,8 @@ export default function HandheldHubPage() {
                 {
                   key: 'completed', label: 'Report Signed Off',
                   desc: rs.state === 'completed'
-                    ? `Signed off${rs.completedAt ? ' · ' + new Date(rs.completedAt).toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }) : ''} — no further action needed.`
-                    : 'Pending management sign-off.',
+                    ? `Signed off${rs.completedAt ? ' · ' + new Date(rs.completedAt).toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }) : ''} — no further action required.`
+                    : 'Awaiting management final sign-off.',
                   done: rs.state === 'completed', active: false,
                   Icon: CheckSquare,
                   iconColor: rs.state === 'completed' ? 'text-white' : 'text-slate-400 dark:text-slate-500',
@@ -2763,102 +2801,104 @@ export default function HandheldHubPage() {
                 },
               ];
 
-              const stateColor = rs.state === 'completed'
-                ? { pill: 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700', dot: 'bg-emerald-500', card: 'border-emerald-300 dark:border-emerald-800/60', header: 'from-emerald-600 to-teal-600' }
+              const sc = rs.state === 'completed'
+                ? { card: 'border-emerald-300 dark:border-emerald-800/70', hdr: 'from-emerald-600 to-teal-600', pill: 'bg-white/90 text-emerald-700 border-emerald-300', dot: 'bg-emerald-500', label: 'Completed' }
                 : rs.state === 'tickets'
-                ? { pill: 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-700', dot: 'bg-violet-500 animate-pulse', card: 'border-violet-300 dark:border-violet-800/60', header: 'from-violet-600 to-indigo-600' }
-                : { pill: 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-700', dot: 'bg-indigo-500 animate-pulse', card: 'border-indigo-200 dark:border-indigo-800/40', header: 'from-indigo-600 to-indigo-700' };
-
-              const stateLabel = rs.state === 'completed' ? 'Completed' : rs.state === 'tickets' ? 'Action In Progress' : 'Under Review';
+                ? { card: 'border-violet-300 dark:border-violet-800/60', hdr: 'from-violet-600 to-indigo-600', pill: 'bg-white/90 text-violet-700 border-violet-300', dot: 'bg-violet-500 animate-pulse', label: 'Action In Progress' }
+                : { card: 'border-indigo-200 dark:border-indigo-800/50', hdr: 'from-indigo-600 to-indigo-700', pill: 'bg-white/90 text-indigo-700 border-indigo-300', dot: 'bg-indigo-500 animate-pulse', label: 'Under Review' };
 
               return (
-                <div className={`rounded-2xl border-2 overflow-hidden shadow-md ${stateColor.card}`}>
-                  {/* Gradient header */}
-                  <div className={`bg-gradient-to-r ${stateColor.header} px-4 py-3.5`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                          <ClipboardList className="h-4.5 w-4.5 text-white h-5 w-5" />
+                <div className="space-y-3">
+                  {/* Status card */}
+                  <div className={`rounded-2xl border-2 overflow-hidden shadow-md ${sc.card}`}>
+                    {/* Header */}
+                    <div className={`bg-gradient-to-r ${sc.hdr} px-4 py-4`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 shadow-inner">
+                            <ClipboardList className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-base font-bold text-white">Latest Inventory Report</p>
+                            <p className="text-[11px] text-white/65 mt-0.5">Submitted to management for review</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-white leading-tight">Latest Inventory Report</p>
-                          <p className="text-[11px] text-white/70 mt-0.5">Submitted to management for review</p>
-                        </div>
+                        <button onClick={refreshStatus} disabled={rs.loading}
+                          className="h-9 w-9 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/30 flex items-center justify-center transition-all touch-manipulation shadow-sm">
+                          <RefreshCw className={`h-4 w-4 text-white ${rs.loading ? 'animate-spin' : ''}`}/>
+                        </button>
                       </div>
+                      {/* Pills row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${sc.pill}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sc.dot}`}/>
+                          {sc.label}
+                        </span>
+                        {rs.ticketCount > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/25 text-white border border-white/30">
+                            <TicketIcon className="h-3 w-3"/> {rs.ticketCount} ticket{rs.ticketCount > 1 ? 's' : ''} raised
+                          </span>
+                        )}
+                        {rs.loading && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-white/15 text-white/80">
+                            <div className="h-2.5 w-2.5 rounded-full border border-white/60 border-t-white animate-spin"/>
+                            Checking…
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step-by-step tracker */}
+                    <div className="bg-white dark:bg-slate-900 px-5 pt-5 pb-4">
+                      {steps.map((step, i) => {
+                        const Icon = step.Icon;
+                        const isLast = i === steps.length - 1;
+                        return (
+                          <div key={step.key} className="flex gap-3.5">
+                            <div className="flex flex-col items-center shrink-0">
+                              <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm
+                                ${step.done || step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'}
+                                ${step.active && !step.done ? 'ring-2 ring-offset-2 ring-indigo-300 dark:ring-indigo-700 dark:ring-offset-slate-900 shadow-indigo-500/25 shadow-lg' : ''}`}>
+                                <Icon className={`h-4 w-4 ${step.done || step.active ? step.iconColor : 'text-slate-400 dark:text-slate-600'}`} />
+                              </div>
+                              {!isLast && (
+                                <div className={`w-0.5 h-7 my-1 rounded-full transition-all duration-500 ${step.connectorDone ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'}`}/>
+                              )}
+                            </div>
+                            <div className="flex-1 pt-1 pb-4">
+                              <p className={`text-sm font-semibold leading-tight
+                                ${step.done ? 'text-slate-900 dark:text-slate-100'
+                                  : step.active ? 'text-indigo-700 dark:text-indigo-300'
+                                  : 'text-slate-400 dark:text-slate-500'}`}>
+                                {step.label}
+                              </p>
+                              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">{step.desc}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                        <RefreshCw className="h-3 w-3"/> Auto-refreshes every 60s
+                      </p>
                       <button
-                        onClick={refreshStatus}
-                        disabled={rs.loading}
-                        className="h-8 w-8 rounded-lg bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors touch-manipulation"
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 text-white ${rs.loading ? 'animate-spin' : ''}`}/>
+                        onClick={() => {
+                          setLastInventoryAuditLogId(null);
+                          setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
+                          if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
+                        }}
+                        className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors touch-manipulation px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30">
+                        Clear
                       </button>
                     </div>
-                    {/* Status pill */}
-                    <div className="mt-3 flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-white/90 dark:bg-white/10 backdrop-blur-sm ${stateColor.pill}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${stateColor.dot}`}/>
-                        {stateLabel}
-                      </span>
-                      {rs.ticketCount > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/20 text-white border border-white/20">
-                          <TicketIcon className="h-3 w-3"/> {rs.ticketCount} ticket{rs.ticketCount > 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Steps */}
-                  <div className="bg-white dark:bg-slate-900 px-4 pt-4 pb-3 space-y-0">
-                    {steps.map((step, i) => {
-                      const Icon = step.Icon;
-                      const isLast = i === steps.length - 1;
-                      return (
-                        <div key={step.key} className="flex gap-3">
-                          <div className="flex flex-col items-center shrink-0">
-                            <div className={`h-8 w-8 rounded-full flex items-center justify-center transition-all duration-300 ${step.done || step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'} ${step.active && !step.done ? 'ring-2 ring-offset-2 ring-indigo-300 dark:ring-indigo-700 dark:ring-offset-slate-900 shadow-lg shadow-indigo-500/20' : ''}`}>
-                              <Icon className={`h-4 w-4 ${step.done || step.active ? step.iconColor : 'text-slate-400 dark:text-slate-500'}`} />
-                            </div>
-                            {!isLast && (
-                              <div className={`w-0.5 h-6 my-1 rounded-full transition-colors duration-500 ${step.connectorDone ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'}`}/>
-                            )}
-                          </div>
-                          <div className={`flex-1 ${isLast ? 'pb-1' : 'pb-0'}`}>
-                            <p className={`text-sm font-semibold leading-snug mt-1 ${step.done ? 'text-slate-900 dark:text-slate-100' : step.active ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>
-                              {step.label}
-                            </p>
-                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 mb-3 leading-relaxed">{step.desc}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">Auto-refreshes every 60 seconds</p>
-                    <button
-                      onClick={() => {
-                        setLastInventoryAuditLogId(null);
-                        setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
-                        if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
-                      }}
-                      className="text-[11px] font-semibold text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors touch-manipulation"
-                    >
-                      Dismiss
-                    </button>
                   </div>
                 </div>
               );
             })()}
 
-            <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
-              <button type="button" onClick={() => setWorkMode('tickets')} className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation', workMode === 'tickets' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
-                <Ticket className="h-4 w-4 inline mr-1.5 align-middle" /> Tickets
-              </button>
-              <button type="button" onClick={() => setWorkMode('tasks')} className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation', workMode === 'tasks' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
-                <ListTodo className="h-4 w-4 inline mr-1.5 align-middle" /> Tasks
-              </button>
-            </div>
             {workMode === 'tickets' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2 flex-wrap">
