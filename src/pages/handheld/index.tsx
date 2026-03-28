@@ -559,8 +559,14 @@ export default function HandheldHubPage() {
   const [countReviewNote, setCountReviewNote] = useState('');
   /** Server audit log id after submitting inventory review — links new tickets to that report in Audit Center */
   const [lastInventoryAuditLogId, setLastInventoryAuditLogId] = useState<string | null>(null);
-  /** Live status of the submitted report: null=loading, 'reviewing'|'tickets'|'completed' */
-  const [submittedReportStatus, setSubmittedReportStatus] = useState<null | { state: 'reviewing'|'tickets'|'completed'; ticketCount: number; completedAt?: string }>(null);
+  /** Live status of the submitted report */
+  const [submittedReportStatus, setSubmittedReportStatus] = useState<{
+    loading: boolean;
+    state: 'reviewing'|'tickets'|'completed';
+    ticketCount: number;
+    completedAt?: string | null;
+  }>({ loading: false, state: 'reviewing', ticketCount: 0 });
+  const reportStatusPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Recent actions (audit trail)
   const [recentActions, setRecentActions] = useState<{ type: string; label: string; at: number }[]>([]);
@@ -2194,25 +2200,57 @@ export default function HandheldHubPage() {
       });
       try {
         const data = await submitRes.json();
-        if (data?.auditLogId && typeof data.auditLogId === 'string') {
-          setLastInventoryAuditLogId(data.auditLogId);
-          // Start polling for report status
-          setSubmittedReportStatus(null);
-          const pollStatus = async (logId: string) => {
-            try {
-              const r2 = await fetch(`/api/audit/report-status?id=${encodeURIComponent(logId)}`, { credentials: 'include' });
-              if (r2.ok) {
-                const s = await r2.json();
-                setSubmittedReportStatus(s);
+        const logId: string | null = (data?.auditLogId && typeof data.auditLogId === 'string') ? data.auditLogId : null;
+        if (logId) setLastInventoryAuditLogId(logId);
+
+        // Immediately show "reviewing" — correct state for a freshly submitted report
+        setSubmittedReportStatus({ loading: true, state: 'reviewing', ticketCount: 0 });
+
+        // Clear any previous poll
+        if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
+
+        const fetchStatus = async (id: string, attempt = 0) => {
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 8000);
+            const r2 = await fetch(`/api/audit/report-status?id=${encodeURIComponent(id)}`, {
+              credentials: 'include',
+              signal: ctrl.signal,
+            });
+            clearTimeout(tid);
+            if (r2.ok) {
+              const s = await r2.json();
+              setSubmittedReportStatus({ loading: false, state: s.state || 'reviewing', ticketCount: s.ticketCount ?? 0, completedAt: s.completedAt });
+              // Schedule next auto-refresh in 60s if not completed
+              if (s.state !== 'completed') {
+                reportStatusPollRef.current = setTimeout(() => fetchStatus(id), 60000);
               }
-            } catch {}
-          };
-          pollStatus(data.auditLogId);
-          // Refresh after 30s
-          setTimeout(() => pollStatus(data.auditLogId), 30000);
+            } else if (attempt < 3) {
+              // Retry with back-off
+              reportStatusPollRef.current = setTimeout(() => fetchStatus(id, attempt + 1), 3000 * (attempt + 1));
+            } else {
+              // After 3 retries, just show reviewing (freshly submitted = under review is correct)
+              setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
+            }
+          } catch {
+            if (attempt < 3) {
+              reportStatusPollRef.current = setTimeout(() => fetchStatus(id, attempt + 1), 3000 * (attempt + 1));
+            } else {
+              setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
+            }
+          }
+        };
+
+        if (logId) {
+          // Small delay so DB write is committed before we read it
+          reportStatusPollRef.current = setTimeout(() => fetchStatus(logId), 1500);
+        } else {
+          // No logId — still show reviewing (server persisted but didn't return id)
+          setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
         }
       } catch {
-        /* ignore */
+        // JSON parse failed — still show reviewing
+        setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
       }
     } catch {
       // Server submission is best-effort; local state already updated
@@ -2363,7 +2401,8 @@ export default function HandheldHubPage() {
     setInventorySessionFloor('');
     setInventorySessionRoom('');
     setLastInventoryAuditLogId(null);
-    setSubmittedReportStatus(null);
+    setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
+    if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
     toast({ title: 'Session ended', description: `${total} item${total !== 1 ? 's' : ''} in list.` });
   }, [unifiedInventory.length, countLocationLabel, pushRecentAction, toast]);
 
@@ -3577,84 +3616,126 @@ export default function HandheldHubPage() {
                             </div>
                           </div>
                           {/* Report status tracker */}
-                          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-                            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Report Status</p>
-                            </div>
-                            {submittedReportStatus === null ? (
-                              <div className="px-4 py-4 flex items-center gap-3">
-                                <div className="h-8 w-8 rounded-full border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-500 animate-spin shrink-0"/>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">Checking report status…</p>
-                              </div>
-                            ) : (
-                              <div className="px-4 py-4 space-y-3">
-                                {/* Status steps */}
-                                {[
-                                  {
-                                    key: 'submitted',
-                                    label: 'Report Submitted',
-                                    desc: 'Your inventory count report has been received.',
-                                    done: true,
-                                    Icon: CheckCircle2,
-                                    color: 'text-emerald-500',
-                                    bg: 'bg-emerald-500',
-                                  },
-                                  {
-                                    key: 'reviewing',
-                                    label: submittedReportStatus.state === 'completed' ? 'Management Reviewed' : 'Under Management Review',
-                                    desc: submittedReportStatus.state === 'completed'
-                                      ? 'Management has reviewed and approved this report.'
-                                      : 'Management is reviewing your report. No action needed.',
-                                    done: submittedReportStatus.state === 'completed',
-                                    active: submittedReportStatus.state === 'reviewing' || submittedReportStatus.state === 'tickets',
-                                    Icon: submittedReportStatus.state === 'completed' ? CheckCircle2 : ClipboardList,
-                                    color: submittedReportStatus.state === 'completed' ? 'text-emerald-500' : 'text-indigo-500',
-                                    bg: submittedReportStatus.state === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500',
-                                  },
-                                  ...(submittedReportStatus.ticketCount > 0 ? [{
-                                    key: 'tickets',
-                                    label: `${submittedReportStatus.ticketCount} Ticket${submittedReportStatus.ticketCount > 1 ? 's' : ''} Raised`,
-                                    desc: `Management has raised ${submittedReportStatus.ticketCount} action ticket${submittedReportStatus.ticketCount > 1 ? 's' : ''} for this report.`,
-                                    done: true,
-                                    Icon: TicketIcon,
-                                    color: 'text-violet-500',
-                                    bg: 'bg-violet-500',
-                                  }] : []),
-                                  {
-                                    key: 'completed',
-                                    label: 'Report Completed',
-                                    desc: submittedReportStatus.state === 'completed'
-                                      ? `Completed${submittedReportStatus.completedAt ? ' on ' + new Date(submittedReportStatus.completedAt).toLocaleDateString() : ''}.`
-                                      : 'Management will mark the report as complete when done.',
-                                    done: submittedReportStatus.state === 'completed',
-                                    Icon: CheckSquare,
-                                    color: submittedReportStatus.state === 'completed' ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-600',
-                                    bg: submittedReportStatus.state === 'completed' ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700',
-                                  },
-                                ].map((step, i) => {
-                                  const Icon = step.Icon;
-                                  return (
-                                    <div key={step.key} className="flex items-start gap-3">
-                                      <div className="flex flex-col items-center">
-                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${step.done ? step.bg : step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'}`}>
-                                          <Icon className={`h-4 w-4 ${step.done || step.active ? 'text-white' : step.color}`} />
+                          {(() => {
+                            const rs = submittedReportStatus;
+                            const steps = [
+                              {
+                                key: 'submitted',
+                                label: 'Report Submitted',
+                                desc: 'Your inventory count report has been received by the system.',
+                                done: true,
+                                active: false,
+                                Icon: CheckCircle2,
+                                iconColor: 'text-white',
+                                bg: 'bg-emerald-500',
+                              },
+                              {
+                                key: 'reviewing',
+                                label: rs.state === 'completed' ? 'Management Reviewed' : 'Under Management Review',
+                                desc: rs.state === 'completed'
+                                  ? 'Management has reviewed and approved this report.'
+                                  : 'Management is currently reviewing your report. No action needed from you.',
+                                done: rs.state === 'completed',
+                                active: rs.state === 'reviewing' || rs.state === 'tickets',
+                                Icon: rs.state === 'completed' ? CheckCircle2 : ClipboardList,
+                                iconColor: 'text-white',
+                                bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500',
+                              },
+                              ...(rs.ticketCount > 0 ? [{
+                                key: 'tickets',
+                                label: `${rs.ticketCount} Action Ticket${rs.ticketCount > 1 ? 's' : ''} Raised`,
+                                desc: `Management raised ${rs.ticketCount} ticket${rs.ticketCount > 1 ? 's' : ''} to resolve discrepancies found in your report.`,
+                                done: true,
+                                active: false,
+                                Icon: TicketIcon,
+                                iconColor: 'text-white',
+                                bg: 'bg-violet-500',
+                              }] : []),
+                              {
+                                key: 'completed',
+                                label: 'Report Signed Off',
+                                desc: rs.state === 'completed'
+                                  ? `Signed off${rs.completedAt ? ' on ' + new Date(rs.completedAt).toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }) : ''} — no further action required.`
+                                  : 'Awaiting management sign-off after review.',
+                                done: rs.state === 'completed',
+                                active: false,
+                                Icon: CheckSquare,
+                                iconColor: rs.state === 'completed' ? 'text-white' : 'text-slate-400 dark:text-slate-500',
+                                bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-slate-100 dark:bg-slate-800',
+                              },
+                            ];
+                            const totalSteps = steps.length;
+                            return (
+                              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+                                {/* Header */}
+                                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Report Status</p>
+                                    {rs.loading && (
+                                      <div className="h-3.5 w-3.5 rounded-full border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-500 animate-spin"/>
+                                    )}
+                                  </div>
+                                  {lastInventoryAuditLogId && !rs.loading && (
+                                    <button
+                                      onClick={() => {
+                                        setSubmittedReportStatus(prev => ({ ...prev, loading: true }));
+                                        if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
+                                        const id = lastInventoryAuditLogId;
+                                        const ctrl = new AbortController();
+                                        setTimeout(() => ctrl.abort(), 8000);
+                                        fetch(`/api/audit/report-status?id=${encodeURIComponent(id)}`, { credentials: 'include', signal: ctrl.signal })
+                                          .then(r => r.ok ? r.json() : null)
+                                          .then(s => {
+                                            if (s) setSubmittedReportStatus({ loading: false, state: s.state || 'reviewing', ticketCount: s.ticketCount ?? 0, completedAt: s.completedAt });
+                                            else setSubmittedReportStatus(prev => ({ ...prev, loading: false }));
+                                          })
+                                          .catch(() => setSubmittedReportStatus(prev => ({ ...prev, loading: false })));
+                                      }}
+                                      className="flex items-center gap-1 text-[11px] font-semibold text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                                    >
+                                      <RefreshCw className="h-3 w-3"/> Refresh
+                                    </button>
+                                  )}
+                                </div>
+                                {/* Status pill */}
+                                <div className="px-4 pt-3 pb-1 flex items-center gap-2">
+                                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                                    rs.state === 'completed'
+                                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                      : rs.state === 'tickets'
+                                      ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800'
+                                      : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                                  }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${rs.state === 'completed' ? 'bg-emerald-500' : rs.state === 'tickets' ? 'bg-violet-500 animate-pulse' : 'bg-indigo-500 animate-pulse'}`}/>
+                                    {rs.state === 'completed' ? 'Completed' : rs.state === 'tickets' ? 'Action In Progress' : 'Under Review'}
+                                  </span>
+                                </div>
+                                {/* Steps */}
+                                <div className="px-4 py-3 space-y-0">
+                                  {steps.map((step, i) => {
+                                    const Icon = step.Icon;
+                                    const isLast = i === totalSteps - 1;
+                                    return (
+                                      <div key={step.key} className="flex gap-3">
+                                        <div className="flex flex-col items-center">
+                                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 transition-all ${step.done || step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'} ${step.active && !step.done ? 'ring-2 ring-offset-1 ring-indigo-300 dark:ring-indigo-700 dark:ring-offset-slate-900' : ''}`}>
+                                            <Icon className={`h-4 w-4 ${step.done || step.active ? step.iconColor : 'text-slate-400 dark:text-slate-500'}`} />
+                                          </div>
+                                          {!isLast && <div className={`w-0.5 h-5 my-0.5 rounded-full transition-all ${step.done ? 'bg-emerald-300 dark:bg-emerald-700' : 'bg-slate-200 dark:bg-slate-700'}`}/>}
                                         </div>
-                                        {i < 2 + (submittedReportStatus.ticketCount > 0 ? 1 : 0) && (
-                                          <div className="w-0.5 h-4 bg-slate-200 dark:bg-slate-700 mt-1" />
-                                        )}
+                                        <div className={`pb-3 flex-1 ${isLast ? '' : ''}`}>
+                                          <p className={`text-sm font-semibold leading-snug ${step.done ? 'text-slate-900 dark:text-slate-100' : step.active ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>
+                                            {step.label}
+                                          </p>
+                                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">{step.desc}</p>
+                                        </div>
                                       </div>
-                                      <div className="pb-1">
-                                        <p className={`text-sm font-semibold ${step.done ? 'text-slate-900 dark:text-slate-100' : step.active ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>
-                                          {step.label}
-                                        </p>
-                                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">{step.desc}</p>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            )}
-                          </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
