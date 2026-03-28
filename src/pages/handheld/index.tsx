@@ -557,6 +557,7 @@ export default function HandheldHubPage() {
   // Exception/reason codes for count review
   const [countReviewReason, setCountReviewReason] = useState('');
   const [countReviewNote, setCountReviewNote] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   /** Server audit log id after submitting inventory review — links new tickets to that report in Audit Center */
   const [lastInventoryAuditLogId, setLastInventoryAuditLogId] = useState<string | null>(null);
   /** Live status of the submitted report */
@@ -2156,11 +2157,8 @@ export default function HandheldHubPage() {
 
   const submitCountForReview = useCallback(async () => {
     const r = reconciliationResult;
-    if (!r) return;
-    // Mark locally first for instant feedback
-    setReconciliationResult((prev) =>
-      prev ? { ...prev, submittedForReview: true, reasonCode: countReviewReason, note: countReviewNote, submittedAt: Date.now() } : null
-    );
+    if (!r || isSubmittingReport) return;
+    setIsSubmittingReport(true);
     pushInventoryAudit(
       'submit_review',
       `reason=${countReviewReason || '—'} note=${(countReviewNote || '').slice(0, 200)} proof_images=${sessionProofImages.length}`,
@@ -2253,12 +2251,29 @@ export default function HandheldHubPage() {
         setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
       }
     } catch {
-      // Server submission is best-effort; local state already updated
+      // Server submission is best-effort — still reset session
     }
+
+    // ── Reset inventory session so a new one can start immediately ──────────
     setCountReviewReason('');
     setCountReviewNote('');
-    toast({ title: 'Submitted for review', description: 'Manager can review the inventory count and discrepancies.' });
-  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length, rosterNotReadSnapshot]);
+    setCountSessionActive(false);
+    setUnifiedInventory([]);
+    setReconciliationResult(null);
+    setInventoryRoomTagVerified(false);
+    setInventorySessionFloor('');
+    setInventorySessionRoom('');
+    inventoryUndoStackRef.current = [];
+    try { localStorage.removeItem(INVENTORY_SESSION_KEY); } catch {}
+
+    // ── Navigate to Work tab so user sees the status tracker ────────────────
+    setTab('work');
+    toast({
+      title: '✓ Report submitted',
+      description: 'Inventory session reset. Check your report status in the Work tab.',
+    });
+    setIsSubmittingReport(false);
+  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length, rosterNotReadSnapshot, isSubmittingReport]);
 
   const saveReconcileEditLocation = useCallback(async () => {
     const asset = reconcileEditLocationAsset;
@@ -2687,6 +2702,155 @@ export default function HandheldHubPage() {
 
         {tab === 'work' && (
           <div className="max-w-lg mx-auto space-y-4">
+
+            {/* ── Latest Audit Report Status Card ─────────────────────────── */}
+            {lastInventoryAuditLogId && (() => {
+              const rs = submittedReportStatus;
+              const refreshStatus = () => {
+                setSubmittedReportStatus(prev => ({ ...prev, loading: true }));
+                if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
+                const id = lastInventoryAuditLogId;
+                const ctrl = new AbortController();
+                setTimeout(() => ctrl.abort(), 8000);
+                fetch(`/api/audit/report-status?id=${encodeURIComponent(id)}`, { credentials: 'include', signal: ctrl.signal })
+                  .then(r => r.ok ? r.json() : null)
+                  .then(s => {
+                    if (s) setSubmittedReportStatus({ loading: false, state: s.state || 'reviewing', ticketCount: s.ticketCount ?? 0, completedAt: s.completedAt });
+                    else setSubmittedReportStatus(prev => ({ ...prev, loading: false }));
+                  })
+                  .catch(() => setSubmittedReportStatus(prev => ({ ...prev, loading: false })));
+              };
+
+              const steps = [
+                {
+                  key: 'submitted', label: 'Report Submitted',
+                  desc: 'Your inventory count has been received and logged.',
+                  done: true, active: false,
+                  Icon: CheckCircle2, iconColor: 'text-white', bg: 'bg-emerald-500',
+                  connectorDone: true,
+                },
+                {
+                  key: 'reviewing',
+                  label: rs.state === 'completed' ? 'Management Reviewed' : 'Under Management Review',
+                  desc: rs.state === 'completed'
+                    ? 'Management has reviewed and approved this report.'
+                    : 'Management is currently reviewing your report. No action needed.',
+                  done: rs.state === 'completed',
+                  active: rs.state === 'reviewing' || rs.state === 'tickets',
+                  Icon: rs.state === 'completed' ? CheckCircle2 : ClipboardList,
+                  iconColor: 'text-white',
+                  bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500',
+                  connectorDone: rs.state === 'completed',
+                },
+                ...(rs.ticketCount > 0 ? [{
+                  key: 'tickets',
+                  label: `${rs.ticketCount} Action Ticket${rs.ticketCount > 1 ? 's' : ''} Raised`,
+                  desc: `Management raised ${rs.ticketCount} ticket${rs.ticketCount > 1 ? 's' : ''} to resolve discrepancies.`,
+                  done: true, active: false,
+                  Icon: TicketIcon, iconColor: 'text-white', bg: 'bg-violet-500',
+                  connectorDone: rs.state === 'completed',
+                }] : []),
+                {
+                  key: 'completed', label: 'Report Signed Off',
+                  desc: rs.state === 'completed'
+                    ? `Signed off${rs.completedAt ? ' · ' + new Date(rs.completedAt).toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }) : ''} — no further action needed.`
+                    : 'Pending management sign-off.',
+                  done: rs.state === 'completed', active: false,
+                  Icon: CheckSquare,
+                  iconColor: rs.state === 'completed' ? 'text-white' : 'text-slate-400 dark:text-slate-500',
+                  bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-slate-100 dark:bg-slate-800',
+                  connectorDone: false,
+                },
+              ];
+
+              const stateColor = rs.state === 'completed'
+                ? { pill: 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700', dot: 'bg-emerald-500', card: 'border-emerald-300 dark:border-emerald-800/60', header: 'from-emerald-600 to-teal-600' }
+                : rs.state === 'tickets'
+                ? { pill: 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-700', dot: 'bg-violet-500 animate-pulse', card: 'border-violet-300 dark:border-violet-800/60', header: 'from-violet-600 to-indigo-600' }
+                : { pill: 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-700', dot: 'bg-indigo-500 animate-pulse', card: 'border-indigo-200 dark:border-indigo-800/40', header: 'from-indigo-600 to-indigo-700' };
+
+              const stateLabel = rs.state === 'completed' ? 'Completed' : rs.state === 'tickets' ? 'Action In Progress' : 'Under Review';
+
+              return (
+                <div className={`rounded-2xl border-2 overflow-hidden shadow-md ${stateColor.card}`}>
+                  {/* Gradient header */}
+                  <div className={`bg-gradient-to-r ${stateColor.header} px-4 py-3.5`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                          <ClipboardList className="h-4.5 w-4.5 text-white h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white leading-tight">Latest Inventory Report</p>
+                          <p className="text-[11px] text-white/70 mt-0.5">Submitted to management for review</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={refreshStatus}
+                        disabled={rs.loading}
+                        className="h-8 w-8 rounded-lg bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors touch-manipulation"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 text-white ${rs.loading ? 'animate-spin' : ''}`}/>
+                      </button>
+                    </div>
+                    {/* Status pill */}
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-white/90 dark:bg-white/10 backdrop-blur-sm ${stateColor.pill}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${stateColor.dot}`}/>
+                        {stateLabel}
+                      </span>
+                      {rs.ticketCount > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/20 text-white border border-white/20">
+                          <TicketIcon className="h-3 w-3"/> {rs.ticketCount} ticket{rs.ticketCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Steps */}
+                  <div className="bg-white dark:bg-slate-900 px-4 pt-4 pb-3 space-y-0">
+                    {steps.map((step, i) => {
+                      const Icon = step.Icon;
+                      const isLast = i === steps.length - 1;
+                      return (
+                        <div key={step.key} className="flex gap-3">
+                          <div className="flex flex-col items-center shrink-0">
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center transition-all duration-300 ${step.done || step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'} ${step.active && !step.done ? 'ring-2 ring-offset-2 ring-indigo-300 dark:ring-indigo-700 dark:ring-offset-slate-900 shadow-lg shadow-indigo-500/20' : ''}`}>
+                              <Icon className={`h-4 w-4 ${step.done || step.active ? step.iconColor : 'text-slate-400 dark:text-slate-500'}`} />
+                            </div>
+                            {!isLast && (
+                              <div className={`w-0.5 h-6 my-1 rounded-full transition-colors duration-500 ${step.connectorDone ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'}`}/>
+                            )}
+                          </div>
+                          <div className={`flex-1 ${isLast ? 'pb-1' : 'pb-0'}`}>
+                            <p className={`text-sm font-semibold leading-snug mt-1 ${step.done ? 'text-slate-900 dark:text-slate-100' : step.active ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>
+                              {step.label}
+                            </p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 mb-3 leading-relaxed">{step.desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">Auto-refreshes every 60 seconds</p>
+                    <button
+                      onClick={() => {
+                        setLastInventoryAuditLogId(null);
+                        setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
+                        if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
+                      }}
+                      className="text-[11px] font-semibold text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors touch-manipulation"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
               <button type="button" onClick={() => setWorkMode('tickets')} className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation', workMode === 'tickets' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
                 <Ticket className="h-4 w-4 inline mr-1.5 align-middle" /> Tickets
@@ -3578,9 +3742,13 @@ export default function HandheldHubPage() {
                             <Button
                               className="w-full h-12 rounded-xl gap-2.5 font-bold bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 shadow-lg shadow-violet-500/30 text-white text-sm"
                               onClick={submitCountForReview}
+                              disabled={isSubmittingReport}
                             >
-                              <ClipboardList className="h-5 w-5 shrink-0" />
-                              Submit inventory report
+                              {isSubmittingReport ? (
+                                <><Loader2 className="h-5 w-5 shrink-0 animate-spin" /> Submitting report…</>
+                              ) : (
+                                <><ClipboardList className="h-5 w-5 shrink-0" /> Submit inventory report</>
+                              )}
                             </Button>
                           </div>
                           <div className="px-4 pb-3">
@@ -3601,143 +3769,7 @@ export default function HandheldHubPage() {
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {/* Submission confirmed */}
-                          <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-slate-900 px-4 py-4 flex items-start gap-3 shadow-sm">
-                            <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
-                              <CheckCircle2 className="h-5 w-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100">Report submitted</p>
-                              <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
-                                Missing items now appear on the dashboard and manager report page.
-                              </p>
-                            </div>
-                          </div>
-                          {/* Report status tracker */}
-                          {(() => {
-                            const rs = submittedReportStatus;
-                            const steps = [
-                              {
-                                key: 'submitted',
-                                label: 'Report Submitted',
-                                desc: 'Your inventory count report has been received by the system.',
-                                done: true,
-                                active: false,
-                                Icon: CheckCircle2,
-                                iconColor: 'text-white',
-                                bg: 'bg-emerald-500',
-                              },
-                              {
-                                key: 'reviewing',
-                                label: rs.state === 'completed' ? 'Management Reviewed' : 'Under Management Review',
-                                desc: rs.state === 'completed'
-                                  ? 'Management has reviewed and approved this report.'
-                                  : 'Management is currently reviewing your report. No action needed from you.',
-                                done: rs.state === 'completed',
-                                active: rs.state === 'reviewing' || rs.state === 'tickets',
-                                Icon: rs.state === 'completed' ? CheckCircle2 : ClipboardList,
-                                iconColor: 'text-white',
-                                bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500',
-                              },
-                              ...(rs.ticketCount > 0 ? [{
-                                key: 'tickets',
-                                label: `${rs.ticketCount} Action Ticket${rs.ticketCount > 1 ? 's' : ''} Raised`,
-                                desc: `Management raised ${rs.ticketCount} ticket${rs.ticketCount > 1 ? 's' : ''} to resolve discrepancies found in your report.`,
-                                done: true,
-                                active: false,
-                                Icon: TicketIcon,
-                                iconColor: 'text-white',
-                                bg: 'bg-violet-500',
-                              }] : []),
-                              {
-                                key: 'completed',
-                                label: 'Report Signed Off',
-                                desc: rs.state === 'completed'
-                                  ? `Signed off${rs.completedAt ? ' on ' + new Date(rs.completedAt).toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }) : ''} — no further action required.`
-                                  : 'Awaiting management sign-off after review.',
-                                done: rs.state === 'completed',
-                                active: false,
-                                Icon: CheckSquare,
-                                iconColor: rs.state === 'completed' ? 'text-white' : 'text-slate-400 dark:text-slate-500',
-                                bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-slate-100 dark:bg-slate-800',
-                              },
-                            ];
-                            const totalSteps = steps.length;
-                            return (
-                              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-                                {/* Header */}
-                                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Report Status</p>
-                                    {rs.loading && (
-                                      <div className="h-3.5 w-3.5 rounded-full border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-500 animate-spin"/>
-                                    )}
-                                  </div>
-                                  {lastInventoryAuditLogId && !rs.loading && (
-                                    <button
-                                      onClick={() => {
-                                        setSubmittedReportStatus(prev => ({ ...prev, loading: true }));
-                                        if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
-                                        const id = lastInventoryAuditLogId;
-                                        const ctrl = new AbortController();
-                                        setTimeout(() => ctrl.abort(), 8000);
-                                        fetch(`/api/audit/report-status?id=${encodeURIComponent(id)}`, { credentials: 'include', signal: ctrl.signal })
-                                          .then(r => r.ok ? r.json() : null)
-                                          .then(s => {
-                                            if (s) setSubmittedReportStatus({ loading: false, state: s.state || 'reviewing', ticketCount: s.ticketCount ?? 0, completedAt: s.completedAt });
-                                            else setSubmittedReportStatus(prev => ({ ...prev, loading: false }));
-                                          })
-                                          .catch(() => setSubmittedReportStatus(prev => ({ ...prev, loading: false })));
-                                      }}
-                                      className="flex items-center gap-1 text-[11px] font-semibold text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
-                                    >
-                                      <RefreshCw className="h-3 w-3"/> Refresh
-                                    </button>
-                                  )}
-                                </div>
-                                {/* Status pill */}
-                                <div className="px-4 pt-3 pb-1 flex items-center gap-2">
-                                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                                    rs.state === 'completed'
-                                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                                      : rs.state === 'tickets'
-                                      ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800'
-                                      : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                                  }`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${rs.state === 'completed' ? 'bg-emerald-500' : rs.state === 'tickets' ? 'bg-violet-500 animate-pulse' : 'bg-indigo-500 animate-pulse'}`}/>
-                                    {rs.state === 'completed' ? 'Completed' : rs.state === 'tickets' ? 'Action In Progress' : 'Under Review'}
-                                  </span>
-                                </div>
-                                {/* Steps */}
-                                <div className="px-4 py-3 space-y-0">
-                                  {steps.map((step, i) => {
-                                    const Icon = step.Icon;
-                                    const isLast = i === totalSteps - 1;
-                                    return (
-                                      <div key={step.key} className="flex gap-3">
-                                        <div className="flex flex-col items-center">
-                                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 transition-all ${step.done || step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'} ${step.active && !step.done ? 'ring-2 ring-offset-1 ring-indigo-300 dark:ring-indigo-700 dark:ring-offset-slate-900' : ''}`}>
-                                            <Icon className={`h-4 w-4 ${step.done || step.active ? step.iconColor : 'text-slate-400 dark:text-slate-500'}`} />
-                                          </div>
-                                          {!isLast && <div className={`w-0.5 h-5 my-0.5 rounded-full transition-all ${step.done ? 'bg-emerald-300 dark:bg-emerald-700' : 'bg-slate-200 dark:bg-slate-700'}`}/>}
-                                        </div>
-                                        <div className={`pb-3 flex-1 ${isLast ? '' : ''}`}>
-                                          <p className={`text-sm font-semibold leading-snug ${step.done ? 'text-slate-900 dark:text-slate-100' : step.active ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>
-                                            {step.label}
-                                          </p>
-                                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">{step.desc}</p>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                     );
                   })()}
