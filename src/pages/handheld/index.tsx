@@ -177,6 +177,7 @@ const TAB_SUBTITLE: Record<HandheldTabId, string> = {
 
 /** Persisted handheld inventory session (device-local recovery). */
 const INVENTORY_SESSION_KEY = 'handheld_inventory_session_v1';
+const LAST_AUDIT_REPORT_KEY = 'handheld_last_audit_report_v1';
 const INVENTORY_AUDIT_LOG_MAX = 250;
 const INVENTORY_PROOF_MAX_IMAGES = 3;
 
@@ -456,6 +457,44 @@ export default function HandheldHubPage() {
       /* ignore corrupt storage */
     }
   }, [toast]);
+
+  // Restore last submitted audit report ID from localStorage on mount + auto-fetch status
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(LAST_AUDIT_REPORT_KEY);
+      if (!saved) return;
+      const { logId } = JSON.parse(saved);
+      if (!logId || typeof logId !== 'string') return;
+      setLastInventoryAuditLogId(logId);
+      // Fetch status immediately
+      setSubmittedReportStatus(prev => ({ ...prev, loading: true }));
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 8000);
+      fetch(`/api/audit/report-status?id=${encodeURIComponent(logId)}`, { credentials: 'include', signal: ctrl.signal })
+        .then(r => r.ok ? r.json() : null)
+        .then(s => {
+          if (s) setSubmittedReportStatus({ loading: false, state: s.state || 'reviewing', ticketCount: s.ticketCount ?? 0, completedAt: s.completedAt });
+          else setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
+        })
+        .catch(() => setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 }));
+    } catch {
+      /* ignore */
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist audit report ID whenever it changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (lastInventoryAuditLogId) {
+        localStorage.setItem(LAST_AUDIT_REPORT_KEY, JSON.stringify({ logId: lastInventoryAuditLogId }));
+      } else {
+        localStorage.removeItem(LAST_AUDIT_REPORT_KEY);
+      }
+    } catch {}
+  }, [lastInventoryAuditLogId]);
 
   // Persist active inventory session (debounced)
   useEffect(() => {
