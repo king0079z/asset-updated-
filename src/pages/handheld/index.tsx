@@ -65,6 +65,8 @@ import {
   ChevronDown,
   ChevronUp,
   Undo2,
+  TicketIcon,
+  CheckSquare,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const TicketBarcodeScanner = dynamic(() => import('@/components/TicketBarcodeScanner').then(m => ({ default: m.default })), { ssr: false });
@@ -557,6 +559,8 @@ export default function HandheldHubPage() {
   const [countReviewNote, setCountReviewNote] = useState('');
   /** Server audit log id after submitting inventory review — links new tickets to that report in Audit Center */
   const [lastInventoryAuditLogId, setLastInventoryAuditLogId] = useState<string | null>(null);
+  /** Live status of the submitted report: null=loading, 'reviewing'|'tickets'|'completed' */
+  const [submittedReportStatus, setSubmittedReportStatus] = useState<null | { state: 'reviewing'|'tickets'|'completed'; ticketCount: number; completedAt?: string }>(null);
 
   // Recent actions (audit trail)
   const [recentActions, setRecentActions] = useState<{ type: string; label: string; at: number }[]>([]);
@@ -2190,7 +2194,23 @@ export default function HandheldHubPage() {
       });
       try {
         const data = await submitRes.json();
-        if (data?.auditLogId && typeof data.auditLogId === 'string') setLastInventoryAuditLogId(data.auditLogId);
+        if (data?.auditLogId && typeof data.auditLogId === 'string') {
+          setLastInventoryAuditLogId(data.auditLogId);
+          // Start polling for report status
+          setSubmittedReportStatus(null);
+          const pollStatus = async (logId: string) => {
+            try {
+              const r2 = await fetch(`/api/audit/report-status?id=${encodeURIComponent(logId)}`, { credentials: 'include' });
+              if (r2.ok) {
+                const s = await r2.json();
+                setSubmittedReportStatus(s);
+              }
+            } catch {}
+          };
+          pollStatus(data.auditLogId);
+          // Refresh after 30s
+          setTimeout(() => pollStatus(data.auditLogId), 30000);
+        }
       } catch {
         /* ignore */
       }
@@ -2343,6 +2363,7 @@ export default function HandheldHubPage() {
     setInventorySessionFloor('');
     setInventorySessionRoom('');
     setLastInventoryAuditLogId(null);
+    setSubmittedReportStatus(null);
     toast({ title: 'Session ended', description: `${total} item${total !== 1 ? 's' : ''} in list.` });
   }, [unifiedInventory.length, countLocationLabel, pushRecentAction, toast]);
 
@@ -3542,15 +3563,97 @@ export default function HandheldHubPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-slate-900 px-4 py-4 flex items-start gap-3 shadow-sm">
-                          <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
-                            <CheckCircle2 className="h-5 w-5 text-white" />
+                        <div className="space-y-3">
+                          {/* Submission confirmed */}
+                          <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/30 dark:to-slate-900 px-4 py-4 flex items-start gap-3 shadow-sm">
+                            <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0">
+                              <CheckCircle2 className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100">Report submitted</p>
+                              <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                                Missing items now appear on the dashboard and manager report page.
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100">Report submitted</p>
-                            <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
-                              Missing items now appear on the dashboard and manager report page.
-                            </p>
+                          {/* Report status tracker */}
+                          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+                            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Report Status</p>
+                            </div>
+                            {submittedReportStatus === null ? (
+                              <div className="px-4 py-4 flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-500 animate-spin shrink-0"/>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">Checking report status…</p>
+                              </div>
+                            ) : (
+                              <div className="px-4 py-4 space-y-3">
+                                {/* Status steps */}
+                                {[
+                                  {
+                                    key: 'submitted',
+                                    label: 'Report Submitted',
+                                    desc: 'Your inventory count report has been received.',
+                                    done: true,
+                                    Icon: CheckCircle2,
+                                    color: 'text-emerald-500',
+                                    bg: 'bg-emerald-500',
+                                  },
+                                  {
+                                    key: 'reviewing',
+                                    label: submittedReportStatus.state === 'completed' ? 'Management Reviewed' : 'Under Management Review',
+                                    desc: submittedReportStatus.state === 'completed'
+                                      ? 'Management has reviewed and approved this report.'
+                                      : 'Management is reviewing your report. No action needed.',
+                                    done: submittedReportStatus.state === 'completed',
+                                    active: submittedReportStatus.state === 'reviewing' || submittedReportStatus.state === 'tickets',
+                                    Icon: submittedReportStatus.state === 'completed' ? CheckCircle2 : ClipboardList,
+                                    color: submittedReportStatus.state === 'completed' ? 'text-emerald-500' : 'text-indigo-500',
+                                    bg: submittedReportStatus.state === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500',
+                                  },
+                                  ...(submittedReportStatus.ticketCount > 0 ? [{
+                                    key: 'tickets',
+                                    label: `${submittedReportStatus.ticketCount} Ticket${submittedReportStatus.ticketCount > 1 ? 's' : ''} Raised`,
+                                    desc: `Management has raised ${submittedReportStatus.ticketCount} action ticket${submittedReportStatus.ticketCount > 1 ? 's' : ''} for this report.`,
+                                    done: true,
+                                    Icon: TicketIcon,
+                                    color: 'text-violet-500',
+                                    bg: 'bg-violet-500',
+                                  }] : []),
+                                  {
+                                    key: 'completed',
+                                    label: 'Report Completed',
+                                    desc: submittedReportStatus.state === 'completed'
+                                      ? `Completed${submittedReportStatus.completedAt ? ' on ' + new Date(submittedReportStatus.completedAt).toLocaleDateString() : ''}.`
+                                      : 'Management will mark the report as complete when done.',
+                                    done: submittedReportStatus.state === 'completed',
+                                    Icon: CheckSquare,
+                                    color: submittedReportStatus.state === 'completed' ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-600',
+                                    bg: submittedReportStatus.state === 'completed' ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700',
+                                  },
+                                ].map((step, i) => {
+                                  const Icon = step.Icon;
+                                  return (
+                                    <div key={step.key} className="flex items-start gap-3">
+                                      <div className="flex flex-col items-center">
+                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${step.done ? step.bg : step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'}`}>
+                                          <Icon className={`h-4 w-4 ${step.done || step.active ? 'text-white' : step.color}`} />
+                                        </div>
+                                        {i < 2 + (submittedReportStatus.ticketCount > 0 ? 1 : 0) && (
+                                          <div className="w-0.5 h-4 bg-slate-200 dark:bg-slate-700 mt-1" />
+                                        )}
+                                      </div>
+                                      <div className="pb-1">
+                                        <p className={`text-sm font-semibold ${step.done ? 'text-slate-900 dark:text-slate-100' : step.active ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>
+                                          {step.label}
+                                        </p>
+                                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">{step.desc}</p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

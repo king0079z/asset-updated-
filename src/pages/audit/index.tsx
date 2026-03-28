@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -31,6 +32,7 @@ import {
   Info, BarChart3, Zap, AlertCircle, ArrowRight, Hash, ScanLine,
   X, Download, Brain, TrendingUp, TrendingDown, Star, Activity,
   Building2, Users, Award, Lightbulb, Target, CheckSquare, XCircle,
+  Printer, CheckCheck, Archive, LayoutList,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -63,6 +65,10 @@ interface Report {
   details: ReportDetails|null;
   submitter?: { id?: string; name?: string; email?: string; role?: string; imageUrl?: string; }|null;
   linkedTickets: LinkedTicket[];
+  verified?: boolean;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  completedBy?: string;
 }
 interface StaffUser { id: string; name?: string; email: string; role?: string; }
 interface StaffPerf {
@@ -527,12 +533,14 @@ function StaffPerformanceDialog({ open, onClose, userId, staffName, staffEmail }
 }
 
 /* ── Report Card ───────────────────────────────────────────────────────── */
-function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onViewStaff }: {
+function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onViewStaff, onComplete, onReopen }: {
   report: Report; onViewAssets: (r: Report)=>void; onCreateTicket: (r: Report)=>void;
   onDownloadPdf: (id: string)=>void; onViewStaff: (r: Report)=>void;
+  onComplete?: (r: Report)=>void; onReopen?: (r: Report)=>void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const isCompleted = !!report.verified;
   const d = report.details || {} as ReportDetails;
   const sev = getSevConfig(report.severity);
   const SevIcon = sev.Icon;
@@ -550,8 +558,17 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onVie
 
   return (
     <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{duration:0.3}}
-      className={cn('rounded-2xl border-2 bg-card shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden', sev.card)}>
-      <div className={cn('h-1 w-full bg-gradient-to-r', sev.stripe)}/>
+      className={cn('rounded-2xl border-2 bg-card shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden',
+        isCompleted ? 'border-emerald-200 dark:border-emerald-800/60' : sev.card)}>
+      <div className={cn('h-1 w-full bg-gradient-to-r', isCompleted ? 'from-emerald-400 to-teal-500' : sev.stripe)}/>
+      {isCompleted && (
+        <div className="px-5 py-2.5 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900 flex items-center gap-2">
+          <CheckCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0"/>
+          <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Report Completed</span>
+          {report.verifiedAt && <span className="text-xs text-emerald-500 dark:text-emerald-500 ml-1">· {fmtDate(report.verifiedAt)}</span>}
+          {report.completedBy && <span className="text-xs text-emerald-500 dark:text-emerald-500">· by {report.completedBy}</span>}
+        </div>
+      )}
       <div className="p-5">
         {/* Top row */}
         <div className="flex items-start gap-4">
@@ -562,7 +579,7 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onVie
                 {initials(report.submitter?.name, staffEmail)}
               </AvatarFallback>
             </Avatar>
-            <span className={cn('absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-800', sev.dot)}/>
+            <span className={cn('absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-800', isCompleted ? 'bg-emerald-400' : sev.dot)}/>
             <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
               <User className="h-3.5 w-3.5 text-indigo-600"/>
             </div>
@@ -571,12 +588,13 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onVie
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <button onClick={()=>onViewStaff(report)}
-                className="font-bold text-slate-900 hover:text-indigo-600 transition-colors text-left leading-tight underline-offset-2 hover:underline">
+                className="font-bold text-slate-900 dark:text-slate-100 hover:text-indigo-600 transition-colors text-left leading-tight underline-offset-2 hover:underline">
                 {staffName}
               </button>
-              {report.submitter?.role && <Badge variant="outline" className="text-xs font-medium text-indigo-600 border-indigo-200 bg-indigo-50">{report.submitter.role}</Badge>}
-              <Badge variant="outline" className={cn('text-xs font-semibold border', sev.badge)}>
-                <SevIcon className={cn('h-3 w-3 mr-1', sev.iconCol)}/>{report.severity}
+              {report.submitter?.role && <Badge variant="outline" className="text-xs font-medium text-indigo-600 border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300">{report.submitter.role}</Badge>}
+              <Badge variant="outline" className={cn('text-xs font-semibold border', isCompleted ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' : sev.badge)}>
+                {isCompleted ? <CheckCheck className="h-3 w-3 mr-1 text-emerald-500"/> : <SevIcon className={cn('h-3 w-3 mr-1', sev.iconCol)}/>}
+                {isCompleted ? 'COMPLETED' : report.severity}
               </Badge>
             </div>
             {staffEmail && staffEmail !== staffName && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{staffEmail}</p>}
@@ -687,17 +705,29 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onVie
 
         {/* Action row */}
         <div className="mt-4 flex items-center gap-2 flex-wrap">
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs border-indigo-200 text-indigo-600 hover:bg-indigo-50" onClick={()=>onViewAssets(report)}>
+          <Button size="sm" variant="outline" className="gap-1.5 text-xs border-indigo-200 text-indigo-600 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-indigo-950/40" onClick={()=>onViewAssets(report)}>
             <Eye className="h-3.5 w-3.5"/> View Assets
           </Button>
-          <Button size="sm" className="gap-1.5 text-xs bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-sm" onClick={()=>onCreateTicket(report)}>
-            <TicketIcon className="h-3.5 w-3.5"/> Create Ticket
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50" onClick={handlePdf} disabled={pdfLoading}>
+          {!isCompleted && (
+            <Button size="sm" className="gap-1.5 text-xs bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-sm" onClick={()=>onCreateTicket(report)}>
+              <TicketIcon className="h-3.5 w-3.5"/> Create Ticket
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" onClick={handlePdf} disabled={pdfLoading}>
             {pdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <Download className="h-3.5 w-3.5"/>}
-            Download PDF
+            PDF
           </Button>
-          {!expanded && report.linkedTickets.length > 0 && (
+          {!isCompleted && onComplete && (
+            <Button size="sm" className="gap-1.5 text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm ml-auto" onClick={()=>onComplete(report)}>
+              <CheckCheck className="h-3.5 w-3.5"/> Report Complete
+            </Button>
+          )}
+          {isCompleted && onReopen && (
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs border-amber-200 text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40 ml-auto" onClick={()=>onReopen(report)}>
+              <Archive className="h-3.5 w-3.5"/> Reopen
+            </Button>
+          )}
+          {!expanded && report.linkedTickets.length > 0 && !onComplete && (
             <button onClick={()=>setExpanded(true)} className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1 ml-auto transition-colors">
               <TicketIcon className="h-3 w-3"/> {report.linkedTickets.length} ticket{report.linkedTickets.length!==1?'s':''}
             </button>
@@ -708,34 +738,252 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onDownloadPdf, onVie
   );
 }
 
+/* ── Confirm Complete Dialog ───────────────────────────────────────────── */
+function ConfirmCompleteDialog({ open, onClose, report, onConfirm, loading: busy }: {
+  open: boolean; onClose: ()=>void; report: Report|null; onConfirm: ()=>void; loading: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md rounded-2xl border-border bg-card p-0 overflow-hidden">
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 p-6 text-white">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl"><CheckCheck className="h-5 w-5"/></div>
+            <div>
+              <DialogTitle className="text-lg font-bold text-white">Mark Report Complete</DialogTitle>
+              <DialogDescription className="text-emerald-100 text-sm mt-0.5">This action moves the report to the Completed tab.</DialogDescription>
+            </div>
+          </div>
+        </div>
+        <div className="p-6 space-y-3">
+          <p className="text-sm text-slate-700 dark:text-slate-300">
+            Are you sure you want to mark this inventory report as <strong>complete</strong>? Management has reviewed and approved the findings.
+          </p>
+          {report && (
+            <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-3 space-y-1">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Report Summary</p>
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{[report.details?.floorNumber&&`Floor ${report.details.floorNumber}`, report.details?.roomNumber&&`Room ${report.details.roomNumber}`].filter(Boolean).join(' · ')||'All locations'}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{fmtDate(report.details?.submittedAt||report.timestamp)} · {report.details?.missingCount||0} missing items</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="px-6 pb-6 gap-3">
+          <Button variant="outline" onClick={onClose} disabled={busy} className="flex-1">Cancel</Button>
+          <Button onClick={onConfirm} disabled={busy} className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <CheckCheck className="h-4 w-4 mr-2"/>}
+            {busy ? 'Completing…' : 'Yes, Complete'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Print Report Dialog ───────────────────────────────────────────────── */
+function PrintReportDialog({ open, onClose, reports, completedCount, totalCount }: {
+  open: boolean; onClose: ()=>void; reports: Report[]; completedCount: number; totalCount: number;
+}) {
+  const printRef = useRef<HTMLDivElement>(null);
+  const [printMode, setPrintMode] = useState<'all'|'active'|'completed'>('all');
+
+  const filtered = printMode === 'all' ? reports : printMode === 'completed' ? reports.filter(r=>r.verified) : reports.filter(r=>!r.verified);
+
+  const handlePrint = () => {
+    if (!printRef.current) return;
+    const win = window.open('', '_blank', 'width=1100,height=800');
+    if (!win) return;
+    const style = `
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body { background: white; color: #1e293b; padding: 32px; }
+        .page-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 24px; border-bottom: 3px solid #4f46e5; margin-bottom: 28px; }
+        .page-header h1 { font-size: 26px; font-weight: 800; color: #1e293b; }
+        .page-header p { font-size: 13px; color: #64748b; margin-top: 4px; }
+        .logo-badge { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 10px 18px; border-radius: 12px; font-weight: 700; font-size: 15px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
+        .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; text-align: center; }
+        .stat-card .val { font-size: 24px; font-weight: 800; color: #1e293b; }
+        .stat-card .lbl { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .report-card { border: 1px solid #e2e8f0; border-radius: 14px; margin-bottom: 20px; overflow: hidden; page-break-inside: avoid; }
+        .report-header { padding: 16px 18px; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-bottom: 1px solid #e2e8f0; display: flex; align-items: flex-start; justify-content: space-between; }
+        .report-title { font-size: 15px; font-weight: 700; color: #1e293b; }
+        .report-meta { font-size: 12px; color: #64748b; margin-top: 4px; }
+        .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid; }
+        .badge-info { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+        .badge-warning { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+        .badge-error { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+        .badge-complete { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+        .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 14px 18px; }
+        .stat-cell { text-align: center; background: white; border: 1px solid #f1f5f9; border-radius: 8px; padding: 10px 6px; }
+        .stat-cell .val { font-size: 20px; font-weight: 800; }
+        .stat-cell .lbl { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+        .tickets-section { padding: 12px 18px; background: #fafafa; border-top: 1px solid #f1f5f9; }
+        .tickets-title { font-size: 11px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .ticket-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 6px; }
+        .ticket-title { font-size: 13px; font-weight: 600; color: #1e293b; flex: 1; }
+        .ticket-id { font-size: 11px; color: #94a3b8; }
+        .note-section { padding: 10px 18px 14px; }
+        .note-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #78350f; font-style: italic; }
+        .completed-banner { background: #d1fae5; padding: 8px 18px; font-size: 12px; color: #065f46; font-weight: 600; border-bottom: 1px solid #a7f3d0; }
+        .page-footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
+        @media print { .report-card { page-break-inside: avoid; } body { padding: 16px; } }
+      </style>
+    `;
+    const now = new Date().toLocaleString();
+    const allMissing = filtered.reduce((s,r)=>s+(r.details?.missingCount||0),0);
+    const allScanned = filtered.reduce((s,r)=>s+(r.details?.totalScanned||0),0);
+    const allTickets = filtered.reduce((s,r)=>s+r.linkedTickets.length,0);
+    const alerts = filtered.filter(r=>r.severity!=='INFO').length;
+    const completed = filtered.filter(r=>r.verified).length;
+
+    const reportHTML = filtered.map(r => {
+      const d = r.details || {};
+      const name = r.submitter?.email || r.submitter?.name || d.submittedByEmail || d.submittedByName || 'Unknown Staff';
+      const loc = [d.floorNumber&&`Floor ${d.floorNumber}`, d.roomNumber&&`Room ${d.roomNumber}`].filter(Boolean).join(' · ')||'All locations';
+      const covPct = d.totalInSystem > 0 ? Math.round((d.totalScanned/d.totalInSystem)*100) : 0;
+      const sev = r.severity;
+      const sevClass = sev==='WARNING'?'badge-warning':sev==='ERROR'?'badge-error':'badge-info';
+      const tickets = r.linkedTickets.map(t =>
+        `<div class="ticket-row">
+          <div class="ticket-title">${t.title}</div>
+          <span class="ticket-id">${t.displayId||t.id.slice(0,8)}</span>
+          <span class="badge ${t.status==='RESOLVED'?'badge-info':'badge-warning'}" style="font-size:10px;">${t.status.replace('_',' ')}</span>
+          <span style="font-size:10px;color:#94a3b8;">${t.priority}</span>
+        </div>`
+      ).join('');
+      return `
+        <div class="report-card">
+          ${r.verified ? `<div class="completed-banner">✓ COMPLETED · ${r.verifiedAt ? new Date(r.verifiedAt).toLocaleString() : ''} ${r.completedBy ? `· by ${r.completedBy}` : ''}</div>` : ''}
+          <div class="report-header">
+            <div>
+              <div class="report-title">${name}</div>
+              <div class="report-meta">${loc} · ${new Date(d.submittedAt||r.timestamp).toLocaleString()} · ${d.sessionDurationMs ? Math.round(d.sessionDurationMs/60000)+'m session' : ''}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-direction:column;align-items:flex-end;">
+              <span class="badge ${sevClass}">${sev}</span>
+              <span style="font-size:11px;color:#64748b;">Coverage: <strong>${covPct}%</strong></span>
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-cell"><div class="val" style="color:#4f46e5;">${d.totalScanned||0}</div><div class="lbl">Scanned</div></div>
+            <div class="stat-cell"><div class="val" style="color:#64748b;">${d.totalInSystem||0}</div><div class="lbl">In System</div></div>
+            <div class="stat-cell"><div class="val" style="color:${(d.missingCount||0)>0?'#dc2626':'#16a34a'};">${d.missingCount||0}</div><div class="lbl">Missing</div></div>
+            <div class="stat-cell"><div class="val" style="color:#d97706;">${d.wrongLocationCount||0}</div><div class="lbl">Wrong Loc.</div></div>
+          </div>
+          ${(d.reasonCode||d.note) ? `<div class="note-section">${d.reasonCode ? `<div style="font-size:12px;color:#64748b;margin-bottom:6px;">Reason code: <strong>${d.reasonCode}</strong></div>` : ''}${d.note ? `<div class="note-box">"${d.note}"</div>` : ''}</div>` : ''}
+          ${r.linkedTickets.length > 0 ? `<div class="tickets-section"><div class="tickets-title">🎫 Linked Tickets (${r.linkedTickets.length})</div>${tickets}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    win.document.write(`<!DOCTYPE html><html><head><title>Inventory Audit Report</title>${style}</head><body>
+      <div class="page-header">
+        <div>
+          <h1>Inventory Audit Center — Full Report</h1>
+          <p>Generated ${now} · Showing ${filtered.length} ${printMode === 'all' ? 'all' : printMode} reports</p>
+        </div>
+        <div class="logo-badge">Asset AI</div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="val">${filtered.length}</div><div class="lbl">Reports</div></div>
+        <div class="stat-card"><div class="val">${alerts}</div><div class="lbl">Alerts</div></div>
+        <div class="stat-card"><div class="val">${allScanned}</div><div class="lbl">Scanned</div></div>
+        <div class="stat-card"><div class="val">${allMissing}</div><div class="lbl">Missing</div></div>
+        <div class="stat-card"><div class="val">${allTickets}</div><div class="lbl">Tickets</div></div>
+      </div>
+      ${reportHTML}
+      <div class="page-footer">Asset AI · Inventory Audit Center · Confidential · Generated ${now}</div>
+    </body></html>`);
+    win.document.close();
+    setTimeout(() => win.print(), 600);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-xl rounded-2xl border-border bg-card p-0 overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 text-white">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/15 rounded-xl"><Printer className="h-5 w-5"/></div>
+            <div>
+              <DialogTitle className="text-lg font-bold text-white">Print Inventory Audit Report</DialogTitle>
+              <DialogDescription className="text-slate-300 text-sm mt-0.5">World-class comprehensive report with all details and tickets</DialogDescription>
+            </div>
+          </div>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Which reports to include?</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { key:'all', label:'All Reports', Icon:LayoutList, desc:`${totalCount} total` },
+                { key:'active', label:'Active Only', Icon:Activity, desc:`${totalCount - completedCount} active` },
+                { key:'completed', label:'Completed Only', Icon:CheckCheck, desc:`${completedCount} done` },
+              ].map(opt => { const Icon=opt.Icon; return (
+                <button key={opt.key} onClick={()=>setPrintMode(opt.key as any)}
+                  className={cn('flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center',
+                    printMode===opt.key ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600')}>
+                  <Icon className="h-4 w-4"/>
+                  <span className="text-xs font-semibold">{opt.label}</span>
+                  <span className="text-[10px] opacity-70">{opt.desc}</span>
+                </button>
+              );})}
+            </div>
+          </div>
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3.5 flex gap-2.5 items-start">
+            <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"/>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              The report includes all fields: submitter, location, scan counts, missing items, notes, linked tickets, and completion status. Currently loaded reports will be printed ({reports.length} shown).
+            </p>
+          </div>
+        </div>
+        <div ref={printRef} className="hidden"/>
+        <DialogFooter className="px-6 pb-6 gap-3">
+          <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+          <Button onClick={handlePrint} className="flex-1 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 text-white gap-2">
+            <Printer className="h-4 w-4"/> Open Print Preview
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ── Main Page ─────────────────────────────────────────────────────────── */
 function AuditPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [total, setTotal] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [severityFilter, setSeverityFilter] = useState('__all__');
+  const [activeTab, setActiveTab] = useState<'active'|'completed'>('active');
   const [search, setSearch] = useState('');
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
 
   const [assetModal, setAssetModal] = useState<Report|null>(null);
   const [ticketModal, setTicketModal] = useState<Report|null>(null);
   const [staffDialog, setStaffDialog] = useState<{report: Report}|null>(null);
+  const [completeTarget, setCompleteTarget] = useState<Report|null>(null);
+  const [completeLoading, setCompleteLoading] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
-  const fetchReports = useCallback(async (p=1, sev=severityFilter, silent=false) => {
+  const fetchReports = useCallback(async (p=1, sev=severityFilter, tab=activeTab, silent=false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
-      const params = new URLSearchParams({ page:String(p), limit:'12' });
+      const params = new URLSearchParams({ page:String(p), limit:'12', status: tab });
       if (sev && sev!=='__all__') params.set('severity', sev);
       const res = await fetch(`/api/audit/inventory-reports?${params}`, { credentials:'include' });
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
-      setReports(data.reports||[]); setTotal(data.total||0); setTotalPages(data.totalPages||1); setPage(p);
+      setReports(data.reports||[]);
+      setTotal(data.total||0);
+      setCompletedCount(data.completedCount||0);
+      setTotalPages(data.totalPages||1);
+      setPage(p);
     } catch(e: any) { toast({title:'Failed to load reports',description:e.message,variant:'destructive'}); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [severityFilter]);
+  }, [severityFilter, activeTab]);
 
   const fetchStaff = useCallback(async () => {
     try {
@@ -746,20 +994,62 @@ function AuditPage() {
     } catch {}
   }, []);
 
-  useEffect(() => { fetchReports(1, severityFilter); fetchStaff(); }, []);
+  useEffect(() => { fetchReports(1, severityFilter, activeTab); fetchStaff(); }, []);
 
-  const handleSevChange = (v: string) => { setSeverityFilter(v); fetchReports(1, v); };
+  const handleTabChange = (tab: 'active'|'completed') => {
+    setActiveTab(tab);
+    setPage(1);
+    fetchReports(1, severityFilter, tab);
+  };
+
+  const handleSevChange = (v: string) => { setSeverityFilter(v); fetchReports(1, v, activeTab); };
 
   const handleTicketCreated = (reportId: string, ticket: LinkedTicket) => {
     setReports(prev => prev.map(r => r.id===reportId ? {...r, linkedTickets:[...r.linkedTickets, ticket]} : r));
   };
 
-  // Aggregated stats
+  const handleComplete = async (confirmed: boolean) => {
+    if (!completeTarget) return;
+    setCompleteLoading(true);
+    try {
+      const res = await fetch('/api/audit/inventory-reports', {
+        method: 'PATCH', credentials: 'include',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ id: completeTarget.id, completed: confirmed }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast({ title: confirmed ? 'Report marked as complete' : 'Report reopened', description: confirmed ? 'Moved to Completed Reports tab.' : 'Report is now active again.' });
+      setCompleteTarget(null);
+      fetchReports(1, severityFilter, activeTab, true);
+      setCompletedCount(prev => confirmed ? prev+1 : Math.max(0, prev-1));
+    } catch(e: any) { toast({ title:'Failed', description:e.message, variant:'destructive' }); }
+    finally { setCompleteLoading(false); }
+  };
+
+  const handleReopen = async (report: Report) => {
+    setCompleteLoading(true);
+    try {
+      const res = await fetch('/api/audit/inventory-reports', {
+        method: 'PATCH', credentials: 'include',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ id: report.id, completed: false }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast({ title: 'Report reopened', description: 'Report moved back to Active Reports.' });
+      fetchReports(1, severityFilter, activeTab, true);
+      setCompletedCount(prev => Math.max(0, prev-1));
+    } catch(e: any) { toast({ title:'Failed', description:e.message, variant:'destructive' }); }
+    finally { setCompleteLoading(false); }
+  };
+
+  // Aggregated stats (from current page)
   const totalMissing = reports.reduce((s,r)=>s+(r.details?.missingCount||0),0);
   const totalScanned = reports.reduce((s,r)=>s+(r.details?.totalScanned||0),0);
   const warningCount = reports.filter(r=>r.severity==='WARNING').length;
   const clearCount = reports.filter(r=>r.severity==='INFO').length;
   const totalLinkedTickets = reports.reduce((s,r)=>s+r.linkedTickets.length,0);
+  // Total counts: active = total - completedCount (from API)
+  const activeCount = Math.max(0, (total + completedCount) - completedCount);
 
   const filtered = reports.filter(r => {
     if (!search) return true;
@@ -771,11 +1061,12 @@ function AuditPage() {
   });
 
   const statCards = [
-    { label:'Total Reports', value:total, Icon:FileText, grad:'from-indigo-500/20 to-indigo-500/5', border:'border-indigo-400/20', text:'text-indigo-200', sub:'text-indigo-300' },
+    { label:'Total Reports', value:total + completedCount, Icon:FileText, grad:'from-indigo-500/20 to-indigo-500/5', border:'border-indigo-400/20', text:'text-indigo-200', sub:'text-indigo-300' },
     { label:'Alert Reports', value:warningCount, Icon:AlertTriangle, grad:'from-amber-500/20 to-amber-500/5', border:'border-amber-400/20', text:'text-amber-200', sub:'text-amber-400' },
     { label:'Items Scanned', value:totalScanned, Icon:ScanLine, grad:'from-blue-500/20 to-blue-500/5', border:'border-blue-400/20', text:'text-blue-200', sub:'text-blue-400' },
     { label:'Missing Items', value:totalMissing, Icon:ShieldAlert, grad:'from-red-500/20 to-red-500/5', border:'border-red-400/20', text:'text-red-200', sub:'text-red-400' },
     { label:'Linked Tickets', value:totalLinkedTickets, Icon:TicketIcon, grad:'from-purple-500/20 to-purple-500/5', border:'border-purple-400/20', text:'text-purple-200', sub:'text-purple-400' },
+    { label:'Completed', value:completedCount, Icon:CheckCheck, grad:'from-emerald-500/20 to-emerald-500/5', border:'border-emerald-400/20', text:'text-emerald-200', sub:'text-emerald-400' },
   ];
 
   return (
@@ -803,14 +1094,20 @@ function AuditPage() {
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={()=>fetchReports(page,severityFilter,true)} disabled={refreshing}
-              className="border-white/20 text-white hover:bg-white/10 bg-white/5 backdrop-blur-sm gap-2">
-              <RefreshCw className={cn('h-4 w-4', refreshing&&'animate-spin')}/> Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={()=>setPrintOpen(true)}
+                className="border-white/20 text-white hover:bg-white/10 bg-white/5 backdrop-blur-sm gap-2">
+                <Printer className="h-4 w-4"/> Print Report
+              </Button>
+              <Button variant="outline" size="sm" onClick={()=>fetchReports(page,severityFilter,activeTab,true)} disabled={refreshing}
+                className="border-white/20 text-white hover:bg-white/10 bg-white/5 backdrop-blur-sm gap-2">
+                <RefreshCw className={cn('h-4 w-4', refreshing&&'animate-spin')}/> Refresh
+              </Button>
+            </div>
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6">
             {statCards.map(s => { const Icon=s.Icon; return (
               <motion.div key={s.label} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
                 className={cn('rounded-2xl border backdrop-blur-sm bg-gradient-to-br p-4', s.grad, s.border)}>
@@ -826,7 +1123,29 @@ function AuditPage() {
 
       {/* ── Toolbar ── */}
       <div className="sticky top-0 z-20 bg-white/80 dark:bg-background/90 backdrop-blur-md border-b border-slate-100 dark:border-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3 flex-wrap">
+        {/* Tabs */}
+        <div className="max-w-7xl mx-auto px-6 pt-3 flex items-center gap-1">
+          {([
+            { key:'active', label:'Active Reports', Icon:LayoutList, count:total },
+            { key:'completed', label:'Completed Reports', Icon:CheckCheck, count:completedCount },
+          ] as const).map(t => { const Icon=t.Icon; return (
+            <button key={t.key} onClick={()=>handleTabChange(t.key)}
+              className={cn('flex items-center gap-2 px-4 py-2 rounded-t-xl text-sm font-semibold border border-b-0 transition-all',
+                activeTab===t.key
+                  ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 bg-transparent')}>
+              <Icon className="h-4 w-4"/>
+              {t.label}
+              <span className={cn('ml-1 px-2 py-0.5 rounded-full text-xs font-bold',
+                activeTab===t.key
+                  ? t.key==='completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500')}>
+                {t.count}
+              </span>
+            </button>
+          );})}
+        </div>
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3 flex-wrap border-t border-slate-100 dark:border-slate-800">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500"/>
             <Input placeholder="Search staff, location, note…" value={search} onChange={e=>setSearch(e.target.value)} className="pl-9 h-9 text-sm bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700"/>
@@ -842,7 +1161,7 @@ function AuditPage() {
             </SelectContent>
           </Select>
           <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-full px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
-            <Activity className="h-3.5 w-3.5"/>{filtered.length} of {total} reports
+            <Activity className="h-3.5 w-3.5"/>{filtered.length} of {total} {activeTab} reports
           </div>
         </div>
       </div>
@@ -859,9 +1178,13 @@ function AuditPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 text-slate-400 dark:text-slate-500">
-            <div className="p-6 bg-slate-100 dark:bg-slate-800 rounded-3xl mb-4"><ClipboardList className="h-14 w-14 text-slate-300 dark:text-slate-600"/></div>
-            <p className="text-xl font-bold text-slate-500 dark:text-slate-300">No reports found</p>
-            <p className="text-sm mt-1">{search ? 'Try a different search term.' : 'No inventory reconciliation reports submitted yet.'}</p>
+            <div className={cn('p-6 rounded-3xl mb-4', activeTab==='completed' ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-slate-100 dark:bg-slate-800')}>
+              {activeTab==='completed' ? <CheckCheck className="h-14 w-14 text-emerald-300 dark:text-emerald-700"/> : <ClipboardList className="h-14 w-14 text-slate-300 dark:text-slate-600"/>}
+            </div>
+            <p className="text-xl font-bold text-slate-500 dark:text-slate-300">
+              {activeTab==='completed' ? 'No completed reports yet' : 'No active reports found'}
+            </p>
+            <p className="text-sm mt-1">{search ? 'Try a different search term.' : activeTab==='completed' ? 'Mark reports as complete to see them here.' : 'No inventory reconciliation reports submitted yet.'}</p>
             {search && <Button variant="ghost" size="sm" className="mt-3 gap-2" onClick={()=>setSearch('')}><X className="h-4 w-4"/> Clear search</Button>}
           </div>
         ) : (
@@ -872,6 +1195,8 @@ function AuditPage() {
                 onCreateTicket={()=>setTicketModal(r)}
                 onDownloadPdf={()=>downloadPdf(`/api/audit/report-pdf?id=${r.id}`)}
                 onViewStaff={()=>setStaffDialog({report:r})}
+                onComplete={activeTab==='active' ? (rep)=>setCompleteTarget(rep) : undefined}
+                onReopen={activeTab==='completed' ? (rep)=>handleReopen(rep) : undefined}
               />
             ))}
           </div>
@@ -880,16 +1205,16 @@ function AuditPage() {
         {/* Pagination */}
         {totalPages > 1 && !loading && (
           <div className="flex items-center justify-center gap-2 mt-8">
-            <Button variant="outline" size="sm" disabled={page<=1} onClick={()=>fetchReports(page-1,severityFilter)}>← Previous</Button>
+            <Button variant="outline" size="sm" disabled={page<=1} onClick={()=>fetchReports(page-1,severityFilter,activeTab)}>← Previous</Button>
             <div className="flex items-center gap-1">
               {Array.from({length:Math.min(7,totalPages)},(_,i)=>{const p=i+1;return(
-                <button key={p} onClick={()=>fetchReports(p,severityFilter)}
+                <button key={p} onClick={()=>fetchReports(p,severityFilter,activeTab)}
                   className={cn('w-8 h-8 rounded-lg text-sm font-medium transition-all', p===page?'bg-indigo-600 text-white':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}>
                   {p}
                 </button>);
               })}
             </div>
-            <Button variant="outline" size="sm" disabled={page>=totalPages} onClick={()=>fetchReports(page+1,severityFilter)}>Next →</Button>
+            <Button variant="outline" size="sm" disabled={page>=totalPages} onClick={()=>fetchReports(page+1,severityFilter,activeTab)}>Next →</Button>
           </div>
         )}
       </div>
@@ -903,6 +1228,15 @@ function AuditPage() {
         userId={staffDialog?.report?.submitter?.id||staffDialog?.report?.userId}
         staffName={staffDialog?.report?.submitter?.name||staffDialog?.report?.details?.submittedByName}
         staffEmail={staffDialog?.report?.submitter?.email||staffDialog?.report?.details?.submittedByEmail}
+      />
+      <ConfirmCompleteDialog
+        open={!!completeTarget} onClose={()=>setCompleteTarget(null)}
+        report={completeTarget} loading={completeLoading}
+        onConfirm={()=>handleComplete(true)}
+      />
+      <PrintReportDialog
+        open={printOpen} onClose={()=>setPrintOpen(false)}
+        reports={reports} completedCount={completedCount} totalCount={total+completedCount}
       />
     </div>
   );
