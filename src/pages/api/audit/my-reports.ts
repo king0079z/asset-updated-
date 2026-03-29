@@ -25,11 +25,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           { userEmail: user.email },
         ],
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { timestamp: 'desc' },
       take: 30,
       select: {
         id: true,
-        createdAt: true,
+        timestamp: true,
         details: true,
         verified: true,
         verifiedAt: true,
@@ -64,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         return {
           id: log.id,
-          submittedAt: log.createdAt.toISOString(),
+          submittedAt: log.timestamp.toISOString(),
           floor: details?.floorNumber ?? details?.floor ?? '',
           room: details?.roomNumber ?? details?.room ?? '',
           totalScanned: details?.totalScanned ?? 0,
