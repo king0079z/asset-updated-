@@ -570,6 +570,46 @@ export default function HandheldHubPage() {
   }>({ loading: false, state: 'reviewing', ticketCount: 0 });
   const reportStatusPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── My Reports (DB-driven list) ────────────────────────────────────────────
+  type MyReportEntry = {
+    id: string;
+    submittedAt: string;
+    floor: string;
+    room: string;
+    totalScanned: number;
+    missingCount: number;
+    extraCount: number;
+    state: 'reviewing' | 'tickets' | 'completed';
+    ticketCount: number;
+    completedAt: string | null;
+  };
+  const [myReports, setMyReports] = useState<MyReportEntry[]>([]);
+  const [myReportsLoading, setMyReportsLoading] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const myReportsFetchedRef = useRef(false);
+
+  const fetchMyReports = useCallback(async (autoSelectId?: string | null) => {
+    setMyReportsLoading(true);
+    try {
+      const res = await fetch('/api/audit/my-reports', { credentials: 'include' });
+      if (!res.ok) throw new Error('fetch failed');
+      const data = await res.json();
+      const reports: MyReportEntry[] = data.reports ?? [];
+      setMyReports(reports);
+      myReportsFetchedRef.current = true;
+      // Auto-select: prefer the just-submitted report, else the most recent
+      setSelectedReportId(prev => {
+        if (autoSelectId && reports.some(r => r.id === autoSelectId)) return autoSelectId;
+        if (prev && reports.some(r => r.id === prev)) return prev;
+        return reports[0]?.id ?? null;
+      });
+    } catch {
+      // keep existing data if fetch fails
+    } finally {
+      setMyReportsLoading(false);
+    }
+  }, []);
+
   // Restore last submitted audit report ID from localStorage on mount + auto-fetch status
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -610,6 +650,16 @@ export default function HandheldHubPage() {
       }
     } catch {}
   }, [lastInventoryAuditLogId]);
+
+  // Fetch my reports when Work > Reports tab is opened (or re-opened)
+  useEffect(() => {
+    if (tab !== 'work' || workMode !== 'reports') return;
+    fetchMyReports(lastInventoryAuditLogId);
+    // Auto-refresh every 60 s while on the tab
+    const interval = setInterval(() => fetchMyReports(lastInventoryAuditLogId), 60000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, workMode]);
 
   // Recent actions (audit trail)
   const [recentActions, setRecentActions] = useState<{ type: string; label: string; at: number }[]>([]);
@@ -2313,10 +2363,12 @@ export default function HandheldHubPage() {
     setWorkMode('reports');
     toast({
       title: '✓ Report submitted',
-      description: 'Inventory session reset. Your report status is now in the Work tab.',
+      description: 'Your report status is now live in the Work tab → Reports.',
     });
+    // Fetch updated report list after a short delay to allow DB commit
+    setTimeout(() => fetchMyReports(lastInventoryAuditLogId), 1500);
     setIsSubmittingReport(false);
-  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length, rosterNotReadSnapshot, isSubmittingReport]);
+  }, [toast, countReviewReason, countReviewNote, pushInventoryAudit, sessionProofImages.length, reconciliationResult, inventorySessionFloor, inventorySessionRoom, countStartTime, countScansForReconciliation.length, rosterNotReadSnapshot, isSubmittingReport, fetchMyReports, lastInventoryAuditLogId]);
 
   const saveReconcileEditLocation = useCallback(async () => {
     const asset = reconcileEditLocationAsset;
@@ -2762,184 +2814,260 @@ export default function HandheldHubPage() {
                 className={cn('flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all touch-manipulation relative',
                   workMode === 'reports' ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400')}>
                 <ClipboardList className="h-4 w-4 inline mr-1.5 align-middle" /> Reports
-                {lastInventoryAuditLogId && workMode !== 'reports' && (
+                {(lastInventoryAuditLogId || myReports.some(r => r.state !== 'completed')) && workMode !== 'reports' && (
                   <span className="absolute top-1.5 right-2 h-2 w-2 rounded-full bg-indigo-500 ring-2 ring-white dark:ring-slate-800 animate-pulse"/>
                 )}
               </button>
             </div>
-            {/* ── Reports view ──────────────────────────────────────────── */}
-            {workMode === 'reports' && (() => {
-              const rs = submittedReportStatus;
-              const refreshStatus = () => {
-                if (!lastInventoryAuditLogId) return;
-                setSubmittedReportStatus(prev => ({ ...prev, loading: true }));
-                if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
-                const id = lastInventoryAuditLogId;
-                const ctrl = new AbortController();
-                setTimeout(() => ctrl.abort(), 8000);
-                fetch(`/api/audit/report-status?id=${encodeURIComponent(id)}`, { credentials: 'include', signal: ctrl.signal })
-                  .then(r => r.ok ? r.json() : null)
-                  .then(s => {
-                    if (s) setSubmittedReportStatus({ loading: false, state: s.state || 'reviewing', ticketCount: s.ticketCount ?? 0, completedAt: s.completedAt });
-                    else setSubmittedReportStatus(prev => ({ ...prev, loading: false }));
-                  })
-                  .catch(() => setSubmittedReportStatus(prev => ({ ...prev, loading: false })));
-              };
+            {/* ── Reports view (DB-driven, world-class) ───────────────────── */}
+            {workMode === 'reports' && (
+              <div className="space-y-3 pb-2">
+                {/* Section header */}
+                <div className="flex items-center justify-between px-0.5">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                      {myReports.length > 0 ? `${myReports.length} Inventory Report${myReports.length !== 1 ? 's' : ''}` : 'Inventory Reports'}
+                    </p>
+                    {myReports.length > 0 && (
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                        {myReports.filter(r => r.state !== 'completed').length} active · {myReports.filter(r => r.state === 'completed').length} completed
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => fetchMyReports(selectedReportId)} disabled={myReportsLoading}
+                    className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center touch-manipulation hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700">
+                    <RefreshCw className={`h-4 w-4 text-slate-500 dark:text-slate-400 ${myReportsLoading ? 'animate-spin' : ''}`}/>
+                  </button>
+                </div>
 
-              if (!lastInventoryAuditLogId) {
-                return (
-                  <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-10 text-center space-y-3">
-                    <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto">
-                      <ClipboardList className="h-7 w-7 text-slate-400 dark:text-slate-500" />
+                {/* Loading skeleton */}
+                {myReportsLoading && myReports.length === 0 && (
+                  <div className="space-y-3">
+                    {[0, 1].map(i => (
+                      <div key={i} className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-pulse">
+                        <div className="h-24 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600"/>
+                        <div className="p-4 space-y-3 bg-white dark:bg-slate-900">
+                          {[0, 1, 2].map(j => (
+                            <div key={j} className="flex gap-3">
+                              <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 shrink-0"/>
+                              <div className="flex-1 space-y-1.5 pt-1">
+                                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full w-3/4"/>
+                                <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full w-1/2"/>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {!myReportsLoading && myReports.length === 0 && (
+                  <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-10 text-center space-y-4">
+                    <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/50 dark:to-violet-950/50 flex items-center justify-center mx-auto border border-indigo-100 dark:border-indigo-900">
+                      <ClipboardList className="h-8 w-8 text-indigo-400 dark:text-indigo-500"/>
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-600 dark:text-slate-300">No reports this session</p>
-                      <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-                        Submit an inventory count from the Inventory tab — the report status will appear here.
+                      <p className="font-bold text-slate-700 dark:text-slate-200 text-base">No reports submitted yet</p>
+                      <p className="text-sm text-slate-400 dark:text-slate-500 mt-1.5 leading-relaxed max-w-xs mx-auto">
+                        Complete an inventory count from the Inventory tab and your reports will appear here.
                       </p>
                     </div>
+                    <button onClick={() => fetchMyReports(null)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline touch-manipulation">
+                      <RefreshCw className="h-3 w-3"/> Check again
+                    </button>
                   </div>
-                );
-              }
+                )}
 
-              const steps = [
-                {
-                  key: 'submitted', label: 'Report Submitted',
-                  desc: 'Your inventory count has been received and logged by the system.',
-                  done: true, active: false,
-                  Icon: CheckCircle2, iconColor: 'text-white', bg: 'bg-emerald-500', connectorDone: true,
-                },
-                {
-                  key: 'reviewing',
-                  label: rs.state === 'completed' ? 'Management Reviewed' : 'Under Management Review',
-                  desc: rs.state === 'completed'
-                    ? 'Management has reviewed and approved this report.'
-                    : 'Management is currently reviewing your report. No action needed from you.',
-                  done: rs.state === 'completed',
-                  active: rs.state === 'reviewing' || rs.state === 'tickets',
-                  Icon: rs.state === 'completed' ? CheckCircle2 : ClipboardList,
-                  iconColor: 'text-white',
-                  bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500',
-                  connectorDone: rs.state === 'completed',
-                },
-                ...(rs.ticketCount > 0 ? [{
-                  key: 'tickets',
-                  label: `${rs.ticketCount} Action Ticket${rs.ticketCount > 1 ? 's' : ''} Raised`,
-                  desc: `Management raised ${rs.ticketCount} ticket${rs.ticketCount > 1 ? 's' : ''} to resolve discrepancies found in your report.`,
-                  done: true, active: false,
-                  Icon: TicketIcon, iconColor: 'text-white', bg: 'bg-violet-500',
-                  connectorDone: rs.state === 'completed',
-                }] : []),
-                {
-                  key: 'completed', label: 'Report Signed Off',
-                  desc: rs.state === 'completed'
-                    ? `Signed off${rs.completedAt ? ' · ' + new Date(rs.completedAt).toLocaleDateString(undefined, { day:'2-digit', month:'short', year:'numeric' }) : ''} — no further action required.`
-                    : 'Awaiting management final sign-off.',
-                  done: rs.state === 'completed', active: false,
-                  Icon: CheckSquare,
-                  iconColor: rs.state === 'completed' ? 'text-white' : 'text-slate-400 dark:text-slate-500',
-                  bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-slate-100 dark:bg-slate-800',
-                  connectorDone: false,
-                },
-              ];
+                {/* Reports list */}
+                {myReports.length > 0 && (() => {
+                  const selected = myReports.find(r => r.id === selectedReportId) ?? myReports[0];
+                  const rs = selected;
+                  const isLatest = rs.id === myReports[0]?.id;
+                  const loc = [rs.floor && `Floor ${rs.floor}`, rs.room && `Room ${rs.room}`].filter(Boolean).join(' · ');
 
-              const sc = rs.state === 'completed'
-                ? { card: 'border-emerald-300 dark:border-emerald-800/70', hdr: 'from-emerald-600 to-teal-600', pill: 'bg-white/90 text-emerald-700 border-emerald-300', dot: 'bg-emerald-500', label: 'Completed' }
-                : rs.state === 'tickets'
-                ? { card: 'border-violet-300 dark:border-violet-800/60', hdr: 'from-violet-600 to-indigo-600', pill: 'bg-white/90 text-violet-700 border-violet-300', dot: 'bg-violet-500 animate-pulse', label: 'Action In Progress' }
-                : { card: 'border-indigo-200 dark:border-indigo-800/50', hdr: 'from-indigo-600 to-indigo-700', pill: 'bg-white/90 text-indigo-700 border-indigo-300', dot: 'bg-indigo-500 animate-pulse', label: 'Under Review' };
+                  const sc = rs.state === 'completed'
+                    ? { card: 'border-emerald-300 dark:border-emerald-800/60', hdr: 'from-emerald-500 to-teal-600', pill: 'bg-white/90 text-emerald-700 border-emerald-200', dot: 'bg-emerald-400', label: 'Completed' }
+                    : rs.state === 'tickets'
+                    ? { card: 'border-violet-300 dark:border-violet-800/60', hdr: 'from-violet-600 to-indigo-600', pill: 'bg-white/90 text-violet-700 border-violet-200', dot: 'bg-violet-500 animate-pulse', label: 'Action Required' }
+                    : { card: 'border-indigo-200 dark:border-indigo-800/50', hdr: 'from-indigo-500 to-indigo-700', pill: 'bg-white/90 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500 animate-pulse', label: 'Under Review' };
 
-              return (
-                <div className="space-y-3">
-                  {/* Status card */}
-                  <div className={`rounded-2xl border-2 overflow-hidden shadow-md ${sc.card}`}>
-                    {/* Header */}
-                    <div className={`bg-gradient-to-r ${sc.hdr} px-4 py-4`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 shadow-inner">
-                            <ClipboardList className="h-5 w-5 text-white" />
+                  const steps = [
+                    {
+                      key: 'submitted', label: 'Report Submitted',
+                      desc: `Received · ${new Date(rs.submittedAt).toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+                      done: true, active: false,
+                      Icon: CheckCircle2, iconColor: 'text-white', bg: 'bg-emerald-500', connectorDone: true,
+                    },
+                    {
+                      key: 'reviewing',
+                      label: rs.state === 'completed' ? 'Management Reviewed' : 'Under Management Review',
+                      desc: rs.state === 'completed'
+                        ? 'Management has reviewed and approved this report.'
+                        : 'Management is currently reviewing your report — no action needed from you.',
+                      done: rs.state === 'completed',
+                      active: rs.state === 'reviewing' || rs.state === 'tickets',
+                      Icon: rs.state === 'completed' ? CheckCircle2 : ClipboardList,
+                      iconColor: 'text-white',
+                      bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-indigo-500',
+                      connectorDone: rs.state === 'completed',
+                    },
+                    ...(rs.ticketCount > 0 ? [{
+                      key: 'tickets',
+                      label: `${rs.ticketCount} Action Ticket${rs.ticketCount > 1 ? 's' : ''} Raised`,
+                      desc: `Management raised ${rs.ticketCount} ticket${rs.ticketCount > 1 ? 's' : ''} for discrepancies found in this report.`,
+                      done: true, active: false,
+                      Icon: TicketIcon, iconColor: 'text-white', bg: 'bg-violet-500',
+                      connectorDone: rs.state === 'completed',
+                    }] : []),
+                    {
+                      key: 'completed', label: 'Report Signed Off',
+                      desc: rs.state === 'completed'
+                        ? `Signed off${rs.completedAt ? ' · ' + new Date(rs.completedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : ''} — no further action required.`
+                        : 'Awaiting management final sign-off.',
+                      done: rs.state === 'completed', active: false,
+                      Icon: CheckSquare,
+                      iconColor: rs.state === 'completed' ? 'text-white' : 'text-slate-400 dark:text-slate-500',
+                      bg: rs.state === 'completed' ? 'bg-emerald-500' : 'bg-slate-100 dark:bg-slate-800',
+                      connectorDone: false,
+                    },
+                  ];
+
+                  return (
+                    <>
+                      {/* ── Selected report detail card ──────────────────── */}
+                      <div className={`rounded-2xl border-2 overflow-hidden shadow-md ${sc.card}`}>
+                        {/* Gradient header */}
+                        <div className={`bg-gradient-to-br ${sc.hdr} px-4 py-4`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="h-11 w-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 shadow-inner">
+                                <ClipboardList className="h-5 w-5 text-white"/>
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="text-sm font-bold text-white truncate">{loc || 'Inventory Report'}</p>
+                                  {isLatest && (
+                                    <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-white/25 text-[10px] font-bold text-white border border-white/30 uppercase tracking-wide">Latest</span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-white/70 mt-0.5">
+                                  {new Date(rs.submittedAt).toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+                                  {rs.totalScanned ? ` · ${rs.totalScanned} assets` : ''}
+                                </p>
+                              </div>
+                            </div>
+                            <button onClick={() => fetchMyReports(selectedReportId)} disabled={myReportsLoading}
+                              className="h-9 w-9 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/35 flex items-center justify-center transition-all touch-manipulation shrink-0 shadow-sm">
+                              <RefreshCw className={`h-4 w-4 text-white ${myReportsLoading ? 'animate-spin' : ''}`}/>
+                            </button>
                           </div>
-                          <div>
-                            <p className="text-base font-bold text-white">Latest Inventory Report</p>
-                            <p className="text-[11px] text-white/65 mt-0.5">Submitted to management for review</p>
+                          {/* Status pills */}
+                          <div className="flex items-center gap-2 flex-wrap mt-3">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${sc.pill}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sc.dot}`}/>
+                              {sc.label}
+                            </span>
+                            {rs.ticketCount > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/25 text-white border border-white/30">
+                                <TicketIcon className="h-3 w-3"/> {rs.ticketCount} ticket{rs.ticketCount > 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {rs.missingCount > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/20 text-white/90 border border-white/20">
+                                {rs.missingCount} missing
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <button onClick={refreshStatus} disabled={rs.loading}
-                          className="h-9 w-9 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/30 flex items-center justify-center transition-all touch-manipulation shadow-sm">
-                          <RefreshCw className={`h-4 w-4 text-white ${rs.loading ? 'animate-spin' : ''}`}/>
-                        </button>
-                      </div>
-                      {/* Pills row */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${sc.pill}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sc.dot}`}/>
-                          {sc.label}
-                        </span>
-                        {rs.ticketCount > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/25 text-white border border-white/30">
-                            <TicketIcon className="h-3 w-3"/> {rs.ticketCount} ticket{rs.ticketCount > 1 ? 's' : ''} raised
-                          </span>
-                        )}
-                        {rs.loading && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-white/15 text-white/80">
-                            <div className="h-2.5 w-2.5 rounded-full border border-white/60 border-t-white animate-spin"/>
-                            Checking…
-                          </span>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Step-by-step tracker */}
-                    <div className="bg-white dark:bg-slate-900 px-5 pt-5 pb-4">
-                      {steps.map((step, i) => {
-                        const Icon = step.Icon;
-                        const isLast = i === steps.length - 1;
-                        return (
-                          <div key={step.key} className="flex gap-3.5">
-                            <div className="flex flex-col items-center shrink-0">
-                              <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm
-                                ${step.done || step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'}
-                                ${step.active && !step.done ? 'ring-2 ring-offset-2 ring-indigo-300 dark:ring-indigo-700 dark:ring-offset-slate-900 shadow-indigo-500/25 shadow-lg' : ''}`}>
-                                <Icon className={`h-4 w-4 ${step.done || step.active ? step.iconColor : 'text-slate-400 dark:text-slate-600'}`} />
+                        {/* Step tracker */}
+                        <div className="bg-white dark:bg-slate-900 px-5 pt-5 pb-3">
+                          {steps.map((step, i) => {
+                            const Icon = step.Icon;
+                            const isLast = i === steps.length - 1;
+                            return (
+                              <div key={step.key} className="flex gap-3.5">
+                                <div className="flex flex-col items-center shrink-0">
+                                  <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm
+                                    ${step.done || step.active ? step.bg : 'bg-slate-100 dark:bg-slate-800'}
+                                    ${step.active && !step.done ? 'ring-2 ring-offset-2 ring-indigo-300 dark:ring-indigo-700 dark:ring-offset-slate-900 shadow-lg shadow-indigo-500/20' : ''}`}>
+                                    <Icon className={`h-4 w-4 ${step.done || step.active ? step.iconColor : 'text-slate-400 dark:text-slate-600'}`}/>
+                                  </div>
+                                  {!isLast && (
+                                    <div className={`w-0.5 h-7 my-1 rounded-full transition-all duration-500 ${step.connectorDone ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'}`}/>
+                                  )}
+                                </div>
+                                <div className="flex-1 pt-1 pb-4">
+                                  <p className={`text-sm font-semibold leading-tight
+                                    ${step.done ? 'text-slate-900 dark:text-slate-100'
+                                      : step.active ? 'text-indigo-700 dark:text-indigo-300'
+                                      : 'text-slate-400 dark:text-slate-500'}`}>
+                                    {step.label}
+                                  </p>
+                                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">{step.desc}</p>
+                                </div>
                               </div>
-                              {!isLast && (
-                                <div className={`w-0.5 h-7 my-1 rounded-full transition-all duration-500 ${step.connectorDone ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'}`}/>
-                              )}
-                            </div>
-                            <div className="flex-1 pt-1 pb-4">
-                              <p className={`text-sm font-semibold leading-tight
-                                ${step.done ? 'text-slate-900 dark:text-slate-100'
-                                  : step.active ? 'text-indigo-700 dark:text-indigo-300'
-                                  : 'text-slate-400 dark:text-slate-500'}`}>
-                                {step.label}
-                              </p>
-                              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 leading-relaxed">{step.desc}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                            );
+                          })}
+                        </div>
 
-                    {/* Footer */}
-                    <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                        <RefreshCw className="h-3 w-3"/> Auto-refreshes every 60s
-                      </p>
-                      <button
-                        onClick={() => {
-                          setLastInventoryAuditLogId(null);
-                          setSubmittedReportStatus({ loading: false, state: 'reviewing', ticketCount: 0 });
-                          if (reportStatusPollRef.current) clearTimeout(reportStatusPollRef.current);
-                        }}
-                        className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition-colors touch-manipulation px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30">
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+                        {/* Footer */}
+                        <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-700/50">
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                            <RefreshCw className="h-3 w-3"/> Auto-refreshes every 60 s
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* ── All reports list ─────────────────────────────── */}
+                      {myReports.length > 1 && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">All Reports</p>
+                          {myReports.map((r, idx) => {
+                            const isSelected = r.id === (selectedReportId ?? myReports[0]?.id);
+                            const rLoc = [r.floor && `Floor ${r.floor}`, r.room && `Room ${r.room}`].filter(Boolean).join(' · ');
+                            const ss = r.state === 'completed'
+                              ? { dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', label: 'Completed' }
+                              : r.state === 'tickets'
+                              ? { dot: 'bg-violet-500', text: 'text-violet-600 dark:text-violet-400', label: 'Action Required' }
+                              : { dot: 'bg-indigo-500 animate-pulse', text: 'text-indigo-600 dark:text-indigo-400', label: 'Under Review' };
+                            return (
+                              <button key={r.id} type="button" onClick={() => setSelectedReportId(r.id)}
+                                className={`w-full text-left rounded-xl border px-4 py-3 flex items-center gap-3 transition-all touch-manipulation
+                                  ${isSelected
+                                    ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 shadow-sm ring-1 ring-indigo-200 dark:ring-indigo-800'
+                                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600 active:bg-slate-50 dark:active:bg-slate-800'}`}>
+                                {/* Index badge */}
+                                <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold
+                                  ${idx === 0 ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}`}>
+                                  {idx + 1}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                    {rLoc || 'General Inventory'}
+                                  </p>
+                                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                                    {new Date(r.submittedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    {r.ticketCount > 0 ? ` · ${r.ticketCount} ticket${r.ticketCount > 1 ? 's' : ''}` : ''}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className={`w-2 h-2 rounded-full ${ss.dot}`}/>
+                                  <span className={`text-xs font-semibold ${ss.text}`}>{ss.label}</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
             {workMode === 'tickets' && (
           <div className="space-y-4">
