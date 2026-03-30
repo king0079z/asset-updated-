@@ -83,11 +83,12 @@ export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAna
       const mlData = await mlResponse.json();
       
       // Transform budget predictions into forecast data
-      const forecasts = transformBudgetPredictions(mlData.mlAnalysis.budgetPredictions, data.monthlyData);
+      const budgetPredictions = mlData?.mlAnalysis?.budgetPredictions ?? [];
+      const forecasts = transformBudgetPredictions(budgetPredictions, data.monthlyData ?? []);
       setForecastData(forecasts);
       
       // Generate category-specific forecasts
-      const categoryForecasts = generateCategoryForecasts(forecasts, data.monthlyData);
+      const categoryForecasts = generateCategoryForecasts(forecasts, data.monthlyData ?? []);
       setCategoryForecasts(categoryForecasts);
     } catch (error) {
       console.error('Error loading consumption analysis data:', error);
@@ -99,7 +100,7 @@ export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAna
 
   // Transform budget predictions into monthly forecast data
   const transformBudgetPredictions = (budgetPredictions: any[], historicalData: MonthlyConsumption[]) => {
-    if (!budgetPredictions || !historicalData || historicalData.length === 0) {
+    if (!budgetPredictions || budgetPredictions.length === 0 || !historicalData || historicalData.length === 0) {
       return [];
     }
 
