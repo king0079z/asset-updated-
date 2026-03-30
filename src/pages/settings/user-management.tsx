@@ -7,13 +7,14 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useState } from "react";
-import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+import { fetchWithCache, getFromCache, invalidateCache } from "@/lib/api-cache";
 const CUSTOM_ROLES_KEY = "/api/admin/custom-roles";
 const USERS_PENDING_KEY = "/api/admin/users?status=PENDING";
 const USERS_APPROVED_KEY = "/api/admin/users?status=APPROVED";
 const USERS_REJECTED_KEY = "/api/admin/users?status=REJECTED";
 const PAGES_KEY = "/api/admin/pages";
 const ADMIN_TTL = 2 * 60_000;
+const PENDING_AUTO_REFRESH_MS = 30_000; // Re-check for new signups every 30 s
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -151,6 +152,17 @@ export default function UserManagementPage() {
   useEffect(() => {
     if (hasCachedUsers) { setTimeout(() => loadUsers(true), 300); }
     else { loadUsers(false); }
+
+    // Auto-refresh pending users every 30 s so new signups appear without manual action.
+    const pendingTimer = setInterval(async () => {
+      try {
+        invalidateCache(USERS_PENDING_KEY);
+        const fresh = await fetchWithCache<User[]>(USERS_PENDING_KEY, { maxAge: 0 }).catch(() => null);
+        if (Array.isArray(fresh)) setPendingUsers(fresh);
+      } catch { /* silent */ }
+    }, PENDING_AUTO_REFRESH_MS);
+
+    return () => clearInterval(pendingTimer);
   }, []);
 
   const handleStatusChange = async (userId: string, status: string) => {
@@ -373,7 +385,12 @@ export default function UserManagementPage() {
                   />
                 </div>
                 <Button variant="ghost" size="icon" className="text-white/80 hover:text-white hover:bg-white/15 rounded-xl"
-                  onClick={() => { setRefreshing(true); loadUsers(); }} disabled={refreshing}>
+                  onClick={() => {
+                    setRefreshing(true);
+                    // Clear client-side cache so the fetch actually hits the server.
+                    [USERS_PENDING_KEY, USERS_APPROVED_KEY, USERS_REJECTED_KEY, CUSTOM_ROLES_KEY, PAGES_KEY].forEach(invalidateCache);
+                    loadUsers();
+                  }} disabled={refreshing}>
                   <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                 </Button>
               </div>

@@ -130,20 +130,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const createUser = async (user: User) => {
     try {
-      // Prefer server-side Prisma provisioning — Supabase RLS blocks direct inserts on Organization (42501).
+      // Pass userId + email in the body so the server can verify via auth.users
+      // even when there is no active session (e.g. email-confirmation required on signup).
       const res = await fetch('/api/users/provision', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, email: user?.email }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         console.error('[createUser] provision failed:', res.status, err);
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: err?.error || 'Failed to create user profile. Try again or contact support.',
-        });
+        // Don't show a destructive toast on 401 during signup — the user just hasn't
+        // confirmed their email yet and the record will be created on first sign-in.
+        if (res.status !== 401) {
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: err?.error || 'Failed to create user profile. Try again or contact support.',
+          });
+        }
         return;
       }
     } catch (error) {
