@@ -28,7 +28,7 @@ import RoleDefaultPermissionsManager from "@/components/RoleDefaultPermissionsMa
 import {
   CheckCircle, XCircle, UserCog, Settings, Search, Users, UserPlus, UserX,
   Filter, RefreshCw, Key, Mail, Copy, AlertCircle, ShieldCheck, Building2,
-  ChevronDown, ChevronUp, Lock, Eye, ToggleLeft,
+  ChevronDown, ChevronUp, Lock, Eye, ToggleLeft, KeyRound, EyeOff,
 } from "lucide-react";
 
 type User = {
@@ -114,6 +114,10 @@ export default function UserManagementPage() {
   const [subscriptionPlan, setSubscriptionPlan] = useState("BASIC");
   const [syncing, setSyncing] = useState(false);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
+  const [tempPassword, setTempPassword] = useState("");
+  const [showTempPassword, setShowTempPassword] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
   const { toast } = useToast();
 
   const toggleExpanded = (userId: string) =>
@@ -181,6 +185,34 @@ export default function UserManagementPage() {
       toast({ title: 'Sync failed', description: err.message, variant: 'destructive' });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPasswordUser || !tempPassword) return;
+    if (tempPassword.length < 8) {
+      toast({ title: 'Too short', description: 'Temporary password must be at least 8 characters.', variant: 'destructive' });
+      return;
+    }
+    setResettingPassword(true);
+    try {
+      const res = await fetch('/api/admin/users/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: resetPasswordUser.id, tempPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset password');
+      toast({
+        title: 'Temporary password set',
+        description: `Share the temporary password with ${resetPasswordUser.email}. They will be prompted to create a new password on next login.`,
+      });
+      setResetPasswordUser(null);
+      setTempPassword('');
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setResettingPassword(false);
     }
   };
 
@@ -677,7 +709,12 @@ export default function UserManagementPage() {
                               </div>
 
                               {/* Actions */}
-                              <div className="flex items-center gap-2 w-28 justify-end flex-shrink-0" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center gap-1.5 w-36 justify-end flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"
+                                  title="Reset password"
+                                  onClick={() => { setResetPasswordUser(user); setTempPassword(''); setShowTempPassword(false); }}>
+                                  <KeyRound className="h-4 w-4" />
+                                </Button>
                                 <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                                   onClick={() => handleStatusChange(user.id, "REJECTED")}>
                                   <UserX className="h-4 w-4" />
@@ -865,6 +902,71 @@ export default function UserManagementPage() {
           </Tabs>
         </div>
       </SimpleDashboardLayout>
+
+      {/* ── Reset Password Dialog ────────────────────────────────── */}
+      <Dialog open={!!resetPasswordUser} onOpenChange={open => { if (!open) { setResetPasswordUser(null); setTempPassword(''); } }}>
+        <DialogContent className="sm:max-w-md gap-0 p-0 overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <KeyRound className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-white font-bold">Reset User Password</DialogTitle>
+                <DialogDescription className="text-amber-100 text-xs mt-0.5">
+                  {resetPasswordUser?.email}
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-5 space-y-4">
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300">
+              Set a temporary password and share it with the user. They will be required to change it immediately after logging in.
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Temporary Password</Label>
+              <div className="relative">
+                <Input
+                  type={showTempPassword ? 'text' : 'password'}
+                  placeholder="Enter a temporary password (min 8 chars)"
+                  value={tempPassword}
+                  onChange={e => setTempPassword(e.target.value)}
+                  className="pr-10 rounded-xl"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') handleResetPassword(); }}
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowTempPassword(v => !v)}
+                >
+                  {showTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">Minimum 8 characters. Share this securely with the user.</p>
+            </div>
+          </div>
+
+          <DialogFooter className="px-6 pb-5 gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => { setResetPasswordUser(null); setTempPassword(''); }}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white gap-2"
+              onClick={handleResetPassword}
+              disabled={resettingPassword || tempPassword.length < 8}
+            >
+              {resettingPassword
+                ? <><div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Setting…</>
+                : <><KeyRound className="h-4 w-4" /> Set Temporary Password</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ProtectedRoute>
   );
 }

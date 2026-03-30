@@ -121,6 +121,7 @@ model User {
   pageAccess               Json?
   canDeleteDocuments       Boolean              @default(false)
   buttonVisibility         Json?
+  mustChangePassword       Boolean              @default(false)
   organizationId           String?
   assets                   Asset[]
   assetHistory             AssetHistory[]
