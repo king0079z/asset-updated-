@@ -28,7 +28,7 @@ import RoleDefaultPermissionsManager from "@/components/RoleDefaultPermissionsMa
 import {
   CheckCircle, XCircle, UserCog, Settings, Search, Users, UserPlus, UserX,
   Filter, RefreshCw, Key, Mail, Copy, AlertCircle, ShieldCheck, Building2,
-  ChevronDown, ChevronUp, Lock, Eye, ToggleLeft, KeyRound, EyeOff,
+  ChevronDown, ChevronUp, Lock, Eye, ToggleLeft, KeyRound, EyeOff, Trash2, AlertTriangle,
 } from "lucide-react";
 
 type User = {
@@ -121,6 +121,8 @@ export default function UserManagementPage() {
   const [resettingPassword, setResettingPassword] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [generatedLoginLink, setGeneratedLoginLink] = useState<string | null>(null);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
   const { toast } = useToast();
 
   const toggleExpanded = (userId: string) =>
@@ -236,6 +238,31 @@ export default function UserManagementPage() {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setGeneratingLink(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteConfirmUser) return;
+    setDeletingUser(true);
+    try {
+      const res = await fetch('/api/admin/users/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: deleteConfirmUser.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete user');
+
+      toast({ title: 'User removed', description: `${deleteConfirmUser.email} has been completely removed. They can now re-register.` });
+      setDeleteConfirmUser(null);
+
+      // Refresh all lists
+      [USERS_PENDING_KEY, USERS_APPROVED_KEY, USERS_REJECTED_KEY].forEach(invalidateCache);
+      await loadUsers(false);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeletingUser(false);
     }
   };
 
@@ -668,6 +695,10 @@ export default function UserManagementPage() {
                               onClick={() => handleStatusChange(user.id, "REJECTED")}>
                               <XCircle className="h-4 w-4" /> Reject
                             </Button>
+                            <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950" title="Remove user from system"
+                              onClick={() => setDeleteConfirmUser(user)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -738,9 +769,13 @@ export default function UserManagementPage() {
                                   onClick={() => { setResetPasswordUser(user); setTempPassword(''); setShowTempPassword(false); setGeneratedLoginLink(null); setResetTab("link"); }}>
                                   <KeyRound className="h-4 w-4" />
                                 </Button>
-                                <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950" title="Revoke access"
                                   onClick={() => handleStatusChange(user.id, "REJECTED")}>
                                   <UserX className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950" title="Remove from system"
+                                  onClick={() => setDeleteConfirmUser(user)}>
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                                 <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950"
                                   onClick={() => toggleExpanded(user.id)}>
@@ -910,6 +945,10 @@ export default function UserManagementPage() {
                               onClick={() => { handleStatusChange(user.id, "APPROVED"); toast({ title: "Access Restored", description: "Default page access granted." }); }}>
                               <CheckCircle className="h-4 w-4" /> Approve Access
                             </Button>
+                            <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950" title="Remove from system"
+                              onClick={() => setDeleteConfirmUser(user)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -1057,6 +1096,61 @@ export default function UserManagementPage() {
           <DialogFooter className="px-6 pb-5">
             <Button variant="outline" className="rounded-xl" onClick={() => { setResetPasswordUser(null); setTempPassword(''); setGeneratedLoginLink(null); setResetTab("link"); }}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete User Confirmation Dialog ──────────────────────── */}
+      <Dialog open={!!deleteConfirmUser} onOpenChange={open => { if (!open) setDeleteConfirmUser(null); }}>
+        <DialogContent className="sm:max-w-md gap-0 p-0 overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-br from-red-600 to-rose-700 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-white font-bold">Remove User from System</DialogTitle>
+                <DialogDescription className="text-red-100 text-xs mt-0.5 font-medium">
+                  {deleteConfirmUser?.email}
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-5 space-y-4">
+            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 space-y-2">
+              <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-semibold text-sm">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                This action is permanent and cannot be undone
+              </div>
+              <ul className="text-xs text-red-700 dark:text-red-400 space-y-1 ml-6 list-disc">
+                <li>The user will be removed from Supabase Auth</li>
+                <li>Their profile and all settings will be deleted</li>
+                <li>Assets, tickets, and records will be unassigned (not deleted)</li>
+                <li>They can re-register with the same email address after removal</li>
+              </ul>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to permanently remove <span className="font-semibold text-foreground">{deleteConfirmUser?.email}</span> from the system?
+            </p>
+          </div>
+
+          <DialogFooter className="px-6 pb-5 gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => setDeleteConfirmUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white gap-2"
+              onClick={handleDeleteUser}
+              disabled={deletingUser}
+            >
+              {deletingUser
+                ? <><div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Removing…</>
+                : <><Trash2 className="h-4 w-4" /> Yes, Remove Permanently</>}
             </Button>
           </DialogFooter>
         </DialogContent>
