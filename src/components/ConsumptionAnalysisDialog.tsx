@@ -1,19 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { BarChart3, Calendar, TrendingUp, DollarSign, LineChart, AlertTriangle, Info, Printer, Brain, Sparkles } from "lucide-react";
+import {
+  BarChart3, Calendar, TrendingUp, TrendingDown, DollarSign,
+  LineChart, AlertTriangle, Info, Brain, Sparkles, Utensils,
+  Package, Car, ArrowUpRight, ArrowDownRight, Minus, Target,
+  ChevronRight, Zap, Shield, Activity
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ChartJSBar } from "@/components/ui/chart";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PrintConsumptionReportButton } from "./PrintConsumptionReportButton";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useTranslation } from "@/contexts/TranslationContext";
-import { useTheme } from "@/contexts/ThemeContext";
 
 type ConsumptionAnalysisProps = {
   open: boolean;
@@ -26,6 +29,8 @@ type MonthlyConsumption = {
   foodConsumption: number;
   assetsPurchased: number;
   vehicleRentalCosts: number;
+  vehicleMaintenanceCosts?: number;
+  vehicleTotal?: number;
   total: number;
 };
 
@@ -48,37 +53,43 @@ type CategoryForecast = {
   confidence: number;
 };
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+const fmt = (n: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'QAR', maximumFractionDigits: 0 }).format(n);
+
+const pct = (part: number, total: number) =>
+  total > 0 ? Math.round((part / total) * 100) : 0;
+
+const momChange = (current: number, previous: number) => {
+  if (previous === 0) return null;
+  return ((current - previous) / previous) * 100;
+};
+
+// ── Component ──────────────────────────────────────────────────────────────────
 export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAnalysisProps) {
-  const { t, language, dir } = useTranslation();
-  const [loading, setLoading] = useState(false);
-  const [monthlyData, setMonthlyData] = useState<MonthlyConsumption[]>([]);
-  const [forecastData, setForecastData] = useState<ForecastData[]>([]);
+  const { t, dir } = useTranslation();
+  const [loading, setLoading]               = useState(false);
+  const [monthlyData, setMonthlyData]       = useState<MonthlyConsumption[]>([]);
+  const [forecastData, setForecastData]     = useState<ForecastData[]>([]);
   const [categoryForecasts, setCategoryForecasts] = useState<CategoryForecast[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isMlForecast, setIsMlForecast] = useState(false);
-  
-  // Media queries for responsive design
+  const [error, setError]                   = useState<string | null>(null);
+  const [isMlForecast, setIsMlForecast]     = useState(false);
+
   const isMobile = useMediaQuery('(max-width: 640px)');
-  const isTablet = useMediaQuery('(max-width: 1024px)');
 
-  useEffect(() => {
-    if (open) {
-      loadConsumptionData();
-    }
-  }, [open]);
+  useEffect(() => { if (open) loadConsumptionData(); }, [open]);
 
+  // ── Data loading ─────────────────────────────────────────────────────────────
   const loadConsumptionData = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Fetch monthly consumption data
       const response = await fetch('/api/dashboard/total-spent?includeMonthly=true');
       if (!response.ok) throw new Error('Failed to load consumption data');
       const data = await response.json();
       const monthly: MonthlyConsumption[] = data.monthlyData || [];
       setMonthlyData(monthly);
 
-      // Fetch ML forecast data (best-effort — falls back to trend if unavailable)
       let budgetPredictions: any[] = [];
       try {
         const mlResponse = await fetch('/api/ai-analysis/ml-predictions');
@@ -86,847 +97,675 @@ export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAna
           const mlData = await mlResponse.json();
           budgetPredictions = mlData?.mlAnalysis?.budgetPredictions ?? [];
         }
-      } catch {
-        // ML endpoint unavailable — fall through to trend-based forecasts
-      }
+      } catch { /* fall through */ }
 
-      // Try ML-based forecasts first; fall back to statistical trend if empty
       let forecasts = transformBudgetPredictions(budgetPredictions, monthly);
       const usedMl = forecasts.length > 0;
-      if (!usedMl && monthly.length >= 2) {
-        forecasts = generateTrendForecasts(monthly);
-      }
+      if (!usedMl && monthly.length >= 2) forecasts = generateTrendForecasts(monthly);
       setIsMlForecast(usedMl);
       setForecastData(forecasts);
-
-      // Generate category-specific forecasts
-      const categoryForecasts = generateCategoryForecasts(forecasts, monthly);
-      setCategoryForecasts(categoryForecasts);
-    } catch (error) {
-      console.error('Error loading consumption analysis data:', error);
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
+      setCategoryForecasts(generateCategoryForecasts(forecasts, monthly));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Generate 6-month forecasts from historical monthly data using linear regression.
-   * Used as a fallback when the ML predictions API is unavailable or returns no data.
-   */
+  // ── Forecast generation ───────────────────────────────────────────────────────
   const generateTrendForecasts = (historicalData: MonthlyConsumption[]): ForecastData[] => {
     if (!historicalData || historicalData.length < 2) return [];
-
     const n = historicalData.length;
-    // Linear regression: y = intercept + slope * x (x = month index 0..n-1)
     const sumX  = (n * (n - 1)) / 2;
     const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
     const sumY  = historicalData.reduce((s, d) => s + d.total, 0);
     const sumXY = historicalData.reduce((s, d, i) => s + i * d.total, 0);
     const denom = n * sumX2 - sumX * sumX;
-    const slope     = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+    const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
     const intercept = (sumY - slope * sumX) / n;
-
-    const currentDate  = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear  = currentDate.getFullYear();
-
+    const now = new Date();
     return Array.from({ length: 6 }, (_, i) => {
-      const forecastDate = new Date(currentYear, currentMonth + i + 1, 1);
-      const x = n + i;
-      const predictedAmount = Math.max(0, intercept + slope * x);
-      const margin = predictedAmount * 0.15; // ±15% confidence band
+      const d = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
+      const predictedAmount = Math.max(0, intercept + slope * (n + i));
+      const margin = predictedAmount * 0.15;
       return {
-        month: forecastDate.toLocaleString('default', { month: 'long' }),
-        year: forecastDate.getFullYear(),
+        month: d.toLocaleString('default', { month: 'long' }),
+        year: d.getFullYear(),
         predictedAmount,
         upperBound: predictedAmount + margin,
         lowerBound: Math.max(0, predictedAmount - margin),
-        confidence: Math.max(0.55, Math.min(0.80, 0.75 - i * 0.03)), // confidence decays with distance
+        confidence: Math.max(0.55, Math.min(0.80, 0.75 - i * 0.03)),
       };
     });
   };
 
-  // Transform budget predictions into monthly forecast data
   const transformBudgetPredictions = (budgetPredictions: any[], historicalData: MonthlyConsumption[]) => {
-    if (!budgetPredictions || budgetPredictions.length === 0 || !historicalData || historicalData.length === 0) {
-      return [];
-    }
-
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-    
-    // Get the next 6 months forecast
-    const forecasts: ForecastData[] = [];
-    
-    for (let i = 1; i <= 6; i++) {
-      const forecastDate = new Date(currentYear, currentMonth + i, 1);
-      const monthName = forecastDate.toLocaleString('default', { month: 'long' });
-      const forecastYear = forecastDate.getFullYear();
-      
-      // Find the closest prediction (1, 3, or 6 months)
-      const closestPrediction = budgetPredictions.reduce((prev, curr) => {
-        return Math.abs(curr.months - i) < Math.abs(prev.months - i) ? curr : prev;
-      }, budgetPredictions[0]);
-      
-      // Adjust prediction based on how far we are from the prediction point
-      const adjustmentFactor = 1 - (Math.abs(closestPrediction.months - i) * 0.05);
-      
-      // Create the forecast data with the base prediction
-      const forecastData: any = {
-        month: monthName,
-        year: forecastYear,
-        predictedAmount: closestPrediction.prediction.predictedAmount * adjustmentFactor,
-        upperBound: closestPrediction.prediction.upperBound * adjustmentFactor,
-        lowerBound: closestPrediction.prediction.lowerBound * adjustmentFactor,
-        confidence: closestPrediction.prediction.confidence
+    if (!budgetPredictions?.length || !historicalData?.length) return [];
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, idx) => {
+      const i = idx + 1;
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const closest = budgetPredictions.reduce((p, c) =>
+        Math.abs(c.months - i) < Math.abs(p.months - i) ? c : p, budgetPredictions[0]);
+      const adj = 1 - Math.abs(closest.months - i) * 0.05;
+      const fd: any = {
+        month: d.toLocaleString('default', { month: 'long' }),
+        year: d.getFullYear(),
+        predictedAmount: closest.prediction.predictedAmount * adj,
+        upperBound:      closest.prediction.upperBound * adj,
+        lowerBound:      closest.prediction.lowerBound * adj,
+        confidence:      closest.prediction.confidence,
       };
-      
-      // If we have category-specific predictions, include them
-      if (closestPrediction.categoryPredictions) {
-        forecastData.categoryPredictions = {
-          food: {
-            ...closestPrediction.categoryPredictions.food,
-            predictedAmount: closestPrediction.categoryPredictions.food.predictedAmount * adjustmentFactor,
-            upperBound: closestPrediction.categoryPredictions.food.upperBound * adjustmentFactor,
-            lowerBound: closestPrediction.categoryPredictions.food.lowerBound * adjustmentFactor
-          },
-          vehicleRental: {
-            ...closestPrediction.categoryPredictions.vehicleRental,
-            // Vehicle rental costs are typically fixed, so we don't apply the adjustment factor
-            // This ensures the forecast reflects the fixed nature of these costs
-            predictedAmount: closestPrediction.categoryPredictions.vehicleRental.predictedAmount,
-            upperBound: closestPrediction.categoryPredictions.vehicleRental.upperBound,
-            lowerBound: closestPrediction.categoryPredictions.vehicleRental.lowerBound
-          }
+      if (closest.categoryPredictions) {
+        fd.categoryPredictions = {
+          food: { ...closest.categoryPredictions.food,
+            predictedAmount: closest.categoryPredictions.food.predictedAmount * adj },
+          vehicleRental: { ...closest.categoryPredictions.vehicleRental },
         };
       }
-      
-      forecasts.push(forecastData);
-    }
-    
-    return forecasts;
-  };
-
-  // Generate category-specific forecasts based on ML predictions with specialized vehicle rental forecasting
-  const generateCategoryForecasts = (forecasts: ForecastData[], historicalData: MonthlyConsumption[]): CategoryForecast[] => {
-    if (!forecasts || forecasts.length === 0 || !historicalData || historicalData.length === 0) {
-      return [];
-    }
-    
-    return forecasts.map((forecast, index) => {
-      // Check if we have category-specific predictions from the ML model
-      const mlData = forecast as any;
-      
-      if (mlData.categoryPredictions) {
-        // Use the specialized category predictions from the ML model
-        return {
-          month: forecast.month,
-          year: forecast.year,
-          // Use the specialized vehicle rental prediction
-          vehicleRentalCosts: mlData.categoryPredictions.vehicleRental.predictedAmount,
-          // For food and assets, use the food prediction and historical proportions for assets
-          foodConsumption: mlData.categoryPredictions.food.predictedAmount * 0.7, // 70% of food budget for food
-          assetsPurchased: mlData.categoryPredictions.food.predictedAmount * 0.3, // 30% of food budget for assets
-          total: forecast.predictedAmount,
-          confidence: forecast.confidence
-        };
-      } else {
-        // Fallback to historical proportions if category predictions aren't available
-        // Calculate average proportions from historical data
-        const totalFoodConsumption = historicalData.reduce((sum, month) => sum + month.foodConsumption, 0);
-        const totalAssetsPurchased = historicalData.reduce((sum, month) => sum + month.assetsPurchased, 0);
-        const totalVehicleRentalCosts = historicalData.reduce((sum, month) => sum + month.vehicleRentalCosts, 0);
-        const totalSpent = totalFoodConsumption + totalAssetsPurchased + totalVehicleRentalCosts;
-        
-        const foodProportion = totalSpent > 0 ? totalFoodConsumption / totalSpent : 0.33;
-        const assetsProportion = totalSpent > 0 ? totalAssetsPurchased / totalSpent : 0.33;
-        const vehicleProportion = totalSpent > 0 ? totalVehicleRentalCosts / totalSpent : 0.34;
-        
-        // For vehicle rental costs, use the last month's value as the base
-        // and apply a small growth factor for future months
-        const lastMonthVehicleRental = historicalData.length > 0 
-          ? historicalData[historicalData.length - 1].vehicleRentalCosts 
-          : 0;
-        
-        // Vehicle rental costs are typically fixed monthly payments
-        // with occasional step changes when new vehicles are added
-        const vehicleRentalCosts = lastMonthVehicleRental;
-        
-        // Adjust food and assets proportions to account for the fixed vehicle costs
-        const remainingBudget = forecast.predictedAmount - vehicleRentalCosts;
-        const foodConsumption = remainingBudget * (foodProportion / (foodProportion + assetsProportion));
-        const assetsPurchased = remainingBudget * (assetsProportion / (foodProportion + assetsProportion));
-        
-        return {
-          month: forecast.month,
-          year: forecast.year,
-          foodConsumption,
-          assetsPurchased,
-          vehicleRentalCosts,
-          total: forecast.predictedAmount,
-          confidence: forecast.confidence
-        };
-      }
+      return fd;
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'QAR'
-    }).format(amount);
+  const generateCategoryForecasts = (forecasts: ForecastData[], historicalData: MonthlyConsumption[]): CategoryForecast[] => {
+    if (!forecasts?.length || !historicalData?.length) return [];
+    const totalFood    = historicalData.reduce((s, m) => s + m.foodConsumption, 0);
+    const totalAssets  = historicalData.reduce((s, m) => s + m.assetsPurchased, 0);
+    const totalVehicle = historicalData.reduce((s, m) => s + m.vehicleRentalCosts, 0);
+    const totalSpent   = totalFood + totalAssets + totalVehicle;
+    const foodProp   = totalSpent > 0 ? totalFood   / totalSpent : 0.33;
+    const assetProp  = totalSpent > 0 ? totalAssets / totalSpent : 0.33;
+    const lastVehicle = historicalData[historicalData.length - 1].vehicleRentalCosts;
+    return forecasts.map(f => {
+      const ml = f as any;
+      if (ml.categoryPredictions) {
+        return {
+          month: f.month, year: f.year,
+          vehicleRentalCosts: ml.categoryPredictions.vehicleRental.predictedAmount,
+          foodConsumption:    ml.categoryPredictions.food.predictedAmount * 0.7,
+          assetsPurchased:    ml.categoryPredictions.food.predictedAmount * 0.3,
+          total: f.predictedAmount, confidence: f.confidence,
+        };
+      }
+      const remaining = f.predictedAmount - lastVehicle;
+      return {
+        month: f.month, year: f.year,
+        vehicleRentalCosts: lastVehicle,
+        foodConsumption:  remaining * (foodProp  / (foodProp + assetProp)),
+        assetsPurchased:  remaining * (assetProp / (foodProp + assetProp)),
+        total: f.predictedAmount, confidence: f.confidence,
+      };
+    });
   };
 
-  const getMonthYearLabel = (month: string, year: number) => {
-    return `${month} ${year}`;
-  };
-
-  // Prepare monthly data for bar chart
-  const prepareMonthlyChartData = () => {
-    if (!monthlyData || monthlyData.length === 0) return null;
-
-    const labels = monthlyData.map(item => getMonthYearLabel(item.month, item.year));
-    
+  // ── Derived analytics ─────────────────────────────────────────────────────────
+  const analytics = useMemo(() => {
+    if (!monthlyData.length) return null;
+    const ytdFood    = monthlyData.reduce((s, m) => s + m.foodConsumption, 0);
+    const ytdAssets  = monthlyData.reduce((s, m) => s + m.assetsPurchased, 0);
+    const ytdVehicle = monthlyData.reduce((s, m) => s + m.vehicleRentalCosts, 0);
+    const ytdTotal   = monthlyData.reduce((s, m) => s + m.total, 0);
+    const avgMonthly = ytdTotal / monthlyData.length;
+    const peakMonth  = [...monthlyData].sort((a, b) => b.total - a.total)[0];
+    const lastMonth  = monthlyData[monthlyData.length - 1];
+    const prevMonth  = monthlyData.length >= 2 ? monthlyData[monthlyData.length - 2] : null;
+    const momDelta   = prevMonth ? momChange(lastMonth.total, prevMonth.total) : null;
+    const forecastTotal = categoryForecasts.reduce((s, f) => s + f.total, 0);
+    const avgConf = categoryForecasts.length
+      ? categoryForecasts.reduce((s, f) => s + f.confidence, 0) / categoryForecasts.length
+      : 0;
     return {
-      labels,
-      datasets: [
-        {
-          label: 'Food Consumption',
-          data: monthlyData.map(item => item.foodConsumption),
-          backgroundColor: 'rgba(16, 185, 129, 0.7)', // emerald color
-          borderColor: 'rgb(16, 185, 129)',
-          borderWidth: 1,
-        },
-        {
-          label: 'Assets Purchased',
-          data: monthlyData.map(item => item.assetsPurchased),
-          backgroundColor: 'rgba(99, 102, 241, 0.7)', // indigo color
-          borderColor: 'rgb(99, 102, 241)',
-          borderWidth: 1,
-        },
-        {
-          label: 'Vehicle Rental Costs',
-          data: monthlyData.map(item => item.vehicleRentalCosts),
-          backgroundColor: 'rgba(245, 158, 11, 0.7)', // amber color
-          borderColor: 'rgb(245, 158, 11)',
-          borderWidth: 1,
-        },
-      ],
+      ytdTotal, ytdFood, ytdAssets, ytdVehicle,
+      avgMonthly, peakMonth, lastMonth, prevMonth, momDelta,
+      forecastTotal, avgConf,
     };
-  };
+  }, [monthlyData, categoryForecasts]);
 
-  // Prepare category forecast data for bar chart
-  const prepareCategoryForecastChartData = () => {
-    if (!categoryForecasts || categoryForecasts.length === 0) return null;
-
-    const labels = categoryForecasts.map(item => getMonthYearLabel(item.month, item.year));
-    
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Food Consumption',
-          data: categoryForecasts.map(item => item.foodConsumption),
-          backgroundColor: 'rgba(16, 185, 129, 0.7)', // emerald color
-          borderColor: 'rgb(16, 185, 129)',
-          borderWidth: 1,
-        },
-        {
-          label: 'Assets Purchased',
-          data: categoryForecasts.map(item => item.assetsPurchased),
-          backgroundColor: 'rgba(99, 102, 241, 0.7)', // indigo color
-          borderColor: 'rgb(99, 102, 241)',
-          borderWidth: 1,
-        },
-        {
-          label: 'Vehicle Rental Costs',
-          data: categoryForecasts.map(item => item.vehicleRentalCosts),
-          backgroundColor: 'rgba(245, 158, 11, 0.7)', // amber color
-          borderColor: 'rgb(245, 158, 11)',
-          borderWidth: 1,
-        },
-      ],
-    };
-  };
-
-  // Chart options
-  const chartOptions = {
+  // ── Chart data ────────────────────────────────────────────────────────────────
+  const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: isMobile ? 'bottom' as const : 'top' as const,
-        labels: {
-          boxWidth: 12,
-          usePointStyle: true,
-          pointStyle: 'circle',
-          font: {
-            size: isMobile ? 10 : 12
-          }
-        },
+        position: (isMobile ? 'bottom' : 'top') as const,
+        labels: { boxWidth: 10, usePointStyle: true, pointStyle: 'circle' as const, font: { size: isMobile ? 10 : 11 } },
       },
       tooltip: {
         callbacks: {
-          label: function(context: any) {
-            let label = context.dataset.label || '';
-            if (label) {
-              label += ': ';
-            }
-            if (context.parsed.y !== null) {
-              label += formatCurrency(context.parsed.y);
-            }
-            return label;
-          }
-        }
-      }
+          label: (ctx: any) => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`,
+        },
+      },
     },
     scales: {
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          font: {
-            size: isMobile ? 8 : 12
-          },
-          maxRotation: isMobile ? 45 : 0
-        }
-      },
-      y: {
-        beginAtZero: true,
-        ticks: {
-          callback: function(value: any) {
-            return isMobile ? formatCurrency(value).replace('.00', '') : formatCurrency(value);
-          },
-          font: {
-            size: isMobile ? 8 : 12
-          }
-        }
-      }
-    }
+      x: { grid: { display: false }, stacked: false,
+        ticks: { font: { size: isMobile ? 9 : 11 }, maxRotation: isMobile ? 45 : 0 } },
+      y: { beginAtZero: true,
+        ticks: { callback: (v: any) => fmt(v).replace('QAR ', '').replace(',000', 'k'), font: { size: isMobile ? 9 : 11 } } },
+    },
+  }), [isMobile]);
+
+  const monthlyChartData = useMemo(() => {
+    if (!monthlyData.length) return null;
+    return {
+      labels: monthlyData.map(m => m.month.slice(0, 3)),
+      datasets: [
+        { label: 'Food', data: monthlyData.map(m => m.foodConsumption),
+          backgroundColor: 'rgba(16,185,129,0.75)', borderColor: 'rgb(16,185,129)', borderWidth: 1.5, borderRadius: 4 },
+        { label: 'Assets', data: monthlyData.map(m => m.assetsPurchased),
+          backgroundColor: 'rgba(99,102,241,0.75)', borderColor: 'rgb(99,102,241)', borderWidth: 1.5, borderRadius: 4 },
+        { label: 'Vehicles', data: monthlyData.map(m => m.vehicleRentalCosts),
+          backgroundColor: 'rgba(245,158,11,0.75)', borderColor: 'rgb(245,158,11)', borderWidth: 1.5, borderRadius: 4 },
+      ],
+    };
+  }, [monthlyData]);
+
+  const forecastChartData = useMemo(() => {
+    if (!categoryForecasts.length) return null;
+    return {
+      labels: categoryForecasts.map(f => f.month.slice(0, 3)),
+      datasets: [
+        { label: 'Food', data: categoryForecasts.map(f => f.foodConsumption),
+          backgroundColor: 'rgba(16,185,129,0.75)', borderColor: 'rgb(16,185,129)', borderWidth: 1.5, borderRadius: 4 },
+        { label: 'Assets', data: categoryForecasts.map(f => f.assetsPurchased),
+          backgroundColor: 'rgba(99,102,241,0.75)', borderColor: 'rgb(99,102,241)', borderWidth: 1.5, borderRadius: 4 },
+        { label: 'Vehicles', data: categoryForecasts.map(f => f.vehicleRentalCosts),
+          backgroundColor: 'rgba(245,158,11,0.75)', borderColor: 'rgb(245,158,11)', borderWidth: 1.5, borderRadius: 4 },
+      ],
+    };
+  }, [categoryForecasts]);
+
+  // ── Rendering helpers ─────────────────────────────────────────────────────────
+  const TrendArrow = ({ delta }: { delta: number | null }) => {
+    if (delta === null) return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
+    if (delta > 0) return <ArrowUpRight className="h-3.5 w-3.5 text-red-500" />;
+    return <ArrowDownRight className="h-3.5 w-3.5 text-emerald-500" />;
   };
 
-  const monthlyChartData = prepareMonthlyChartData();
-  const categoryForecastChartData = prepareCategoryForecastChartData();
+  const ConfBadge = ({ conf }: { conf: number }) => {
+    const pctVal = Math.round(conf * 100);
+    const cls = conf >= 0.80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+      : conf >= 0.65 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+    return <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${cls}`}>{pctVal}% conf.</span>;
+  };
+
+  const LoadingState = () => (
+    <div className="flex flex-col items-center justify-center py-16 space-y-4">
+      <div className="relative">
+        <div className="w-14 h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+        <Brain className="absolute inset-0 m-auto h-5 w-5 text-primary animate-pulse" />
+      </div>
+      <p className="text-sm font-medium text-muted-foreground">Analysing enterprise data…</p>
+    </div>
+  );
+
+  const ErrorState = () => (
+    <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
+      <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+        <AlertTriangle className="h-6 w-6 text-destructive" />
+      </div>
+      <p className="font-semibold">Failed to load data</p>
+      <p className="text-sm text-muted-foreground max-w-xs">{error}</p>
+      <Button variant="outline" size="sm" onClick={loadConsumptionData}>Retry</Button>
+    </div>
+  );
+
+  // ── KPI Hero ──────────────────────────────────────────────────────────────────
+  const KpiHero = () => {
+    if (!analytics) return null;
+    const cards = [
+      {
+        label: 'YTD Total',
+        value: fmt(analytics.ytdTotal),
+        sub: `${monthlyData.length} months recorded`,
+        icon: <DollarSign className="h-4 w-4" />,
+        color: 'from-violet-500 to-purple-600',
+        light: 'bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300',
+      },
+      {
+        label: 'Avg / Month',
+        value: fmt(analytics.avgMonthly),
+        sub: analytics.momDelta !== null
+          ? `${analytics.momDelta > 0 ? '+' : ''}${analytics.momDelta.toFixed(1)}% vs last month`
+          : 'Based on all months',
+        icon: <Activity className="h-4 w-4" />,
+        color: 'from-sky-500 to-blue-600',
+        light: 'bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300',
+        trend: analytics.momDelta,
+      },
+      {
+        label: 'Peak Month',
+        value: analytics.peakMonth.month.slice(0, 3),
+        sub: fmt(analytics.peakMonth.total),
+        icon: <Target className="h-4 w-4" />,
+        color: 'from-rose-500 to-pink-600',
+        light: 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300',
+      },
+      {
+        label: '6-Mo Forecast',
+        value: analytics.forecastTotal > 0 ? fmt(analytics.forecastTotal) : '—',
+        sub: analytics.forecastTotal > 0
+          ? `${Math.round(analytics.avgConf * 100)}% avg. confidence`
+          : 'Insufficient data',
+        icon: isMlForecast ? <Brain className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />,
+        color: 'from-emerald-500 to-teal-600',
+        light: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300',
+      },
+    ];
+
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
+        {cards.map((c, i) => (
+          <div key={i} className="relative rounded-xl overflow-hidden border border-border/50 bg-card shadow-sm">
+            <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${c.color}`} />
+            <div className="p-3 pt-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className={`p-1 rounded-md ${c.light}`}>{c.icon}</span>
+                {'trend' in c && c.trend !== undefined && (
+                  <span className={`text-xs font-semibold flex items-center gap-0.5 ${
+                    c.trend === null ? 'text-muted-foreground'
+                    : c.trend > 0 ? 'text-red-500' : 'text-emerald-500'
+                  }`}>
+                    <TrendArrow delta={c.trend ?? null} />
+                    {c.trend !== null && `${Math.abs(c.trend).toFixed(1)}%`}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground font-medium mt-2">{c.label}</p>
+              <p className="text-sm sm:text-base font-bold truncate">{c.value}</p>
+              <p className="text-xs text-muted-foreground truncate">{c.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // ── Category pill row ─────────────────────────────────────────────────────────
+  const CategoryPills = ({ food, assets, vehicle, total }: { food: number; assets: number; vehicle: number; total: number }) => (
+    <div className="grid grid-cols-3 gap-2">
+      {[
+        { label: 'Food', val: food, pctVal: pct(food, total), icon: <Utensils className="h-3.5 w-3.5" />, bg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-700 dark:text-emerald-300', bar: 'bg-emerald-500' },
+        { label: 'Assets', val: assets, pctVal: pct(assets, total), icon: <Package className="h-3.5 w-3.5" />, bg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-700 dark:text-indigo-300', bar: 'bg-indigo-500' },
+        { label: 'Vehicles', val: vehicle, pctVal: pct(vehicle, total), icon: <Car className="h-3.5 w-3.5" />, bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300', bar: 'bg-amber-500' },
+      ].map(c => (
+        <div key={c.label} className={`rounded-xl p-3 ${c.bg}`}>
+          <div className={`flex items-center gap-1.5 ${c.text} mb-2`}>
+            {c.icon}
+            <span className="text-xs font-semibold">{c.label}</span>
+            <span className="ml-auto text-xs opacity-70">{c.pctVal}%</span>
+          </div>
+          <p className={`text-sm font-bold ${c.text}`}>{fmt(c.val)}</p>
+          <div className="mt-2 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${c.pctVal}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── Month card ────────────────────────────────────────────────────────────────
+  const MonthCard = ({ month, prev, isPeak }: { month: MonthlyConsumption; prev?: MonthlyConsumption; isPeak: boolean }) => {
+    const delta = prev ? momChange(month.total, prev.total) : null;
+    return (
+      <Card className={`overflow-hidden border ${isPeak ? 'border-rose-200 dark:border-rose-800/50' : 'border-border/50'} shadow-sm`}>
+        <div className="p-3 sm:p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isPeak ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}>
+                {isPeak ? '🔥 Peak' : month.month.slice(0, 3)}
+              </span>
+              <span className="font-semibold text-sm">{month.month} {month.year}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {delta !== null && (
+                <span className={`text-xs font-semibold flex items-center gap-0.5 ${delta > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  <TrendArrow delta={delta} />
+                  {Math.abs(delta).toFixed(1)}%
+                </span>
+              )}
+              <Badge variant="secondary" className="font-bold text-xs">{fmt(month.total)}</Badge>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {[
+              { label: 'Food', val: month.foodConsumption, bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' },
+              { label: 'Assets', val: month.assetsPurchased, bar: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400' },
+              { label: 'Vehicles', val: month.vehicleRentalCosts, bar: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' },
+            ].map(row => (
+              <div key={row.label} className="space-y-0.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${row.bar} inline-block`} />
+                    {row.label}
+                  </span>
+                  <span className={`font-semibold ${row.text}`}>{fmt(row.val)}</span>
+                </div>
+                <Progress value={pct(row.val, month.total)} className="h-1.5" indicatorClassName={row.bar} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
+  // ── Forecast card ─────────────────────────────────────────────────────────────
+  const ForecastCard = ({ forecast, index, lastActual }: { forecast: CategoryForecast; index: number; lastActual?: MonthlyConsumption }) => {
+    const vsActual = lastActual ? momChange(forecast.total, lastActual.total) : null;
+    return (
+      <Card className={`overflow-hidden border border-border/50 shadow-sm ${index === 0 ? 'ring-1 ring-primary/20' : ''}`}>
+        <div className={`h-1 ${index === 0 ? 'bg-gradient-to-r from-primary to-violet-500' : 'bg-gradient-to-r from-muted to-muted/50'}`} />
+        <div className="p-3 sm:p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {index === 0 && <Zap className="h-3.5 w-3.5 text-primary" />}
+              <span className="font-semibold text-sm">{forecast.month} {forecast.year}</span>
+              {index === 0 && <Badge variant="outline" className="text-xs py-0">Next</Badge>}
+            </div>
+            <div className="flex items-center gap-2">
+              <ConfBadge conf={forecast.confidence} />
+              <Badge variant={index === 0 ? 'default' : 'secondary'} className="font-bold text-xs">{fmt(forecast.total)}</Badge>
+            </div>
+          </div>
+
+          {vsActual !== null && (
+            <div className={`flex items-center gap-1.5 text-xs rounded-lg px-2 py-1.5 ${vsActual > 0 ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'}`}>
+              <TrendArrow delta={vsActual} />
+              <span>{vsActual > 0 ? '+' : ''}{vsActual.toFixed(1)}% vs last actual month</span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {[
+              { label: 'Food Consumption', val: forecast.foodConsumption, bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' },
+              { label: 'Assets Purchased', val: forecast.assetsPurchased, bar: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400' },
+              { label: 'Vehicle Costs', val: forecast.vehicleRentalCosts, bar: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' },
+            ].map(row => (
+              <div key={row.label} className="space-y-0.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${row.bar} inline-block`} />
+                    {row.label}
+                  </span>
+                  <span className={`font-semibold ${row.text}`}>{fmt(row.val)}</span>
+                </div>
+                <Progress value={pct(row.val, forecast.total)} className="h-1.5" indicatorClassName={row.bar} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────────
+  const peakMonthKey = analytics
+    ? `${analytics.peakMonth.month}-${analytics.peakMonth.year}`
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent 
-        className={`${isMobile ? 'w-[95vw] max-w-[95vw]' : 'sm:max-w-[900px]'} overflow-hidden`}
+      <DialogContent
+        className={`${isMobile ? 'w-[96vw] max-w-[96vw]' : 'sm:max-w-[960px]'} overflow-hidden p-0`}
         showFullscreenButton
-        showPrintButton={!loading && !error && monthlyData.length > 0 && categoryForecasts.length > 0}
+        showPrintButton={!loading && !error && monthlyData.length > 0}
         showShareButton={!loading && !error && monthlyData.length > 0}
       >
-        <DialogHeader>
-          <DialogTitle>{t('consumption_analysis')}</DialogTitle>
-          <DialogDescription>{t('consumption_analysis_description')}</DialogDescription>
-        </DialogHeader>
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <div className="flex items-center space-x-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <h3 className="font-medium text-sm sm:text-base">{t('enterprise_consumption_dashboard')}</h3>
-          </div>
-          
-          {!loading && !error && monthlyData.length > 0 && categoryForecasts.length > 0 && !isMobile && (
-            <PrintConsumptionReportButton 
-              monthlyData={monthlyData}
-              categoryForecasts={categoryForecasts}
-            />
+        {/* ── Header ─────────────────────────────────────────────────── */}
+        <div className="relative bg-gradient-to-br from-primary/10 via-background to-violet-500/5 border-b px-4 sm:px-6 pt-5 pb-4">
+          <div className="absolute inset-0 bg-grid-black/[0.02] dark:bg-grid-white/[0.02]" />
+          <DialogHeader className="relative mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <BarChart3 className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold">
+                  Enterprise Consumption Dashboard
+                </DialogTitle>
+                <DialogDescription className="text-xs mt-0.5">
+                  Year-to-date spending analysis with 6-month forward projection
+                </DialogDescription>
+              </div>
+              {!isMobile && !loading && !error && monthlyData.length > 0 && categoryForecasts.length > 0 && (
+                <div className="ml-auto">
+                  <PrintConsumptionReportButton monthlyData={monthlyData} categoryForecasts={categoryForecasts} />
+                </div>
+              )}
+            </div>
+          </DialogHeader>
+
+          {/* KPI Hero row */}
+          {!loading && !error && <KpiHero />}
+          {loading && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-1">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-[90px] rounded-xl bg-muted/40 animate-pulse" />
+              ))}
+            </div>
           )}
         </div>
-        
-        <Tabs defaultValue="monthly" className="w-full" dir={dir}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="monthly">{t('monthly_breakdown')}</TabsTrigger>
-            <TabsTrigger value="forecast">{t('ml_forecast')}</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="monthly" className="mt-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-8 sm:py-12">
-                <div className="flex flex-col items-center space-y-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                  <p className="text-sm text-muted-foreground">{t('loading_consumption_data')}</p>
+
+        {/* ── Tabs ────────────────────────────────────────────────────── */}
+        <div className="px-4 sm:px-6 pb-4">
+          <Tabs defaultValue="monthly" className="w-full" dir={dir}>
+            <TabsList className="grid w-full grid-cols-2 mt-4 mb-4 h-10">
+              <TabsTrigger value="monthly" className="flex items-center gap-1.5 text-sm">
+                <Calendar className="h-3.5 w-3.5" />
+                Monthly Breakdown
+              </TabsTrigger>
+              <TabsTrigger value="forecast" className="flex items-center gap-1.5 text-sm">
+                {isMlForecast ? <Brain className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
+                {isMlForecast ? 'ML Forecast' : 'Trend Forecast'}
+                {!loading && categoryForecasts.length > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ml-1 ${isMlForecast ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'}`}>
+                    {isMlForecast ? 'ML' : 'Trend'}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ══ MONTHLY BREAKDOWN TAB ══════════════════════════════════ */}
+            <TabsContent value="monthly" className="m-0">
+              {loading ? <LoadingState /> : error ? <ErrorState /> : monthlyData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-muted/60 flex items-center justify-center">
+                    <Calendar className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <p className="font-semibold">No consumption data yet</p>
+                  <p className="text-sm text-muted-foreground max-w-xs">
+                    Start recording food, assets, or vehicle expenses to see your monthly breakdown.
+                  </p>
                 </div>
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
-                <AlertTriangle className="h-10 w-10 sm:h-12 sm:w-12 text-destructive mb-4" />
-                <p className="text-destructive font-medium">Error loading data</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-2">{error}</p>
-                <Button variant="outline" size={isMobile ? "sm" : "default"} className="mt-4" onClick={loadConsumptionData}>
-                  Try Again
-                </Button>
-              </div>
-            ) : monthlyData.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
-                <Calendar className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground font-medium">No consumption data available</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-2">Start tracking your expenses to see monthly breakdowns.</p>
-              </div>
-            ) : (
-              <ScrollArea className={`${isMobile ? 'h-[450px]' : 'h-[500px]'} pr-2 sm:pr-4`}>
-                <div className="space-y-4 sm:space-y-6">
-                  {/* Summary Card */}
-                  <Card className="border-none shadow-sm">
-                    <CardHeader className={`pb-2 ${isMobile ? 'px-3 py-3' : ''}`}>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className={`${isMobile ? 'text-sm' : 'text-base'} flex items-center`}>
-                          <DollarSign className="h-4 w-4 mr-2 text-primary" />
-                          Consumption Summary
-                        </CardTitle>
-                        <Badge variant="outline" className="text-xs">
-                          {monthlyData.length} months
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className={`${isMobile ? 'px-3 py-2' : ''} grid grid-cols-3 gap-2 sm:gap-4`}>
-                      {/* Calculate totals */}
-                      {(() => {
-                        const totalFood = monthlyData.reduce((sum, month) => sum + month.foodConsumption, 0);
-                        const totalAssets = monthlyData.reduce((sum, month) => sum + month.assetsPurchased, 0);
-                        const totalVehicle = monthlyData.reduce((sum, month) => sum + month.vehicleRentalCosts, 0);
-                        const grandTotal = totalFood + totalAssets + totalVehicle;
-                        
-                        return (
-                          <>
-                            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-2 sm:p-3 text-center">
-                              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Food</p>
-                              <p className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                                {formatCurrency(totalFood).replace('.00', '')}
-                              </p>
-                              <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70 mt-1">
-                                {Math.round((totalFood / grandTotal) * 100)}%
-                              </p>
-                            </div>
-                            
-                            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-2 sm:p-3 text-center">
-                              <p className="text-xs text-indigo-700 dark:text-indigo-400 font-medium">Assets</p>
-                              <p className="text-sm sm:text-base font-bold text-indigo-600 dark:text-indigo-400 mt-1">
-                                {formatCurrency(totalAssets).replace('.00', '')}
-                              </p>
-                              <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70 mt-1">
-                                {Math.round((totalAssets / grandTotal) * 100)}%
-                              </p>
-                            </div>
-                            
-                            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 sm:p-3 text-center">
-                              <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">Vehicles</p>
-                              <p className="text-sm sm:text-base font-bold text-amber-600 dark:text-amber-400 mt-1">
-                                {formatCurrency(totalVehicle).replace('.00', '')}
-                              </p>
-                              <p className="text-xs text-amber-600/70 dark:text-amber-400/70 mt-1">
-                                {Math.round((totalVehicle / grandTotal) * 100)}%
-                              </p>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </CardContent>
-                  </Card>
-                
-                  {/* Chart Card */}
-                  <Card className="border-none shadow-sm">
-                    <CardHeader className={`pb-2 ${isMobile ? 'px-3 py-3' : ''}`}>
-                      <CardTitle className={`${isMobile ? 'text-sm' : 'text-base'}`}>Monthly Consumption Trends</CardTitle>
-                      <CardDescription className={`${isMobile ? 'text-xs' : 'text-sm'}`}>
-                        Breakdown of expenses by category
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className={isMobile ? 'px-3 py-2' : ''}>
-                      {/* Bar Chart for Monthly Data */}
-                      <div className={`${isMobile ? 'h-[220px]' : 'h-[280px]'} mb-4 sm:mb-6`}>
-                        {monthlyChartData && (
-                          <ChartJSBar 
-                            data={monthlyChartData} 
-                            options={chartOptions} 
-                          />
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Detailed breakdown */}
-                  <div className="space-y-3 sm:space-y-4">
-                    <h3 className={`font-medium ${isMobile ? 'text-sm' : 'text-base'} flex items-center`}>
-                      <Calendar className="h-4 w-4 mr-2 text-primary" />
-                      Monthly Breakdown
-                    </h3>
-                    
-                    <div className="grid gap-3 sm:gap-4">
-                      {monthlyData.map((month) => (
-                        <Card key={`${month.month}-${month.year}`} className="overflow-hidden border-none shadow-sm">
-                          <div className="bg-gradient-to-r from-background to-background/95 p-3 sm:p-4 space-y-3">
-                            <div className="flex justify-between items-center">
-                              <h4 className="font-semibold flex items-center text-sm sm:text-base">
-                                {getMonthYearLabel(month.month, month.year)}
-                              </h4>
-                              <Badge variant="secondary" className="font-semibold text-xs">
-                                {formatCurrency(month.total)}
-                              </Badge>
-                            </div>
-                            
-                            <div className="space-y-2.5">
-                              <div className="space-y-1">
-                                <div className="flex justify-between items-center text-xs sm:text-sm">
-                                  <span className="flex items-center">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>
-                                    <span>Food Consumption</span>
-                                  </span>
-                                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                    {formatCurrency(month.foodConsumption)}
-                                  </span>
-                                </div>
-                                <Progress 
-                                  value={month.total ? (month.foodConsumption / month.total) * 100 : 0} 
-                                  className="h-1.5 sm:h-2" 
-                                  indicatorClassName="bg-emerald-500" 
-                                />
-                              </div>
-                              
-                              <div className="space-y-1">
-                                <div className="flex justify-between items-center text-xs sm:text-sm">
-                                  <span className="flex items-center">
-                                    <span className="w-2 h-2 rounded-full bg-indigo-500 mr-1.5"></span>
-                                    <span>Assets Purchased</span>
-                                  </span>
-                                  <span className="font-medium text-indigo-600 dark:text-indigo-400">
-                                    {formatCurrency(month.assetsPurchased)}
-                                  </span>
-                                </div>
-                                <Progress 
-                                  value={month.total ? (month.assetsPurchased / month.total) * 100 : 0} 
-                                  className="h-1.5 sm:h-2" 
-                                  indicatorClassName="bg-indigo-500" 
-                                />
-                              </div>
-                              
-                              <div className="space-y-1">
-                                <div className="flex justify-between items-center text-xs sm:text-sm">
-                                  <span className="flex items-center">
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span>
-                                    <span>Vehicle Rental Costs</span>
-                                  </span>
-                                  <span className="font-medium text-amber-600 dark:text-amber-400">
-                                    {formatCurrency(month.vehicleRentalCosts)}
-                                  </span>
-                                </div>
-                                <Progress 
-                                  value={month.total ? (month.vehicleRentalCosts / month.total) * 100 : 0} 
-                                  className="h-1.5 sm:h-2" 
-                                  indicatorClassName="bg-amber-500" 
-                                />
-                              </div>
-                            </div>
+              ) : (
+                <ScrollArea className={`${isMobile ? 'h-[460px]' : 'h-[480px]'} pr-1`}>
+                  <div className="space-y-4 pb-2">
+
+                    {/* Category totals */}
+                    {analytics && (
+                      <CategoryPills
+                        food={analytics.ytdFood}
+                        assets={analytics.ytdAssets}
+                        vehicle={analytics.ytdVehicle}
+                        total={analytics.ytdTotal}
+                      />
+                    )}
+
+                    {/* Chart */}
+                    <Card className="border-border/50 shadow-sm">
+                      <CardHeader className="pb-1 pt-3 px-4">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm font-semibold">Spending by Month</CardTitle>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block"/>Food</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block"/>Assets</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-500 inline-block"/>Vehicles</span>
                           </div>
-                        </Card>
-                      ))}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-4">
+                        <div className={`${isMobile ? 'h-[200px]' : 'h-[240px]'}`}>
+                          {monthlyChartData && <ChartJSBar data={monthlyChartData} options={chartOptions} />}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Insights strip */}
+                    {analytics && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                        {[
+                          { label: 'Highest category', value: analytics.ytdFood >= analytics.ytdAssets && analytics.ytdFood >= analytics.ytdVehicle ? '🍽️ Food' : analytics.ytdAssets >= analytics.ytdVehicle ? '📦 Assets' : '🚗 Vehicles' },
+                          { label: 'Monthly avg.', value: fmt(analytics.avgMonthly) },
+                          { label: analytics.momDelta !== null ? 'Month-over-month' : 'Months tracked', value: analytics.momDelta !== null ? `${analytics.momDelta > 0 ? '+' : ''}${analytics.momDelta.toFixed(1)}%` : `${monthlyData.length}` },
+                        ].map(item => (
+                          <div key={item.label} className="rounded-lg bg-muted/40 px-3 py-2">
+                            <p className="text-muted-foreground">{item.label}</p>
+                            <p className="font-semibold mt-0.5">{item.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Month-by-month cards */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5" /> Month Detail
+                      </p>
+                      <div className="grid gap-2.5">
+                        {[...monthlyData].reverse().map((month, i) => (
+                          <MonthCard
+                            key={`${month.month}-${month.year}`}
+                            month={month}
+                            prev={monthlyData[monthlyData.length - i - 2]}
+                            isPeak={`${month.month}-${month.year}` === peakMonthKey}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
+                </ScrollArea>
+              )}
+            </TabsContent>
+
+            {/* ══ FORECAST TAB ══════════════════════════════════════════ */}
+            <TabsContent value="forecast" className="m-0">
+              {loading ? <LoadingState /> : error ? <ErrorState /> : categoryForecasts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-muted/60 flex items-center justify-center">
+                    <TrendingUp className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <p className="font-semibold">Forecast unavailable</p>
+                  <p className="text-sm text-muted-foreground max-w-xs">
+                    {monthlyData.length < 2
+                      ? 'At least 2 months of spending data are needed. Record food, assets, or vehicle expenses to unlock forecasting.'
+                      : 'Could not generate forecasts from the available data.'}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={loadConsumptionData}>Retry</Button>
                 </div>
-              </ScrollArea>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="forecast" className="mt-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-8 sm:py-12">
-                <div className="flex flex-col items-center space-y-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                  <p className="text-sm text-muted-foreground">{t('loading_forecast_data')}</p>
-                </div>
-              </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
-                <AlertTriangle className="h-10 w-10 sm:h-12 sm:w-12 text-destructive mb-4" />
-                <p className="text-destructive font-medium">Error loading forecast data</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-2">{error}</p>
-                <Button variant="outline" size={isMobile ? "sm" : "default"} className="mt-4" onClick={loadConsumptionData}>
-                  Try Again
-                </Button>
-              </div>
-            ) : categoryForecasts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
-                <LineChart className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground font-medium">No forecast data available</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-2">
-                  {monthlyData.length < 2
-                    ? 'At least 2 months of spending data is needed to generate forecasts. Start recording food consumption, assets, or vehicle rentals.'
-                    : 'Could not generate forecasts from the available data. Try refreshing.'}
-                </p>
-                <Button variant="outline" size={isMobile ? "sm" : "default"} className="mt-4" onClick={loadConsumptionData}>
-                  Retry
-                </Button>
-              </div>
-            ) : (
-              <ScrollArea className={`${isMobile ? 'h-[450px]' : 'h-[500px]'} pr-2 sm:pr-4`}>
-                <div className="space-y-4 sm:space-y-6">
-                  {/* Forecast Summary Card */}
-                  <Card className="border-none shadow-sm">
-                    <CardHeader className={`pb-2 ${isMobile ? 'px-3 py-3' : ''}`}>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className={`${isMobile ? 'text-sm' : 'text-base'} flex items-center`}>
-                          <TrendingUp className="h-4 w-4 mr-2 text-primary" />
-                          Forecast Overview
-                        </CardTitle>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-8 sm:w-8">
-                                <Info className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs text-xs sm:text-sm">
-                              <p>{isMlForecast
-                                ? 'Forecasts are generated by machine learning models trained on your historical spending patterns across all expense categories.'
-                                : 'Forecasts are generated using linear trend analysis from your historical spending data. ML-enhanced forecasts become available as more data is collected.'
-                              }</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                      <CardDescription className={`${isMobile ? 'text-xs' : 'text-sm'} flex items-center gap-2`}>
-                        {isMlForecast
-                          ? `ML-powered predictions for the next ${categoryForecasts.length} months`
-                          : `Trend-based predictions for the next ${categoryForecasts.length} months`}
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isMlForecast ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'}`}>
-                          {isMlForecast ? 'ML' : 'Trend'}
-                        </span>
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className={`${isMobile ? 'px-3 py-2' : ''} grid grid-cols-3 gap-2 sm:gap-4`}>
-                      {/* Calculate forecast totals */}
-                      {(() => {
-                        const totalFood = categoryForecasts.reduce((sum, forecast) => sum + forecast.foodConsumption, 0);
-                        const totalAssets = categoryForecasts.reduce((sum, forecast) => sum + forecast.assetsPurchased, 0);
-                        const totalVehicle = categoryForecasts.reduce((sum, forecast) => sum + forecast.vehicleRentalCosts, 0);
-                        const grandTotal = totalFood + totalAssets + totalVehicle;
-                        const avgConfidence = categoryForecasts.reduce((sum, forecast) => sum + forecast.confidence, 0) / categoryForecasts.length;
-                        
-                        return (
-                          <>
-                            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-2 sm:p-3 text-center">
-                              <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Food</p>
-                              <p className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                                {formatCurrency(totalFood).replace('.00', '')}
-                              </p>
-                              <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70 mt-1">
-                                {Math.round((totalFood / grandTotal) * 100)}%
-                              </p>
-                            </div>
-                            
-                            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-2 sm:p-3 text-center">
-                              <p className="text-xs text-indigo-700 dark:text-indigo-400 font-medium">Assets</p>
-                              <p className="text-sm sm:text-base font-bold text-indigo-600 dark:text-indigo-400 mt-1">
-                                {formatCurrency(totalAssets).replace('.00', '')}
-                              </p>
-                              <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70 mt-1">
-                                {Math.round((totalAssets / grandTotal) * 100)}%
-                              </p>
-                            </div>
-                            
-                            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2 sm:p-3 text-center">
-                              <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">Vehicles</p>
-                              <p className="text-sm sm:text-base font-bold text-amber-600 dark:text-amber-400 mt-1">
-                                {formatCurrency(totalVehicle).replace('.00', '')}
-                              </p>
-                              <p className="text-xs text-amber-600/70 dark:text-amber-400/70 mt-1">
-                                {Math.round((totalVehicle / grandTotal) * 100)}%
-                              </p>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </CardContent>
-                  </Card>
-                
-                  {/* Chart Card */}
-                  <Card className="border-none shadow-sm">
-                    <CardHeader className={`pb-2 ${isMobile ? 'px-3 py-3' : ''}`}>
-                      <CardTitle className={`${isMobile ? 'text-sm' : 'text-base'}`}>Forecast Trends</CardTitle>
-                      <CardDescription className={`${isMobile ? 'text-xs' : 'text-sm'}`}>
-                        Predicted expenses by category
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className={isMobile ? 'px-3 py-2' : ''}>
-                      {/* Bar Chart for Forecast Data */}
-                      <div className={`${isMobile ? 'h-[220px]' : 'h-[280px]'} mb-4 sm:mb-6`}>
-                        {categoryForecastChartData && (
-                          <ChartJSBar 
-                            data={categoryForecastChartData} 
-                            options={chartOptions} 
-                          />
+              ) : (
+                <ScrollArea className={`${isMobile ? 'h-[460px]' : 'h-[480px]'} pr-1`}>
+                  <div className="space-y-4 pb-2">
+
+                    {/* Model badge + 6-month totals */}
+                    {analytics && analytics.forecastTotal > 0 && (
+                      <div className="rounded-xl border border-border/50 bg-gradient-to-br from-primary/5 to-violet-500/5 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            {isMlForecast
+                              ? <Brain className="h-4 w-4 text-violet-500" />
+                              : <TrendingUp className="h-4 w-4 text-blue-500" />}
+                            <span className="font-semibold text-sm">
+                              {isMlForecast ? 'Machine Learning Forecast' : 'Trend-Based Forecast'}
+                            </span>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs text-xs">
+                                  {isMlForecast
+                                    ? 'Generated by ML models trained on your historical spending, vehicle rentals, and asset purchases.'
+                                    : 'Generated using linear regression on your monthly spending history. ML forecasts activate with more data.'}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <ConfBadge conf={analytics.avgConf} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground">6-Month Total Projection</p>
+                            <p className="text-xl font-bold">{fmt(analytics.forecastTotal)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Avg. Monthly Projection</p>
+                            <p className="text-xl font-bold">{fmt(analytics.forecastTotal / categoryForecasts.length)}</p>
+                          </div>
+                        </div>
+                        {analytics.lastMonth && (
+                          <div className="mt-3 pt-3 border-t border-border/30">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Shield className="h-3 w-3" />
+                              Last actual: <strong>{analytics.lastMonth.month}</strong> — {fmt(analytics.lastMonth.total)}
+                            </p>
+                          </div>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Detailed forecast breakdown */}
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className={`font-medium ${isMobile ? 'text-sm' : 'text-base'} flex items-center`}>
-                        <Calendar className="h-4 w-4 mr-2 text-primary" />
-                        Monthly Forecast
-                      </h3>
-                      <Badge variant="outline" className="text-xs">
-                        Avg. Confidence: {Math.round((categoryForecasts.reduce((sum, f) => sum + f.confidence, 0) / categoryForecasts.length) * 100)}%
-                      </Badge>
-                    </div>
-                    
-                    <div className="grid gap-3 sm:gap-4">
-                      {categoryForecasts.map((forecast, index) => (
-                        <Card key={`${forecast.month}-${forecast.year}`} className="overflow-hidden border-none shadow-sm">
-                          <div className="bg-gradient-to-r from-background to-background/95 p-3 sm:p-4 space-y-3">
-                            <div className="flex justify-between items-center">
-                              <h4 className="font-semibold flex items-center text-sm sm:text-base">
-                                {getMonthYearLabel(forecast.month, forecast.year)}
-                              </h4>
-                              <div className="flex items-center space-x-2">
-                                <Badge 
-                                  variant={index === 0 ? "default" : "secondary"} 
-                                  className="font-semibold text-xs"
-                                >
-                                  {formatCurrency(forecast.total)}
-                                </Badge>
-                                <div className={`text-xs px-1.5 py-0.5 rounded-full text-center min-w-[40px] ${
-                                  forecast.confidence >= 0.85 
-                                    ? "bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300" 
-                                    : forecast.confidence >= 0.75
-                                      ? "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300"
-                                      : "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300"
-                                }`}>
-                                  {Math.round(forecast.confidence * 100)}%
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="space-y-2.5">
-                              <div className="space-y-1">
-                                <div className="flex justify-between items-center text-xs sm:text-sm">
-                                  <span className="flex items-center">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>
-                                    <span>Food Consumption</span>
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-5 w-5 ml-1 p-0">
-                                            <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="right" className="max-w-xs bg-emerald-50 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800">
-                                          <div className="text-xs space-y-1 text-emerald-900 dark:text-emerald-100">
-                                            <p className="font-medium">Food Consumption Prediction</p>
-                                            <p>Calculated using:</p>
-                                            <ul className="list-disc pl-4 space-y-0.5">
-                                              <li>Exponential smoothing of historical data</li>
-                                              <li>Seasonal adjustment factors</li>
-                                              <li>Outlier detection and removal</li>
-                                              <li>Confidence: {Math.round(forecast.confidence * 100)}%</li>
-                                            </ul>
-                                          </div>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  </span>
-                                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                    {formatCurrency(forecast.foodConsumption)}
-                                  </span>
-                                </div>
-                                <Progress 
-                                  value={forecast.total ? (forecast.foodConsumption / forecast.total) * 100 : 0} 
-                                  className="h-1.5 sm:h-2" 
-                                  indicatorClassName="bg-emerald-500" 
-                                />
-                              </div>
-                              
-                              <div className="space-y-1">
-                                <div className="flex justify-between items-center text-xs sm:text-sm">
-                                  <span className="flex items-center">
-                                    <span className="w-2 h-2 rounded-full bg-indigo-500 mr-1.5"></span>
-                                    <span>Assets Purchased</span>
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-5 w-5 ml-1 p-0">
-                                            <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="right" className="max-w-xs bg-indigo-50 dark:bg-indigo-900/40 border-indigo-200 dark:border-indigo-800">
-                                          <div className="text-xs space-y-1 text-indigo-900 dark:text-indigo-100">
-                                            <p className="font-medium">Assets Purchased Prediction</p>
-                                            <p>Calculated using:</p>
-                                            <ul className="list-disc pl-4 space-y-0.5">
-                                              <li>Historical asset purchase patterns</li>
-                                              <li>Proportion of total budget (30% of food budget)</li>
-                                              <li>Linear regression with t-distribution</li>
-                                              <li>Confidence: {Math.round(forecast.confidence * 100)}%</li>
-                                            </ul>
-                                          </div>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  </span>
-                                  <span className="font-medium text-indigo-600 dark:text-indigo-400">
-                                    {formatCurrency(forecast.assetsPurchased)}
-                                  </span>
-                                </div>
-                                <Progress 
-                                  value={forecast.total ? (forecast.assetsPurchased / forecast.total) * 100 : 0} 
-                                  className="h-1.5 sm:h-2" 
-                                  indicatorClassName="bg-indigo-500" 
-                                />
-                              </div>
-                              
-                              <div className="space-y-1">
-                                <div className="flex justify-between items-center text-xs sm:text-sm">
-                                  <span className="flex items-center">
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span>
-                                    <span>Vehicle Rental Costs</span>
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-5 w-5 ml-1 p-0">
-                                            <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="right" className="max-w-xs bg-amber-50 dark:bg-amber-900/40 border-amber-200 dark:border-amber-800">
-                                          <div className="text-xs space-y-1 text-amber-900 dark:text-amber-100">
-                                            <p className="font-medium">Vehicle Rental Prediction</p>
-                                            <p>Calculated using:</p>
-                                            <ul className="list-disc pl-4 space-y-0.5">
-                                              <li>Fixed monthly payment analysis</li>
-                                              <li>Step change detection for new vehicles</li>
-                                              <li>Probability of fleet expansion: {Math.round((forecast.vehicleRentalCosts > (monthlyData.length > 0 ? monthlyData[monthlyData.length-1].vehicleRentalCosts : 0) ? 0.7 : 0.2) * 100)}%</li>
-                                              <li>Confidence: {Math.round((forecast.confidence + 0.1) * 100)}%</li>
-                                            </ul>
-                                          </div>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  </span>
-                                  <span className="font-medium text-amber-600 dark:text-amber-400">
-                                    {formatCurrency(forecast.vehicleRentalCosts)}
-                                  </span>
-                                </div>
-                                <Progress 
-                                  value={forecast.total ? (forecast.vehicleRentalCosts / forecast.total) * 100 : 0} 
-                                  className="h-1.5 sm:h-2" 
-                                  indicatorClassName="bg-amber-500" 
-                                />
-                              </div>
-                            </div>
+                    )}
+
+                    {/* Forecast category totals */}
+                    {analytics && (
+                      <CategoryPills
+                        food={categoryForecasts.reduce((s, f) => s + f.foodConsumption, 0)}
+                        assets={categoryForecasts.reduce((s, f) => s + f.assetsPurchased, 0)}
+                        vehicle={categoryForecasts.reduce((s, f) => s + f.vehicleRentalCosts, 0)}
+                        total={analytics.forecastTotal}
+                      />
+                    )}
+
+                    {/* Forecast chart */}
+                    <Card className="border-border/50 shadow-sm">
+                      <CardHeader className="pb-1 pt-3 px-4">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm font-semibold">6-Month Projected Spend</CardTitle>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block"/>Food</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-indigo-500 inline-block"/>Assets</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-500 inline-block"/>Vehicles</span>
                           </div>
-                        </Card>
-                      ))}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-4">
+                        <div className={`${isMobile ? 'h-[200px]' : 'h-[240px]'}`}>
+                          {forecastChartData && <ChartJSBar data={forecastChartData} options={chartOptions} />}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Month-by-month forecast cards */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                        <ChevronRight className="h-3.5 w-3.5" /> Monthly Projections
+                      </p>
+                      <div className="grid gap-2.5">
+                        {categoryForecasts.map((forecast, index) => (
+                          <ForecastCard
+                            key={`${forecast.month}-${forecast.year}`}
+                            forecast={forecast}
+                            index={index}
+                            lastActual={analytics?.lastMonth}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </ScrollArea>
-            )}
-          </TabsContent>
-        </Tabs>
+                </ScrollArea>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
