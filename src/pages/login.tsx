@@ -164,8 +164,17 @@ export default function LoginPage() {
       } else {
         router.push('/portal');
       }
-    } catch {
-      toast({ variant: 'destructive', title: 'Login failed', description: 'Check your credentials and try again.' });
+    } catch (err: any) {
+      const msg = err?.message || '';
+      let description = 'Check your credentials and try again.';
+      if (msg.toLowerCase().includes('email not confirmed')) {
+        description = 'Your email address has not been confirmed yet. Please contact your administrator to unlock your account.';
+      } else if (msg.toLowerCase().includes('invalid login credentials') || msg.toLowerCase().includes('invalid password')) {
+        description = 'Incorrect email or password. Please try again.';
+      } else if (msg) {
+        description = msg;
+      }
+      toast({ variant: 'destructive', title: 'Login failed', description });
     } finally { setLoading(false); }
   };
 

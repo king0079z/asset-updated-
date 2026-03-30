@@ -41,17 +41,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Set the password in Supabase Auth.
-  // email_confirm: true also marks the email as verified so the user can
-  // sign in immediately even if they haven't clicked a confirmation link.
+  // Set the password via Supabase Admin API.
+  // email_confirm: true tells Supabase to also verify the email so the user
+  // can sign in immediately without clicking a confirmation link.
   const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
     password: tempPassword,
     email_confirm: true,
   });
 
   if (authError) {
-    console.error('[reset-password] Supabase error:', authError);
+    console.error('[reset-password] Supabase admin API error:', authError);
     return res.status(500).json({ error: authError.message || 'Failed to update password in auth' });
+  }
+
+  // Belt-and-suspenders: directly stamp email_confirmed_at and clear the
+  // confirmation_token in auth.users via raw SQL. Some Supabase project configs
+  // do not honour the email_confirm field in the admin REST API alone.
+  try {
+    await prisma.$executeRaw`
+      UPDATE auth.users
+      SET
+        email_confirmed_at  = COALESCE(email_confirmed_at, NOW()),
+        confirmation_token  = '',
+        recovery_token      = '',
+        updated_at          = NOW()
+      WHERE id::text = ${userId}
+    `;
+  } catch (sqlErr) {
+    // Log but don't fail — the admin API call already succeeded.
+    console.warn('[reset-password] Could not directly confirm email via SQL (non-fatal):', sqlErr);
   }
 
   // Mark the user as mustChangePassword in our database
