@@ -19,6 +19,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { prefetchAllData, resetPrefetch } from '@/lib/prefetch';
 import { DiagnosticsPanel } from '@/components/DiagnosticsPanel';
 import { ForcePasswordChangeModal } from '@/components/ForcePasswordChangeModal';
+import { SupabaseAuthUrlErrors } from '@/components/SupabaseAuthUrlErrors';
 
 // Lazy load non-critical components
 const QuickActionsMenu = lazy(() => 
@@ -274,6 +275,7 @@ export default function App({ Component, pageProps }: AppProps) {
                     </ProtectedRoute>
                   </AppShellWrapper>
                   <ForcePasswordChangeModal />
+                  <SupabaseAuthUrlErrors />
                   <Toaster />
                 </TooltipProvider>
               </OrganizationProvider>

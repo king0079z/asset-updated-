@@ -6,6 +6,7 @@ import { useRouter } from 'next/router';
 import { enhancedFetch } from '@/util/connectivity';
 import { isSupabaseConfigured } from '@/util/supabase/env';
 import { clearCache } from '@/lib/api-cache';
+import { getPublicSiteUrl } from '@/lib/site-url';
 
 interface AuthContextType {
   user: User | null;
@@ -40,11 +41,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const supabaseConfigured = isSupabaseConfigured();
   const supabase = createClient();
   const { toast } = useToast();
-  const getSiteUrl = () =>
-    typeof window !== 'undefined'
-      ? window.location.origin
-      : process.env.NEXT_PUBLIC_SITE_URL || '';
-
   const ensureSupabaseConfigured = () => {
     if (supabaseConfigured) return true;
     toast({
@@ -186,9 +182,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signUp = async (email: string, password: string) => {
     if (!ensureSupabaseConfigured()) return;
+    const siteUrl = getPublicSiteUrl();
+    if (!siteUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'Configuration error',
+        description: 'Set NEXT_PUBLIC_SITE_URL to your live site (e.g. https://assetxai.live) in Vercel environment variables so confirmation emails use the correct link.',
+      });
+      throw new Error('NEXT_PUBLIC_SITE_URL is not set');
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
-      password
+      password,
+      options: {
+        emailRedirectTo: `${siteUrl}/auth/callback`,
+      },
     });
 
     if (data.user) {
@@ -212,7 +220,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signInWithMagicLink = async (email: string) => {
     if (!ensureSupabaseConfigured()) return;
-    const siteUrl = getSiteUrl();
+    const siteUrl = getPublicSiteUrl();
     const { data, error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -279,7 +287,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const resetPassword = async (email: string) => {
     if (!ensureSupabaseConfigured()) return;
-    const siteUrl = getSiteUrl();
+    const siteUrl = getPublicSiteUrl();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${siteUrl}/reset-password`,
     });

@@ -13,6 +13,7 @@ import { createClient } from '@/util/supabase/api';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import prisma from '@/lib/prisma';
 import { getUserRoleData } from '@/util/roleCheck';
+import { getPublicSiteUrl } from '@/lib/site-url';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -56,9 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Step 2: Generate a one-time magic sign-in link
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  const siteUrl = getPublicSiteUrl() || 'http://localhost:3000';
 
   const { data, error } = await adminClient.auth.admin.generateLink({
     type: 'magiclink',
