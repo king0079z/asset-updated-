@@ -41,9 +41,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Set the password in Supabase Auth
+  // Set the password in Supabase Auth.
+  // email_confirm: true also marks the email as verified so the user can
+  // sign in immediately even if they haven't clicked a confirmation link.
   const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
     password: tempPassword,
+    email_confirm: true,
   });
 
   if (authError) {
