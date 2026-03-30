@@ -111,6 +111,7 @@ export default function UserManagementPage() {
   const [isGeneratingKey, setIsGeneratingKey] = useState(false);
   const [subscriptionDuration, setSubscriptionDuration] = useState("12");
   const [subscriptionPlan, setSubscriptionPlan] = useState("BASIC");
+  const [syncing, setSyncing] = useState(false);
   const { toast } = useToast();
 
   const safeJson = async (res: Response | null): Promise<any[]> => {
@@ -146,6 +147,31 @@ export default function UserManagementPage() {
       if (!background) toast({ title: "Error", description: "Failed to load users", variant: "destructive" });
     } finally {
       if (!background) { setLoading(false); setRefreshing(false); }
+    }
+  };
+
+  // Retroactively provision any Supabase auth user not yet in the DB.
+  const handleSyncFromAuth = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/admin/users/sync-from-auth', { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed');
+      if (data.synced === 0) {
+        toast({ title: 'Already up to date', description: 'All registered accounts are already in the system.' });
+      } else {
+        toast({
+          title: `${data.synced} account${data.synced > 1 ? 's' : ''} recovered`,
+          description: data.users.map((u: any) => u.email).join(', '),
+        });
+      }
+      // Force-refresh the pending list so recovered accounts appear immediately.
+      [USERS_PENDING_KEY, USERS_APPROVED_KEY].forEach(invalidateCache);
+      await loadUsers(false);
+    } catch (err: any) {
+      toast({ title: 'Sync failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -392,6 +418,19 @@ export default function UserManagementPage() {
                     loadUsers();
                   }} disabled={refreshing}>
                   <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white/80 hover:text-white hover:bg-white/15 rounded-xl flex items-center gap-1.5 text-xs px-3"
+                  onClick={handleSyncFromAuth}
+                  disabled={syncing}
+                  title="Scan Supabase auth for registered accounts not yet in the pending list"
+                >
+                  {syncing
+                    ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    : <UserPlus className="h-3.5 w-3.5" />}
+                  {syncing ? 'Syncing…' : 'Sync Accounts'}
                 </Button>
               </div>
             </div>

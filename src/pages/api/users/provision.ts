@@ -33,9 +33,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (bodyId && bodyEmail) {
       try {
         // Query Supabase's auth schema directly — both id AND email must match.
+        // Use id::text comparison to avoid UUID cast issues with parameterized queries.
         const rows: Array<{ id: string }> = await prisma.$queryRaw`
-          SELECT id FROM auth.users
-          WHERE id = ${bodyId}::uuid
+          SELECT id::text FROM auth.users
+          WHERE id::text = ${bodyId}
             AND email = ${bodyEmail}
           LIMIT 1
         `;
