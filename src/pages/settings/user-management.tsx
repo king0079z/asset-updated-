@@ -28,6 +28,7 @@ import RoleDefaultPermissionsManager from "@/components/RoleDefaultPermissionsMa
 import {
   CheckCircle, XCircle, UserCog, Settings, Search, Users, UserPlus, UserX,
   Filter, RefreshCw, Key, Mail, Copy, AlertCircle, ShieldCheck, Building2,
+  ChevronDown, ChevronUp, Lock, Eye, ToggleLeft,
 } from "lucide-react";
 
 type User = {
@@ -112,7 +113,15 @@ export default function UserManagementPage() {
   const [subscriptionDuration, setSubscriptionDuration] = useState("12");
   const [subscriptionPlan, setSubscriptionPlan] = useState("BASIC");
   const [syncing, setSyncing] = useState(false);
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  const toggleExpanded = (userId: string) =>
+    setExpandedUsers(prev => {
+      const next = new Set(prev);
+      next.has(userId) ? next.delete(userId) : next.add(userId);
+      return next;
+    });
 
   const safeJson = async (res: Response | null): Promise<any[]> => {
     if (!res || !res.ok) return [];
@@ -620,21 +629,44 @@ export default function UserManagementPage() {
                     message={searchQuery ? "No approved users match your search" : "No approved users found"}
                     onClear={searchQuery ? () => setSearchQuery("") : undefined} />
                 ) : (
-                  <div className="space-y-5">
-                    {filteredApproved.map(user => (
-                      <div key={user.id} className="rounded-2xl border border-border bg-card overflow-hidden">
-                        {/* User Header */}
-                        <div className="px-6 py-5 border-b border-border bg-gradient-to-r from-muted/50 to-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <UserAvatar email={user.email} />
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                                <p className="font-bold">{user.email}</p>
-                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${getRoleBadgeClass(user)}`}>
-                                  {user.customRoleName ?? user.role}
-                                </span>
+                  <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                    {/* Table header */}
+                    <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-4 px-6 py-3 bg-muted/40 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      <span>User</span>
+                      <span className="text-center w-28">Role</span>
+                      <span className="text-center w-32">Org</span>
+                      <span className="text-center w-28">Actions</span>
+                    </div>
+
+                    <div className="divide-y divide-border">
+                      {filteredApproved.map(user => {
+                        const isExpanded = expandedUsers.has(user.id);
+                        const accessedPages = Object.values(user.pageAccess ?? {}).filter(Boolean).length;
+                        return (
+                          <div key={user.id}>
+                            {/* ── Compact row ── */}
+                            <div
+                              className="px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-muted/20 transition-colors cursor-pointer"
+                              onClick={() => toggleExpanded(user.id)}
+                            >
+                              {/* Avatar + info */}
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <UserAvatar email={user.email} />
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-sm truncate">{user.email}</p>
+                                  <p className="text-xs text-muted-foreground">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+
+                              {/* Role badge */}
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full border w-28 text-center flex-shrink-0 ${getRoleBadgeClass(user)}`}>
+                                {user.customRoleName ?? user.role}
+                              </span>
+
+                              {/* Org */}
+                              <div className="w-32 flex-shrink-0">
                                 {user.organization ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 truncate max-w-full">
                                     🏢 {user.organization.name}
                                   </span>
                                 ) : (
@@ -643,109 +675,143 @@ export default function UserManagementPage() {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-muted-foreground">Joined {new Date(user.createdAt).toLocaleDateString()}</p>
-                            </div>
-                          </div>
-                          <Button size="sm" variant="outline" className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 gap-1.5"
-                            onClick={() => handleStatusChange(user.id, "REJECTED")}>
-                            <UserX className="h-4 w-4" /> Revoke Access
-                          </Button>
-                        </div>
 
-                        {/* Permissions Grid */}
-                        <div className="p-6 space-y-5">
-                          {/* Role */}
-                          <div className="rounded-xl border border-border p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <ShieldCheck className="h-5 w-5 text-violet-500" />
-                                <div>
-                                  <Label className="font-semibold text-base">Role Assignment</Label>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {user.role === "ADMIN" ? "Full system access including admin settings" :
-                                      user.role === "MANAGER" ? "All features except admin settings" :
-                                        user.role === "HANDHELD" ? "Handheld app only — scan, tickets, tasks in the field" :
-                                          "Limited access based on page permissions"}
-                                  </p>
-                                </div>
-                              </div>
-                              <Select defaultValue={user.customRoleName ?? user.role} onValueChange={v => handleRoleChange(user.id, v)}>
-                                <SelectTrigger className="w-44 rounded-xl"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="ADMIN">Admin</SelectItem>
-                                  <SelectItem value="MANAGER">Manager</SelectItem>
-                                  <SelectItem value="STAFF">Staff</SelectItem>
-                                  <SelectItem value="HANDHELD">Handheld</SelectItem>
-                                  <CustomRoleOptions />
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-
-                          {/* Doc Delete */}
-                          <div className="rounded-xl border border-border p-4 flex items-center justify-between">
-                            <div>
-                              <Label className="font-semibold">Document Delete Permission</Label>
-                              <p className="text-xs text-muted-foreground mt-0.5">Allow this user to delete documents from assets</p>
-                            </div>
-                            <Switch checked={user.canDeleteDocuments ?? false}
-                              onCheckedChange={v => handleDocumentDeletePermissionChange(user.id, v)} />
-                          </div>
-
-                          {/* Button Visibility */}
-                          <div className="rounded-xl border border-border p-4">
-                            <Label className="font-semibold text-base mb-3 block">Button Visibility</Label>
-                            <div className="space-y-3">
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Assets</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <PermissionToggle label="Dispose Asset" userId={user.id} field="dispose_asset" value={user.buttonVisibility?.["dispose_asset"] === true} />
-                                  <PermissionToggle label="Assets Button" userId={user.id} field="assets_button" value={user.buttonVisibility?.["assets_button"] === true} />
-                                </div>
-                              </div>
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Food Supply</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <PermissionToggle label="Edit Food Supply" userId={user.id} field="edit_food_supply" value={user.buttonVisibility?.["edit_food_supply"] === true} />
-                                </div>
-                              </div>
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Kitchen</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <PermissionToggle label="Consumption" userId={user.id} field="kitchen_consumption" value={user.buttonVisibility?.["kitchen_consumption"] === true} />
-                                  <PermissionToggle label="Waste Tracking" userId={user.id} field="kitchen_waste_tracking" value={user.buttonVisibility?.["kitchen_waste_tracking"] === true} />
-                                  <PermissionToggle label="Add Food Supply" userId={user.id} field="kitchen_food_supply" value={user.buttonVisibility?.["kitchen_food_supply"] === true} />
-                                  <PermissionToggle label="Recipe Management" userId={user.id} field="kitchen_recipe" value={user.buttonVisibility?.["kitchen_recipe"] === true} />
-                                </div>
+                              {/* Actions */}
+                              <div className="flex items-center gap-2 w-28 justify-end flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                  onClick={() => handleStatusChange(user.id, "REJECTED")}>
+                                  <UserX className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950"
+                                  onClick={() => toggleExpanded(user.id)}>
+                                  {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                </Button>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Page Access */}
-                          <div className="rounded-xl border border-border p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <Label className="font-semibold text-base">Page Access</Label>
-                              <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
-                                {Object.values(user.pageAccess ?? {}).filter(Boolean).length} / {availablePages.length} pages
-                              </span>
-                            </div>
-                            <div className="max-h-72 overflow-y-auto">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1">
-                                {availablePages.map(page => (
-                                  <div key={`${user.id}-${page.path}`} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors">
-                                    <Label className="text-sm cursor-pointer">{page.name}</Label>
-                                    <Switch
-                                      checked={user.pageAccess?.[page.path] === true}
-                                      onCheckedChange={checked => handlePageAccessChange(user.id, page.path, checked)}
-                                    />
+                            {/* ── Expanded permissions panel ── */}
+                            {isExpanded && (
+                              <div className="bg-muted/10 border-t border-border px-6 py-5 space-y-4">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                                  {/* Col 1 — Role + Doc Delete */}
+                                  <div className="space-y-3">
+                                    {/* Role */}
+                                    <div className="rounded-xl border border-border bg-card p-4">
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <ShieldCheck className="h-4 w-4 text-violet-500 flex-shrink-0" />
+                                        <span className="text-sm font-semibold">Role Assignment</span>
+                                      </div>
+                                      <Select defaultValue={user.customRoleName ?? user.role} onValueChange={v => handleRoleChange(user.id, v)}>
+                                        <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="ADMIN">Admin</SelectItem>
+                                          <SelectItem value="MANAGER">Manager</SelectItem>
+                                          <SelectItem value="STAFF">Staff</SelectItem>
+                                          <SelectItem value="HANDHELD">Handheld</SelectItem>
+                                          <CustomRoleOptions />
+                                        </SelectContent>
+                                      </Select>
+                                      <p className="text-xs text-muted-foreground mt-2">
+                                        {user.role === "ADMIN" ? "Full system access including admin settings" :
+                                          user.role === "MANAGER" ? "All features except admin settings" :
+                                            user.role === "HANDHELD" ? "Handheld app only — scan, tickets, tasks" :
+                                              "Limited access based on page permissions"}
+                                      </p>
+                                    </div>
+
+                                    {/* Doc delete */}
+                                    <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <Lock className="h-4 w-4 text-rose-500 flex-shrink-0" />
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-semibold">Document Delete</p>
+                                          <p className="text-xs text-muted-foreground">Allow deleting asset documents</p>
+                                        </div>
+                                      </div>
+                                      <Switch checked={user.canDeleteDocuments ?? false}
+                                        onCheckedChange={v => handleDocumentDeletePermissionChange(user.id, v)} />
+                                    </div>
                                   </div>
-                                ))}
+
+                                  {/* Col 2 — Button Visibility */}
+                                  <div className="rounded-xl border border-border bg-card p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <ToggleLeft className="h-4 w-4 text-sky-500" />
+                                      <span className="text-sm font-semibold">Button Visibility</span>
+                                    </div>
+                                    <div className="space-y-3">
+                                      {[
+                                        { section: "Assets", items: [
+                                          { label: "Dispose Asset", field: "dispose_asset" },
+                                          { label: "Assets Button", field: "assets_button" },
+                                        ]},
+                                        { section: "Food Supply", items: [
+                                          { label: "Edit Food Supply", field: "edit_food_supply" },
+                                        ]},
+                                        { section: "Kitchen", items: [
+                                          { label: "Consumption", field: "kitchen_consumption" },
+                                          { label: "Waste Tracking", field: "kitchen_waste_tracking" },
+                                          { label: "Add Food Supply", field: "kitchen_food_supply" },
+                                          { label: "Recipe Mgmt", field: "kitchen_recipe" },
+                                        ]},
+                                      ].map(({ section, items }) => (
+                                        <div key={section}>
+                                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{section}</p>
+                                          <div className="space-y-1">
+                                            {items.map(item => (
+                                              <div key={item.field} className="flex items-center justify-between py-1.5 px-2.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                                <span className="text-xs text-foreground">{item.label}</span>
+                                                <Switch
+                                                  checked={user.buttonVisibility?.[item.field] === true}
+                                                  onCheckedChange={v => handleButtonVisibilityChange(user.id, item.field, v)}
+                                                />
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Col 3 — Page Access */}
+                                  <div className="rounded-xl border border-border bg-card p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <div className="flex items-center gap-2">
+                                        <Eye className="h-4 w-4 text-emerald-500" />
+                                        <span className="text-sm font-semibold">Page Access</span>
+                                      </div>
+                                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                                        {accessedPages}/{availablePages.length}
+                                      </span>
+                                    </div>
+                                    <div className="max-h-64 overflow-y-auto space-y-1 pr-1">
+                                      {availablePages.map(page => (
+                                        <div key={`${user.id}-${page.path}`} className="flex items-center justify-between py-1.5 px-2.5 rounded-lg hover:bg-muted/40 transition-colors">
+                                          <span className="text-xs text-foreground">{page.name}</span>
+                                          <Switch
+                                            checked={user.pageAccess?.[page.path] === true}
+                                            onCheckedChange={checked => handlePageAccessChange(user.id, page.path, checked)}
+                                          />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Revoke footer */}
+                                <div className="flex justify-end pt-1">
+                                  <Button size="sm" variant="outline" className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 gap-1.5"
+                                    onClick={() => handleStatusChange(user.id, "REJECTED")}>
+                                    <UserX className="h-4 w-4" /> Revoke Access
+                                  </Button>
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
             </TabsContent>
