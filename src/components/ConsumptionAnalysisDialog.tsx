@@ -55,6 +55,7 @@ export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAna
   const [forecastData, setForecastData] = useState<ForecastData[]>([]);
   const [categoryForecasts, setCategoryForecasts] = useState<CategoryForecast[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isMlForecast, setIsMlForecast] = useState(false);
   
   // Media queries for responsive design
   const isMobile = useMediaQuery('(max-width: 640px)');
@@ -74,21 +75,32 @@ export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAna
       const response = await fetch('/api/dashboard/total-spent?includeMonthly=true');
       if (!response.ok) throw new Error('Failed to load consumption data');
       const data = await response.json();
-      
-      setMonthlyData(data.monthlyData || []);
-      
-      // Fetch ML forecast data
-      const mlResponse = await fetch('/api/ai-analysis/ml-predictions');
-      if (!mlResponse.ok) throw new Error('Failed to load forecast data');
-      const mlData = await mlResponse.json();
-      
-      // Transform budget predictions into forecast data
-      const budgetPredictions = mlData?.mlAnalysis?.budgetPredictions ?? [];
-      const forecasts = transformBudgetPredictions(budgetPredictions, data.monthlyData ?? []);
+      const monthly: MonthlyConsumption[] = data.monthlyData || [];
+      setMonthlyData(monthly);
+
+      // Fetch ML forecast data (best-effort — falls back to trend if unavailable)
+      let budgetPredictions: any[] = [];
+      try {
+        const mlResponse = await fetch('/api/ai-analysis/ml-predictions');
+        if (mlResponse.ok) {
+          const mlData = await mlResponse.json();
+          budgetPredictions = mlData?.mlAnalysis?.budgetPredictions ?? [];
+        }
+      } catch {
+        // ML endpoint unavailable — fall through to trend-based forecasts
+      }
+
+      // Try ML-based forecasts first; fall back to statistical trend if empty
+      let forecasts = transformBudgetPredictions(budgetPredictions, monthly);
+      const usedMl = forecasts.length > 0;
+      if (!usedMl && monthly.length >= 2) {
+        forecasts = generateTrendForecasts(monthly);
+      }
+      setIsMlForecast(usedMl);
       setForecastData(forecasts);
-      
+
       // Generate category-specific forecasts
-      const categoryForecasts = generateCategoryForecasts(forecasts, data.monthlyData ?? []);
+      const categoryForecasts = generateCategoryForecasts(forecasts, monthly);
       setCategoryForecasts(categoryForecasts);
     } catch (error) {
       console.error('Error loading consumption analysis data:', error);
@@ -96,6 +108,43 @@ export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAna
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * Generate 6-month forecasts from historical monthly data using linear regression.
+   * Used as a fallback when the ML predictions API is unavailable or returns no data.
+   */
+  const generateTrendForecasts = (historicalData: MonthlyConsumption[]): ForecastData[] => {
+    if (!historicalData || historicalData.length < 2) return [];
+
+    const n = historicalData.length;
+    // Linear regression: y = intercept + slope * x (x = month index 0..n-1)
+    const sumX  = (n * (n - 1)) / 2;
+    const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
+    const sumY  = historicalData.reduce((s, d) => s + d.total, 0);
+    const sumXY = historicalData.reduce((s, d, i) => s + i * d.total, 0);
+    const denom = n * sumX2 - sumX * sumX;
+    const slope     = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+    const intercept = (sumY - slope * sumX) / n;
+
+    const currentDate  = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear  = currentDate.getFullYear();
+
+    return Array.from({ length: 6 }, (_, i) => {
+      const forecastDate = new Date(currentYear, currentMonth + i + 1, 1);
+      const x = n + i;
+      const predictedAmount = Math.max(0, intercept + slope * x);
+      const margin = predictedAmount * 0.15; // ±15% confidence band
+      return {
+        month: forecastDate.toLocaleString('default', { month: 'long' }),
+        year: forecastDate.getFullYear(),
+        predictedAmount,
+        upperBound: predictedAmount + margin,
+        lowerBound: Math.max(0, predictedAmount - margin),
+        confidence: Math.max(0.55, Math.min(0.80, 0.75 - i * 0.03)), // confidence decays with distance
+      };
+    });
   };
 
   // Transform budget predictions into monthly forecast data
@@ -602,7 +651,14 @@ export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAna
               <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
                 <LineChart className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-4" />
                 <p className="text-muted-foreground font-medium">No forecast data available</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-2">More historical data is needed to generate accurate forecasts.</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-2">
+                  {monthlyData.length < 2
+                    ? 'At least 2 months of spending data is needed to generate forecasts. Start recording food consumption, assets, or vehicle rentals.'
+                    : 'Could not generate forecasts from the available data. Try refreshing.'}
+                </p>
+                <Button variant="outline" size={isMobile ? "sm" : "default"} className="mt-4" onClick={loadConsumptionData}>
+                  Retry
+                </Button>
               </div>
             ) : (
               <ScrollArea className={`${isMobile ? 'h-[450px]' : 'h-[500px]'} pr-2 sm:pr-4`}>
@@ -623,13 +679,21 @@ export function ConsumptionAnalysisDialog({ open, onOpenChange }: ConsumptionAna
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs text-xs sm:text-sm">
-                              <p>Forecasts are based on historical spending patterns and machine learning predictions for each expense category.</p>
+                              <p>{isMlForecast
+                                ? 'Forecasts are generated by machine learning models trained on your historical spending patterns across all expense categories.'
+                                : 'Forecasts are generated using linear trend analysis from your historical spending data. ML-enhanced forecasts become available as more data is collected.'
+                              }</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
-                      <CardDescription className={`${isMobile ? 'text-xs' : 'text-sm'}`}>
-                        ML-powered predictions for the next {categoryForecasts.length} months
+                      <CardDescription className={`${isMobile ? 'text-xs' : 'text-sm'} flex items-center gap-2`}>
+                        {isMlForecast
+                          ? `ML-powered predictions for the next ${categoryForecasts.length} months`
+                          : `Trend-based predictions for the next ${categoryForecasts.length} months`}
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isMlForecast ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'}`}>
+                          {isMlForecast ? 'ML' : 'Trend'}
+                        </span>
                       </CardDescription>
                     </CardHeader>
                     <CardContent className={`${isMobile ? 'px-3 py-2' : ''} grid grid-cols-3 gap-2 sm:gap-4`}>
