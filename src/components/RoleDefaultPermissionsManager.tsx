@@ -1,21 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { UserCog, Save, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  UserCog, Save, Plus, Trash2, ShieldCheck, Eye, Layout,
+  MousePointerClick, Settings2, ChevronRight, Check, X,
+} from "lucide-react";
 
-type Page = {
-  path: string;
-  name: string;
-};
+type Page = { path: string; name: string };
 
 type CustomRole = {
   id: string;
@@ -38,6 +36,31 @@ type RolePermission = {
   updatedAt: string;
 };
 
+const ROLE_META: Record<string, { label: string; description: string; gradient: string; badge: string }> = {
+  ADMIN:    { label: "Admin",    description: "Full access to all features and user management.",        gradient: "from-rose-500 to-pink-600",    badge: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" },
+  MANAGER:  { label: "Manager",  description: "Access to all features except admin settings.",           gradient: "from-violet-500 to-purple-600", badge: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
+  STAFF:    { label: "Staff",    description: "Access only to features explicitly granted.",             gradient: "from-blue-500 to-indigo-600",   badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  HANDHELD: { label: "Handheld", description: "Mobile handheld device user with limited access.",       gradient: "from-emerald-500 to-teal-600",  badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+};
+
+const BUTTON_GROUPS = [
+  {
+    label: "Assets",
+    icon: Layout,
+    buttons: [
+      { id: "dispose_asset",  label: "Dispose Asset" },
+      { id: "assets_button",  label: "Assets Button" },
+    ],
+  },
+  {
+    label: "Food Supply",
+    icon: Settings2,
+    buttons: [
+      { id: "edit_food_supply", label: "Edit Food Supply" },
+    ],
+  },
+];
+
 export default function RoleDefaultPermissionsManager() {
   const [selectedRole, setSelectedRole] = useState<string>("STAFF");
   const [availablePages, setAvailablePages] = useState<Page[]>([]);
@@ -49,81 +72,48 @@ export default function RoleDefaultPermissionsManager() {
     buttonVisibility: Record<string, boolean>;
   }>({ pageAccess: {}, canDeleteDocuments: false, buttonVisibility: {} });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
   const [isAddingRole, setIsAddingRole] = useState(false);
   const [isCustomRoleSelected, setIsCustomRoleSelected] = useState(false);
   const { toast } = useToast();
 
-  // Load available pages and role permissions
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
-        // Load available pages
-        const pagesResponse = await fetch("/api/admin/pages");
-        const pagesData = await pagesResponse.json();
+        const [pagesData, customRolesData, permissionsData] = await Promise.all([
+          fetch("/api/admin/pages").then(r => r.json()),
+          fetch("/api/admin/custom-roles").then(r => r.json()),
+          fetch("/api/admin/role-permissions").then(r => r.json()),
+        ]);
         setAvailablePages(pagesData);
-
-        // Load custom roles
-        const customRolesResponse = await fetch("/api/admin/custom-roles");
-        const customRolesData = await customRolesResponse.json();
         setCustomRoles(customRolesData);
 
-        // Load role permissions
-        const permissionsResponse = await fetch("/api/admin/role-permissions");
-        const permissionsData = await permissionsResponse.json();
-
-        // Convert to a map for easier access
         const permissionsMap: Record<string, RolePermission> = {};
-        permissionsData.forEach((permission: RolePermission) => {
-          // For standard roles, use the role name as key
-          if (permission.role) {
-            permissionsMap[permission.role] = permission;
-          }
-          // For custom roles, use 'custom_' + id as key
-          else if (permission.customRoleId) {
-            permissionsMap[`custom_${permission.customRoleId}`] = permission;
-          }
+        permissionsData.forEach((p: RolePermission) => {
+          if (p.role) permissionsMap[p.role] = p;
+          else if (p.customRoleId) permissionsMap[`custom_${p.customRoleId}`] = p;
         });
-
         setRolePermissions(permissionsMap);
 
-        // Set initial permission based on selected role
-        if (permissionsMap[selectedRole]) {
+        if (permissionsMap["STAFF"]) {
           setCurrentPermission({
-            pageAccess: permissionsMap[selectedRole].pageAccess,
-            canDeleteDocuments: permissionsMap[selectedRole].canDeleteDocuments,
-            buttonVisibility: permissionsMap[selectedRole].buttonVisibility || {},
+            pageAccess: permissionsMap["STAFF"].pageAccess,
+            canDeleteDocuments: permissionsMap["STAFF"].canDeleteDocuments,
+            buttonVisibility: permissionsMap["STAFF"].buttonVisibility || {},
           });
-          
-          // Check if this is a custom role
-          setIsCustomRoleSelected(selectedRole.startsWith('custom_'));
-        } else {
-          // Default empty permissions if none exist for the role
-          setCurrentPermission({
-            pageAccess: {},
-            canDeleteDocuments: false,
-            buttonVisibility: {},
-          });
-          setIsCustomRoleSelected(selectedRole.startsWith('custom_'));
         }
-      } catch (error) {
-        console.error("Error loading data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load role permissions data",
-          variant: "destructive",
-        });
+      } catch {
+        toast({ title: "Error", description: "Failed to load role permissions data", variant: "destructive" });
       } finally {
         setLoading(false);
       }
     };
-
     loadData();
   }, []);
 
-  // Update current permission when role changes
   useEffect(() => {
     if (rolePermissions[selectedRole]) {
       setCurrentPermission({
@@ -132,475 +122,372 @@ export default function RoleDefaultPermissionsManager() {
         buttonVisibility: rolePermissions[selectedRole].buttonVisibility || {},
       });
     } else {
-      // Default empty permissions if none exist for the role
-      setCurrentPermission({
-        pageAccess: {},
-        canDeleteDocuments: false,
-        buttonVisibility: {},
-      });
+      setCurrentPermission({ pageAccess: {}, canDeleteDocuments: false, buttonVisibility: {} });
     }
-    
-    // Check if this is a custom role
     setIsCustomRoleSelected(selectedRole.startsWith('custom_'));
   }, [selectedRole, rolePermissions]);
 
-  const handleRoleChange = (role: string) => {
-    setSelectedRole(role);
-  };
-  
   const handleAddCustomRole = async () => {
     if (!newRoleName.trim()) {
-      toast({
-        title: "Error",
-        description: "Role name is required",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Role name is required", variant: "destructive" });
       return;
     }
-    
     try {
       const response = await fetch("/api/admin/custom-roles", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: newRoleName.trim(),
-          description: newRoleDescription.trim() || null,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newRoleName.trim(), description: newRoleDescription.trim() || null }),
       });
-      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create custom role");
+        const err = await response.json();
+        throw new Error(err.error || "Failed to create custom role");
       }
-      
       const newRole = await response.json();
-      
-      // Add the new role to the list
-      setCustomRoles((prev) => [...prev, newRole]);
-      
-      // Reset form
+      setCustomRoles(prev => [...prev, newRole]);
       setNewRoleName("");
       setNewRoleDescription("");
       setIsAddingRole(false);
-      
-      // Select the new role
       setSelectedRole(`custom_${newRole.id}`);
-      
-      toast({
-        title: "Success",
-        description: `Custom role "${newRole.name}" created successfully.`,
-      });
+      toast({ title: "Role Created", description: `"${newRole.name}" is ready to configure.` });
     } catch (error) {
-      console.error("Error creating custom role:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create custom role",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Failed to create role", variant: "destructive" });
     }
   };
-  
+
   const handleDeleteCustomRole = async (roleId: string) => {
     try {
       const response = await fetch("/api/admin/custom-roles", {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: roleId,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: roleId }),
       });
-      
-      if (!response.ok) {
-        throw new Error("Failed to delete custom role");
-      }
-      
-      // Remove the role from the list
-      setCustomRoles((prev) => prev.filter((role) => role.id !== roleId));
-      
-      // If the deleted role was selected, switch to STAFF
-      if (selectedRole === `custom_${roleId}`) {
-        setSelectedRole("STAFF");
-      }
-      
-      // Remove from permissions map
-      const updatedPermissions = { ...rolePermissions };
-      delete updatedPermissions[`custom_${roleId}`];
-      setRolePermissions(updatedPermissions);
-      
-      toast({
-        title: "Success",
-        description: "Custom role deleted successfully.",
-      });
-    } catch (error) {
-      console.error("Error deleting custom role:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete custom role",
-        variant: "destructive",
-      });
+      if (!response.ok) throw new Error("Failed to delete custom role");
+      setCustomRoles(prev => prev.filter(r => r.id !== roleId));
+      if (selectedRole === `custom_${roleId}`) setSelectedRole("STAFF");
+      const updated = { ...rolePermissions };
+      delete updated[`custom_${roleId}`];
+      setRolePermissions(updated);
+      toast({ title: "Role Deleted", description: "Custom role removed successfully." });
+    } catch {
+      toast({ title: "Error", description: "Failed to delete custom role", variant: "destructive" });
     }
-  };
-
-  const handlePageAccessChange = (pagePath: string, enabled: boolean) => {
-    setCurrentPermission((prev) => ({
-      ...prev,
-      pageAccess: {
-        ...prev.pageAccess,
-        [pagePath]: enabled,
-      },
-    }));
-  };
-
-  const handleDocumentDeletePermissionChange = (enabled: boolean) => {
-    setCurrentPermission((prev) => ({
-      ...prev,
-      canDeleteDocuments: enabled,
-    }));
-  };
-  
-  const handleButtonVisibilityChange = (buttonId: string, enabled: boolean) => {
-    setCurrentPermission((prev) => ({
-      ...prev,
-      buttonVisibility: {
-        ...prev.buttonVisibility,
-        [buttonId]: enabled,
-      },
-    }));
   };
 
   const handleSelectAll = (enabled: boolean) => {
     const newPageAccess: Record<string, boolean> = {};
-    availablePages.forEach((page) => {
-      newPageAccess[page.path] = enabled;
-    });
-
-    setCurrentPermission((prev) => ({
-      ...prev,
-      pageAccess: newPageAccess,
-    }));
+    availablePages.forEach(page => { newPageAccess[page.path] = enabled; });
+    setCurrentPermission(prev => ({ ...prev, pageAccess: newPageAccess }));
   };
 
   const saveRolePermissions = async () => {
+    setSaving(true);
     try {
-      // Determine if we're saving for a standard role or custom role
-      const isCustomRole = selectedRole.startsWith('custom_');
-      let requestBody: any = {
+      const isCustom = selectedRole.startsWith('custom_');
+      const body: Record<string, unknown> = {
         pageAccess: currentPermission.pageAccess,
         canDeleteDocuments: currentPermission.canDeleteDocuments,
         buttonVisibility: currentPermission.buttonVisibility,
       };
-      
-      if (isCustomRole) {
-        // For custom roles, extract the ID from the selectedRole string
-        const customRoleId = selectedRole.replace('custom_', '');
-        requestBody.customRoleId = customRoleId;
-      } else {
-        // For standard roles, use the role name
-        requestBody.role = selectedRole;
-      }
-      
+      if (isCustom) body.customRoleId = selectedRole.replace('custom_', '');
+      else body.role = selectedRole;
+
       const response = await fetch("/api/admin/role-permissions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to save role permissions");
-      }
-
-      const savedPermission = await response.json();
-
-      // Update local state
-      setRolePermissions((prev) => ({
-        ...prev,
-        [selectedRole]: savedPermission,
-      }));
-
-      toast({
-        title: "Success",
-        description: isCustomRole
-          ? `Default permissions for custom role saved successfully.`
-          : `Default permissions for ${selectedRole} role saved successfully.`,
-      });
-    } catch (error) {
-      console.error("Error saving role permissions:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save role permissions",
-        variant: "destructive",
-      });
+      if (!response.ok) throw new Error("Failed to save");
+      const saved = await response.json();
+      setRolePermissions(prev => ({ ...prev, [selectedRole]: saved }));
+      toast({ title: "Permissions Saved", description: `Default permissions for ${isCustom ? customRoles.find(r => `custom_${r.id}` === selectedRole)?.name : selectedRole} updated.` });
+    } catch {
+      toast({ title: "Error", description: "Failed to save role permissions", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const getRoleBadge = (role: string) => {
-    switch (role) {
-      case "ADMIN":
-        return <Badge variant="secondary">Admin</Badge>;
-      case "MANAGER":
-        return <Badge variant="outline">Manager</Badge>;
-      case "STAFF":
-        return <Badge>Staff</Badge>;
-      case "HANDHELD":
-        return <Badge variant="outline">Handheld</Badge>;
-      default:
-        return <Badge>{role}</Badge>;
-    }
+  const enabledPageCount = availablePages.filter(p => currentPermission.pageAccess?.[p.path]).length;
+  const roleMeta = ROLE_META[selectedRole] ?? {
+    label: customRoles.find(r => `custom_${r.id}` === selectedRole)?.name ?? selectedRole,
+    description: customRoles.find(r => `custom_${r.id}` === selectedRole)?.description ?? "Custom role with configurable permissions.",
+    gradient: "from-slate-500 to-gray-600",
+    badge: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="w-12 h-12 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin" />
+        <p className="text-sm text-muted-foreground">Loading permissions…</p>
+      </div>
+    );
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Role Default Permissions</CardTitle>
-        <CardDescription>
-          Configure default page access permissions for each user role
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-gray-900"></div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="p-3 border rounded-md bg-slate-50 dark:bg-slate-900">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <UserCog className="h-5 w-5 mr-2 text-slate-500" />
-                  <Label className="font-medium">Select Role to Configure</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Select
-                    value={selectedRole}
-                    onValueChange={handleRoleChange}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ADMIN">Admin</SelectItem>
-                      <SelectItem value="MANAGER">Manager</SelectItem>
-                      <SelectItem value="STAFF">Staff</SelectItem>
-                      <SelectItem value="HANDHELD">Handheld</SelectItem>
-                      {customRoles.length > 0 && (
-                        <>
-                          <div className="py-2">
-                            <div className="px-2 text-xs font-medium">Custom Roles</div>
-                          </div>
-                          {customRoles.map((role) => (
-                            <SelectItem key={role.id} value={`custom_${role.id}`}>
-                              {role.name}
-                            </SelectItem>
-                          ))}
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  
-                  <Dialog open={isAddingRole} onOpenChange={setIsAddingRole}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Plus className="h-4 w-4 mr-1" /> Add Role
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Create New Role</DialogTitle>
-                        <DialogDescription>
-                          Add a new custom role to the system. You'll be able to configure its permissions after creation.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="role-name">Role Name</Label>
-                          <Input
-                            id="role-name"
-                            placeholder="Enter role name"
-                            value={newRoleName}
-                            onChange={(e) => setNewRoleName(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="role-description">Description (Optional)</Label>
-                          <Textarea
-                            id="role-description"
-                            placeholder="Enter role description"
-                            value={newRoleDescription}
-                            onChange={(e) => setNewRoleDescription(e.target.value)}
-                          />
-                        </div>
+    <div className="space-y-6">
+      {/* ── Role Selector Header ──────────────────────────────────── */}
+      <div className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${roleMeta.gradient} p-px`}>
+        <div className="rounded-2xl bg-card p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="h-6 w-6 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-bold tracking-tight">Role Default Permissions</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Configure what each role can see and access by default
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger className="w-44 rounded-xl border-border bg-background">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  <SelectItem value="MANAGER">Manager</SelectItem>
+                  <SelectItem value="STAFF">Staff</SelectItem>
+                  <SelectItem value="HANDHELD">Handheld</SelectItem>
+                  {customRoles.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
+                        Custom Roles
                       </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsAddingRole(false)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleAddCustomRole}>
-                          Create Role
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </div>
-              
-              {isCustomRoleSelected ? (
-                <div className="flex justify-between items-center mt-2">
-                  <p className="text-sm text-slate-500">
-                    {customRoles.find(r => `custom_${r.id}` === selectedRole)?.description || 
-                    "Custom role with configurable permissions."}
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-red-500 hover:text-red-700"
-                    onClick={() => {
-                      const customRoleId = selectedRole.replace('custom_', '');
-                      handleDeleteCustomRole(customRoleId);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" /> Delete Role
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500 mt-2">
-                  {selectedRole === "ADMIN"
-                    ? "Admin can access all features and manage users."
-                    : selectedRole === "MANAGER"
-                    ? "Manager can access all features except admin settings."
-                    : "Staff can only access features they have been granted permission to."}
-                </p>
-              )}
-              
-              <div className="mt-4 flex justify-between items-center">
-                <div>
-                  <span className="text-sm font-medium">Current Role: </span>
-                  {isCustomRoleSelected ? (
-                    <Badge variant="default" className="bg-purple-500">
-                      {customRoles.find(r => `custom_${r.id}` === selectedRole)?.name || "Custom Role"}
-                    </Badge>
-                  ) : (
-                    getRoleBadge(selectedRole)
+                      {customRoles.map(role => (
+                        <SelectItem key={role.id} value={`custom_${role.id}`}>{role.name}</SelectItem>
+                      ))}
+                    </>
                   )}
-                </div>
-                <div className="space-x-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleSelectAll(true)}
-                  >
-                    Select All
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleSelectAll(false)}
-                  >
-                    Deselect All
-                  </Button>
-                </div>
-              </div>
-            </div>
+                </SelectContent>
+              </Select>
 
-            <div className="mb-4 p-3 border rounded-md bg-slate-50 dark:bg-slate-900">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="font-medium">Document Delete Permission</Label>
-                  <p className="text-sm text-slate-500 mt-1">
-                    When enabled, users with this role can delete documents from assets
-                  </p>
-                </div>
-                <Switch
-                  checked={currentPermission.canDeleteDocuments}
-                  onCheckedChange={handleDocumentDeletePermissionChange}
-                />
-              </div>
-            </div>
-            
-            <div className="mb-4 p-3 border rounded-md bg-slate-50 dark:bg-slate-900">
-              <div>
-                <Label className="font-medium">Button Visibility Permissions</Label>
-                <p className="text-sm text-slate-500 mt-1 mb-4">
-                  Control which buttons are visible to users with this role
-                </p>
-                
-                <div className="space-y-4">
-                  <div className="p-2 border rounded-md">
-                    <h4 className="font-medium mb-2">Assets Page Buttons</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="flex items-center justify-between border p-2 rounded-md">
-                        <Label htmlFor="dispose-asset-btn">Dispose Asset Button</Label>
-                        <Switch
-                          id="dispose-asset-btn"
-                          checked={currentPermission.buttonVisibility?.['dispose_asset'] === true}
-                          onCheckedChange={(checked) => handleButtonVisibilityChange('dispose_asset', checked)}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between border p-2 rounded-md">
-                        <Label htmlFor="assets-button">Assets Button</Label>
-                        <Switch
-                          id="assets-button"
-                          checked={currentPermission.buttonVisibility?.['assets_button'] === true}
-                          onCheckedChange={(checked) => handleButtonVisibilityChange('assets_button', checked)}
-                        />
-                      </div>
+              <Dialog open={isAddingRole} onOpenChange={setIsAddingRole}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="rounded-xl gap-1.5">
+                    <Plus className="h-4 w-4" /> New Role
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Custom Role</DialogTitle>
+                    <DialogDescription>Define a new role and configure its permissions after creation.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="role-name">Role Name</Label>
+                      <Input id="role-name" placeholder="e.g. Supervisor" value={newRoleName} onChange={e => setNewRoleName(e.target.value)} className="rounded-xl" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="role-desc">Description <span className="text-muted-foreground">(optional)</span></Label>
+                      <Textarea id="role-desc" placeholder="Describe the purpose of this role…" value={newRoleDescription} onChange={e => setNewRoleDescription(e.target.value)} className="rounded-xl resize-none" rows={3} />
                     </div>
                   </div>
-                  
-                  <div className="p-2 border rounded-md">
-                    <h4 className="font-medium mb-2">Food Supply Page Buttons</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="flex items-center justify-between border p-2 rounded-md">
-                        <Label htmlFor="edit-food-supply-btn">Edit Food Supply Button</Label>
-                        <Switch
-                          id="edit-food-supply-btn"
-                          checked={currentPermission.buttonVisibility?.['edit_food_supply'] === true}
-                          onCheckedChange={(checked) => handleButtonVisibilityChange('edit_food_supply', checked)}
-                        />
-                      </div>
+                  <DialogFooter>
+                    <Button variant="outline" className="rounded-xl" onClick={() => setIsAddingRole(false)}>Cancel</Button>
+                    <Button className="rounded-xl" onClick={handleAddCustomRole}>Create Role</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+
+          {/* Role info strip */}
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t border-border">
+            <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full ${roleMeta.badge}`}>
+              <UserCog className="h-3.5 w-3.5" />
+              {roleMeta.label}
+            </span>
+            <p className="text-sm text-muted-foreground flex-1">{roleMeta.description}</p>
+            {isCustomRoleSelected && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl gap-1.5 text-xs"
+                onClick={() => handleDeleteCustomRole(selectedRole.replace('custom_', ''))}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete Role
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Three column grid: General | Buttons | Pages ─────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* General Permissions */}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-border bg-muted/30">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                <ShieldCheck className="h-4 w-4 text-white" />
+              </div>
+              <h3 className="font-semibold text-sm">General Permissions</h3>
+            </div>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium">Document Delete</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Allow deleting asset documents</p>
+              </div>
+              <Switch
+                checked={currentPermission.canDeleteDocuments}
+                onCheckedChange={v => setCurrentPermission(p => ({ ...p, canDeleteDocuments: v }))}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Button Visibility */}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-border bg-muted/30">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                <MousePointerClick className="h-4 w-4 text-white" />
+              </div>
+              <h3 className="font-semibold text-sm">Button Visibility</h3>
+            </div>
+          </div>
+          <div className="p-5 space-y-5">
+            {BUTTON_GROUPS.map(group => (
+              <div key={group.label}>
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <group.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group.label}</span>
+                </div>
+                <div className="space-y-2">
+                  {group.buttons.map(btn => (
+                    <div key={btn.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
+                      <span className="text-xs font-medium">{btn.label}</span>
+                      <Switch
+                        checked={currentPermission.buttonVisibility?.[btn.id] === true}
+                        onCheckedChange={v => setCurrentPermission(p => ({
+                          ...p,
+                          buttonVisibility: { ...p.buttonVisibility, [btn.id]: v },
+                        }))}
+                      />
                     </div>
-                  </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            ))}
+          </div>
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {availablePages.map((page) => (
-                <div
-                  key={page.path}
-                  className="flex items-center justify-between border p-3 rounded-md"
-                >
-                  <Label htmlFor={`${selectedRole}-${page.path}`} className="flex-1">
-                    {page.name}
-                  </Label>
+        {/* Page Access summary */}
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-border bg-muted/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <Eye className="h-4 w-4 text-white" />
+                </div>
+                <h3 className="font-semibold text-sm">Page Access</h3>
+              </div>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                {enabledPageCount}/{availablePages.length}
+              </span>
+            </div>
+          </div>
+          <div className="p-4 space-y-1.5">
+            <div className="flex gap-2 mb-3">
+              <Button size="sm" variant="outline" className="rounded-lg text-xs h-7 px-2.5 flex-1 gap-1" onClick={() => handleSelectAll(true)}>
+                <Check className="h-3 w-3" /> All
+              </Button>
+              <Button size="sm" variant="outline" className="rounded-lg text-xs h-7 px-2.5 flex-1 gap-1" onClick={() => handleSelectAll(false)}>
+                <X className="h-3 w-3" /> None
+              </Button>
+            </div>
+            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+              {availablePages.map(page => (
+                <div key={page.path} className="flex items-center justify-between py-1.5 px-2.5 rounded-lg hover:bg-muted/40 transition-colors group">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <ChevronRight className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
+                    <span className="text-xs text-foreground truncate">{page.name}</span>
+                  </div>
                   <Switch
-                    id={`${selectedRole}-${page.path}`}
                     checked={currentPermission.pageAccess?.[page.path] === true}
-                    onCheckedChange={(checked) =>
-                      handlePageAccessChange(page.path, checked)
-                    }
+                    onCheckedChange={v => setCurrentPermission(p => ({ ...p, pageAccess: { ...p.pageAccess, [page.path]: v } }))}
                   />
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
 
-            <div className="flex justify-end mt-6">
-              <Button
-                onClick={saveRolePermissions}
-                className="flex items-center"
-              >
-                <Save className="mr-2 h-4 w-4" />
-                Save Default Permissions
-              </Button>
+      {/* ── Full Page Access grid (detailed) ─────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="px-6 py-4 border-b border-border bg-muted/30 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center">
+              <Layout className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">All Pages</h3>
+              <p className="text-xs text-muted-foreground">{enabledPageCount} of {availablePages.length} pages enabled</p>
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="rounded-xl text-xs gap-1" onClick={() => handleSelectAll(true)}>
+              <Check className="h-3.5 w-3.5" /> Enable All
+            </Button>
+            <Button size="sm" variant="outline" className="rounded-xl text-xs gap-1" onClick={() => handleSelectAll(false)}>
+              <X className="h-3.5 w-3.5" /> Disable All
+            </Button>
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {availablePages.map(page => {
+              const enabled = currentPermission.pageAccess?.[page.path] === true;
+              return (
+                <div
+                  key={page.path}
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all cursor-pointer ${
+                    enabled
+                      ? "border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20"
+                      : "border-border bg-muted/20 hover:bg-muted/40"
+                  }`}
+                  onClick={() => setCurrentPermission(p => ({ ...p, pageAccess: { ...p.pageAccess, [page.path]: !enabled } }))}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${enabled ? "bg-blue-500" : "bg-muted-foreground/30"}`} />
+                    <Label className="text-xs font-medium cursor-pointer truncate">{page.name}</Label>
+                  </div>
+                  <Switch
+                    checked={enabled}
+                    onCheckedChange={v => setCurrentPermission(p => ({ ...p, pageAccess: { ...p.pageAccess, [page.path]: v } }))}
+                    onClick={e => e.stopPropagation()}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Save Bar ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/40 border border-border">
+        <div>
+          <p className="text-sm font-medium">Save Changes</p>
+          <p className="text-xs text-muted-foreground">Applying to all new users assigned the <span className="font-semibold">{roleMeta.label}</span> role</p>
+        </div>
+        <Button
+          onClick={saveRolePermissions}
+          disabled={saving}
+          className="rounded-xl gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-sm"
+        >
+          {saving ? (
+            <div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          Save Permissions
+        </Button>
+      </div>
+    </div>
   );
 }

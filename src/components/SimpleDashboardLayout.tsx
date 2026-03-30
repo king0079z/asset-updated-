@@ -45,7 +45,7 @@ export function SimpleDashboardLayout({ children }: { children: React.ReactNode 
   
   return (
     <div 
-      className="flex min-h-screen bg-background transition-colors duration-300 overflow-hidden"
+      className="flex min-h-screen bg-background transition-colors duration-300 overflow-x-hidden"
       dir={dir}
     >
       {/* Mobile sidebar backdrop - only shown when sidebar is open */}
@@ -68,7 +68,7 @@ export function SimpleDashboardLayout({ children }: { children: React.ReactNode 
       />
       
       {/* Main content area with responsive padding and margin */}
-      <main className={`flex-1 ${isRtl ? 'lg:mr-[280px]' : 'lg:ml-[280px]'} w-full h-screen overflow-y-auto`}>
+      <main className={`flex-1 min-w-0 ${isRtl ? 'lg:mr-[280px]' : 'lg:ml-[280px]'} h-screen overflow-y-auto`}>
         <div className="p-4 md:p-6 lg:p-8 pt-6 pb-28 lg:pb-8">
           {/* Mobile header without menu button - improved for RTL */}
           <div className="lg:hidden flex flex-col mb-6 bg-card p-3 rounded-lg shadow-sm">
