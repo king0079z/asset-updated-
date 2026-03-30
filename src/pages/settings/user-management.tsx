@@ -115,9 +115,12 @@ export default function UserManagementPage() {
   const [syncing, setSyncing] = useState(false);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
+  const [resetTab, setResetTab] = useState<"password" | "link">("link");
   const [tempPassword, setTempPassword] = useState("");
   const [showTempPassword, setShowTempPassword] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [generatedLoginLink, setGeneratedLoginLink] = useState<string | null>(null);
   const { toast } = useToast();
 
   const toggleExpanded = (userId: string) =>
@@ -213,6 +216,26 @@ export default function UserManagementPage() {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setResettingPassword(false);
+    }
+  };
+
+  const handleGenerateLoginLink = async () => {
+    if (!resetPasswordUser) return;
+    setGeneratingLink(true);
+    setGeneratedLoginLink(null);
+    try {
+      const res = await fetch('/api/admin/users/generate-login-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: resetPasswordUser.id, email: resetPasswordUser.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate link');
+      setGeneratedLoginLink(data.link);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setGeneratingLink(false);
     }
   };
 
@@ -711,8 +734,8 @@ export default function UserManagementPage() {
                               {/* Actions */}
                               <div className="flex items-center gap-1.5 w-36 justify-end flex-shrink-0" onClick={e => e.stopPropagation()}>
                                 <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"
-                                  title="Reset password"
-                                  onClick={() => { setResetPasswordUser(user); setTempPassword(''); setShowTempPassword(false); }}>
+                                  title="Account access recovery"
+                                  onClick={() => { setResetPasswordUser(user); setTempPassword(''); setShowTempPassword(false); setGeneratedLoginLink(null); setResetTab("link"); }}>
                                   <KeyRound className="h-4 w-4" />
                                 </Button>
                                 <Button size="sm" variant="ghost" className="rounded-xl h-8 px-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
@@ -903,9 +926,11 @@ export default function UserManagementPage() {
         </div>
       </SimpleDashboardLayout>
 
-      {/* ── Reset Password Dialog ────────────────────────────────── */}
-      <Dialog open={!!resetPasswordUser} onOpenChange={open => { if (!open) { setResetPasswordUser(null); setTempPassword(''); } }}>
-        <DialogContent className="sm:max-w-md gap-0 p-0 overflow-hidden">
+      {/* ── Reset Password / Login Link Dialog ───────────────────── */}
+      <Dialog open={!!resetPasswordUser} onOpenChange={open => {
+        if (!open) { setResetPasswordUser(null); setTempPassword(''); setGeneratedLoginLink(null); setResetTab("link"); }
+      }}>
+        <DialogContent className="sm:max-w-lg gap-0 p-0 overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-6 py-5">
             <div className="flex items-center gap-3">
@@ -913,56 +938,125 @@ export default function UserManagementPage() {
                 <KeyRound className="h-5 w-5 text-white" />
               </div>
               <div>
-                <DialogTitle className="text-white font-bold">Reset User Password</DialogTitle>
-                <DialogDescription className="text-amber-100 text-xs mt-0.5">
+                <DialogTitle className="text-white font-bold">Account Access Recovery</DialogTitle>
+                <DialogDescription className="text-amber-100 text-xs mt-0.5 font-medium">
                   {resetPasswordUser?.email}
                 </DialogDescription>
               </div>
             </div>
           </div>
 
-          {/* Body */}
-          <div className="px-6 py-5 space-y-4">
-            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300">
-              Set a temporary password and share it with the user. They will be required to change it immediately after logging in.
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Temporary Password</Label>
-              <div className="relative">
-                <Input
-                  type={showTempPassword ? 'text' : 'password'}
-                  placeholder="Enter a temporary password (min 8 chars)"
-                  value={tempPassword}
-                  onChange={e => setTempPassword(e.target.value)}
-                  className="pr-10 rounded-xl"
-                  autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') handleResetPassword(); }}
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowTempPassword(v => !v)}
-                >
-                  {showTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">Minimum 8 characters. Share this securely with the user.</p>
-            </div>
+          {/* Tab switcher */}
+          <div className="flex border-b border-border bg-muted/30">
+            <button
+              className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${resetTab === "link" ? "border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 bg-background" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => { setResetTab("link"); setGeneratedLoginLink(null); }}
+            >
+              <Mail className="h-4 w-4" /> Magic Login Link
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">Recommended</span>
+            </button>
+            <button
+              className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${resetTab === "password" ? "border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 bg-background" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setResetTab("password")}
+            >
+              <KeyRound className="h-4 w-4" /> Set Temp Password
+            </button>
           </div>
 
-          <DialogFooter className="px-6 pb-5 gap-2">
-            <Button variant="outline" className="rounded-xl" onClick={() => { setResetPasswordUser(null); setTempPassword(''); }}>
-              Cancel
-            </Button>
-            <Button
-              className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white gap-2"
-              onClick={handleResetPassword}
-              disabled={resettingPassword || tempPassword.length < 8}
-            >
-              {resettingPassword
-                ? <><div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Setting…</>
-                : <><KeyRound className="h-4 w-4" /> Set Temporary Password</>}
+          {/* Body */}
+          <div className="px-6 py-5 space-y-4">
+            {resetTab === "link" ? (
+              <>
+                <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
+                  Generate a one-time magic link for this user. They click it to sign in instantly — no password needed. After login, they will be prompted to set their permanent password.
+                </div>
+
+                {!generatedLoginLink ? (
+                  <Button
+                    className="w-full rounded-xl h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold gap-2"
+                    onClick={handleGenerateLoginLink}
+                    disabled={generatingLink}
+                  >
+                    {generatingLink
+                      ? <><div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Generating…</>
+                      : <><Mail className="h-4 w-4" /> Generate Magic Login Link</>}
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 font-medium flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                      Link generated! Copy and share it securely with {resetPasswordUser?.email}. It expires after one use.
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 px-3 py-2 rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground font-mono break-all select-all">
+                        {generatedLoginLink}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl flex-shrink-0 gap-1.5"
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedLoginLink);
+                          toast({ title: 'Copied!', description: 'Login link copied to clipboard.' });
+                        }}
+                      >
+                        <Copy className="h-4 w-4" /> Copy
+                      </Button>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full rounded-xl text-muted-foreground"
+                      onClick={() => { setGeneratedLoginLink(null); }}
+                    >
+                      Generate new link
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300">
+                  Set a temporary password and share it with the user. They will be required to set a new permanent password immediately after logging in.
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Temporary Password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showTempPassword ? 'text' : 'password'}
+                      placeholder="Enter a temporary password (min 8 chars)"
+                      value={tempPassword}
+                      onChange={e => setTempPassword(e.target.value)}
+                      className="pr-10 rounded-xl"
+                      autoFocus={resetTab === "password"}
+                      onKeyDown={e => { if (e.key === 'Enter') handleResetPassword(); }}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowTempPassword(v => !v)}
+                    >
+                      {showTempPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Minimum 8 characters. Share this securely with the user.</p>
+                </div>
+                <Button
+                  className="w-full rounded-xl h-11 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold gap-2"
+                  onClick={handleResetPassword}
+                  disabled={resettingPassword || tempPassword.length < 8}
+                >
+                  {resettingPassword
+                    ? <><div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Setting…</>
+                    : <><KeyRound className="h-4 w-4" /> Set Temporary Password</>}
+                </Button>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="px-6 pb-5">
+            <Button variant="outline" className="rounded-xl" onClick={() => { setResetPasswordUser(null); setTempPassword(''); setGeneratedLoginLink(null); setResetTab("link"); }}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
