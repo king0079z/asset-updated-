@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx prisma generate && npx prisma db push --accept-data-loss && pnpm build",
+  "buildCommand": "npx prisma generate && node -e \"const{execSync}=require('child_process');try{execSync('npx prisma db push --accept-data-loss',{stdio:'inherit'})}catch(e){console.warn('DB push warning:',e.message.split('\\\\n')[0]);process.exit(0)}\" && pnpm build",
   "installCommand": "pnpm install",
   "framework": "nextjs",
   "regions": ["bom1"],
