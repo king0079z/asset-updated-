@@ -109,36 +109,201 @@
   .free-badge { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 10px; background: #dcfce7; color: #16a34a; border: 1px solid #86efac; white-space: nowrap; }
   @media (min-width: 700px) { .opt-card[style*="span 2"] { grid-column: span 2; } }
 
-  /* ─── Signature / sign-off section ─── */
-  .signoff { margin: 0 32px 48px; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; }
-  .signoff h3 { font-size: 14px; font-weight: 800; color: #1e293b; margin-bottom: 16px; }
-  .signoff-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
-  .signoff-col label { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; display: block; margin-bottom: 8px; }
-  .signoff-col .line { border-bottom: 1.5px solid #cbd5e1; margin-top: 32px; }
-  .signoff-col .name { font-size: 12px; color: #64748b; margin-top: 6px; }
 
-  /* ─── PRINT STYLES ─── */
+  /* ─── PRINT STYLES — World-Class Full-Page Layout ─── */
   @media print {
-    body { background: #fff; font-size: 11px; }
-    .print-btn-wrap { display: none !important; }
-    .controls { display: none !important; }
-    .topbar { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 18px 24px; }
-    .summary { padding: 12px 24px; }
-    .progress-wrap { padding: 0 24px 8px; }
-    .table-wrap { padding: 0 24px 20px; }
-    .optional-section { margin: 0 24px 24px; }
-    .signoff { margin: 0 24px 32px; }
-    .sec-row td { background: #eff6ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .badge.comply { background: #dcfce7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .badge.optional { background: #dbeafe !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .opt-card { break-inside: avoid; }
-    table { break-inside: auto; font-size: 10px; }
-    tr { break-inside: avoid; }
-    th, td { padding: 7px 10px; }
-    .opt-grid { grid-template-columns: 1fr 1fr; }
-    .signoff-grid { grid-template-columns: 1fr 1fr 1fr; }
-    @page { margin: 1.5cm; size: A4; }
-    h1 { font-size: 16px !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    html, body { margin: 0; padding: 0; background: #fff !important; font-size: 10.5pt; font-family: 'Segoe UI', Arial, sans-serif; }
+
+    /* Page setup */
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    @page :first {
+      margin: 0;
+    }
+
+    /* Hide screen-only elements */
+    .print-btn-wrap,
+    .controls,
+    .no-print { display: none !important; }
+
+    /* ── Cover / header — full-width dark band ── */
+    .topbar {
+      background: #0f172a !important;
+      color: #fff !important;
+      padding: 28px 36px 24px !important;
+      margin: 0 !important;
+      page-break-after: avoid;
+      display: flex !important;
+    }
+    .topbar-logo-box { background: linear-gradient(135deg,#4f46e5,#2563eb) !important; }
+    .topbar h1 { font-size: 20pt !important; color: #fff !important; }
+    .topbar .sub, .topbar .meta { color: #94a3b8 !important; }
+    .topbar-right .doc-ver { color: #818cf8 !important; }
+    .comply-all-badge { background: #dcfce7 !important; color: #15803d !important; border-color: #86efac !important; }
+
+    /* ── Summary cards — compact row ── */
+    .summary {
+      display: flex !important;
+      padding: 14px 36px !important;
+      gap: 10px !important;
+      background: #f8fafc !important;
+      border-bottom: 2px solid #e5e7eb !important;
+      page-break-after: avoid;
+    }
+    .card {
+      flex: 1 !important;
+      padding: 10px 14px !important;
+      border-radius: 8px !important;
+      border: 1px solid #e5e7eb !important;
+      background: #fff !important;
+    }
+    .card.g { border-left: 3px solid #16a34a !important; }
+    .card.t { border-left: 3px solid #7c3aed !important; }
+    .card .num { font-size: 20pt !important; }
+    .card .lbl { font-size: 7.5pt !important; }
+
+    /* ── Progress bar ── */
+    .progress-wrap { padding: 8px 36px 6px !important; }
+    .progress-bar { height: 7px !important; border-radius: 4px !important; }
+    .legend { font-size: 8pt !important; gap: 12px !important; }
+
+    /* ── Section title ── */
+    .section-title {
+      font-size: 12pt !important;
+      font-weight: 900 !important;
+      color: #1e293b !important;
+      padding: 14px 36px 6px !important;
+      background: #fff !important;
+      page-break-after: avoid;
+    }
+
+    /* ── Main table ── */
+    .table-wrap { padding: 0 36px 20px !important; }
+    table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 8.5pt !important;
+      border: 1px solid #d1d5db !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      page-break-inside: auto !important;
+    }
+    thead { display: table-header-group !important; }
+    thead tr { background: #1e293b !important; }
+    th {
+      background: #1e293b !important;
+      color: #fff !important;
+      padding: 8px 10px !important;
+      font-size: 7.5pt !important;
+      font-weight: 800 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.05em !important;
+      border: none !important;
+      white-space: nowrap !important;
+    }
+    td {
+      padding: 7px 10px !important;
+      border-bottom: 1px solid #f1f5f9 !important;
+      font-size: 8pt !important;
+      vertical-align: top !important;
+    }
+    tr { page-break-inside: avoid !important; }
+    tr:hover td { background: transparent !important; }
+    tr:nth-child(even) td { background: #fafbff !important; }
+
+    /* Section header rows */
+    .sec-row td {
+      background: #1e40af !important;
+      color: #fff !important;
+      font-size: 8pt !important;
+      font-weight: 800 !important;
+      padding: 7px 10px !important;
+      border-left: 4px solid #60a5fa !important;
+      letter-spacing: 0.04em !important;
+      text-transform: uppercase !important;
+      page-break-after: avoid !important;
+    }
+
+    /* Badges */
+    .badge.comply {
+      background: #dcfce7 !important;
+      color: #15803d !important;
+      border: 1px solid #86efac !important;
+      font-size: 7.5pt !important;
+      padding: 3px 8px !important;
+      border-radius: 10px !important;
+      font-weight: 800 !important;
+    }
+
+    /* Refs */
+    .refs { display: none !important; }
+    .notes { font-size: 7.5pt !important; color: #475569 !important; }
+    .req-id { font-size: 7pt !important; color: #94a3b8 !important; }
+
+    /* ── Additional features section ── */
+    .optional-section {
+      margin: 8px 36px 24px !important;
+      page-break-before: always !important;
+    }
+    .optional-section h2 {
+      font-size: 14pt !important;
+      font-weight: 900 !important;
+      color: #1e293b !important;
+      margin-bottom: 4px !important;
+      page-break-after: avoid !important;
+    }
+    .optional-section > p {
+      font-size: 8.5pt !important;
+      color: #64748b !important;
+      margin-bottom: 12px !important;
+    }
+    .opt-grid {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr 1fr !important;
+      gap: 8px !important;
+    }
+    .opt-card {
+      padding: 10px 12px !important;
+      border-radius: 6px !important;
+      border: 1px solid #e5e7eb !important;
+      border-left: 3px solid #3b82f6 !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .opt-card.highlight {
+      grid-column: span 3 !important;
+      border-left-color: #7c3aed !important;
+      background: #faf5ff !important;
+    }
+    .opt-card .opt-title {
+      font-size: 8.5pt !important;
+      font-weight: 800 !important;
+      color: #1e293b !important;
+      margin-bottom: 4px !important;
+    }
+    .opt-card .opt-desc {
+      font-size: 7.5pt !important;
+      color: #64748b !important;
+      line-height: 1.5 !important;
+    }
+    .opt-badge, .free-badge {
+      font-size: 7pt !important;
+      padding: 1px 5px !important;
+      border-radius: 8px !important;
+      display: inline-block !important;
+    }
+    .opt-badge { background: #dbeafe !important; color: #1d4ed8 !important; border: 1px solid #93c5fd !important; }
+    .opt-badge.on-req { background: #fef9c3 !important; color: #a16207 !important; border-color: #fcd34d !important; }
+    .free-badge { background: #dcfce7 !important; color: #16a34a !important; border: 1px solid #86efac !important; }
+
+    /* Print footer */
+    .print-footer-bar { display: block !important; page-break-inside: avoid !important; margin-top: 20px !important; }
+
+    /* Hide screen decorations in print */
+    .card[style*="30K"] { display: none !important; }
   }
 </style>
 </head>
@@ -479,43 +644,13 @@
     </div>
 
   </div>
-</div>
 
-<!-- Compliance Statement -->
-<div class="optional-section" style="margin-bottom:24px">
-  <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:20px 24px">
-    <div style="font-size:14px;font-weight:800;color:#15803d;margin-bottom:8px">✓ Full Compliance Declaration</div>
-    <p style="font-size:13px;color:#166534;line-height:1.7;margin:0">
-      AssetXAI confirms <strong>full compliance</strong> with all mandatory requirements set forth in this RFQ. All 113 mandatory requirements across Sections 1–4 carry the status <strong>"Comply"</strong>, indicating complete and operational implementation within the AssetXAI platform. The platform is deployed on enterprise-grade cloud infrastructure (Vercel + Supabase), supports up to 30,000 assets, 5,000 active RFID tags, and 100+ concurrent handheld devices. The system is ready for immediate on-premise-equivalent deployment at all 7 QRCS sites upon award.
-    </p>
-  </div>
-</div>
-
-<!-- Sign-off Section -->
-<div class="signoff">
-  <h3>Document Sign-Off &amp; Authorisation</h3>
-  <div class="signoff-grid">
-    <div class="signoff-col">
-      <label>Prepared by (Vendor)</label>
-      <div class="line"></div>
-      <div class="name">AssetXAI Technical Team</div>
-      <div class="name" style="margin-top:2px;font-size:11px;color:#94a3b8">Date: April 1, 2026</div>
+  <!-- Print-only footer -->
+  <div style="display:none" class="print-footer-bar">
+    <div style="margin:0 36px;padding:10px 0;border-top:2px solid #1e293b;display:flex;justify-content:space-between;align-items:center;font-size:8pt;color:#475569">
+      <span><strong style="color:#0f172a">AssetXAI Platform</strong> &nbsp;·&nbsp; RFQ Compliance Matrix &nbsp;·&nbsp; Doc Ref: AX-RFQ-2026-001 v3.0</span>
+      <span>Qatar Red Crescent Society (QRCS) &nbsp;·&nbsp; April 2026 &nbsp;·&nbsp; Confidential</span>
     </div>
-    <div class="signoff-col">
-      <label>Reviewed by (Vendor)</label>
-      <div class="line"></div>
-      <div class="name">AssetXAI Management</div>
-      <div class="name" style="margin-top:2px;font-size:11px;color:#94a3b8">Date: _______________</div>
-    </div>
-    <div class="signoff-col">
-      <label>Accepted by (QRCS)</label>
-      <div class="line"></div>
-      <div class="name">Qatar Red Crescent Society</div>
-      <div class="name" style="margin-top:2px;font-size:11px;color:#94a3b8">Date: _______________</div>
-    </div>
-  </div>
-  <div style="margin-top:16px;padding-top:14px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8;text-align:center">
-    Document Ref: AX-RFQ-2026-001 &nbsp;|&nbsp; Version 3.0 &nbsp;|&nbsp; AssetXAI — Confidential &nbsp;|&nbsp; This document is prepared exclusively for Qatar Red Crescent Society procurement evaluation purposes.
   </div>
 </div>
 
