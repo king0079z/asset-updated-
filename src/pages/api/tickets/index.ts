@@ -450,6 +450,45 @@ async function ticketsHandler(
           };
           
           logApiEvent(`Ticket created successfully`, { ticketId: ticket.id });
+
+          // Auto-assign SLA policy based on category + priority (non-blocking)
+          try {
+            const { assignSLAToTicket } = await import('@/lib/sla/slaEngine');
+            await assignSLAToTicket({
+              ticketId: ticket.id,
+              organizationId: ticket.organizationId || null,
+              category: ticket.category || null,
+              priority: ticket.priority,
+            });
+          } catch (slaErr) {
+            // Non-blocking: SLA assignment failure does not break ticket creation
+            logApiEvent('SLA assignment failed (non-critical)', slaErr instanceof Error ? slaErr.message : slaErr);
+          }
+
+          // Auto-route based on routing rules (non-blocking)
+          try {
+            if (!ticket.assignedToId) {
+              const rule = await prisma.routingRule.findFirst({
+                where: {
+                  isActive: true,
+                  OR: [
+                    { category: ticket.category || null },
+                    { category: null },
+                  ],
+                  ...(ticket.priority ? { OR: [{ priority: ticket.priority }, { priority: null }] } : {}),
+                },
+                orderBy: { priority_order: 'asc' },
+              });
+              if (rule?.assignToUserId) {
+                await prisma.ticket.update({
+                  where: { id: ticket.id },
+                  data: { assignedToId: rule.assignToUserId },
+                });
+              }
+            }
+          } catch {
+            // Non-blocking
+          }
           
           // Explicitly log this as a user activity for the staff activity page
           try {

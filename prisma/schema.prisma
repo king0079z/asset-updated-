@@ -53,7 +53,7 @@ model Subscription {
   maxUsers             Int              @default(5)
   maxKitchens          Int              @default(2)
   maxRecipes           Int              @default(50)
-  maxAssets            Int              @default(100)
+  maxAssets            Int              @default(30000)
   features             Json             @default("{}")
   licenseKey           String?
   licenseKeyCreatedAt  DateTime?
@@ -113,6 +113,10 @@ model User {
   id                       String               @id @db.Uuid
   email                    String               @unique
   phone                    String?              // Optional mobile/phone for ticket assignee contact
+  azureAdId                String?              @unique
+  displayName              String?
+  department               String?
+  jobTitle                 String?
   createdAt                DateTime             @default(now())
   status                   UserStatus           @default(PENDING)
   isAdmin                  Boolean              @default(false)
@@ -145,6 +149,16 @@ model User {
   organization             Organization?        @relation(fields: [organizationId], references: [id])
   vehicleMaintenances      VehicleMaintenance[]
   vehicles                 VehicleRental[]
+  borrowedAssets           AssetBorrow[]        @relation("BorrowedAssets")
+  assetAcknowledgments     AssetAcknowledgment[] @relation("AssetAcknowledgments")
+  policyAcceptances        PolicyAcceptance[]   @relation("PolicyAcceptances")
+  sparePartUsages          SparePartUsage[]     @relation("SparePartUsages")
+  approvalRequests         ApprovalRequest[]    @relation("ApprovalRequests")
+  approvalSteps            ApprovalStep[]       @relation("ApprovalSteps")
+  stocktakingExecutions    StocktakingPlan[]    @relation("StocktakingExecutor")
+  inspectionRoutes         InspectionRoute[]    @relation("InspectionRoutes")
+  inspectionCompletions    InspectionCompletion[] @relation("InspectionCompletions")
+  handheldSessions         HandheldSession[]    @relation("HandheldSessions")
 }
 
 model LicenseKeyRole {
@@ -186,6 +200,8 @@ model Vendor {
   foodSupplies        FoodSupply[]
   purchaseOrders      PurchaseOrder[]
   vehicleMaintenances VehicleMaintenance[]
+  spareParts          SparePart[]
+  serviceContracts    ServiceContract[]
   organization        Organization?        @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
@@ -223,18 +239,22 @@ model Asset {
   organization   Organization?   @relation(fields: [organizationId], references: [id])
   user           User            @relation(fields: [userId], references: [id])
   vendor         Vendor?         @relation(fields: [vendorId], references: [id])
-  documents      AssetDocument[]
-  history        AssetHistory[]
-  location       AssetLocation?
-  movements      AssetMovement[]
-  plannerTasks   PlannerTask[]
-  tickets        Ticket[]
-  rfidTag        RFIDTag?
+  documents        AssetDocument[]
+  history          AssetHistory[]
+  location         AssetLocation?
+  movements        AssetMovement[]
+  plannerTasks     PlannerTask[]
+  tickets          Ticket[]
+  rfidTag          RFIDTag?
+  borrows          AssetBorrow[]
+  acknowledgments  AssetAcknowledgment[]
+  serviceContracts ServiceContract[]
 
   @@index([userId])
   @@index([organizationId])
   @@index([status])
   @@index([createdAt])
+  @@index([organizationId, status])
 }
 
 model AssetMovement {
@@ -655,6 +675,12 @@ model Ticket {
   organizationId String?
   missionName    String?         // Mission/campaign (e.g. field deployment)
   resolveBy      DateTime?       // SLA: target resolution date
+  slaPolicyId    String?
+  slaBreached    Boolean         @default(false)
+  escalationLevel Int            @default(0)
+  lastEscalatedAt DateTime?
+  reopenReason   String?
+  teamId         String?
   source         String?         @default("INTERNAL") // "PORTAL" | "INTERNAL"
   ticketType     String?         @default("ISSUE")    // "ISSUE" | "REQUEST" | "INQUIRY" | "MANAGEMENT"
   category       String?                              // e.g. "DEVICES" | "ACCESS" | "SERVICE_DESK"
@@ -1023,6 +1049,10 @@ enum AssetStatus {
   DAMAGED
   CRITICAL
   LIKE_NEW
+  BORROWED
+  RETURNED
+  RESERVED
+  LOST_REPORTED
 }
 
 enum LocationType {
@@ -1077,8 +1107,11 @@ enum AssetHistoryAction {
 enum TicketStatus {
   OPEN
   IN_PROGRESS
+  PENDING
   RESOLVED
   CLOSED
+  ESCALATED
+  REOPENED
 }
 
 enum TicketPriority {
@@ -1132,6 +1165,448 @@ enum ErrorStatus {
   IGNORED
 }
 
+// ── New enums for world-class RFQ features ─────────────────────────────────
+
+enum AssetBorrowStatus {
+  BORROWED
+  RETURNED
+  OVERDUE
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalEntityType {
+  TICKET
+  BORROW
+  DISPOSAL
+  TRANSFER
+}
+
+enum StocktakingType {
+  FULL
+  RANDOM
+  SELF
+  AUTOMATIC
+}
+
+enum StocktakingStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum D365SyncDirection {
+  PUSH
+  PULL
+}
+
+enum D365SyncStatus {
+  PENDING
+  SUCCESS
+  ERROR
+  SKIPPED
+}
+
+enum PassagewayDirection {
+  ENTRY
+  EXIT
+  BOTH
+}
+
+// ── World-Class RFQ New Models ─────────────────────────────────────────────
+
+model SLAPolicy {
+  id              String   @id @default(cuid())
+  name            String
+  category        String   // ticket category this applies to
+  priority        String   // LOW | MEDIUM | HIGH | CRITICAL
+  responseHours   Float    @default(4)
+  resolutionHours Float    @default(24)
+  organizationId  String?
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, category, priority])
+  @@index([organizationId])
+}
+
+model EscalationRule {
+  id              String          @id @default(cuid())
+  name            String
+  level           Int             // 1 = first escalation, 2 = second, etc.
+  organizationId  String?
+  delayMinutes    Int             @default(60)
+  targetRole      String?         // UserRole to escalate to
+  targetUserId    String?         @db.Uuid
+  notifyTemplate  String?
+  enabled         Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  events          EscalationEvent[]
+
+  @@index([organizationId, level])
+}
+
+model EscalationEvent {
+  id              String         @id @default(cuid())
+  ticketId        String
+  ruleId          String
+  level           Int
+  notifiedUserIds Json           // array of user IDs notified
+  triggeredAt     DateTime       @default(now())
+  rule            EscalationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([triggeredAt])
+}
+
+model AssetBorrow {
+  id               String           @id @default(cuid())
+  assetId          String
+  borrowedById     String           @db.Uuid
+  borrowedAt       DateTime         @default(now())
+  expectedReturnAt DateTime
+  returnedAt       DateTime?
+  status           AssetBorrowStatus @default(BORROWED)
+  borrowLocation   String?
+  custodianName    String?
+  notes            String?
+  approvedById     String?          @db.Uuid
+  organizationId   String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  asset            Asset            @relation(fields: [assetId], references: [id])
+  borrowedBy       User             @relation("BorrowedAssets", fields: [borrowedById], references: [id])
+
+  @@index([assetId])
+  @@index([borrowedById])
+  @@index([expectedReturnAt, status])
+  @@index([organizationId])
+}
+
+model AssetAcknowledgment {
+  id            String   @id @default(cuid())
+  assetId       String
+  userId        String   @db.Uuid
+  acknowledgedAt DateTime @default(now())
+  ipAddress     String?
+  signature     Json?    // digital signature data
+  policyVersion String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  asset         Asset    @relation(fields: [assetId], references: [id])
+  user          User     @relation("AssetAcknowledgments", fields: [userId], references: [id])
+
+  @@index([assetId])
+  @@index([userId])
+}
+
+model PolicyDocument {
+  id             String            @id @default(cuid())
+  title          String
+  content        String            @db.Text
+  version        String            @default("1.0")
+  organizationId String?
+  effectiveDate  DateTime          @default(now())
+  isActive       Boolean           @default(true)
+  requiresAcceptance Boolean       @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  acceptances    PolicyAcceptance[]
+
+  @@index([organizationId])
+}
+
+model PolicyAcceptance {
+  id         String         @id @default(cuid())
+  policyId   String
+  userId     String         @db.Uuid
+  acceptedAt DateTime       @default(now())
+  ipAddress  String?
+  policy     PolicyDocument @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  user       User           @relation("PolicyAcceptances", fields: [userId], references: [id])
+
+  @@unique([policyId, userId])
+  @@index([userId])
+}
+
+model SparePart {
+  id             String           @id @default(cuid())
+  name           String
+  partNumber     String?          @unique
+  description    String?
+  quantity       Float            @default(0)
+  unitCost       Float            @default(0)
+  reorderLevel   Float            @default(5)
+  unit           String           @default("pcs")
+  assetType      AssetType?
+  vendorId       String?
+  organizationId String?
+  imageUrl       String?
+  location       String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  vendor         Vendor?          @relation(fields: [vendorId], references: [id])
+  usages         SparePartUsage[]
+
+  @@index([organizationId])
+  @@index([vendorId])
+}
+
+model SparePartUsage {
+  id          String    @id @default(cuid())
+  sparePartId String
+  ticketId    String?
+  assetId     String?
+  quantity    Float
+  usedAt      DateTime  @default(now())
+  userId      String    @db.Uuid
+  notes       String?
+  createdAt   DateTime  @default(now())
+  sparePart   SparePart @relation(fields: [sparePartId], references: [id])
+  user        User      @relation("SparePartUsages", fields: [userId], references: [id])
+
+  @@index([sparePartId])
+  @@index([ticketId])
+  @@index([usedAt])
+}
+
+model ServiceContract {
+  id               String   @id @default(cuid())
+  assetId          String?
+  vendorId         String?
+  contractNumber   String?  @unique
+  title            String
+  coverageDetails  String?  @db.Text
+  startDate        DateTime
+  endDate          DateTime
+  cost             Float    @default(0)
+  autoRenew        Boolean  @default(false)
+  organizationId   String?
+  status           String   @default("ACTIVE") // ACTIVE | EXPIRED | CANCELLED
+  notifyDaysBefore Int      @default(30)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  asset            Asset?   @relation(fields: [assetId], references: [id])
+  vendor           Vendor?  @relation(fields: [vendorId], references: [id])
+
+  @@index([organizationId])
+  @@index([endDate])
+  @@index([assetId])
+}
+
+model ApprovalChain {
+  id             String             @id @default(cuid())
+  name           String
+  description    String?
+  entityType     ApprovalEntityType
+  steps          Json               // ordered array: [{role, userId, order}]
+  organizationId String?
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  requests       ApprovalRequest[]
+
+  @@index([organizationId, entityType])
+}
+
+model ApprovalRequest {
+  id            String             @id @default(cuid())
+  chainId       String
+  entityId      String             // ticket ID, borrow ID, disposal asset ID, etc.
+  entityType    ApprovalEntityType
+  currentStep   Int                @default(0)
+  status        ApprovalStatus     @default(PENDING)
+  requestedById String             @db.Uuid
+  completedAt   DateTime?
+  notes         String?
+  organizationId String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  chain         ApprovalChain      @relation(fields: [chainId], references: [id])
+  steps         ApprovalStep[]
+  requestedBy   User               @relation("ApprovalRequests", fields: [requestedById], references: [id])
+
+  @@index([entityId, entityType])
+  @@index([requestedById])
+  @@index([status])
+}
+
+model ApprovalStep {
+  id            String          @id @default(cuid())
+  requestId     String
+  stepOrder     Int
+  assignedToId  String          @db.Uuid
+  status        ApprovalStatus  @default(PENDING)
+  decidedAt     DateTime?
+  comment       String?
+  createdAt     DateTime        @default(now())
+  request       ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assignedTo    User            @relation("ApprovalSteps", fields: [assignedToId], references: [id])
+
+  @@index([requestId])
+  @@index([assignedToId, status])
+}
+
+model WorkflowConfig {
+  id             String   @id @default(cuid())
+  organizationId String?
+  ticketCategory String
+  statuses       Json     // ordered array of status strings
+  customFields   Json?    // array of {name, type, required, options}
+  autoRoutingRules Json?  // array of routing rule configs
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, ticketCategory])
+  @@index([organizationId])
+}
+
+model RoutingRule {
+  id             String   @id @default(cuid())
+  organizationId String?
+  category       String?
+  priority       String?
+  assetType      String?
+  assignToRole   String?
+  assignToUserId String?  @db.Uuid
+  teamName       String?
+  isActive       Boolean  @default(true)
+  priority_order Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model StocktakingPlan {
+  id             String           @id @default(cuid())
+  type           StocktakingType  @default(FULL)
+  name           String
+  description    String?
+  scope          Json?            // {assetTypes, locations, categories}
+  executorId     String?          @db.Uuid
+  scheduledAt    DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  status         StocktakingStatus @default(PLANNED)
+  summaryReport  Json?
+  organizationId String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  executor       User?            @relation("StocktakingExecutor", fields: [executorId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([scheduledAt])
+}
+
+model InspectionRoute {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  assetIds       Json     // array of asset IDs
+  periodDays     Int      @default(30)
+  assignedToId   String?  @db.Uuid
+  organizationId String?
+  lastCompletedAt DateTime?
+  nextDueAt      DateTime?
+  deliveryRate   Float?   // % on-time delivery
+  successRate    Float?   // % successful inspections
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  assignedTo     User?    @relation("InspectionRoutes", fields: [assignedToId], references: [id])
+  completions    InspectionCompletion[]
+
+  @@index([organizationId])
+  @@index([assignedToId])
+}
+
+model InspectionCompletion {
+  id             String          @id @default(cuid())
+  routeId        String
+  completedById  String          @db.Uuid
+  completedAt    DateTime        @default(now())
+  isOnTime       Boolean         @default(true)
+  isSuccessful   Boolean         @default(true)
+  notes          String?
+  findings       Json?
+  route          InspectionRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  completedBy    User            @relation("InspectionCompletions", fields: [completedById], references: [id])
+
+  @@index([routeId])
+  @@index([completedAt])
+}
+
+model D365SyncLog {
+  id             String           @id @default(cuid())
+  entityType     String           // Asset | Disposal | Transfer
+  entityId       String
+  direction      D365SyncDirection @default(PUSH)
+  status         D365SyncStatus   @default(PENDING)
+  payload        Json?
+  responseData   Json?
+  errorMessage   String?
+  retryCount     Int              @default(0)
+  syncedAt       DateTime?
+  organizationId String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([entityId, entityType])
+  @@index([status])
+  @@index([organizationId, createdAt])
+}
+
+model PassagewayConfig {
+  id                  String              @id @default(cuid())
+  siteName            String
+  siteCode            String?
+  zoneId              String?
+  direction           PassagewayDirection @default(BOTH)
+  alertOnUnauthorized Boolean             @default(true)
+  readerMacAddress    String?
+  organizationId      String?
+  isActive            Boolean             @default(true)
+  notes               String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  zone                RFIDZone?           @relation(fields: [zoneId], references: [id])
+
+  @@index([organizationId])
+  @@index([zoneId])
+}
+
+model HandheldSession {
+  id             String   @id @default(cuid())
+  deviceId       String   // device identifier
+  deviceName     String?
+  userId         String   @db.Uuid
+  startedAt      DateTime @default(now())
+  endedAt        DateTime?
+  actionsLog     Json?    // array of {action, assetId, timestamp}
+  scanCount      Int      @default(0)
+  ticketsCreated Int      @default(0)
+  organizationId String?
+  appVersion     String?
+  platform       String?  // android | web
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation("HandheldSessions", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId, startedAt])
+}
+
 // ── RFID / BLE Asset Tracking ──────────────────────────────────────────────
 
 enum RFIDTagStatus {
@@ -1176,9 +1651,10 @@ model RFIDZone {
   organizationId String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
-  tags           RFIDTag[]   @relation("CurrentZone")
-  roomTags       RFIDTag[]   @relation("RoomTagZone")
+  tags           RFIDTag[]         @relation("CurrentZone")
+  roomTags       RFIDTag[]         @relation("RoomTagZone")
   scans          RFIDScan[]
+  passageways    PassagewayConfig[]
 }
 
 model RFIDTag {

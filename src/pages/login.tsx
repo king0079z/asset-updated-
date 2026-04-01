@@ -5,6 +5,7 @@ import { AuthContext } from '@/contexts/AuthContext';
 import { useToast } from "@/components/ui/use-toast";
 import { createClient } from '@/util/supabase/component';
 import { isSupabaseConfigured } from '@/util/supabase/env';
+import { MicrosoftButton } from '@/components/MicrosoftButton';
 import {
   Mail, Lock, Eye, EyeOff, Shield, ArrowRight,
   MapPin, Loader2, AlertTriangle, Package,
@@ -111,7 +112,8 @@ const ALERTS = [
 /* ── Page ────────────────────────────────────────────────────────────────── */
 export default function LoginPage() {
   const router = useRouter();
-  const { initializing, signIn, signOut } = useContext(AuthContext);
+  const { initializing, signIn, signOut, signInWithMicrosoft } = useContext(AuthContext);
+  const [msLoading, setMsLoading] = useState(false);
   const { toast } = useToast();
   const supabaseConfigured = isSupabaseConfigured();
 
@@ -463,10 +465,29 @@ export default function LoginPage() {
                 </div>
               </form>
 
+              {/* Divider */}
+              <div className="su4" style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0 16px' }}>
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }}/>
+                <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>OR CONTINUE WITH</span>
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }}/>
+              </div>
+
+              {/* Microsoft SSO */}
+              <div className="su4" style={{ marginBottom: 16 }}>
+                <MicrosoftButton
+                  onClick={async () => {
+                    setMsLoading(true);
+                    try { await signInWithMicrosoft(); } catch { setMsLoading(false); }
+                  }}
+                  loading={msLoading}
+                  mode="signin"
+                />
+              </div>
+
               {/* Security note */}
               <div className="su4" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18, padding: '9px 16px', borderRadius: 999, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
                 <CheckCircle style={{ width: 12, height: 12, color: '#10b981' }}/>
-                <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>256-bit SSL · SOC 2 Ready · Zero data sharing</span>
+                <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>256-bit SSL · SOC 2 Ready · Azure AD Compatible</span>
               </div>
 
               {/* KPI strip */}

@@ -3,6 +3,12 @@
   "installCommand": "pnpm install",
   "framework": "nextjs",
   "regions": ["bom1"],
+  "crons": [
+    { "path": "/api/sla/monitor", "schedule": "*/5 * * * *" },
+    { "path": "/api/borrowing/overdue", "schedule": "0 * * * *" },
+    { "path": "/api/spare-parts/low-stock-notify", "schedule": "0 8 * * *" },
+    { "path": "/api/service-contracts/expiry-notify", "schedule": "0 9 * * *" }
+  ],
   "env": {
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "NEXT_TELEMETRY_DISABLED": "1",

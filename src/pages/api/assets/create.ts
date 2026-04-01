@@ -298,6 +298,11 @@ export default async function handler(
       asset.id
     );
 
+    // Async D365 sync (non-blocking)
+    import('@/lib/dynamics365/syncAsset').then(({ pushAssetToD365 }) => {
+      pushAssetToD365(asset).catch(() => {});
+    }).catch(() => {});
+
     return res.status(201).json(asset);
   } catch (error) {
     console.error("Error creating asset:", error);

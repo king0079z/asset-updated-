@@ -15,6 +15,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithMicrosoft: () => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -28,6 +29,7 @@ export const AuthContext = createContext<AuthContextType>({
   signUp: async () => {},
   signInWithMagicLink: async () => {},
   signInWithGoogle: async () => {},
+  signInWithMicrosoft: async () => {},
   signOut: async () => {},
   resetPassword: async () => {},
   refreshUser: async () => {},
@@ -266,6 +268,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const signInWithMicrosoft = async () => {
+    if (!ensureSupabaseConfigured()) return;
+    const siteUrl = typeof window !== 'undefined'
+      ? window.location.origin
+      : (process.env.NEXT_PUBLIC_SITE_URL || '');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure' as Provider,
+      options: {
+        scopes: 'email profile openid User.Read',
+        redirectTo: `${siteUrl}/auth/callback`,
+      },
+    });
+    if (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Microsoft Sign-In Error',
+        description: error.message,
+      });
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     if (!ensureSupabaseConfigured()) return;
     clearCache();
@@ -326,6 +350,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signUp,
       signInWithMagicLink,
       signInWithGoogle,
+      signInWithMicrosoft,
       signOut,
       resetPassword,
       refreshUser,
