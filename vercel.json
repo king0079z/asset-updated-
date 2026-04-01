@@ -7,7 +7,8 @@
     { "path": "/api/sla/monitor", "schedule": "*/5 * * * *" },
     { "path": "/api/borrowing/overdue", "schedule": "0 * * * *" },
     { "path": "/api/spare-parts/low-stock-notify", "schedule": "0 8 * * *" },
-    { "path": "/api/service-contracts/expiry-notify", "schedule": "0 9 * * *" }
+    { "path": "/api/service-contracts/expiry-notify", "schedule": "0 9 * * *" },
+    { "path": "/api/notifications/reminders", "schedule": "0 7 * * *" }
   ],
   "env": {
     "NODE_OPTIONS": "--max-old-space-size=4096",
