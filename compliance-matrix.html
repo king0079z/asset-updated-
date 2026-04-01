@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Asset AI – RFQ Compliance Matrix</title>
+<style>
+  :root {
+    --green:  #16a34a; --green-bg:  #dcfce7;
+    --yellow: #ca8a04; --yellow-bg: #fef9c3;
+    --red:    #dc2626; --red-bg:    #fee2e2;
+    --blue:   #2563eb; --blue-bg:   #dbeafe;
+    --gray:   #6b7280; --gray-bg:   #f3f4f6;
+    --border: #e5e7eb;
+    --header: #1e293b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; color: #1e293b; font-size: 14px; }
+
+  /* ─── Top bar ─── */
+  .topbar { background: var(--header); color: #fff; padding: 18px 28px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .topbar h1 { font-size: 20px; font-weight: 700; flex: 1; }
+  .topbar .sub { font-size: 13px; color: #94a3b8; }
+
+  /* ─── Summary cards ─── */
+  .summary { display: flex; gap: 12px; padding: 20px 28px; flex-wrap: wrap; }
+  .card { flex: 1; min-width: 140px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; }
+  .card .num { font-size: 28px; font-weight: 800; }
+  .card .lbl { font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .card.g .num { color: var(--green); }
+  .card.y .num { color: var(--yellow); }
+  .card.r .num { color: var(--red); }
+  .card.b .num { color: var(--blue); }
+
+  /* ─── Filters ─── */
+  .controls { display: flex; gap: 10px; padding: 0 28px 16px; flex-wrap: wrap; align-items: center; }
+  .controls input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+  .controls select, .controls button { padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: #fff; cursor: pointer; }
+  .controls button.active { background: var(--header); color: #fff; border-color: var(--header); }
+  .filter-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-btns button { font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: #fff; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+  .filter-btns button.active { font-weight: 700; }
+  .filter-btns button.f-all.active  { background: #1e293b; color: #fff; border-color: #1e293b; }
+  .filter-btns button.f-yes.active  { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+  .filter-btns button.f-part.active { background: var(--yellow-bg); color: var(--yellow); border-color: var(--yellow); }
+  .filter-btns button.f-no.active   { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+  .filter-btns button.f-ext.active  { background: var(--blue-bg); color: var(--blue); border-color: var(--blue); }
+
+  /* ─── Table ─── */
+  .table-wrap { padding: 0 28px 40px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  thead { background: #f1f5f9; }
+  th { padding: 11px 14px; text-align: left; font-size: 12px; font-weight: 700; color: #475569; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafbfd; }
+
+  /* section header rows */
+  .sec-row td { background: #f8fafc; font-weight: 700; color: #334155; font-size: 13px; padding: 10px 14px; border-bottom: 1px solid var(--border); border-top: 2px solid var(--border); }
+  .sec-row td:first-child { border-left: 4px solid #3b82f6; }
+
+  /* badges */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .badge.yes  { background: var(--green-bg);  color: var(--green); }
+  .badge.part { background: var(--yellow-bg); color: var(--yellow); }
+  .badge.no   { background: var(--red-bg);    color: var(--red); }
+  .badge.ext  { background: var(--blue-bg);   color: var(--blue); }
+
+  /* ref chips */
+  .refs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .ref  { display: inline-block; background: #f1f5f9; color: #475569; border-radius: 4px; padding: 2px 6px; font-size: 11px; font-family: monospace; }
+
+  .req-id { color: #94a3b8; font-family: monospace; font-size: 11px; }
+  .notes  { color: #64748b; font-size: 12px; margin-top: 3px; font-style: italic; }
+
+  .hidden { display: none !important; }
+
+  /* progress bar */
+  .progress-wrap { padding: 0 28px 10px; }
+  .progress-bar { height: 8px; border-radius: 4px; background: #e5e7eb; display: flex; overflow: hidden; }
+  .progress-bar div { height: 100%; }
+  .p-yes  { background: var(--green); }
+  .p-part { background: var(--yellow); }
+  .p-no   { background: var(--red); }
+  .p-ext  { background: var(--blue); }
+  .legend { display: flex; gap: 16px; margin-top: 6px; font-size: 12px; flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>Asset AI — RFQ Compliance Matrix</h1>
+    <div class="sub">Asset Management &amp; Ticketing Maintenance Integrated with RFID Technology · QRCS</div>
+  </div>
+  <div class="sub">Generated: April 1, 2026</div>
+</div>
+
+<div class="summary" id="summaryCards"></div>
+<div class="progress-wrap">
+  <div class="progress-bar" id="progressBar"></div>
+  <div class="legend">
+    <span><i style="background:var(--green)"></i> Implemented</span>
+    <span><i style="background:var(--yellow)"></i> Partial</span>
+    <span><i style="background:var(--red)"></i> Not Implemented</span>
+    <span><i style="background:var(--blue)"></i> Extensible / Customisation Required</span>
+  </div>
+</div>
+
+<div class="controls">
+  <input type="text" id="searchBox" placeholder="Search requirements…" oninput="applyFilters()" />
+  <select id="sectionFilter" onchange="applyFilters()">
+    <option value="">All Sections</option>
+    <option value="1.1">1.1 System Management</option>
+    <option value="1.2">1.2 Asset Transaction Management</option>
+    <option value="1.3">1.3 Asset Stocktaking</option>
+    <option value="1.4">1.4 Asset O&amp;M Management</option>
+    <option value="1.5">1.5 Active Asset Management</option>
+    <option value="1.6">1.6 Asset Location Monitoring</option>
+    <option value="1.7">1.7 Asset Entry/Exit Management</option>
+    <option value="2.1">2.1 RFID Tag Support</option>
+    <option value="2.2">2.2 RFID Reader &amp; Handheld</option>
+    <option value="2.3">2.3 Asset Identification</option>
+    <option value="2.4">2.4 Asset Tracking &amp; Location</option>
+    <option value="2.5">2.5 Inventory &amp; Stock</option>
+    <option value="2.6">2.6 Asset Lifecycle</option>
+    <option value="2.7">2.7 Maintenance &amp; Warranty</option>
+    <option value="2.8">2.8 Security &amp; Access Control</option>
+    <option value="2.9">2.9 Alerts &amp; Notifications</option>
+    <option value="2.10">2.10 Reporting &amp; Analytics</option>
+    <option value="2.11">2.11 System Integration</option>
+    <option value="2.12">2.12 Compliance &amp; Audit</option>
+    <option value="2.13">2.13 Scalability &amp; Performance</option>
+    <option value="3.1">3.1 Ticket Creation</option>
+    <option value="3.2">3.2 RFID &amp; Handheld (Tickets)</option>
+    <option value="3.3">3.3 Ticket Classification</option>
+    <option value="3.4">3.4 Workflow &amp; Approval</option>
+    <option value="3.5">3.5 Maintenance &amp; Repair</option>
+    <option value="3.6">3.6 Ticket Notifications</option>
+    <option value="3.7">3.7 SLA &amp; Performance</option>
+    <option value="3.8">3.8 Ticket Tracking</option>
+    <option value="3.9">3.9 Ticket Reporting</option>
+    <option value="3.10">3.10 Ticket Audit Trail</option>
+    <option value="3.11">3.11 Ticket Security</option>
+    <option value="3.12">3.12 Ticket Integration</option>
+    <option value="3.13">3.13 Scalability</option>
+    <option value="3.14">3.14 Configuration &amp; Admin</option>
+    <option value="3.15">3.15 Data Migration</option>
+    <option value="4.1">4.1 User Access &amp; Profile</option>
+    <option value="4.2">4.2 Asset Visibility</option>
+    <option value="4.3">4.3 Asset Workflow Requests</option>
+    <option value="4.4">4.4 Asset Acknowledgment</option>
+    <option value="4.5">4.5 Incident Reporting</option>
+    <option value="4.6">4.6 Maintenance &amp; Warranty Info</option>
+    <option value="4.7">4.7 Asset Transfer &amp; Movement</option>
+    <option value="4.8">4.8 Documents &amp; Policies</option>
+    <option value="4.9">4.9 Portal Notifications</option>
+    <option value="4.10">4.10 Search &amp; Filters</option>
+    <option value="4.11">4.11 Audit &amp; History</option>
+    <option value="4.12">4.12 Integration &amp; Self-Service</option>
+  </select>
+  <div class="filter-btns">
+    <button class="f-all active" onclick="setStatus('all',this)">All</button>
+    <button class="f-yes"  onclick="setStatus('yes',this)">✅ Implemented</button>
+    <button class="f-part" onclick="setStatus('part',this)">⚠️ Partial</button>
+    <button class="f-no"   onclick="setStatus('no',this)">❌ Not Implemented</button>
+    <button class="f-ext"  onclick="setStatus('ext',this)">🔧 Extensible</button>
+  </div>
+</div>
+
+<div class="table-wrap">
+<table id="mainTable">
+<thead>
+  <tr>
+    <th style="width:80px">Ref</th>
+    <th>Requirement</th>
+    <th style="width:160px">Status</th>
+    <th>Evidence / Codebase Reference</th>
+    <th>Gaps / Notes</th>
+  </tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+// status: yes | part | no | ext
+const ROWS = [
+  // ── Section 1.1 System Management ─────────────────────────────────────────
+  { sec:"1.1", secTitle:"1.1 – System Management" },
+  { id:"1.1.1", sec:"1.1", req:"User management – Add, delete, modify, query asset administrators; upper/lower admin hierarchy; username, password, creation time, company, user level", status:"yes",
+    refs:["/api/admin/users/index.ts","/api/admin/users/delete.ts","/api/admin/users/reset-password.ts","/settings/user-management","/api/users/me.ts","User model (Prisma)"],
+    notes:"Full CRUD via admin API. Multi-org hierarchy via OrganizationMember. Password reset and deletion implemented." },
+  { id:"1.1.2", sec:"1.1", req:"Users can change their own passwords", status:"yes",
+    refs:["/api/users/change-password.ts","ForcePasswordChangeModal.tsx"],
+    notes:"Self-service password change API and forced-change modal both implemented." },
+  { id:"1.1.3", sec:"1.1", req:"Role management – Customize role types, add/delete/modify/query roles; custom function-module permissions", status:"yes",
+    refs:["/api/admin/custom-roles/index.ts","/api/admin/role-permissions/index.ts","CustomRole model","RoleDefaultPermission model","RoleDefaultPermissionsManager.tsx"],
+    notes:"Custom roles + per-role default permissions fully implemented." },
+  { id:"1.1.4", sec:"1.1", req:"Function menu management – Different menus and functions based on role/user/permissions", status:"yes",
+    refs:["/api/admin/users/update-page-access.ts","/api/admin/users/update-button-visibility.ts","/api/admin/pages.ts","User.pageAccess","User.buttonVisibility"],
+    notes:"Per-user page access and button visibility configurable by admins." },
+  { id:"1.1.5", sec:"1.1", req:"Organization structure management – Hierarchical enterprise structure; asset management separated from financial; ERP (Dynamics 365) data sharing", status:"part",
+    refs:["/api/organizations/index.ts","Organization model","OrganizationMember model","/settings/organization.tsx"],
+    notes:"Multi-org hierarchy implemented. ERP / Dynamics 365 integration NOT implemented — no connector or API bridge to D365 exists in the codebase." },
+  { id:"1.1.6", sec:"1.1", req:"Asset category management – Unified asset names and categories", status:"yes",
+    refs:["Asset.category field (Prisma)","EditAssetDialog.tsx","RegisterAssetForm.tsx"],
+    notes:"Category field on Asset model; managed via asset forms." },
+  { id:"1.1.7", sec:"1.1", req:"Asset status management – Customizable statuses: in use, in stock, returned, borrowed, transferred, scrapped, loss reported", status:"part",
+    refs:["Asset.status (Prisma)","ChangeAssetStatusDialog.tsx","/api/assets/[id]/dispose.ts"],
+    notes:"Status field exists and includes core states. Scrapping/loss-reporting via dispose API. Borrowed/returned as explicit workflow states are partial — borrowing as a dedicated module is not fully built out." },
+  { id:"1.1.8", sec:"1.1", req:"Review and approval process – Approval records, responsibility tracking, approver reminders, applicant notifications", status:"part",
+    refs:["UserStatus (pending/approved)","TicketHistory.tsx","Notification model","/api/notifications/index.ts"],
+    notes:"Ticket-level workflow has status tracking and history. A generic multi-step approval engine for asset transactions (borrow, transfer, scrap) is not a standalone module." },
+  { id:"1.1.9", sec:"1.1", req:"Log management – Record add/delete/modify on all assets; store operation time, asset ID, operator, operation type, IP address; admin log query and maintenance", status:"yes",
+    refs:["AuditLog model (Prisma)","audit-middleware.ts","/api/audit/index.ts","AuditLogViewer.tsx","AuditLogAdvancedSearch.tsx"],
+    notes:"Comprehensive audit log with type, severity, org scoping, operator. IP address logging depends on middleware implementation." },
+  { id:"1.1.10", sec:"1.1", req:"Overdue reminder – Remind when tasks approved, borrowed assets expire, warranty periods expire", status:"part",
+    refs:["Asset.nextServiceDate","Ticket.resolveBy","Notification model","/api/notifications/index.ts","VendorPerformanceReminders.tsx","LeadTimeNotificationsCard.tsx"],
+    notes:"Maintenance/warranty date fields exist. Ticket SLA resolve-by date exists. Automated scheduled reminders engine (cron-based push notifications) not confirmed in codebase." },
+
+  // ── Section 1.2 Asset Transaction Management ──────────────────────────────
+  { sec:"1.2", secTitle:"1.2 – Asset Transaction Management" },
+  { id:"1.2.1", sec:"1.2", req:"Asset card management – Enter one by one or batch import via Excel; extended card info customizable", status:"yes",
+    refs:["/api/assets/create.ts","/api/assets/index.ts","RegisterAssetForm.tsx","AssetBulkActionsDialog.tsx","xlsx (package dependency)"],
+    notes:"Single and batch creation via API. XLSX library present for import/export. Extended fields supported on Asset model." },
+  { id:"1.2.2", sec:"1.2", req:"Asset return management – Status changes from in use to in stock-returned", status:"part",
+    refs:["ChangeAssetStatusDialog.tsx","/api/assets/[id]/index.ts","AssetHistory model"],
+    notes:"Status can be changed to returned via UI. Dedicated return workflow module with custodian/warehouse specification is not a fully separate flow." },
+  { id:"1.2.3", sec:"1.2", req:"Asset borrowing management – Specify borrower, borrowing department, use location", status:"part",
+    refs:["Asset.assignedTo","Asset.location","/api/assets/[id]/assign.ts","AssignAssetDialog.tsx"],
+    notes:"Asset assignment covers borrower and location. Dedicated borrowing module with explicit borrow date/expected return date is partial." },
+  { id:"1.2.4", sec:"1.2", req:"Asset borrowing – Specify return warehouse, custodian, location; borrowing time + expected return time; overdue auto-prompt and statistics", status:"part",
+    refs:["Ticket.resolveBy","Notification model","/api/assets/[id]/assign.ts"],
+    notes:"Time-based return tracking with overdue notifications is partially implemented via ticket resolve-by. A dedicated borrowing schedule/overdue engine is not confirmed." },
+  { id:"1.2.5", sec:"1.2", req:"Asset allocation management – Change department, personnel, and location within enterprise", status:"yes",
+    refs:["/api/assets/[id]/move.ts","AssetMoveDialog.tsx","/api/assets/[id]/assign.ts","AssignAssetDialog.tsx","AssetHistory model"],
+    notes:"Full move and reassignment APIs with history tracking." },
+  { id:"1.2.6", sec:"1.2", req:"Asset disposal management – Scrap, transfer, loss reporting individually or in bulk; approval workflow; residual data retained; ERP status update; classified reports", status:"part",
+    refs:["/api/assets/[id]/dispose.ts","AssetDisposalDialog.tsx","AssetDisposalDetailsDialog.tsx","AssetBulkActionsDialog.tsx"],
+    notes:"Disposal (scrap/transfer/loss) implemented with history retention. Bulk disposal possible. ERP (Dynamics 365) status sync NOT implemented. Approval workflow for disposal not a dedicated flow." },
+
+  // ── Section 1.3 Asset Stocktaking ─────────────────────────────────────────
+  { sec:"1.3", secTitle:"1.3 – Asset Stocktaking" },
+  { id:"1.3.1", sec:"1.3", req:"Stocktaking modes: full, random, self-stocktaking, automatic (key assets)", status:"part",
+    refs:["/pages/audit/index.tsx","/api/audit/index.ts","HandheldAssetScanner.tsx","/pages/assets/handheld.tsx"],
+    notes:"Audit/inventory module exists with handheld scanning. Full and ad-hoc modes supported. Automatic key-asset stocktaking by scheduled time is not confirmed as a dedicated mode." },
+  { id:"1.3.2", sec:"1.3", req:"Stocktaking plan – type, scope, executor; auto-generate summary table; query by permission; export and print", status:"part",
+    refs:["/api/audit/report.ts","/api/audit/inventory-reports.ts","AuditLogReportGenerator.tsx","/reports/audit-print.tsx","AuditLogViewer.tsx"],
+    notes:"Audit reports and PDF export implemented. Formal stocktaking plan creation (assign executor, define scope) is partial." },
+
+  // ── Section 1.4 Asset O&M Management ──────────────────────────────────────
+  { sec:"1.4", secTitle:"1.4 – Asset O&M Management" },
+  { id:"1.4.1", sec:"1.4", req:"Set inspection routes, periods, and personnel; generate inspection tasks; track processes; delivery rate statistics", status:"part",
+    refs:["PlannerTask model","/pages/planner/index.tsx","/api/planner/index.ts","TaskCalendar.tsx","TaskKpiDashboard.tsx"],
+    notes:"Task planner with KPI tracking covers inspection scheduling partially. Dedicated route-based inspection with timely/successful delivery rate metrics is not a distinct module." },
+  { id:"1.4.2", sec:"1.4", req:"Maintenance operations for faulty assets; repair application and tracking; overdue maintenance reminders; periodic maintenance tasks", status:"yes",
+    refs:["/api/assets/[id]/health.ts","/api/assets/[id]/maintenance-predictions.ts","PredictiveMaintenanceCard.tsx","AssetHealthDashboard.tsx","VehicleMaintenance model","/api/tickets/index.ts"],
+    notes:"Asset health scoring, predictive maintenance, repair tickets. Ticket-based maintenance tracking with notifications. Periodic tasks via planner." },
+
+  // ── Section 1.5 Active Asset Management ───────────────────────────────────
+  { sec:"1.5", secTitle:"1.5 – Active Asset Management (RFID)" },
+  { id:"1.5.1", sec:"1.5", req:"Electronic map – display area locations on electronic map (extensible/customisation)", status:"ext",
+    refs:["/pages/rfid/floor-map.tsx","FloorMap3D.tsx","LiveTrackingMap.tsx","/api/rfid/map-data.ts","/api/rfid/floor-plans.ts","FloorPlan model (Prisma)"],
+    notes:"Floor map with RFID zone overlay implemented. 3D floor map component exists. Further customisation per-site may be needed." },
+  { id:"1.5.2", sec:"1.5", req:"Area location – Locate area of objects based on RFID card reading range", status:"yes",
+    refs:["RFIDZone model","RFIDScan model","RFIDTag model","/api/rfid/zones/index.ts","/api/rfid/locations.ts","AssetLocation model"],
+    notes:"Zone-based location detection implemented with RFID scan → zone resolution." },
+  { id:"1.5.3", sec:"1.5", req:"Asset area customization and alarm – Monitor entry/exit of important assets; alarm when asset leaves area", status:"yes",
+    refs:["RFIDAlertRule model","RFIDAlert model","/api/rfid/alert-rules.ts","/api/rfid/alerts.ts","AlertRulesPanel.tsx","AlertsLog.tsx"],
+    notes:"Configurable alert rules per zone/asset implemented. Alert generation and log viewing confirmed." },
+  { id:"1.5.4", sec:"1.5", req:"Quick online asset stocktaking – Policy-based: if asset info collected within period, considered in stock", status:"part",
+    refs:["/api/rfid/dashboard.ts","/api/rfid/stats.ts","RFIDDashboardCard.tsx"],
+    notes:"RFID dashboard tracks scan presence. Formal policy configuration for auto-stocktaking threshold is partial." },
+  { id:"1.5.5", sec:"1.5", req:"Asset flow path data statistics (extensible)", status:"ext",
+    refs:["/api/rfid/movement-history.ts","RFIDMovementTimeline.tsx","/api/assets/[id]/movement-history.ts"],
+    notes:"Movement history and timeline implemented. Advanced flow path analytics is extensible." },
+  { id:"1.5.6", sec:"1.5", req:"Asset area distribution statistics on electronic map (extensible)", status:"ext",
+    refs:["/api/rfid/map-data.ts","LiveTrackingMap.tsx","FloorMap3D.tsx"],
+    notes:"Map data API with zone distribution. Full distribution analytics on map is extensible." },
+  { id:"1.5.7", sec:"1.5", req:"Object tag information", status:"yes",
+    refs:["RFIDTag model","Asset.rfidTag","/api/rfid/tags/index.ts","/api/rfid/tags/[id].ts"],
+    notes:"Full tag CRUD with asset binding implemented." },
+
+  // ── Section 1.6 Asset Location Monitoring ─────────────────────────────────
+  { sec:"1.6", secTitle:"1.6 – Asset Location Monitoring" },
+  { id:"1.6.1", sec:"1.6", req:"Active RFID tag on each asset; uploads data at frequency; zone-based area determination; alarm for important assets moved out of zone", status:"yes",
+    refs:["RFIDTag (type: ACTIVE)","RFIDScan model","/api/rfid/webhook.ts","RFIDAlertRule model","RFIDAlert model"],
+    notes:"Active RFID webhook ingestion, zone-based location, alert rules per zone implemented." },
+  { id:"1.6.2", sec:"1.6", req:"Tag removal alarm – once tag attached, cannot be removed; alarm if removed", status:"part",
+    refs:["RFIDAlertRule model","RFIDAlert model","/api/rfid/alert-rules.ts"],
+    notes:"Alert rule framework supports custom triggers. Specific tamper/tag-removal event type depends on reader hardware sending tamper events to the webhook. Software side partially ready." },
+
+  // ── Section 1.7 Asset Entry/Exit Management ───────────────────────────────
+  { sec:"1.7", secTitle:"1.7 – Asset Entry/Exit Management" },
+  { id:"1.7.1", sec:"1.7", req:"Passageway access control reader at entrances/exits of 7 sites; automatic inbound/outbound recording", status:"part",
+    refs:["/api/rfid/webhook.ts","/api/rfid/zones/index.ts","RFIDScan model","AssetMovement model"],
+    notes:"Webhook endpoint ready to receive passageway reader events. Physical reader installation at 7 sites and site survey are vendor/hardware scope, not software." },
+  { id:"1.7.2", sec:"1.7", req:"Passageway reader records inbound/outbound; checks authorization; generates alarm for unauthorized entry/exit", status:"yes",
+    refs:["/api/rfid/webhook.ts","RFIDAlertRule model","RFIDAlert model","AlertsLog.tsx"],
+    notes:"Authorization checking and alarm generation implemented via alert rules. Passageway zone configuration needed per site." },
+
+  // ── Section 2.1 RFID Tag Support ──────────────────────────────────────────
+  { sec:"2.1", secTitle:"2 – RFID & Handheld · 2.1 RFID Tag Support" },
+  { id:"2.1.1", sec:"2.1", req:"Supply 5,000 Active RFID tags (battery-powered, long-range, 3–5 year life)", status:"no",
+    refs:[],
+    notes:"Hardware procurement — outside software scope. System software supports active RFID tags." },
+  { id:"2.1.2", sec:"2.1", req:"Supply 10,000 Passive RFID tags", status:"no",
+    refs:[],
+    notes:"Hardware procurement — outside software scope. System software supports passive RFID tags." },
+  { id:"2.1.3", sec:"2.1", req:"Compatibility with EPC Gen2, ISO standards", status:"part",
+    refs:["RFIDTag model","RFIDScan model","/api/rfid/webhook.ts"],
+    notes:"System is hardware-agnostic via webhook/API. Standards compliance depends on chosen reader hardware. No hard-coded standard restriction in software." },
+  { id:"2.1.4", sec:"2.1", req:"Tag read/write capability (where supported)", status:"part",
+    refs:["/api/rfid/tags/index.ts","/api/rfid/tags/[id].ts"],
+    notes:"Tag data management API supports read/write of tag records. Physical write capability is reader/hardware dependent." },
+  { id:"2.1.5", sec:"2.1", req:"Unique RFID tag–to–asset binding", status:"yes",
+    refs:["Asset.rfidTag (unique)","RFIDTag model","/api/rfid/tags/index.ts"],
+    notes:"1:1 binding enforced at database level." },
+
+  // ── Section 2.2 RFID Reader & Handheld ───────────────────────────────────
+  { sec:"2.2", secTitle:"2.2 – RFID Reader & Handheld Integration" },
+  { id:"2.2.1", sec:"2.2", req:"Supply 15 handheld devices", status:"no",
+    refs:[],
+    notes:"Hardware procurement — outside software scope." },
+  { id:"2.2.2", sec:"2.2", req:"Integration with RFID handheld readers (Android/Windows based)", status:"yes",
+    refs:["/pages/handheld/index.tsx","/pages/assets/handheld.tsx","HandheldAssetScanner.tsx","HandheldLayout.tsx"],
+    notes:"Browser-based handheld interface responsive for Android/Windows devices." },
+  { id:"2.2.3", sec:"2.2", req:"Support for built-in and external RFID scanners", status:"yes",
+    refs:["html5-qrcode (package)","BarcodeScanner2.tsx","EnhancedBarcodeScanner.tsx","/api/assets/scan.ts"],
+    notes:"QR/barcode scanning via camera. External RFID scanner input via webhook API." },
+  { id:"2.2.4", sec:"2.2", req:"Real-time tag reading via handheld devices", status:"yes",
+    refs:["/api/rfid/webhook.ts","HandheldAssetScanner.tsx","/api/assets/scan.ts"],
+    notes:"Real-time scan submission and response implemented." },
+  { id:"2.2.5", sec:"2.2", req:"Offline scanning with automatic sync when connected", status:"yes",
+    refs:["handheld/inventorySessionTypes.ts","ConnectivityMonitor.tsx","handheld/index.ts","OfflineTripMonitor.tsx"],
+    notes:"Offline session queuing with connectivity monitoring and auto-sync implemented." },
+  { id:"2.2.6", sec:"2.2", req:"Bluetooth / USB / WiFi connectivity support", status:"part",
+    refs:["html5-qrcode (camera/Bluetooth camera)"],
+    notes:"WiFi-based web scanning confirmed. USB/Bluetooth peripheral RFID reader pairing is device/OS level; software processes the output via API." },
+
+  // ── Section 2.3 Asset Identification & Registration ───────────────────────
+  { sec:"2.3", secTitle:"2.3 – Asset Identification & Registration" },
+  { id:"2.3.1", sec:"2.3", req:"Asset tagging using RFID (bulk and single)", status:"yes",
+    refs:["/api/rfid/tags/index.ts","AssetBulkActionsDialog.tsx","RegisterAssetForm.tsx"],
+    notes:"Single and batch RFID tag assignment supported." },
+  { id:"2.3.2", sec:"2.3", req:"Asset registration via handheld device", status:"yes",
+    refs:["/pages/assets/handheld.tsx","RegisterAssetForm.tsx","HandheldAssetScanner.tsx"],
+    notes:"Handheld registration flow implemented." },
+  { id:"2.3.3", sec:"2.3", req:"QR code and barcode coexistence with RFID", status:"yes",
+    refs:["TicketBarcodeDisplay.tsx","BatchPrintBarcodeDialog.tsx","/api/assets/scan.ts","/api/tickets/barcode.ts","RFIDTag model"],
+    notes:"Both barcode/QR and RFID systems operate in parallel." },
+  { id:"2.3.4", sec:"2.3", req:"Automatic asset data capture from RFID scans", status:"yes",
+    refs:["/api/assets/scan.ts","/api/rfid/webhook.ts","RFIDScan model"],
+    notes:"Scan events auto-populate asset location and movement history." },
+
+  // ── Section 2.4 Asset Tracking & Location ────────────────────────────────
+  { sec:"2.4", secTitle:"2.4 – Asset Tracking & Location Management" },
+  { id:"2.4.1", sec:"2.4", req:"Real-time asset detection (Active RFID)", status:"yes",
+    refs:["LiveTrackingMap.tsx","/api/rfid/dashboard.ts","RFIDScan model","/api/rfid/webhook.ts"],
+    notes:"Real-time detection via active tag webhook ingestion and live map." },
+  { id:"2.4.2", sec:"2.4", req:"Zone-based and location-based asset tracking", status:"yes",
+    refs:["RFIDZone model","AssetLocation model","/api/rfid/zones/index.ts","ZoneMapEditor.tsx"],
+    notes:"Zone editor and location tracking fully implemented." },
+  { id:"2.4.3", sec:"2.4", req:"Last-seen location for passive RFID assets", status:"yes",
+    refs:["AssetLocation model","RFIDScan.scannedAt","/api/assets/[id]/location.ts","AssetLocationDetailsDialog.tsx"],
+    notes:"Last-seen timestamp and location stored per scan." },
+  { id:"2.4.4", sec:"2.4", req:"Movement detection and logging", status:"yes",
+    refs:["AssetMovement model","RFIDScan model","/api/assets/[id]/movement-history.ts","/api/rfid/movement-history.ts","AssetMovementHistory.tsx","RFIDMovementTimeline.tsx"],
+    notes:"Full movement history with timestamps implemented." },
+  { id:"2.4.5", sec:"2.4", req:"Unauthorized movement alerts", status:"yes",
+    refs:["RFIDAlertRule model","RFIDAlert model","/api/rfid/alerts.ts","AlertsLog.tsx"],
+    notes:"Alert rules for unauthorized movement implemented." },
+
+  // ── Section 2.5 Inventory & Stock ─────────────────────────────────────────
+  { sec:"2.5", secTitle:"2.5 – Inventory & Stock Management" },
+  { id:"2.5.1", sec:"2.5", req:"Rapid bulk inventory scanning using handhelds", status:"yes",
+    refs:["HandheldInventoryVirtualList.tsx","HandheldAssetScanner.tsx","/pages/assets/handheld.tsx"],
+    notes:"Bulk scanning session with virtual list for high volume implemented." },
+  { id:"2.5.2", sec:"2.5", req:"Inventory reconciliation and variance reporting", status:"yes",
+    refs:["/api/audit/inventory-reports.ts","/api/inventory/missing-reports.ts","/reports/missing-inventory.tsx","AuditLogReportGenerator.tsx"],
+    notes:"Missing inventory reports and audit variance reporting implemented." },
+  { id:"2.5.3", sec:"2.5", req:"Scheduled and ad-hoc inventory audits", status:"yes",
+    refs:["/pages/audit/index.tsx","/api/audit/report.ts","PlannerTask model"],
+    notes:"Audit page with ad-hoc reporting. Scheduled audits via planner." },
+  { id:"2.5.4", sec:"2.5", req:"Inventory status updates via RFID scans", status:"yes",
+    refs:["/api/rfid/webhook.ts","RFIDScan model","AssetLocation model"],
+    notes:"RFID scan events update asset status and location." },
+
+  // ── Section 2.6 Asset Lifecycle ───────────────────────────────────────────
+  { sec:"2.6", secTitle:"2.6 – Asset Lifecycle Management" },
+  { id:"2.6.1", sec:"2.6", req:"Track asset lifecycle: procurement → assignment → maintenance → retirement", status:"yes",
+    refs:["AssetHistory model","AssetHistoryAction enum (Prisma)","AssetLifecycleVisualization.tsx","/api/assets/[id]/history.ts"],
+    notes:"Full lifecycle tracking with action-typed history. Lifecycle visualization component implemented." },
+  { id:"2.6.2", sec:"2.6", req:"Asset assignment and return using RFID confirmation", status:"part",
+    refs:["/api/assets/[id]/assign.ts","/api/assets/scan.ts","AssignAssetDialog.tsx"],
+    notes:"Assignment via scan implemented. RFID-confirmed return flow is partial." },
+  { id:"2.6.3", sec:"2.6", req:"Transfer of assets between users or locations", status:"yes",
+    refs:["/api/assets/[id]/move.ts","AssetMoveDialog.tsx","/api/stock-transfers/index.ts","StockTransfer model"],
+    notes:"Inter-user and inter-location transfer with stock transfer records implemented." },
+  { id:"2.6.4", sec:"2.6", req:"Decommissioning and disposal tracking", status:"yes",
+    refs:["/api/assets/[id]/dispose.ts","AssetDisposalDialog.tsx","AssetDisposalDetailsDialog.tsx"],
+    notes:"Disposal with history retention and classification implemented." },
+
+  // ── Section 2.7 Maintenance & Warranty ───────────────────────────────────
+  { sec:"2.7", secTitle:"2.7 – Maintenance & Warranty Tracking" },
+  { id:"2.7.1", sec:"2.7", req:"Maintenance events triggered by RFID scans", status:"part",
+    refs:["/api/assets/[id]/health.ts","/api/rfid/webhook.ts","/api/tickets/index.ts"],
+    notes:"RFID scan can trigger status updates. Auto-triggering a maintenance ticket from a scan event is partial." },
+  { id:"2.7.2", sec:"2.7", req:"Maintenance history linked to RFID tag / asset", status:"yes",
+    refs:["AssetHistory model","VehicleMaintenance model","/api/assets/[id]/history.ts","Asset.rfidTag"],
+    notes:"Maintenance events stored in history linked to asset (and thus RFID tag)." },
+  { id:"2.7.3", sec:"2.7", req:"Warranty and service contract tracking", status:"yes",
+    refs:["Asset.nextServiceDate","Asset.purchaseDate","AssetDetailsDialog.tsx"],
+    notes:"Service/warranty dates on asset model. View in asset details." },
+  { id:"2.7.4", sec:"2.7", req:"Maintenance alerts via handheld and portal", status:"yes",
+    refs:["PredictiveMaintenanceCard.tsx","AssetHealthDashboard.tsx","Notification model","/api/notifications/index.ts"],
+    notes:"Maintenance alerts through notifications and predictive maintenance cards." },
+
+  // ── Section 2.8 Security & Access Control ─────────────────────────────────
+  { sec:"2.8", secTitle:"2.8 – Security & Access Control" },
+  { id:"2.8.1", sec:"2.8", req:"Role-based access control on handheld devices", status:"yes",
+    refs:["ProtectedRoute.tsx","User.role","User.pageAccess","User.buttonVisibility","HandheldLayout.tsx"],
+    notes:"RBAC applied across all routes including handheld pages." },
+  { id:"2.8.2", sec:"2.8", req:"Secure authentication for handheld users", status:"yes",
+    refs:["Supabase Auth","ForcePasswordChangeModal.tsx","/api/users/change-password.ts"],
+    notes:"Supabase Auth with forced password change, session tokens." },
+  { id:"2.8.3", sec:"2.8", req:"Encrypted data transmission between readers and system", status:"yes",
+    refs:["HTTPS (Vercel/Next.js)","Supabase TLS"],
+    notes:"All traffic over HTTPS/TLS. Webhook endpoint secured." },
+  { id:"2.8.4", sec:"2.8", req:"Audit trail for all RFID scan activities", status:"yes",
+    refs:["RFIDScan model","AuditLog model","audit-middleware.ts"],
+    notes:"Every RFID scan stored with timestamp, location, asset. Audit middleware logs API calls." },
+
+  // ── Section 2.9 Alerts & Notifications ───────────────────────────────────
+  { sec:"2.9", secTitle:"2.9 – Alerts & Notifications" },
+  { id:"2.9.1", sec:"2.9", req:"Alerts for missing or unscanned assets", status:"yes",
+    refs:["/api/inventory/missing-reports.ts","/reports/missing-inventory.tsx","RFIDAlert model"],
+    notes:"Missing asset reports and RFID-based alert rules implemented." },
+  { id:"2.9.2", sec:"2.9", req:"Unauthorized removal or movement alerts (Active RFID)", status:"yes",
+    refs:["RFIDAlertRule model","RFIDAlert model","/api/rfid/alerts.ts","AlertsLog.tsx"],
+    notes:"Active RFID alert rules with tamper/unauthorized movement detection implemented." },
+  { id:"2.9.3", sec:"2.9", req:"Low battery alerts for Active RFID tags", status:"part",
+    refs:["RFIDTag.batteryLevel (if in schema)","RFIDAlert model"],
+    notes:"Alert framework exists. Low battery alert depends on active tag hardware transmitting battery data to the webhook. Software-side handling is partial." },
+  { id:"2.9.4", sec:"2.9", req:"Inventory and compliance alerts", status:"yes",
+    refs:["/api/audit/inventory-reports.ts","AiAlerts.tsx","RFIDAlert model","/api/notifications/index.ts"],
+    notes:"Inventory discrepancy and compliance alerts implemented." },
+
+  // ── Section 2.10 Reporting & Analytics ───────────────────────────────────
+  { sec:"2.10", secTitle:"2.10 – Reporting & Analytics" },
+  { id:"2.10.1", sec:"2.10", req:"RFID-based asset utilization reports", status:"yes",
+    refs:["/api/rfid/stats.ts","RFIDDashboardCard.tsx","/api/rfid/dashboard.ts"],
+    notes:"RFID scan statistics and utilization dashboard implemented." },
+  { id:"2.10.2", sec:"2.10", req:"Inventory accuracy and audit reports", status:"yes",
+    refs:["/api/audit/inventory-reports.ts","AuditLogReportGenerator.tsx","AuditRfidMapDialog.tsx","/reports/audit-print.tsx"],
+    notes:"Audit reports with PDF export implemented." },
+  { id:"2.10.3", sec:"2.10", req:"Asset movement and location history reports", status:"yes",
+    refs:["/api/assets/[id]/movement-history.ts","/api/rfid/movement-history.ts","RFIDMovementTimeline.tsx","AssetMovementHistory.tsx"],
+    notes:"Movement history with timeline visualization implemented." },
+  { id:"2.10.4", sec:"2.10", req:"Handheld device activity reports", status:"part",
+    refs:["/pages/staff-activity/index.tsx","/api/staff-activity/index.ts","StaffActivityViewer.tsx"],
+    notes:"Staff activity tracking available. Specific handheld-device-level activity report is partial." },
+
+  // ── Section 2.11 System Integration ──────────────────────────────────────
+  { sec:"2.11", secTitle:"2.11 – System Integration" },
+  { id:"2.11.1", sec:"2.11", req:"Integration with ERP Microsoft Dynamics 365", status:"no",
+    refs:[],
+    notes:"No D365 connector, OData client, or API bridge found in codebase. This is a significant gap that requires development." },
+  { id:"2.11.2", sec:"2.11", req:"API support for RFID readers and handheld apps", status:"yes",
+    refs:["/api/rfid/webhook.ts","/api/assets/scan.ts","/api/rfid/tags/index.ts","REST API (Next.js)"],
+    notes:"Full REST API available for RFID reader and handheld integration." },
+  { id:"2.11.3", sec:"2.11", req:"Data import/export for asset and tag records", status:"yes",
+    refs:["xlsx (package)","AssetBulkActionsDialog.tsx","/api/assets/index.ts","/api/rfid/tags/index.ts"],
+    notes:"Excel import/export via xlsx library. API-level data exchange available." },
+  { id:"2.11.4", sec:"2.11", req:"SSO and identity management integration (Azure AD)", status:"no",
+    refs:["Supabase Auth (Google OAuth only)","AuthContext.tsx"],
+    notes:"Only Google OAuth implemented. Azure AD / Microsoft Entra / SAML SSO is NOT implemented." },
+
+  // ── Section 2.12 Compliance & Audit ──────────────────────────────────────
+  { sec:"2.12", secTitle:"2.12 – Compliance & Audit" },
+  { id:"2.12.1", sec:"2.12", req:"RFID-based audit logs and traceability", status:"yes",
+    refs:["RFIDScan model","AuditLog model","/api/audit/index.ts","AuditLogViewer.tsx"],
+    notes:"Every RFID scan logged with full traceability chain." },
+  { id:"2.12.2", sec:"2.12", req:"Compliance with internal and regulatory requirements", status:"yes",
+    refs:["/settings/compliance.tsx","ComplianceFooter.tsx","AuditLog model"],
+    notes:"Compliance settings page and audit infrastructure implemented." },
+  { id:"2.12.3", sec:"2.12", req:"Evidence generation for audits (scan logs, timestamps, locations)", status:"yes",
+    refs:["RFIDScan model","AuditLog model","/api/audit/report-pdf.ts","AuditLogReportGenerator.tsx"],
+    notes:"PDF audit reports with timestamped scan evidence implemented." },
+
+  // ── Section 2.13 Scalability & Performance ────────────────────────────────
+  { sec:"2.13", secTitle:"2.13 – Scalability & Performance" },
+  { id:"2.13.1", sec:"2.13", req:"Support for large-scale RFID deployments", status:"yes",
+    refs:["Vercel serverless","PostgreSQL (Supabase)","HandheldInventoryVirtualList.tsx"],
+    notes:"Serverless architecture scales horizontally. Virtual list for large datasets." },
+  { id:"2.13.2", sec:"2.13", req:"High-speed bulk tag reading performance", status:"yes",
+    refs:["HandheldInventoryVirtualList.tsx","api-cache.ts","prefetch.ts"],
+    notes:"Optimized bulk scanning with caching and virtual rendering." },
+  { id:"2.13.3", sec:"2.13", req:"Configurable read ranges and scan modes", status:"part",
+    refs:["RFIDZone model","/api/rfid/zones/[id].ts"],
+    notes:"Zone configuration available. Physical read range is hardware-dependent." },
+  { id:"2.13.4", sec:"2.13", req:"Multi-site and multi-location support", status:"yes",
+    refs:["Organization model","OrganizationMember model","Location model","RFIDZone model"],
+    notes:"Multi-org, multi-location architecture fully implemented." },
+
+  // ── Section 3.1 Ticket Creation ───────────────────────────────────────────
+  { sec:"3.1", secTitle:"3 – Asset Ticketing System · 3.1 Ticket Creation & Submission" },
+  { id:"3.1.1", sec:"3.1", req:"Create tickets linked to specific assets", status:"yes",
+    refs:["/api/tickets/index.ts","Ticket.assetId","CreateTicketDialog.tsx","/api/assets/[id]/tickets.ts"],
+    notes:"Asset-linked ticket creation fully implemented." },
+  { id:"3.1.2", sec:"3.1", req:"Asset identification via RFID scan, barcode, or manual selection", status:"yes",
+    refs:["TicketBarcodeScanner.tsx","/api/assets/scan.ts","CreateTicketDialog.tsx"],
+    notes:"RFID scan, barcode scan, and manual asset selection all supported." },
+  { id:"3.1.3", sec:"3.1", req:"Multiple ticket types: incident, maintenance, damage, loss, request", status:"yes",
+    refs:["Ticket.category","Ticket.type","CreateTicketDialog.tsx","TicketCardView.tsx"],
+    notes:"Multiple configurable ticket types and categories implemented." },
+  { id:"3.1.4", sec:"3.1", req:"Ticket creation via web portal, mobile app, and email integration", status:"part",
+    refs:["/pages/portal/index.tsx","/pages/outlook/taskpane.tsx","CreateTicketDialog.tsx"],
+    notes:"Web portal and Outlook add-in implemented. Native mobile app does not exist (web-responsive only). Email-to-ticket creation not confirmed." },
+  { id:"3.1.5", sec:"3.1", req:"Attach photos, documents, and notes to tickets", status:"yes",
+    refs:["AssetDocument model","/api/assets/documents/upload.ts","AssetDocumentsTab.tsx"],
+    notes:"Document/photo upload to assets implemented. Ticket-level attachments via asset documents." },
+
+  // ── Section 3.2 RFID & Handheld (Tickets) ─────────────────────────────────
+  { sec:"3.2", secTitle:"3.2 – RFID & Handheld Integration (Tickets)" },
+  { id:"3.2.1", sec:"3.2", req:"Automatic asset ID through Active/Passive RFID scanning", status:"yes",
+    refs:["/api/rfid/webhook.ts","/api/assets/scan.ts","TicketBarcodeScanner.tsx"],
+    notes:"RFID scan auto-populates asset on ticket creation." },
+  { id:"3.2.2", sec:"3.2", req:"Ticket initiation directly from handheld RFID devices", status:"yes",
+    refs:["/pages/handheld/index.tsx","HandheldAssetScanner.tsx","CreateTicketDialog.tsx"],
+    notes:"Handheld device can initiate ticket creation after RFID scan." },
+  { id:"3.2.3", sec:"3.2", req:"Offline ticket creation with sync on connectivity", status:"yes",
+    refs:["ConnectivityMonitor.tsx","handheld/inventorySessionTypes.ts","OfflineTripMonitor.tsx"],
+    notes:"Offline queue and auto-sync implemented." },
+  { id:"3.2.4", sec:"3.2", req:"Asset data auto-populated from RFID scan", status:"yes",
+    refs:["/api/assets/scan.ts","RFIDScan model"],
+    notes:"Scan populates asset ID, location, and metadata automatically." },
+
+  // ── Section 3.3 Ticket Classification ─────────────────────────────────────
+  { sec:"3.3", secTitle:"3.3 – Ticket Classification & Prioritization" },
+  { id:"3.3.1", sec:"3.3", req:"Configurable ticket categories and subcategories", status:"yes",
+    refs:["Ticket.category","Ticket.subcategory","CreateTicketDialog.tsx"],
+    notes:"Category and subcategory fields on ticket model." },
+  { id:"3.3.2", sec:"3.3", req:"Priority levels: low, medium, high, critical", status:"yes",
+    refs:["TicketPriority enum (Prisma)","CreateTicketDialog.tsx","TicketCardView.tsx"],
+    notes:"Four priority levels implemented via enum." },
+  { id:"3.3.3", sec:"3.3", req:"SLA assignment based on asset type and priority", status:"part",
+    refs:["Ticket.resolveBy","TicketPriority enum"],
+    notes:"SLA resolve-by date field exists. Automated SLA policy engine (auto-assigning SLA based on category/priority) is not a dedicated module." },
+  { id:"3.3.4", sec:"3.3", req:"Automatic escalation rules", status:"no",
+    refs:[],
+    notes:"No escalation rule engine found. Ticket status workflow exists but no auto-escalation based on SLA breach time." },
+
+  // ── Section 3.4 Workflow & Approval ──────────────────────────────────────
+  { sec:"3.4", secTitle:"3.4 – Workflow & Approval Management" },
+  { id:"3.4.1", sec:"3.4", req:"Configurable ticket workflows", status:"part",
+    refs:["TicketStatus enum","EnhancedKanbanBoard.tsx","KanbanBoard.tsx"],
+    notes:"Kanban-based status workflow. Custom workflow configuration beyond preset statuses is partial." },
+  { id:"3.4.2", sec:"3.4", req:"Multi-level approval for asset-related requests", status:"part",
+    refs:["UserStatus (pending/approved)","Ticket.status","TicketHistory model"],
+    notes:"Single-level approval via ticket status. Multi-level hierarchical approval engine not implemented." },
+  { id:"3.4.3", sec:"3.4", req:"Auto-routing to responsible teams (IT, maintenance, vendor)", status:"part",
+    refs:["Ticket.assignedTo","Ticket.teamId","CreateTicketDialog.tsx"],
+    notes:"Manual assignment to users/teams. Automatic routing rules not confirmed." },
+  { id:"3.4.4", sec:"3.4", req:"Status tracking: open, in progress, pending, resolved, closed", status:"yes",
+    refs:["TicketStatus enum","TicketHistory model","TicketCardView.tsx","TicketListView.tsx"],
+    notes:"All standard statuses implemented with history tracking." },
+
+  // ── Section 3.5 Asset Maintenance & Repair ────────────────────────────────
+  { sec:"3.5", secTitle:"3.5 – Asset Maintenance & Repair Management" },
+  { id:"3.5.1", sec:"3.5", req:"Preventive and corrective maintenance tickets", status:"yes",
+    refs:["/api/tickets/index.ts","Ticket.category","PredictiveMaintenanceCard.tsx"],
+    notes:"Maintenance ticket types supported. Preventive (scheduled) and corrective (incident) both available." },
+  { id:"3.5.2", sec:"3.5", req:"Maintenance history linked to asset records", status:"yes",
+    refs:["AssetHistory model","/api/assets/[id]/history.ts","TicketHistory model"],
+    notes:"Full maintenance history per asset implemented." },
+  { id:"3.5.3", sec:"3.5", req:"Vendor/service provider ticket assignment", status:"yes",
+    refs:["Vendor model","VendorManagementDialog.tsx","/api/vendors/index.ts","Ticket.assignedTo"],
+    notes:"Vendors managed and can be assigned to tickets." },
+  { id:"3.5.4", sec:"3.5", req:"Spare parts and service tracking (optional)", status:"no",
+    refs:[],
+    notes:"No spare parts inventory or service parts tracking module found." },
+
+  // ── Section 3.6 Ticket Notifications ─────────────────────────────────────
+  { sec:"3.6", secTitle:"3.6 – Notifications & Alerts" },
+  { id:"3.6.1", sec:"3.6", req:"Email and in-system notifications for ticket updates", status:"yes",
+    refs:["Notification model","/api/notifications/index.ts","Supabase email (auth emails)"],
+    notes:"In-system notifications implemented. Email via Supabase auth system." },
+  { id:"3.6.2", sec:"3.6", req:"Alerts for SLA breach risks", status:"part",
+    refs:["Ticket.resolveBy","Notification model"],
+    notes:"Resolve-by date exists. Proactive SLA breach risk alerts not a confirmed dedicated feature." },
+  { id:"3.6.3", sec:"3.6", req:"Notifications for ticket assignment and resolution", status:"yes",
+    refs:["Notification model","/api/notifications/index.ts","TicketHistory model"],
+    notes:"Assignment and resolution events trigger notifications." },
+  { id:"3.6.4", sec:"3.6", req:"Reminders for pending actions", status:"part",
+    refs:["Notification model","VendorPerformanceReminders.tsx","LeadTimeNotificationsCard.tsx"],
+    notes:"Reminder notifications framework exists. Automated pending-action reminders scheduler not fully confirmed." },
+
+  // ── Section 3.7 SLA & Performance ────────────────────────────────────────
+  { sec:"3.7", secTitle:"3.7 – SLA & Performance Management" },
+  { id:"3.7.1", sec:"3.7", req:"Configurable SLAs per asset category", status:"no",
+    refs:[],
+    notes:"No SLA policy configuration engine. Only a single resolve-by date field on tickets." },
+  { id:"3.7.2", sec:"3.7", req:"SLA monitoring and breach alerts", status:"part",
+    refs:["Ticket.resolveBy","Notification model"],
+    notes:"Manual resolve-by date. Automated SLA breach monitoring engine not found." },
+  { id:"3.7.3", sec:"3.7", req:"Resolution time tracking", status:"yes",
+    refs:["TicketHistory model","Ticket.createdAt","Ticket.resolvedAt","TicketDashboard.tsx","/api/tickets/stats.ts"],
+    notes:"Resolution time calculable from creation and resolution timestamps." },
+  { id:"3.7.4", sec:"3.7", req:"SLA compliance reporting", status:"part",
+    refs:["/api/tickets/stats.ts","TicketDashboard.tsx","TicketsSummaryReport.tsx"],
+    notes:"Ticket stats and reports available. Dedicated SLA compliance % report is partial." },
+
+  // ── Section 3.8 Ticket Tracking & User Interaction ────────────────────────
+  { sec:"3.8", secTitle:"3.8 – Ticket Tracking & User Interaction" },
+  { id:"3.8.1", sec:"3.8", req:"End-user ticket status visibility", status:"yes",
+    refs:["/pages/tickets/index.tsx","/pages/tickets/[id]/index.tsx","TicketCardView.tsx","TicketListView.tsx"],
+    notes:"Full ticket visibility per user implemented." },
+  { id:"3.8.2", sec:"3.8", req:"Two-way communication within tickets", status:"yes",
+    refs:["TicketHistory model","/api/tickets/[id]/history.ts","TicketHistory.tsx"],
+    notes:"Comment/activity history within tickets supports two-way communication." },
+  { id:"3.8.3", sec:"3.8", req:"Commenting and activity logs", status:"yes",
+    refs:["TicketHistory model","TicketHistory.tsx","/api/tickets/[id]/history.ts"],
+    notes:"Full activity log with comments per ticket." },
+  { id:"3.8.4", sec:"3.8", req:"Ticket reopening functionality", status:"part",
+    refs:["TicketStatus enum","TicketHistory model"],
+    notes:"Status can be changed back to open. Explicit reopen action/reason tracking is partial." },
+
+  // ── Section 3.9 Ticket Reporting ──────────────────────────────────────────
+  { sec:"3.9", secTitle:"3.9 – Reporting & Analytics" },
+  { id:"3.9.1", sec:"3.9", req:"Ticket volume and trend reports", status:"yes",
+    refs:["/api/tickets/stats.ts","TicketDashboard.tsx","/pages/tickets/dashboard.tsx"],
+    notes:"Volume and trend statistics on ticket dashboard." },
+  { id:"3.9.2", sec:"3.9", req:"Asset-wise ticket analysis", status:"yes",
+    refs:["/api/assets/[id]/tickets.ts","AssetDetailsDialog.tsx"],
+    notes:"Ticket history per asset available." },
+  { id:"3.9.3", sec:"3.9", req:"SLA compliance and resolution reports", status:"part",
+    refs:["/api/tickets/stats.ts","TicketsSummaryReport.tsx"],
+    notes:"Resolution stats available. Formal SLA compliance % reporting is partial." },
+  { id:"3.9.4", sec:"3.9", req:"Technician and team performance reports", status:"yes",
+    refs:["/api/tickets/staff-stats.ts","/api/audit/staff-performance.ts","StaffActivityViewer.tsx"],
+    notes:"Staff performance and ticket stats per technician implemented." },
+
+  // ── Section 3.10 Ticket Audit Trail ──────────────────────────────────────
+  { sec:"3.10", secTitle:"3.10 – Audit Trail & Compliance" },
+  { id:"3.10.1", sec:"3.10", req:"Full audit trail for all ticket activities", status:"yes",
+    refs:["TicketHistory model","AuditLog model","audit-middleware.ts"],
+    notes:"Every ticket action logged in TicketHistory and AuditLog." },
+  { id:"3.10.2", sec:"3.10", req:"Timestamped logs of actions and status changes", status:"yes",
+    refs:["TicketHistory.createdAt","AuditLog.createdAt"],
+    notes:"All logs timestamped at database level." },
+  { id:"3.10.3", sec:"3.10", req:"Compliance reporting for internal and external audits", status:"yes",
+    refs:["/api/audit/report-pdf.ts","AuditLogReportGenerator.tsx","/settings/compliance.tsx"],
+    notes:"PDF compliance reports and compliance settings page implemented." },
+
+  // ── Section 3.11 Ticket Security ─────────────────────────────────────────
+  { sec:"3.11", secTitle:"3.11 – Security & Access Control" },
+  { id:"3.11.1", sec:"3.11", req:"Role-based access control", status:"yes",
+    refs:["User.role","CustomRole model","ProtectedRoute.tsx","User.pageAccess"],
+    notes:"Full RBAC with custom roles and per-page access control." },
+  { id:"3.11.2", sec:"3.11", req:"Secure authentication for users and technicians", status:"yes",
+    refs:["Supabase Auth","ForcePasswordChangeModal.tsx"],
+    notes:"Supabase Auth with secure session management." },
+  { id:"3.11.3", sec:"3.11", req:"Segregation of duties: requester, approver, resolver", status:"part",
+    refs:["User.role","Ticket.assignedTo","TicketStatus enum"],
+    notes:"Role separation possible via custom roles. Formal workflow segregation not a dedicated engine." },
+  { id:"3.11.4", sec:"3.11", req:"Data encryption and secure storage", status:"yes",
+    refs:["Supabase (encrypted at rest)","HTTPS/TLS (Vercel)"],
+    notes:"Data encrypted in transit (TLS) and at rest (Supabase)." },
+
+  // ── Section 3.12 Ticket Integration ──────────────────────────────────────
+  { sec:"3.12", secTitle:"3.12 – System Integration" },
+  { id:"3.12.1", sec:"3.12", req:"Integration with Asset Management System", status:"yes",
+    refs:["Ticket.assetId","/api/assets/[id]/tickets.ts","inventoryAuditTicketLink.ts"],
+    notes:"Tickets fully integrated with asset management system." },
+  { id:"3.12.2", sec:"3.12", req:"Integration with RFID platform and handheld devices", status:"yes",
+    refs:["/api/rfid/webhook.ts","TicketBarcodeScanner.tsx","HandheldAssetScanner.tsx"],
+    notes:"Ticket creation from RFID scan on handheld implemented." },
+  { id:"3.12.3", sec:"3.12", req:"API support for third-party systems (ERP Dynamics 365)", status:"part",
+    refs:["REST API (Next.js pages/api)"],
+    notes:"REST API available for third-party integration. No D365-specific connector implemented." },
+  { id:"3.12.4", sec:"3.12", req:"Data export and reporting interfaces", status:"yes",
+    refs:["xlsx (package)","PrintTicketsReportButton.tsx","TicketsSummaryReport.tsx"],
+    notes:"Excel export and printable reports available." },
+
+  // ── Section 3.13 Scalability ──────────────────────────────────────────────
+  { sec:"3.13", secTitle:"3.13 – Scalability & Availability" },
+  { id:"3.13.1", sec:"3.13", req:"Multi-site and multi-organization operations", status:"yes",
+    refs:["Organization model","OrganizationSwitcher.tsx","/api/organizations/index.ts"],
+    notes:"Full multi-org, multi-site support." },
+  { id:"3.13.2", sec:"3.13", req:"High availability and performance", status:"yes",
+    refs:["Vercel (serverless edge)","Supabase (managed PostgreSQL)","api-cache.ts","enhanced-performance.ts"],
+    notes:"Serverless deployment on Vercel with Supabase HA database." },
+  { id:"3.13.3", sec:"3.13", req:"Configurable system parameters without custom coding", status:"part",
+    refs:["/settings/index.tsx","SystemSettings model","/settings/compliance.tsx"],
+    notes:"Settings page and system settings model. Some configuration still requires admin knowledge." },
+
+  // ── Section 3.14 Configuration & Admin ───────────────────────────────────
+  { sec:"3.14", secTitle:"3.14 – Configuration & Administration" },
+  { id:"3.14.1", sec:"3.14", req:"Admin dashboard for ticket rules and workflows", status:"part",
+    refs:["/settings/index.tsx","/pages/tickets/dashboard.tsx","EnhancedKanbanBoard.tsx"],
+    notes:"Admin settings and ticket dashboard exist. Dedicated ticket rule configuration UI is partial." },
+  { id:"3.14.2", sec:"3.14", req:"Custom ticket forms and fields", status:"part",
+    refs:["Ticket model (Prisma)","CreateTicketDialog.tsx"],
+    notes:"Ticket fields customizable via model extension. UI form builder for custom fields not implemented." },
+  { id:"3.14.3", sec:"3.14", req:"SLA and escalation configuration", status:"no",
+    refs:[],
+    notes:"No SLA policy configuration or escalation rule builder implemented." },
+  { id:"3.14.4", sec:"3.14", req:"User, role, and permission management", status:"yes",
+    refs:["/settings/user-management.tsx","RoleDefaultPermissionsManager.tsx","/api/admin/users/index.ts","/api/admin/role-permissions/index.ts"],
+    notes:"Comprehensive user, role, and permission management implemented." },
+
+  // ── Section 3.15 Data Migration ───────────────────────────────────────────
+  { sec:"3.15", secTitle:"3.15 – Data Migration" },
+  { id:"3.15.1", sec:"3.15", req:"Vendor should migrate ticketing and asset data from existing system to new system", status:"part",
+    refs:["xlsx (import/export)","AssetBulkActionsDialog.tsx","/api/demo/seed.ts"],
+    notes:"Bulk import via Excel available. A formal data migration service/tool for legacy system transfer is not a built-in automated module — migration services would be a project task." },
+
+  // ── Section 4.1 User Access & Profile ─────────────────────────────────────
+  { sec:"4.1", secTitle:"4 – User Portal & Mobile App · 4.1 User Access & Profile" },
+  { id:"4.1.1", sec:"4.1", req:"Secure login with SSO Microsoft Azure AD (username/password, MFA)", status:"part",
+    refs:["Supabase Auth","/pages/login.tsx","GoogleButton.tsx (Google OAuth)","ForcePasswordChangeModal.tsx"],
+    notes:"Supabase Auth with Google OAuth. Azure AD / Microsoft Entra SSO is NOT implemented. MFA not confirmed in codebase." },
+  { id:"4.1.2", sec:"4.1", req:"User profile management (personal info, department, role)", status:"yes",
+    refs:["User model (name, email, department, role)","AuthContext.tsx","/api/users/me.ts"],
+    notes:"User profile with department and role fully implemented." },
+  { id:"4.1.3", sec:"4.1", req:"Role-based access control (view/edit permissions)", status:"yes",
+    refs:["User.role","User.pageAccess","User.buttonVisibility","ProtectedRoute.tsx"],
+    notes:"Granular RBAC with view/edit control per page and button." },
+
+  // ── Section 4.2 Asset Visibility ──────────────────────────────────────────
+  { sec:"4.2", secTitle:"4.2 – Asset Visibility" },
+  { id:"4.2.1", sec:"4.2", req:"View assigned assets (hardware, software, licenses, etc.)", status:"yes",
+    refs:["/api/assets/mine.ts","UserAssetsPanel.tsx","/pages/assets/index.tsx"],
+    notes:"Per-user assigned asset list available." },
+  { id:"4.2.2", sec:"4.2", req:"Asset details: asset ID, type, model, serial number, status", status:"yes",
+    refs:["Asset model (all fields)","AssetDetailsDialog.tsx","/api/assets/[id]/index.ts"],
+    notes:"Full asset detail view implemented." },
+  { id:"4.2.3", sec:"4.2", req:"Asset lifecycle status: assigned, in use, under maintenance, retired", status:"yes",
+    refs:["Asset.status","AssetLifecycleVisualization.tsx","AssetHealthDashboard.tsx"],
+    notes:"All lifecycle statuses with visual lifecycle diagram." },
+
+  // ── Section 4.3 Asset Workflow Requests ───────────────────────────────────
+  { sec:"4.3", secTitle:"4.3 – Asset Workflow Requests" },
+  { id:"4.3.1", sec:"4.3", req:"Request new ticket for assets and non-assets", status:"yes",
+    refs:["CreateTicketDialog.tsx","/api/tickets/index.ts","/pages/portal/index.tsx"],
+    notes:"Ticket creation for any asset or general request via portal." },
+  { id:"4.3.2", sec:"4.3", req:"Request asset replacement or upgrade", status:"yes",
+    refs:["CreateTicketDialog.tsx (ticket type: request)","Ticket.category"],
+    notes:"Request ticket type covers replacement/upgrade." },
+  { id:"4.3.3", sec:"4.3", req:"Request asset return or de-allocation", status:"part",
+    refs:["ChangeAssetStatusDialog.tsx","/api/assets/[id]/assign.ts"],
+    notes:"Return flow available via status change. Formal self-service return request portal flow is partial." },
+  { id:"4.3.4", sec:"4.3", req:"Track request status: submitted, approved, rejected, completed", status:"yes",
+    refs:["TicketStatus enum","TicketHistory model","TicketCardView.tsx"],
+    notes:"Full status tracking with history." },
+
+  // ── Section 4.4 Asset Acknowledgment ──────────────────────────────────────
+  { sec:"4.4", secTitle:"4.4 – Asset Acknowledgment" },
+  { id:"4.4.1", sec:"4.4", req:"Digital acknowledgment of asset receipt", status:"part",
+    refs:["/api/assets/[id]/assign.ts","AssetHistory model"],
+    notes:"Assignment confirmation logged. Explicit digital acknowledgment form with user signature/acceptance is partial." },
+  { id:"4.4.2", sec:"4.4", req:"Accept asset usage policies and terms", status:"no",
+    refs:[],
+    notes:"No policy acceptance / terms of use acknowledgment flow for assets found." },
+  { id:"4.4.3", sec:"4.4", req:"View historical acknowledgment records", status:"part",
+    refs:["AssetHistory model","/api/assets/[id]/history.ts"],
+    notes:"History records include assignment events. Dedicated acknowledgment history is partial." },
+
+  // ── Section 4.5 Incident & Issue Reporting ────────────────────────────────
+  { sec:"4.5", secTitle:"4.5 – Incident & Issue Reporting" },
+  { id:"4.5.1", sec:"4.5", req:"Open ticket related to assigned assets", status:"yes",
+    refs:["CreateTicketDialog.tsx","/api/tickets/index.ts","UserAssetsPanel.tsx"],
+    notes:"Users can open tickets on their assigned assets." },
+  { id:"4.5.2", sec:"4.5", req:"Report asset-related issues or damage", status:"yes",
+    refs:["CreateTicketDialog.tsx (type: damage/incident)","Ticket.category"],
+    notes:"Damage and incident ticket types implemented." },
+  { id:"4.5.3", sec:"4.5", req:"Submit maintenance or repair requests", status:"yes",
+    refs:["CreateTicketDialog.tsx (type: maintenance)"],
+    notes:"Maintenance request ticket type available." },
+  { id:"4.5.4", sec:"4.5", req:"Attach photos or documents", status:"yes",
+    refs:["/api/assets/documents/upload.ts","AssetDocumentsTab.tsx"],
+    notes:"Photo and document attachment implemented." },
+  { id:"4.5.5", sec:"4.5", req:"Track incident resolution status", status:"yes",
+    refs:["TicketStatus enum","TicketHistory.tsx","/pages/tickets/[id]/index.tsx"],
+    notes:"Full resolution status tracking per ticket." },
+
+  // ── Section 4.6 Maintenance & Warranty Info ───────────────────────────────
+  { sec:"4.6", secTitle:"4.6 – Maintenance & Warranty Information" },
+  { id:"4.6.1", sec:"4.6", req:"View maintenance schedules", status:"yes",
+    refs:["AssetHealthDashboard.tsx","PredictiveMaintenanceCard.tsx","/api/assets/[id]/maintenance-predictions.ts"],
+    notes:"Maintenance schedule and predictions per asset." },
+  { id:"4.6.2", sec:"4.6", req:"View warranty and support expiry dates", status:"yes",
+    refs:["Asset.nextServiceDate","AssetDetailsDialog.tsx"],
+    notes:"Warranty/service dates visible in asset details." },
+  { id:"4.6.3", sec:"4.6", req:"Alerts for upcoming maintenance or warranty expiration", status:"yes",
+    refs:["Notification model","AssetHealthDashboard.tsx","PredictiveMaintenanceCard.tsx"],
+    notes:"Predictive alerts for upcoming maintenance needs." },
+
+  // ── Section 4.7 Asset Transfer & Movement ────────────────────────────────
+  { sec:"4.7", secTitle:"4.7 – Asset Transfer & Movement" },
+  { id:"4.7.1", sec:"4.7", req:"Request asset transfer between users or locations", status:"yes",
+    refs:["AssetMoveDialog.tsx","/api/assets/[id]/move.ts","CreateTicketDialog.tsx (type: transfer)"],
+    notes:"Transfer request via ticket or direct move implemented." },
+  { id:"4.7.2", sec:"4.7", req:"View asset movement history", status:"yes",
+    refs:["AssetMovementHistory.tsx","/api/assets/[id]/movement-history.ts","RFIDMovementTimeline.tsx"],
+    notes:"Full movement history with timeline and map view." },
+  { id:"4.7.3", sec:"4.7", req:"Confirmation of transfer completion", status:"yes",
+    refs:["AssetHistory model","AssetHistoryAction.MOVED"],
+    notes:"Transfer completion recorded in asset history." },
+
+  // ── Section 4.8 Documents & Policies ─────────────────────────────────────
+  { sec:"4.8", secTitle:"4.8 – Documents & Policies" },
+  { id:"4.8.1", sec:"4.8", req:"Access asset-related documents (user manuals, policies)", status:"yes",
+    refs:["AssetDocument model","AssetDocumentsTab.tsx","/api/assets/[id]/documents.ts"],
+    notes:"Document management per asset implemented." },
+  { id:"4.8.2", sec:"4.8", req:"Download warranty documents and compliance forms", status:"yes",
+    refs:["AssetDocumentsTab.tsx","/api/assets/documents/upload.ts"],
+    notes:"Document download from asset record available." },
+
+  // ── Section 4.9 Portal Notifications ─────────────────────────────────────
+  { sec:"4.9", secTitle:"4.9 – Notifications & Alerts" },
+  { id:"4.9.1", sec:"4.9", req:"Notifications for approvals, rejections, and updates", status:"yes",
+    refs:["Notification model","/api/notifications/index.ts"],
+    notes:"In-app notifications for ticket and asset events." },
+  { id:"4.9.2", sec:"4.9", req:"Alerts for maintenance, returns, or policy changes", status:"yes",
+    refs:["Notification model","PredictiveMaintenanceCard.tsx","AiAlerts.tsx"],
+    notes:"Maintenance and return alerts via notification system." },
+  { id:"4.9.3", sec:"4.9", req:"Email notifications", status:"part",
+    refs:["Supabase Auth emails","Notification model"],
+    notes:"Auth-triggered emails via Supabase. Custom in-app event email dispatch not a fully confirmed separate email service." },
+
+  // ── Section 4.10 Search & Filters ────────────────────────────────────────
+  { sec:"4.10", secTitle:"4.10 – Search & Filters" },
+  { id:"4.10.1", sec:"4.10", req:"Search assets by name, tag, or category", status:"yes",
+    refs:["/api/assets/index.ts (query params)","EnhancedAssetsOverviewCard.tsx","/pages/assets/index.tsx"],
+    notes:"Asset search by name, category, RFID tag implemented." },
+  { id:"4.10.2", sec:"4.10", req:"Filter assets by status, location, or type", status:"yes",
+    refs:["/api/assets/index.ts (filters)","AssetsOverviewCard.tsx"],
+    notes:"Multi-filter asset list with status, location, type filters." },
+
+  // ── Section 4.11 Audit & History ─────────────────────────────────────────
+  { sec:"4.11", secTitle:"4.11 – Audit & History" },
+  { id:"4.11.1", sec:"4.11", req:"View asset usage history", status:"yes",
+    refs:["AssetHistory model","/api/assets/[id]/history.ts","AssetDetailsDialog.tsx"],
+    notes:"Full usage history per asset." },
+  { id:"4.11.2", sec:"4.11", req:"View request and incident history", status:"yes",
+    refs:["TicketHistory model","/api/tickets/[id]/history.ts","TicketHistory.tsx"],
+    notes:"Complete request/incident history per ticket and per user." },
+  { id:"4.11.3", sec:"4.11", req:"Timestamped activity logs (read-only)", status:"yes",
+    refs:["AuditLog model","AuditLogViewer.tsx","AssetHistory.createdAt"],
+    notes:"Immutable timestamped logs with read-only viewer." },
+
+  // ── Section 4.12 Integration & Self-Service ────────────────────────────────
+  { sec:"4.12", secTitle:"4.12 – Integration & Self-Service" },
+  { id:"4.12.1", sec:"4.12", req:"Integration with ITSM / Helpdesk (if applicable)", status:"part",
+    refs:["/pages/portal/index.tsx","/pages/outlook/taskpane.tsx"],
+    notes:"Self-service portal and Outlook add-in. External ITSM integration not confirmed." },
+  { id:"4.12.2", sec:"4.12", req:"Single Sign-On (SSO) with Microsoft Azure AD", status:"no",
+    refs:["Supabase Auth (Google OAuth only)"],
+    notes:"Azure AD / Microsoft Entra SSO NOT implemented. Only Google OAuth available." },
+  { id:"4.12.3", sec:"4.12", req:"Self-service dashboard overview", status:"yes",
+    refs:["/pages/dashboard.tsx","DashboardLayout.tsx","/pages/portal/index.tsx"],
+    notes:"Full self-service dashboard implemented." },
+  { id:"4.12.4", sec:"4.12", req:"Mobile Application (Android and Apple)", status:"no",
+    refs:[],
+    notes:"No native mobile app. Mobile-responsive web app only (handheld-optimized). No React Native or native app in package.json." },
+];
+
+// ── Compute stats ─────────────────────────────────────────────────────────────
+const items = ROWS.filter(r => !r.secTitle);
+const counts = { yes:0, part:0, no:0, ext:0 };
+items.forEach(r => counts[r.status]++);
+const total = items.length;
+
+document.getElementById('summaryCards').innerHTML = `
+  <div class="card g"><div class="num">${counts.yes}</div><div class="lbl">✅ Implemented (${Math.round(counts.yes/total*100)}%)</div></div>
+  <div class="card y"><div class="num">${counts.part}</div><div class="lbl">⚠️ Partial (${Math.round(counts.part/total*100)}%)</div></div>
+  <div class="card r"><div class="num">${counts.no}</div><div class="lbl">❌ Not Implemented (${Math.round(counts.no/total*100)}%)</div></div>
+  <div class="card b"><div class="num">${counts.ext}</div><div class="lbl">🔧 Extensible (${Math.round(counts.ext/total*100)}%)</div></div>
+  <div class="card" style="border-left:4px solid #64748b"><div class="num">${total}</div><div class="lbl">Total Requirements</div></div>
+`;
+
+const pb = document.getElementById('progressBar');
+pb.innerHTML = `
+  <div class="p-yes"  style="width:${counts.yes/total*100}%"></div>
+  <div class="p-part" style="width:${counts.part/total*100}%"></div>
+  <div class="p-ext"  style="width:${counts.ext/total*100}%"></div>
+  <div class="p-no"   style="width:${counts.no/total*100}%"></div>
+`;
+
+// ── Render table ──────────────────────────────────────────────────────────────
+const labels = { yes:'✅ Implemented', part:'⚠️ Partial', no:'❌ Not Implemented', ext:'🔧 Extensible' };
+
+function renderRows() {
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  ROWS.forEach(row => {
+    if (row.secTitle) {
+      const tr = document.createElement('tr');
+      tr.className = 'sec-row';
+      tr.dataset.sec = row.sec;
+      tr.innerHTML = `<td colspan="5">${row.secTitle}</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+    const tr = document.createElement('tr');
+    tr.dataset.status = row.status;
+    tr.dataset.sec = row.sec;
+    tr.dataset.text = (row.req + ' ' + (row.notes||'')).toLowerCase();
+    const refs = (row.refs||[]).map(r=>`<span class="ref">${r}</span>`).join('');
+    tr.innerHTML = `
+      <td><span class="req-id">${row.id}</span></td>
+      <td>${row.req}</td>
+      <td><span class="badge ${row.status}">${labels[row.status]}</span></td>
+      <td><div class="refs">${refs || '<span style="color:#94a3b8;font-size:11px">—</span>'}</div></td>
+      <td><span class="notes">${row.notes||''}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+renderRows();
+
+// ── Filter logic ──────────────────────────────────────────────────────────────
+let activeStatus = 'all';
+
+function setStatus(s, btn) {
+  activeStatus = s;
+  document.querySelectorAll('.filter-btns button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function applyFilters() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const sec = document.getElementById('sectionFilter').value;
+
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    if (tr.classList.contains('sec-row')) { tr.classList.remove('hidden'); return; }
+    const matchStatus = activeStatus === 'all' || tr.dataset.status === activeStatus;
+    const matchSec    = !sec || tr.dataset.sec === sec;
+    const matchText   = !q   || tr.dataset.text.includes(q);
+    tr.classList.toggle('hidden', !(matchStatus && matchSec && matchText));
+  });
+
+  // Hide section headers if all their rows are hidden
+  document.querySelectorAll('.sec-row').forEach(sec => {
+    const secId = sec.dataset.sec;
+    const anyVisible = [...document.querySelectorAll(`#tableBody tr[data-sec="${secId}"]:not(.sec-row)`)].some(r=>!r.classList.contains('hidden'));
+    sec.classList.toggle('hidden', !anyVisible);
+  });
+}
+</script>
+</body>
+</html>
