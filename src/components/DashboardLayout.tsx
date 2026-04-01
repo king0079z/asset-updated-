@@ -21,6 +21,22 @@ import {
   Building2,
   Radio,
   ClipboardList,
+  ArrowLeftRight,
+  Wrench,
+  Shield,
+  FileCheck,
+  DoorOpen,
+  Smartphone,
+  Route,
+  FileText,
+  Database,
+  Clock,
+  GitBranch,
+  Sliders,
+  Mail,
+  TrendingUp,
+  Upload,
+  CheckSquare,
 } from "lucide-react";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { MobileNavBar } from "./MobileNavBar";
@@ -211,6 +227,31 @@ function Sidebar({ className }: SidebarProps) {
         href: "/assets",
       },
       {
+        title: "Borrowing & Returns",
+        icon: ArrowLeftRight,
+        href: "/borrowing",
+      },
+      {
+        title: "Spare Parts",
+        icon: Wrench,
+        href: "/spare-parts",
+      },
+      {
+        title: "Service Contracts",
+        icon: FileText,
+        href: "/service-contracts",
+      },
+      {
+        title: "Stocktaking",
+        icon: ClipboardList,
+        href: "/stocktaking",
+      },
+      {
+        title: "Policies & Acknowledgments",
+        icon: FileCheck,
+        href: "/acknowledgments",
+      },
+      {
         title: t("food_supply"),
         icon: Utensils,
         href: "/food-supply",
@@ -238,6 +279,21 @@ function Sidebar({ className }: SidebarProps) {
         href: "/rfid",
       },
       {
+        title: "Passageways (7 Sites)",
+        icon: DoorOpen,
+        href: "/rfid/passageways",
+      },
+      {
+        title: "Handheld & Battery Reports",
+        icon: Smartphone,
+        href: "/rfid/handheld-reports",
+      },
+      {
+        title: "Inspection Routes",
+        icon: Route,
+        href: "/inspection-routes",
+      },
+      {
         title: t("vehicle_tracking_system"),
         icon: Car,
         href: "/vehicle-tracking",
@@ -259,6 +315,16 @@ function Sidebar({ className }: SidebarProps) {
         icon: ClipboardList,
         href: "/audit",
       },
+      {
+        title: "SLA Compliance",
+        icon: TrendingUp,
+        href: "/settings/sla-compliance",
+      },
+      {
+        title: "Approval Requests",
+        icon: CheckSquare,
+        href: "/settings/approval",
+      },
     ],
     system: [
       {
@@ -270,6 +336,46 @@ function Sidebar({ className }: SidebarProps) {
         title: t("compliance_audit"),
         icon: LineChart,
         href: "/settings/compliance",
+      },
+      {
+        title: "SLA & Escalation",
+        icon: Clock,
+        href: "/settings/sla",
+      },
+      {
+        title: "Ticket Workflows",
+        icon: GitBranch,
+        href: "/settings/workflow",
+      },
+      {
+        title: "Policies (Admin)",
+        icon: Shield,
+        href: "/policies",
+      },
+      {
+        title: "Azure AD SSO",
+        icon: Shield,
+        href: "/settings/sso",
+      },
+      {
+        title: "ERP — Dynamics 365",
+        icon: Database,
+        href: "/settings/erp-integration",
+      },
+      {
+        title: "ITSM & Email Integration",
+        icon: Mail,
+        href: "/settings/itsm-integration",
+      },
+      {
+        title: "System Parameters",
+        icon: Sliders,
+        href: "/settings/system-parameters",
+      },
+      {
+        title: "Data Migration",
+        icon: Upload,
+        href: "/admin/data-migration",
       },
     ],
   };
