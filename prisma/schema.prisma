@@ -1598,7 +1598,10 @@ model HandheldSession {
   ticketsCreated Int      @default(0)
   organizationId String?
   appVersion     String?
-  platform       String?  // android | web
+  platform       String?  // android | ios | web
+  batteryStart   Float?   // battery % at session start (0-100)
+  batteryEnd     Float?   // battery % at session end (0-100)
+  batteryDrain   Float?   // computed: batteryStart - batteryEnd
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation("HandheldSessions", fields: [userId], references: [id])

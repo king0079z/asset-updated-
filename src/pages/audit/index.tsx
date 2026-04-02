@@ -384,41 +384,228 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onViewStaff, onCompl
   );
 }
 
-/* ── Handheld Session Row ── */
-function SessionRow({ s }: { s: any }) {
-  const duration = s.endedAt ? Math.round((new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime()) / 60000) + 'min' : 'Active';
-  const isActive = !s.endedAt;
+/* ── Battery indicator ── */
+function BatteryBar({ level, className }: { level: number | null; className?: string }) {
+  if (level == null) return <span className="text-xs text-slate-400">—</span>;
+  const color = level > 50 ? 'bg-green-500' : level > 20 ? 'bg-amber-400' : 'bg-red-500';
+  const BIcon = level <= 10 ? BatteryWarning : level <= 30 ? BatteryLow : Battery;
   return (
-    <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}
-      className={cn('flex items-center gap-4 p-4 rounded-2xl border transition-all hover:shadow-sm', isActive ? 'border-teal-200 bg-teal-50/40 dark:bg-teal-950/20' : 'border-slate-100 bg-card')}>
-      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', isActive ? 'bg-teal-500' : 'bg-slate-200 dark:bg-slate-700')}>
-        <Smartphone className={cn('h-5 w-5', isActive ? 'text-white' : 'text-slate-500')}/>
+    <div className={cn('flex items-center gap-1.5', className)}>
+      <BIcon className={cn('h-3.5 w-3.5', level > 50 ? 'text-green-500' : level > 20 ? 'text-amber-500' : 'text-red-500')}/>
+      <div className="relative w-12 h-2 bg-slate-200 rounded-full overflow-hidden">
+        <div className={cn('h-full rounded-full transition-all', color)} style={{width:`${Math.min(100,level)}%`}}/>
       </div>
-      <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="min-w-0">
-          <p className="font-semibold text-sm truncate">{s.deviceName || s.deviceId}</p>
-          <p className="text-xs text-slate-400 font-mono truncate">{s.deviceId}</p>
-        </div>
-        <div className="flex items-center gap-1.5 min-w-0">
-          <User className="h-3.5 w-3.5 text-slate-400 flex-shrink-0"/>
-          <p className="text-sm text-slate-600 truncate">{s.user?.email || '—'}</p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1">
-            <Scan className="h-3.5 w-3.5 text-blue-500"/>
-            <span className="text-sm font-bold text-blue-600">{s.scanCount || 0}</span>
-            <span className="text-xs text-slate-400">scans</span>
+      <span className={cn('text-xs font-bold', level > 50 ? 'text-green-600' : level > 20 ? 'text-amber-600' : 'text-red-600')}>{level}%</span>
+    </div>
+  );
+}
+
+/* ── Format duration ── */
+function fmtMs(ms: number | null): string {
+  if (!ms || ms < 0) return '—';
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+/* ── Session Timeline Card ── */
+function SessionTimelineCard({ session, idx }: { session: any; idx: number }) {
+  const isActive = !session.endedAt;
+  const scanVelocity = session.durationMs && session.scanCount > 0
+    ? Math.round(session.scanCount / (session.durationMs / 3_600_000))
+    : null;
+  return (
+    <motion.div initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:idx*0.04}}
+      className={cn('relative pl-8 pb-5 last:pb-0',
+        isActive ? 'border-l-2 border-teal-400 ml-3' : 'border-l-2 border-slate-200 dark:border-slate-700 ml-3')}>
+      {/* Timeline dot */}
+      <div className={cn('absolute -left-[9px] top-3 w-4 h-4 rounded-full border-2 flex items-center justify-center',
+        isActive ? 'bg-teal-500 border-teal-300 shadow-lg shadow-teal-200' : 'bg-slate-300 dark:bg-slate-600 border-white dark:border-slate-800')}/>
+
+      <div className={cn('rounded-2xl border p-4 shadow-sm transition-all hover:shadow-md',
+        isActive ? 'border-teal-200 bg-teal-50/40 dark:bg-teal-950/20' : 'border-slate-100 dark:border-slate-800 bg-card')}>
+
+        {/* Header row */}
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Badge className={cn('text-xs font-bold', isActive ? 'bg-teal-100 text-teal-700 border-teal-200' : 'bg-slate-100 text-slate-600 border-slate-200')}>
+              {isActive ? '● Live' : `Session #${idx + 1}`}
+            </Badge>
+            {session.platform && <Badge className="text-xs bg-indigo-100 text-indigo-700 capitalize">{session.platform}</Badge>}
+            {session.deviceName && <span className="text-xs text-slate-400 truncate max-w-[120px]">{session.deviceName.slice(0,40)}</span>}
           </div>
+          <span className={cn('text-sm font-bold', isActive ? 'text-teal-600' : 'text-slate-600')}>{fmtMs(session.durationMs)}</span>
+        </div>
+
+        {/* Time range */}
+        <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
           <div className="flex items-center gap-1">
-            <Ticket className="h-3.5 w-3.5 text-purple-500"/>
-            <span className="text-sm font-bold text-purple-600">{s.ticketsCreated || 0}</span>
-            <span className="text-xs text-slate-400">tickets</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400"/>
+            <span className="font-medium">Login:</span>
+            <span>{new Date(session.startedAt).toLocaleString(undefined, {dateStyle:'short',timeStyle:'short'})}</span>
+          </div>
+          {session.endedAt ? (
+            <>
+              <span className="text-slate-300">→</span>
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-400"/>
+                <span className="font-medium">Logout:</span>
+                <span>{new Date(session.endedAt).toLocaleString(undefined, {dateStyle:'short',timeStyle:'short'})}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1 text-teal-600">
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse"/>
+              <span className="font-medium">Still active</span>
+            </div>
+          )}
+        </div>
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <div className="rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 p-2.5 text-center">
+            <Scan className="h-3.5 w-3.5 text-blue-500 mx-auto mb-1"/>
+            <p className="text-lg font-black text-blue-600">{session.scanCount || 0}</p>
+            <p className="text-[10px] text-blue-400">Scans</p>
+          </div>
+          <div className="rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900 p-2.5 text-center">
+            <Ticket className="h-3.5 w-3.5 text-purple-500 mx-auto mb-1"/>
+            <p className="text-lg font-black text-purple-600">{session.ticketsCreated || 0}</p>
+            <p className="text-[10px] text-purple-400">Tickets</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-2.5 text-center">
+            <Clock className="h-3.5 w-3.5 text-slate-500 mx-auto mb-1"/>
+            <p className="text-lg font-black text-slate-600">{fmtMs(session.durationMs)}</p>
+            <p className="text-[10px] text-slate-400">Duration</p>
+          </div>
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 p-2.5 text-center">
+            <Gauge className="h-3.5 w-3.5 text-amber-500 mx-auto mb-1"/>
+            <p className="text-lg font-black text-amber-600">{scanVelocity ?? '—'}{scanVelocity ? '/h' : ''}</p>
+            <p className="text-[10px] text-amber-400">Scan rate</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 justify-end">
-          <Badge className={cn('text-xs', isActive ? 'bg-teal-100 text-teal-700 border-teal-200' : 'bg-slate-100 text-slate-500 border-slate-200')}>{isActive ? '● Active' : duration}</Badge>
-          <Badge className="text-xs bg-slate-100 text-slate-500 capitalize">{s.platform || 'web'}</Badge>
+
+        {/* Battery row */}
+        {(session.batteryStart != null || session.batteryEnd != null) && (
+          <div className="flex items-center gap-4 pt-2 border-t border-slate-100 dark:border-slate-800 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">Battery start:</span>
+              <BatteryBar level={session.batteryStart}/>
+            </div>
+            {session.batteryEnd != null && (
+              <>
+                <span className="text-slate-300">→</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 font-medium">End:</span>
+                  <BatteryBar level={session.batteryEnd}/>
+                </div>
+                {session.batteryDrain != null && session.batteryDrain > 0 && (
+                  <Badge className="text-xs bg-red-50 text-red-600 border-red-100">
+                    -{session.batteryDrain}% drain
+                  </Badge>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+/* ── User Card (collapsed) ── */
+function UserCard({ userData, onClick, isExpanded }: { userData: any; onClick: () => void; isExpanded: boolean }) {
+  const score = userData.productivityScore || 0;
+  const scoreColor = score >= 70 ? 'text-green-600' : score >= 40 ? 'text-amber-600' : 'text-red-500';
+  const scoreBg   = score >= 70 ? 'bg-green-50 border-green-200' : score >= 40 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
+  const initials  = (userData.email || '?').split('@')[0].slice(0,2).toUpperCase();
+  const activeSessions = (userData.sessions || []).filter((s: any) => !s.endedAt).length;
+
+  return (
+    <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
+      onClick={onClick} className="cursor-pointer group">
+      <div className={cn('rounded-2xl border-2 p-5 transition-all duration-200 hover:shadow-lg hover:scale-[1.005]',
+        isExpanded ? 'border-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-lg shadow-indigo-100/50' :
+          activeSessions > 0 ? 'border-teal-300 bg-teal-50/30 dark:bg-teal-950/20 hover:border-teal-400' :
+          'border-slate-200 dark:border-slate-700 bg-card hover:border-indigo-300')}>
+
+        <div className="flex items-start gap-4">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0">
+            <div className={cn('w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black text-white shadow-md',
+              activeSessions > 0 ? 'bg-gradient-to-br from-teal-500 to-emerald-500' : 'bg-gradient-to-br from-indigo-500 to-purple-600')}>
+              {initials}
+            </div>
+            {activeSessions > 0 && (
+              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-teal-400 border-2 border-white animate-pulse"/>
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <p className="font-bold text-slate-900 dark:text-slate-100 truncate">{userData.email}</p>
+              {activeSessions > 0 && (
+                <Badge className="text-xs bg-teal-100 text-teal-700 border-teal-200">● Online now</Badge>
+              )}
+              <div className={cn('text-xs font-bold px-2 py-0.5 rounded-full border ml-auto', scoreBg, scoreColor)}>
+                AI Score: {score}
+              </div>
+            </div>
+
+            {/* Stat chips */}
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
+                { icon: Activity, val: `${userData.sessionCount} session${userData.sessionCount !== 1 ? 's' : ''}`, color: 'text-indigo-600 bg-indigo-50' },
+                { icon: Scan, val: `${userData.totalScans} scans`, color: 'text-blue-600 bg-blue-50' },
+                { icon: Ticket, val: `${userData.totalTickets} tickets`, color: 'text-purple-600 bg-purple-50' },
+                { icon: Clock, val: fmtMs(userData.totalDurationMs), color: 'text-slate-600 bg-slate-100' },
+              ].map(({ icon: Icon, val, color }) => (
+                <div key={val} className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold', color)}>
+                  <Icon className="h-3 w-3"/>{val}
+                </div>
+              ))}
+              {userData.avgBatteryDrain != null && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-amber-600 bg-amber-50">
+                  <BatteryLow className="h-3 w-3"/>-{userData.avgBatteryDrain}% avg drain
+                </div>
+              )}
+              {userData.scansPerHour != null && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-teal-600 bg-teal-50">
+                  <Gauge className="h-3 w-3"/>{userData.scansPerHour}/h rate
+                </div>
+              )}
+            </div>
+
+            {/* Last active */}
+            <p className="text-xs text-slate-400 mt-2">
+              Last active: {userData.lastActiveAt ? new Date(userData.lastActiveAt).toLocaleString(undefined, {dateStyle:'medium',timeStyle:'short'}) : '—'}
+            </p>
+          </div>
+
+          {/* Expand chevron */}
+          <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center transition-all flex-shrink-0',
+            isExpanded ? 'bg-indigo-100 text-indigo-600 rotate-180' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500')}>
+            <ChevronDown className="h-4 w-4"/>
+          </div>
         </div>
+
+        {/* AI insight preview */}
+        {userData.sessionCount > 0 && !isExpanded && (
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Brain className="h-3.5 w-3.5 text-indigo-400"/>
+              <span className="italic">
+                {score >= 70 ? `High performer — ${userData.totalScans} assets tracked across ${userData.sessionCount} sessions`
+                  : score >= 40 ? `Active technician — avg ${fmtMs(userData.avgDurationMs)} per session`
+                  : `${userData.sessionCount} session${userData.sessionCount !== 1 ? 's' : ''} recorded — encourage more field activity`}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -494,6 +681,8 @@ function HandheldAuditPage() {
   /* Handheld session state */
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionStats, setSessionStats] = useState<any>({});
+  const [users, setUsers] = useState<any[]>([]);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   /* Battery state */
   const [lowBattery, setLowBattery] = useState<any[]>([]);
@@ -517,9 +706,10 @@ function HandheldAuditPage() {
 
   const fetchSessions = useCallback(async () => {
     try {
-      const s = await fetch('/api/rfid/handheld-sessions').then(r => r.json()).catch(() => ({ sessions: [], stats: {} }));
+      const s = await fetch('/api/rfid/handheld-sessions').then(r => r.json()).catch(() => ({ sessions: [], stats: {}, users: [] }));
       setSessions(Array.isArray(s.sessions) ? s.sessions : []);
       setSessionStats(s.stats || {});
+      setUsers(Array.isArray(s.users) ? s.users : []);
     } catch {}
   }, []);
 
@@ -783,31 +973,87 @@ function HandheldAuditPage() {
         {/* ── Handheld Sessions Tab ── */}
         {activeTab === 'sessions' && (
           <>
-            {/* Session stat tiles */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            {/* Summary stat tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
               {[
-                { label:'Total Sessions', value:sessionStats.totalSessions||0, Icon:Activity, col:'text-slate-700', bg:'bg-slate-50 border-slate-200' },
-                { label:'Total Scans', value:sessionStats.totalScans||0, Icon:Scan, col:'text-blue-600', bg:'bg-blue-50 border-blue-200' },
-                { label:'Tickets Created', value:sessionStats.totalTickets||0, Icon:Ticket, col:'text-purple-600', bg:'bg-purple-50 border-purple-200' },
-                { label:'Unique Devices', value:sessionStats.uniqueDevices||0, Icon:Smartphone, col:'text-teal-600', bg:'bg-teal-50 border-teal-200' },
+                { label:'Total Sessions', value:sessionStats.totalSessions||0, Icon:Activity, col:'text-slate-700', bg:'bg-slate-50 border-slate-200', sub:null },
+                { label:'Active Users', value:sessionStats.uniqueUsers||0, Icon:Users, col:'text-indigo-600', bg:'bg-indigo-50 border-indigo-200', sub:null },
+                { label:'Total Scans', value:sessionStats.totalScans||0, Icon:Scan, col:'text-blue-600', bg:'bg-blue-50 border-blue-200', sub:null },
+                { label:'Tickets Created', value:sessionStats.totalTickets||0, Icon:Ticket, col:'text-purple-600', bg:'bg-purple-50 border-purple-200', sub:null },
+                { label:'Unique Devices', value:sessionStats.uniqueDevices||0, Icon:Smartphone, col:'text-teal-600', bg:'bg-teal-50 border-teal-200', sub:null },
               ].map(({ label, value, Icon, col, bg }) => (
                 <motion.div key={label} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
-                  className={cn('rounded-2xl border p-5 flex items-center gap-4', bg)}>
-                  <div className="p-2.5 rounded-xl bg-white shadow-sm"><Icon className={cn('h-5 w-5', col)}/></div>
-                  <div><p className={cn('text-3xl font-extrabold', col)}>{value}</p><p className="text-xs text-slate-500 mt-0.5">{label}</p></div>
+                  className={cn('rounded-2xl border p-4 flex items-center gap-3', bg)}>
+                  <div className="p-2 rounded-xl bg-white shadow-sm flex-shrink-0"><Icon className={cn('h-4 w-4', col)}/></div>
+                  <div><p className={cn('text-2xl font-extrabold', col)}>{value}</p><p className="text-xs text-slate-500 mt-0.5">{label}</p></div>
                 </motion.div>
               ))}
             </div>
 
-            {sessions.length === 0 ? (
+            {/* AI headline */}
+            {users.length > 0 && (
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800 mb-5">
+                <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex-shrink-0">
+                  <Brain className="h-4 w-4 text-indigo-600 dark:text-indigo-400"/>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-indigo-800 dark:text-indigo-200 mb-0.5">AI Field Activity Insights</p>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                    {users.length} active technician{users.length !== 1 ? 's' : ''} · {sessionStats.totalScans || 0} total scans · Top performer: <strong>{users[0]?.email?.split('@')[0]}</strong> ({users[0]?.totalScans || 0} scans, AI score {users[0]?.productivityScore || 0}).
+                    Click any user card to view their full session history.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {users.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-slate-400">
                 <div className="p-6 rounded-3xl bg-slate-100 mb-4"><Smartphone className="h-14 w-14 text-slate-300"/></div>
                 <p className="text-xl font-bold text-slate-500">No handheld sessions yet</p>
-                <p className="text-sm mt-1">Sessions are recorded when technicians log in on handheld devices.</p>
+                <p className="text-sm mt-1">Sessions are recorded automatically when technicians open the handheld app.</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {sessions.map(s => <SessionRow key={s.id} s={s}/>)}
+              <div className="space-y-4">
+                {users.map((userData) => (
+                  <div key={userData.userId}>
+                    <UserCard
+                      userData={userData}
+                      isExpanded={expandedUserId === userData.userId}
+                      onClick={() => setExpandedUserId(prev => prev === userData.userId ? null : userData.userId)}
+                    />
+                    <AnimatePresence>
+                      {expandedUserId === userData.userId && (
+                        <motion.div
+                          initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
+                          transition={{duration:0.25}} className="overflow-hidden">
+                          <div className="mt-3 ml-4">
+                            {/* User aggregate bar */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+                              {[
+                                { label:'Total Duration', value:fmtMs(userData.totalDurationMs), Icon:Clock, col:'text-indigo-600' },
+                                { label:'Avg Session', value:fmtMs(userData.avgDurationMs), Icon:Activity, col:'text-blue-600' },
+                                { label:'Scan Rate', value:userData.scansPerHour ? `${userData.scansPerHour}/h` : '—', Icon:Gauge, col:'text-teal-600' },
+                                { label:'Avg Battery Drain', value:userData.avgBatteryDrain != null ? `-${userData.avgBatteryDrain}%` : '—', Icon:BatteryLow, col:'text-amber-600' },
+                              ].map(({ label, value, Icon, col }) => (
+                                <div key={label} className="flex items-center gap-2">
+                                  <Icon className={cn('h-4 w-4 flex-shrink-0', col)}/>
+                                  <div><p className={cn('text-sm font-bold', col)}>{value}</p><p className="text-xs text-slate-400">{label}</p></div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Session timeline */}
+                            <div className="relative">
+                              {userData.sessions.map((session: any, idx: number) => (
+                                <SessionTimelineCard key={session.id} session={session} idx={idx}/>
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ))}
               </div>
             )}
           </>

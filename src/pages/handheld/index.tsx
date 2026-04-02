@@ -562,6 +562,9 @@ export default function HandheldHubPage() {
   useEffect(() => { sessionScansRef.current = sessionScansCount; }, [sessionScansCount]);
   useEffect(() => { sessionTasksRef.current = sessionTasksCount; }, [sessionTasksCount]);
 
+  // Battery level ref (captured from navigator.getBattery)
+  const batteryStartRef = useRef<number | null>(null);
+
   // ── Register Handheld Session with API on mount ─────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -570,26 +573,43 @@ export default function HandheldHubPage() {
     const deviceId = `hh_${platform}_${sessionStart}`;
     const deviceName = ua.slice(0, 80);
 
-    // Create session record
-    fetch('/api/rfid/handheld-sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId, deviceName, platform, appVersion: '1.0' }),
-      credentials: 'include',
+    // Capture battery level (supported in Chrome/Android, gracefully skipped elsewhere)
+    const getBattery = async (): Promise<number | null> => {
+      try {
+        if (!('getBattery' in navigator)) return null;
+        const bat = await (navigator as any).getBattery();
+        return Math.round(bat.level * 100);
+      } catch { return null; }
+    };
+
+    // Create session record (with battery start)
+    getBattery().then(batteryLevel => {
+      batteryStartRef.current = batteryLevel;
+      return fetch('/api/rfid/handheld-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, deviceName, platform, appVersion: '1.0', batteryStart: batteryLevel }),
+        credentials: 'include',
+      });
     })
-      .then(r => r.ok ? r.json() : null)
+      .then(r => (r && r.ok) ? r.json() : null)
       .then(data => { if (data?.id) sessionDbIdRef.current = data.id; })
       .catch(() => { /* non-blocking */ });
 
     // End session helper — used on unmount and beforeunload
-    const endSession = () => {
+    const endSession = async () => {
       const id = sessionDbIdRef.current;
       if (!id) return;
+      const batteryEnd = await getBattery().catch(() => null);
+      const batteryDrain = (batteryStartRef.current !== null && batteryEnd !== null)
+        ? batteryStartRef.current - batteryEnd : null;
       const body = JSON.stringify({
         id,
         endedAt: new Date().toISOString(),
         scanCount: sessionScansRef.current,
         ticketsCreated: sessionTasksRef.current,
+        batteryEnd,
+        batteryDrain,
       });
       // sendBeacon works even during page unload; fall back to fetch with keepalive
       if (navigator.sendBeacon) {
@@ -606,7 +626,7 @@ export default function HandheldHubPage() {
       }
     };
 
-    // Periodic heartbeat every 60 s so counts stay current even if the page crashes
+    // Sync heartbeat every 60 s so counts stay current even if the page crashes
     const heartbeat = setInterval(() => {
       const id = sessionDbIdRef.current;
       if (!id) return;
@@ -618,11 +638,12 @@ export default function HandheldHubPage() {
       }).catch(() => {});
     }, 60_000);
 
-    window.addEventListener('beforeunload', endSession);
+    const handleUnload = () => { void endSession(); };
+    window.addEventListener('beforeunload', handleUnload);
     return () => {
-      window.removeEventListener('beforeunload', endSession);
+      window.removeEventListener('beforeunload', handleUnload);
       clearInterval(heartbeat);
-      endSession();
+      void endSession();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
