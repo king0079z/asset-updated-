@@ -121,18 +121,229 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293
 .qr-val{color:#475569;flex:1}
 .qr-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;flex-shrink:0}
 
-/* ── Print ── */
-@media print{
-  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-  @page{size:A4;margin:1.2cm}
-  .sidebar,.topbar,.btn-print{display:none!important}
-  .main{margin-left:0!important}
-  .content{padding:0!important}
-  .hero{border-radius:8px!important;padding:28px!important;margin-bottom:16px!important}
-  .guide-section{border-radius:6px!important;margin-bottom:12px!important;page-break-inside:avoid!important}
-  .hero::before,.hero::after{display:none}
-  .contact-section{border-radius:8px!important;padding:24px!important}
-  .step{page-break-inside:avoid!important}
+/* ── Print — Full A4 Professional Layout ── */
+@media print {
+  /* Colour accuracy */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* Page size and margins */
+  @page { size: A4 portrait; margin: 14mm 14mm 16mm 14mm; }
+  @page :first { margin-top: 0; }
+
+  /* Reset body */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    font-size: 9.5pt !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+    color: #1e293b !important;
+    width: 100% !important;
+  }
+
+  /* Hide all screen-only chrome */
+  .sidebar,
+  .topbar,
+  .btn-print { display: none !important; }
+
+  /* Remove sidebar offset — full width */
+  .main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .content {
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* ── Cover / Hero ── */
+  .hero {
+    background: #0f172a !important;
+    border-radius: 0 !important;
+    padding: 28px 28px 22px !important;
+    margin-bottom: 10px !important;
+    page-break-after: avoid !important;
+    position: relative !important;
+  }
+  .hero::before, .hero::after { display: none !important; }
+  .hero-eyebrow { font-size: 8pt !important; color: #818cf8 !important; margin-bottom: 6px !important; }
+  .hero h1 { font-size: 24pt !important; color: #fff !important; margin-bottom: 6px !important; }
+  .hero h1 span { color: #a5b4fc !important; -webkit-text-fill-color: #a5b4fc !important; }
+  .hero-sub { font-size: 9pt !important; color: #94a3b8 !important; margin-bottom: 12px !important; }
+  .hero-pills { display: flex !important; flex-wrap: wrap !important; gap: 5px !important; }
+  .pill { background: rgba(255,255,255,.1) !important; border: 1px solid rgba(255,255,255,.2) !important; color: #e2e8f0 !important; font-size: 8pt !important; padding: 3px 8px !important; border-radius: 12px !important; }
+
+  /* ── Guide sections ── */
+  .guide-section {
+    border: 1px solid #d1d5db !important;
+    border-radius: 0 !important;
+    margin-bottom: 8px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: visible !important;
+  }
+  .guide-section-header {
+    background: #1e293b !important;
+    padding: 10px 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    page-break-after: avoid !important;
+  }
+  .guide-section-icon {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    background: rgba(255,255,255,.1) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .guide-section-title { font-size: 11pt !important; font-weight: 800 !important; color: #fff !important; }
+  .guide-section-desc { font-size: 8pt !important; color: #94a3b8 !important; }
+  .guide-section-body { padding: 12px 16px !important; }
+  .guide-section-body p { font-size: 9pt !important; margin-bottom: 7px !important; color: #374151 !important; }
+  .guide-section-body h3 { font-size: 9.5pt !important; font-weight: 800 !important; color: #1e293b !important; margin: 10px 0 6px !important; }
+  .guide-section-body h3:first-child { margin-top: 0 !important; }
+  .guide-section-body ul li { font-size: 8.5pt !important; padding: 2px 0 2px 16px !important; }
+
+  /* ── Steps ── */
+  .steps { gap: 6px !important; margin: 8px 0 !important; }
+  .step {
+    padding: 8px 10px !important;
+    border-radius: 6px !important;
+    border: 1px solid #e5e7eb !important;
+    background: #f9fafb !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+  .step-num {
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 9pt !important;
+    border-radius: 5px !important;
+    background: #4f46e5 !important;
+    color: #fff !important;
+    font-weight: 800 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+  .step-content .step-title { font-size: 9pt !important; font-weight: 700 !important; color: #1e293b !important; }
+  .step-content .step-desc { font-size: 8pt !important; color: #6b7280 !important; }
+
+  /* ── Feature grid — 3 columns in print ── */
+  .feat-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr 1fr !important;
+    gap: 6px !important;
+    margin: 8px 0 !important;
+  }
+  .feat-card {
+    padding: 8px 10px !important;
+    border-radius: 5px !important;
+    border: 1px solid #e5e7eb !important;
+    background: #f9fafb !important;
+    page-break-inside: avoid !important;
+  }
+  .feat-card .feat-icon { font-size: 14px !important; margin-bottom: 3px !important; }
+  .feat-card .feat-title { font-size: 8.5pt !important; font-weight: 700 !important; color: #1e293b !important; }
+  .feat-card .feat-desc { font-size: 7.5pt !important; color: #6b7280 !important; }
+
+  /* ── Tables ── */
+  .guide-table {
+    font-size: 8pt !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 8px 0 !important;
+    page-break-inside: auto !important;
+  }
+  .guide-table thead { display: table-header-group !important; }
+  .guide-table th {
+    background: #1e293b !important;
+    color: #fff !important;
+    padding: 7px 10px !important;
+    font-size: 7.5pt !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: .05em !important;
+  }
+  .guide-table td { padding: 6px 10px !important; border-bottom: 1px solid #f1f5f9 !important; font-size: 8pt !important; color: #374151 !important; }
+  .guide-table tr:nth-child(even) td { background: #fafbff !important; }
+
+  /* ── Tip / note / warn boxes ── */
+  .tip, .note, .warn {
+    padding: 8px 12px !important;
+    margin: 6px 0 !important;
+    font-size: 8pt !important;
+    border-radius: 0 6px 6px 0 !important;
+    page-break-inside: avoid !important;
+  }
+  .tip { background: #f0fdf4 !important; border-left: 3px solid #16a34a !important; color: #14532d !important; }
+  .note { background: #eef2ff !important; border-left: 3px solid #4f46e5 !important; color: #312e81 !important; }
+  .warn { background: #fffbeb !important; border-left: 3px solid #d97706 !important; color: #78350f !important; }
+
+  /* ── Quick ref (shortcuts) ── */
+  .qr-row { padding: 5px 0 !important; font-size: 8.5pt !important; }
+  .qr-label { width: 160px !important; font-size: 8.5pt !important; }
+  .key { font-size: 8pt !important; padding: 1px 5px !important; background: #1e293b !important; color: #f1f5f9 !important; border-radius: 4px !important; }
+
+  /* ── Contact section ── */
+  .contact-section {
+    background: #0f172a !important;
+    border-radius: 0 !important;
+    padding: 20px 24px !important;
+    margin-bottom: 8px !important;
+    color: #fff !important;
+    page-break-before: always !important;
+  }
+  .contact-section h2 { font-size: 16pt !important; color: #fff !important; }
+  .contact-section .sub { font-size: 9pt !important; color: #94a3b8 !important; margin-bottom: 14px !important; }
+  .contact-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  .contact-card {
+    background: rgba(255,255,255,.06) !important;
+    border: 1px solid rgba(255,255,255,.15) !important;
+    border-radius: 8px !important;
+    padding: 12px 14px !important;
+    page-break-inside: avoid !important;
+  }
+  .contact-card .c-icon { font-size: 16px !important; margin-bottom: 5px !important; }
+  .contact-card .c-label { font-size: 7.5pt !important; color: #64748b !important; }
+  .contact-card .c-value { font-size: 11pt !important; color: #e2e8f0 !important; }
+  .contact-card .c-sub { font-size: 7.5pt !important; color: #64748b !important; }
+  .contact-card.highlight .c-value { color: #a5b4fc !important; }
+  .hours-badge {
+    font-size: 7.5pt !important;
+    padding: 2px 8px !important;
+    background: rgba(22,163,74,.2) !important;
+    border: 1px solid rgba(22,163,74,.3) !important;
+    color: #4ade80 !important;
+    border-radius: 12px !important;
+    display: inline-block !important;
+    margin-top: 5px !important;
+  }
+
+  /* ── Footer ── */
+  div[style*="text-align:center"][style*="border-top"] {
+    page-break-inside: avoid !important;
+    padding: 10px !important;
+    font-size: 8pt !important;
+    border-top: 1px solid #e5e7eb !important;
+    color: #9ca3af !important;
+    border-radius: 0 !important;
+    margin-top: 8px !important;
+  }
 }
 </style>
 </head>
