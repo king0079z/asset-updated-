@@ -38,7 +38,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'POST') {
-    const { deviceId, deviceName, appVersion, platform } = req.body;
+    // sendBeacon sends as text/plain blob — parse if needed
+    let body = req.body;
+    if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+    const { deviceId, deviceName, appVersion, platform } = body || {};
     const session = await prisma.handheldSession.create({
       data: {
         deviceId: deviceId || 'unknown',
@@ -54,7 +57,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'PATCH') {
-    const { id, endedAt, scanCount, ticketsCreated, actionsLog } = req.body;
+    // sendBeacon sends as text/plain blob — parse if needed
+    let patchBody = req.body;
+    if (typeof patchBody === 'string') { try { patchBody = JSON.parse(patchBody); } catch { patchBody = {}; } }
+    const { id, endedAt, scanCount, ticketsCreated, actionsLog } = patchBody || {};
     if (!id) return res.status(400).json({ error: 'id required' });
     const session = await prisma.handheldSession.update({
       where: { id },

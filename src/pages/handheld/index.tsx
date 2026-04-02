@@ -555,6 +555,78 @@ export default function HandheldHubPage() {
     toast({ title: 'Session reset', description: 'Scans and tasks counters cleared.' });
   }, [toast]);
 
+  // Refs to track latest counts accessible in cleanup (state captured in closures goes stale)
+  const sessionDbIdRef = useRef<string | null>(null);
+  const sessionScansRef = useRef(0);
+  const sessionTasksRef = useRef(0);
+  useEffect(() => { sessionScansRef.current = sessionScansCount; }, [sessionScansCount]);
+  useEffect(() => { sessionTasksRef.current = sessionTasksCount; }, [sessionTasksCount]);
+
+  // ── Register Handheld Session with API on mount ─────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const ua = navigator.userAgent || '';
+    const platform = /android/i.test(ua) ? 'android' : /iphone|ipad/i.test(ua) ? 'ios' : 'web';
+    const deviceId = `hh_${platform}_${sessionStart}`;
+    const deviceName = ua.slice(0, 80);
+
+    // Create session record
+    fetch('/api/rfid/handheld-sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId, deviceName, platform, appVersion: '1.0' }),
+      credentials: 'include',
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.id) sessionDbIdRef.current = data.id; })
+      .catch(() => { /* non-blocking */ });
+
+    // End session helper — used on unmount and beforeunload
+    const endSession = () => {
+      const id = sessionDbIdRef.current;
+      if (!id) return;
+      const body = JSON.stringify({
+        id,
+        endedAt: new Date().toISOString(),
+        scanCount: sessionScansRef.current,
+        ticketsCreated: sessionTasksRef.current,
+      });
+      // sendBeacon works even during page unload; fall back to fetch with keepalive
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' });
+        navigator.sendBeacon('/api/rfid/handheld-sessions', blob);
+      } else {
+        fetch('/api/rfid/handheld-sessions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          credentials: 'include',
+          keepalive: true,
+        }).catch(() => {});
+      }
+    };
+
+    // Periodic heartbeat every 60 s so counts stay current even if the page crashes
+    const heartbeat = setInterval(() => {
+      const id = sessionDbIdRef.current;
+      if (!id) return;
+      fetch('/api/rfid/handheld-sessions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, scanCount: sessionScansRef.current, ticketsCreated: sessionTasksRef.current }),
+        credentials: 'include',
+      }).catch(() => {});
+    }, 60_000);
+
+    window.addEventListener('beforeunload', endSession);
+    return () => {
+      window.removeEventListener('beforeunload', endSession);
+      clearInterval(heartbeat);
+      endSession();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Exception/reason codes for count review
   const [countReviewReason, setCountReviewReason] = useState('');
   const [countReviewNote, setCountReviewNote] = useState('');

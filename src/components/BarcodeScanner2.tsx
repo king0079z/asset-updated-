@@ -124,7 +124,18 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
   /* ── Camera ────────────────────────────────────────── */
   const stopCam = useCallback(async () => {
     if (qrRef.current) {
-      try { await qrRef.current.stop(); } catch {}
+      try {
+        // html5-qrcode internally logs {"cancelled":true} when stop() is called
+        // while a scan operation is pending — suppress this with a no-op console override
+        const orig = console.error;
+        console.error = (...args: any[]) => {
+          const msg = String(args[0] ?? '');
+          if (msg.includes('cancelled') || msg.includes('{"cancelled"')) return;
+          orig.apply(console, args);
+        };
+        await qrRef.current.stop();
+        console.error = orig;
+      } catch { /* ignore stop errors */ }
       qrRef.current = null;
     }
   }, []);
