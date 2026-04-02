@@ -404,7 +404,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293
     </table>
 
     <div class="warn-box" style="margin-top:14px">
-      <strong>Client Right to Reclassify:</strong> QRCS may request reclassification of any ticket if they believe the initial priority does not reflect operational impact. Reclassification requests are reviewed within 1 business hour during standard support hours.
+      <strong>Client Right to Reclassify:</strong> QRCS may request reclassification of any ticket if they believe the initial priority does not reflect operational impact. Reclassification requests are reviewed within 4 business hours during standard support hours and the ticket priority is updated accordingly with QRCS confirmation.
     </div>
   </div>
 </div>
@@ -432,35 +432,35 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293
       <tbody>
         <tr>
           <td><span class="p-badge p1">P1 · Critical</span></td>
-          <td><strong>2 hours</strong><br><small>(24/7, inc. weekends)</small></td>
-          <td>Every 2 hours until resolved</td>
-          <td><strong>8 business hours</strong></td>
-          <td>Response &gt; 2h or Resolution &gt; 8h</td>
+          <td><strong>4 hours</strong><br><small>(24/7, inc. weekends)</small></td>
+          <td>Every 4 hours until resolved</td>
+          <td><strong>3 business days</strong><br><small>Workaround within 24h</small></td>
+          <td>Response &gt; 4h or no workaround &gt; 24h</td>
         </tr>
         <tr>
           <td><span class="p-badge p2">P2 · High</span></td>
-          <td><strong>4 business hours</strong></td>
-          <td>Every 4 hours until resolved</td>
-          <td><strong>2 business days</strong></td>
-          <td>Response &gt; 4h or Resolution &gt; 2d</td>
+          <td><strong>8 business hours</strong></td>
+          <td>Every business day</td>
+          <td><strong>7 business days</strong></td>
+          <td>Response &gt; 8h or Resolution &gt; 7d</td>
         </tr>
         <tr>
           <td><span class="p-badge p3">P3 · Medium</span></td>
-          <td><strong>8 business hours</strong></td>
-          <td>Every business day</td>
-          <td><strong>5 business days</strong></td>
-          <td>Response &gt; 8h or Resolution &gt; 5d</td>
+          <td><strong>2 business days</strong></td>
+          <td>Twice per week</td>
+          <td><strong>15 business days</strong></td>
+          <td>Response &gt; 2d or Resolution &gt; 15d</td>
         </tr>
         <tr>
           <td><span class="p-badge p4">P4 · Low</span></td>
-          <td><strong>1 business day</strong></td>
+          <td><strong>3 business days</strong></td>
           <td>Upon meaningful update</td>
-          <td><strong>10 business days</strong></td>
-          <td>Response &gt; 1d</td>
+          <td><strong>30 business days</strong></td>
+          <td>Response &gt; 3d</td>
         </tr>
         <tr>
           <td><span class="p-badge p5">P5 · Enhancement</span></td>
-          <td><strong>2 business days</strong></td>
+          <td><strong>5 business days</strong></td>
           <td>Upon roadmap decision</td>
           <td>Per product roadmap</td>
           <td>N/A</td>
@@ -469,17 +469,25 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293
     </table>
 
     <div class="highlight-box" style="margin-top:16px">
-      <strong>Business Hours Definition:</strong> Sunday through Thursday, 08:00 – 18:00 Arabia Standard Time (AST), excluding Qatar public holidays. P1 Critical response is measured in calendar hours (24/7).
+      <strong>Business Hours Definition:</strong> Sunday through Thursday, 08:00 – 18:00 Arabia Standard Time (AST), excluding Qatar public holidays. P1 Critical response is measured in calendar hours (24/7). <strong>Note:</strong> For P1 incidents, a temporary workaround or mitigation will be provided within 24 calendar hours where technically feasible, even if the full permanent fix requires additional time.
     </div>
 
     <h3>Clock Pause Conditions</h3>
-    <p>Resolution clocks are paused in the following circumstances and resume immediately upon condition clearance:</p>
+    <p>Resolution clocks are paused in the following circumstances and resume immediately upon condition clearance. These pauses protect both parties and ensure that resolution time reflects only active engineering effort:</p>
     <ul>
-      <li>Awaiting information, access, or approval from QRCS that is required to proceed</li>
-      <li>Issue caused by third-party systems (Dynamics 365, Azure AD, hardware vendor) pending their resolution</li>
-      <li>QRCS-requested deferral of resolution to a preferred maintenance window</li>
-      <li>Scheduled maintenance windows affecting the service component in question</li>
+      <li>Awaiting information, credentials, access, or approvals from QRCS required to diagnose or resolve the issue</li>
+      <li>Issue rooted in third-party systems (Microsoft Dynamics 365, Azure AD, RFID hardware vendor, Supabase, Vercel) and pending their resolution</li>
+      <li>QRCS has accepted a workaround and requested deferral of the permanent fix to a scheduled maintenance window</li>
+      <li>Scheduled maintenance windows affecting the relevant platform component</li>
+      <li>Pending QRCS user acceptance testing (UAT) for a delivered fix prior to closure</li>
+      <li>Ticket placed on hold at QRCS request pending internal decision or budget approval</li>
+      <li>Resolution requires a major platform release, schema migration, or third-party library update that must be batched into the next release cycle</li>
+      <li>The issue cannot be reproduced in a non-QRCS environment and requires access to QRCS live data — pending data provision or anonymised sample from QRCS</li>
     </ul>
+
+    <div class="warn-box">
+      <strong>Complex Investigations:</strong> For technically complex incidents requiring deep root-cause analysis, code archaeology, or third-party vendor co-ordination, AssetXAI may request a formal extension of the resolution timeline. Extensions require written agreement from the QRCS designated IT contact and will be clearly documented in the ticket history with a revised target date.
+    </div>
   </div>
 </div>
 
@@ -495,10 +503,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293
 
     <h3>Automatic Escalation Triggers</h3>
     <ul>
-      <li>P1: No response within 1.5 hours → Auto-escalate to Level 2 and notify QRCS Account Manager</li>
-      <li>P2: No response within 3 hours (business hours) → Auto-escalate to Level 2</li>
-      <li>P1/P2: No resolution within 50% of target time → Escalate to Level 3</li>
+      <li>P1: No response within 3 hours → Auto-escalate to Level 2 and notify QRCS Account Manager</li>
+      <li>P2: No response within 6 business hours → Auto-escalate to Level 2</li>
+      <li>P3: No response within 1.5 business days → Auto-escalate to Level 2</li>
+      <li>P1/P2: No resolution within 60% of target time → Escalate to Level 3</li>
       <li>Any priority: SLA resolution target exceeded → Escalate to Level 3 + service credit assessment</li>
+      <li>Three or more P3/P4 tickets from same QRCS user within 5 business days → Automatic account review triggered</li>
     </ul>
 
     <div class="escalation-chain">
@@ -525,7 +535,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293
     </div>
 
     <h3>Client-Initiated Escalation</h3>
-    <p>QRCS may escalate any ticket to a higher priority at any time by contacting the dedicated Account Manager directly. Escalation requests are acknowledged within 30 minutes during business hours and within 1 hour outside business hours for P1/P2 tickets.</p>
+    <p>QRCS may escalate any ticket to a higher priority at any time by contacting the dedicated Account Manager directly. Escalation requests are acknowledged within 2 business hours during standard support hours and within 2 calendar hours outside business hours for P1/P2 tickets only.</p>
 
     <div class="info-grid" style="margin-top:12px">
       <div class="info-box"><label>Account Manager (Primary)</label><span>Dedicated QRCS Account Manager · Direct Email &amp; Phone</span></div>
@@ -560,12 +570,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293
 
     <h3>Response Time Credits</h3>
     <table class="credits-table" style="margin-top:12px">
-      <thead><tr><th>Incident Priority</th><th>Credit per Breach</th><th>Cap per Month</th></tr></thead>
+      <thead><tr><th>Incident Priority</th><th>Trigger Condition</th><th>Credit per Breach</th><th>Cap per Month</th></tr></thead>
       <tbody>
-        <tr><td><span class="p-badge p1">P1 · Critical</span></td><td>2% of monthly fee per incident</td><td>20% of monthly fee</td></tr>
-        <tr><td><span class="p-badge p2">P2 · High</span></td><td>1% of monthly fee per incident</td><td>10% of monthly fee</td></tr>
-        <tr><td><span class="p-badge p3">P3 · Medium</span></td><td>0.5% of monthly fee per incident</td><td>5% of monthly fee</td></tr>
-        <tr><td><span class="p-badge p4">P4 · Low</span></td><td>Goodwill credit as agreed</td><td>—</td></tr>
+        <tr><td><span class="p-badge p1">P1 · Critical</span></td><td>No workaround within 24h or no response within 4h</td><td>2% of monthly fee per incident</td><td>15% of monthly fee</td></tr>
+        <tr><td><span class="p-badge p2">P2 · High</span></td><td>Response &gt; 8 business hours or Resolution &gt; 7 business days</td><td>1% of monthly fee per incident</td><td>8% of monthly fee</td></tr>
+        <tr><td><span class="p-badge p3">P3 · Medium</span></td><td>Response &gt; 2 business days or Resolution &gt; 15 business days</td><td>0.5% of monthly fee per incident</td><td>4% of monthly fee</td></tr>
+        <tr><td><span class="p-badge p4">P4 · Low</span></td><td>Response &gt; 3 business days</td><td>Goodwill credit as agreed between parties</td><td>—</td></tr>
       </tbody>
     </table>
 
