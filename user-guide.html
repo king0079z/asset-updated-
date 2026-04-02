@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AssetXAI – User Guide | QRCS</title>
+<style>
+:root{
+  --navy:#0f172a;--blue:#1d4ed8;--indigo:#4f46e5;--green:#16a34a;
+  --amber:#d97706;--red:#dc2626;--gray:#64748b;--border:#e2e8f0;
+  --sidebar-w:270px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;line-height:1.65}
+
+/* ── Sidebar ── */
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:var(--navy);overflow-y:auto;z-index:100;display:flex;flex-direction:column}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo-row{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.logo-box{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;color:#fff;flex-shrink:0}
+.logo-name{font-size:16px;font-weight:900;color:#fff}
+.logo-sub{font-size:10px;color:#64748b;margin-left:46px;letter-spacing:.04em}
+.sidebar-search{padding:12px 14px}
+.sidebar-search input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 12px;font-size:12px;color:#e2e8f0;outline:none}
+.sidebar-search input::placeholder{color:#64748b}
+.sidebar-search input:focus{border-color:#4f46e5;background:rgba(79,70,229,.1)}
+.sidebar-section{padding:6px 14px 2px}
+.sidebar-section-label{font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.1em;padding:8px 6px 4px}
+.sidebar-link{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;text-decoration:none;color:#94a3b8;font-size:12px;font-weight:500;transition:all .15s;cursor:pointer}
+.sidebar-link:hover,.sidebar-link.active{background:rgba(79,70,229,.2);color:#c7d2fe}
+.sidebar-link .icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.sidebar-contact{margin-top:auto;border-top:1px solid rgba(255,255,255,.08);padding:14px 16px}
+.sidebar-contact .phone{display:flex;align-items:center;gap:8px;background:rgba(79,70,229,.2);border:1px solid rgba(79,70,229,.3);border-radius:10px;padding:10px 12px;text-decoration:none;margin-bottom:6px}
+.sidebar-contact .phone-num{font-size:13px;font-weight:800;color:#a5b4fc}
+.sidebar-contact .phone-label{font-size:10px;color:#64748b}
+
+/* ── Main content ── */
+.main{margin-left:var(--sidebar-w);min-height:100vh}
+.topbar{background:white;border-bottom:1px solid var(--border);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.topbar-title{font-size:15px;font-weight:700;color:#1e293b}
+.topbar-right{display:flex;gap:8px}
+.btn-print{background:linear-gradient(135deg,#4f46e5,#2563eb);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s}
+.btn-print:hover{box-shadow:0 4px 12px rgba(79,70,229,.4);transform:translateY(-1px)}
+
+/* ── Content ── */
+.content{padding:32px}
+.hero{background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0c1a3a 100%);border-radius:20px;padding:48px 52px;margin-bottom:28px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-80px;right:-80px;width:350px;height:350px;border-radius:50%;background:rgba(79,70,229,.15)}
+.hero::after{content:'';position:absolute;bottom:-60px;left:0;width:250px;height:250px;border-radius:50%;background:rgba(37,99,235,.1)}
+.hero-eyebrow{font-size:11px;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px}
+.hero h1{font-size:36px;font-weight:900;color:#fff;letter-spacing:-.5px;line-height:1.1;margin-bottom:8px;position:relative;z-index:1}
+.hero h1 span{background:linear-gradient(90deg,#818cf8,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:14px;color:#94a3b8;position:relative;z-index:1;margin-bottom:24px;max-width:560px}
+.hero-pills{display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:1}
+.pill{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#cbd5e1;font-size:11px;font-weight:600;padding:5px 12px;border-radius:20px}
+
+/* ── Section cards ── */
+.guide-section{background:#fff;border:1px solid var(--border);border-radius:16px;margin-bottom:20px;overflow:hidden;scroll-margin-top:80px}
+.guide-section-header{display:flex;align-items:center;gap:14px;padding:20px 28px;background:linear-gradient(to right,#f8fafc,#fff);border-bottom:1px solid var(--border)}
+.guide-section-icon{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.guide-section-title{font-size:17px;font-weight:800;color:#1e293b}
+.guide-section-desc{font-size:12px;color:#64748b;margin-top:1px}
+.guide-section-body{padding:24px 28px}
+.guide-section-body p{font-size:13px;color:#475569;margin-bottom:10px;line-height:1.7}
+
+/* ── Steps ── */
+.steps{display:flex;flex-direction:column;gap:12px;margin:12px 0}
+.step{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;background:#f8fafc;border:1px solid var(--border);border-radius:12px;transition:all .15s}
+.step:hover{border-color:#c7d2fe;background:#fafbff}
+.step-num{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#4f46e5,#2563eb);color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.step-content .step-title{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:2px}
+.step-content .step-desc{font-size:12px;color:#64748b;line-height:1.6}
+
+/* ── Tips / warnings ── */
+.tip{border-left:4px solid #16a34a;background:#f0fdf4;border-radius:0 10px 10px 0;padding:12px 16px;margin:10px 0;font-size:12px;color:#166534}
+.tip strong{color:#15803d}
+.note{border-left:4px solid #4f46e5;background:#eef2ff;border-radius:0 10px 10px 0;padding:12px 16px;margin:10px 0;font-size:12px;color:#312e81}
+.note strong{color:#4338ca}
+.warn{border-left:4px solid #d97706;background:#fffbeb;border-radius:0 10px 10px 0;padding:12px 16px;margin:10px 0;font-size:12px;color:#92400e}
+.warn strong{color:#b45309}
+
+/* ── Feature grid ── */
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:12px 0}
+.feat-card{background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.feat-card .feat-icon{font-size:20px;margin-bottom:6px}
+.feat-card .feat-title{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:3px}
+.feat-card .feat-desc{font-size:11px;color:#64748b;line-height:1.5}
+
+/* ── Table ── */
+.guide-table{width:100%;border-collapse:collapse;font-size:12px;margin:12px 0}
+.guide-table th{background:#0f172a;color:#fff;padding:10px 14px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;text-align:left}
+.guide-table td{padding:9px 14px;border-bottom:1px solid #f1f5f9;color:#475569;vertical-align:top}
+.guide-table tr:hover td{background:#fafbff}
+.guide-table tr:last-child td{border-bottom:none}
+
+/* ── Keyboard shortcuts ── */
+.shortcut{display:inline-flex;align-items:center;gap:4px}
+.key{background:#1e293b;color:#f1f5f9;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;font-family:monospace;border:1px solid #334155;box-shadow:0 2px 0 #0f172a}
+
+/* ── Contact section ── */
+.contact-section{background:linear-gradient(135deg,#0f172a,#1e1b4b);border-radius:20px;padding:40px 44px;margin-bottom:28px;color:#fff}
+.contact-section h2{font-size:24px;font-weight:900;margin-bottom:6px}
+.contact-section .sub{font-size:13px;color:#94a3b8;margin-bottom:28px}
+.contact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.contact-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:20px 22px}
+.contact-card .c-icon{font-size:24px;margin-bottom:10px}
+.contact-card .c-label{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+.contact-card .c-value{font-size:15px;font-weight:800;color:#e2e8f0;margin-bottom:2px}
+.contact-card .c-sub{font-size:11px;color:#64748b}
+.contact-card.highlight{border-color:rgba(79,70,229,.5);background:rgba(79,70,229,.12)}
+.contact-card.highlight .c-value{color:#a5b4fc}
+.hours-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(22,163,74,.15);border:1px solid rgba(22,163,74,.3);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:700;color:#4ade80;margin-top:8px}
+
+/* ── Quick ref ── */
+.qr-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f8fafc;font-size:12px}
+.qr-row:last-child{border-bottom:none}
+.qr-label{font-weight:700;color:#1e293b;width:180px;flex-shrink:0}
+.qr-val{color:#475569;flex:1}
+.qr-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;flex-shrink:0}
+
+/* ── Print ── */
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  @page{size:A4;margin:1.2cm}
+  .sidebar,.topbar,.btn-print{display:none!important}
+  .main{margin-left:0!important}
+  .content{padding:0!important}
+  .hero{border-radius:8px!important;padding:28px!important;margin-bottom:16px!important}
+  .guide-section{border-radius:6px!important;margin-bottom:12px!important;page-break-inside:avoid!important}
+  .hero::before,.hero::after{display:none}
+  .contact-section{border-radius:8px!important;padding:24px!important}
+  .step{page-break-inside:avoid!important}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════ SIDEBAR ══════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-row">
+      <div class="logo-box">A</div>
+      <span class="logo-name">AssetXAI</span>
+    </div>
+    <div class="logo-sub">USER GUIDE · QRCS EDITION</div>
+  </div>
+  <div class="sidebar-search">
+    <input type="text" placeholder="Search guide…" id="sideSearch" oninput="searchGuide(this.value)"/>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Getting Started</div>
+    <a class="sidebar-link" onclick="scrollTo('getting-started')"><span class="icon">🚀</span>Getting Started</a>
+    <a class="sidebar-link" onclick="scrollTo('login')"><span class="icon">🔐</span>Login &amp; Authentication</a>
+    <a class="sidebar-link" onclick="scrollTo('dashboard')"><span class="icon">📊</span>Dashboard Overview</a>
+    <a class="sidebar-link" onclick="scrollTo('navigation')"><span class="icon">🗺️</span>Navigation Guide</a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Asset Management</div>
+    <a class="sidebar-link" onclick="scrollTo('assets')"><span class="icon">📦</span>Assets</a>
+    <a class="sidebar-link" onclick="scrollTo('borrowing')"><span class="icon">↔️</span>Borrowing &amp; Returns</a>
+    <a class="sidebar-link" onclick="scrollTo('disposal')"><span class="icon">🗑️</span>Disposal &amp; Lifecycle</a>
+    <a class="sidebar-link" onclick="scrollTo('stocktaking')"><span class="icon">📋</span>Stocktaking</a>
+    <a class="sidebar-link" onclick="scrollTo('inspection')"><span class="icon">🔍</span>Inspection Routes</a>
+    <a class="sidebar-link" onclick="scrollTo('spare-parts')"><span class="icon">🔧</span>Spare Parts &amp; Contracts</a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Tickets &amp; Support</div>
+    <a class="sidebar-link" onclick="scrollTo('tickets')"><span class="icon">🎫</span>Tickets</a>
+    <a class="sidebar-link" onclick="scrollTo('approval')"><span class="icon">✅</span>Approvals</a>
+    <a class="sidebar-link" onclick="scrollTo('sla')"><span class="icon">⏱️</span>SLA Management</a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">RFID &amp; Tracking</div>
+    <a class="sidebar-link" onclick="scrollTo('rfid')"><span class="icon">📡</span>RFID Platform</a>
+    <a class="sidebar-link" onclick="scrollTo('handheld')"><span class="icon">📱</span>Handheld Devices</a>
+    <a class="sidebar-link" onclick="scrollTo('passageways')"><span class="icon">🚪</span>Passageways</a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Reports &amp; Admin</div>
+    <a class="sidebar-link" onclick="scrollTo('reports')"><span class="icon">📈</span>Reports &amp; Analytics</a>
+    <a class="sidebar-link" onclick="scrollTo('policies')"><span class="icon">📜</span>Policies</a>
+    <a class="sidebar-link" onclick="scrollTo('settings')"><span class="icon">⚙️</span>Settings &amp; Admin</a>
+    <a class="sidebar-link" onclick="scrollTo('mobile')"><span class="icon">📲</span>Mobile App</a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Help</div>
+    <a class="sidebar-link" onclick="scrollTo('shortcuts')"><span class="icon">⌨️</span>Keyboard Shortcuts</a>
+    <a class="sidebar-link" onclick="scrollTo('troubleshoot')"><span class="icon">🛠️</span>Troubleshooting</a>
+    <a class="sidebar-link" onclick="scrollTo('contact')"><span class="icon">📞</span>Contact Support</a>
+  </div>
+
+  <div class="sidebar-contact">
+    <a class="phone" href="tel:+97455608507">
+      <span style="font-size:18px">📞</span>
+      <div>
+        <div class="phone-num">+974 5560 8507</div>
+        <div class="phone-label">24/7 Emergency · P1 Critical Only</div>
+      </div>
+    </a>
+    <div style="font-size:10px;color:#475569;text-align:center">support@assetxai.live</div>
+  </div>
+</nav>
+
+<!-- ══════ MAIN ══════ -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title">AssetXAI — Complete User Guide · QRCS Edition</div>
+    <div class="topbar-right">
+      <button class="btn-print" onclick="window.print()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Save as PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-eyebrow">AssetXAI Platform · QRCS Edition · 2026</div>
+      <h1>Complete <span>User Guide</span></h1>
+      <div class="hero-sub">Everything you need to manage 30,000 assets, RFID tracking, ticketing, maintenance, and reporting — for technicians and end-users alike.</div>
+      <div class="hero-pills">
+        <span class="pill">📦 30,000 Assets</span>
+        <span class="pill">📡 5,000 RFID Tags</span>
+        <span class="pill">📱 100+ Handhelds</span>
+        <span class="pill">🏢 7 Sites</span>
+        <span class="pill">👥 920 Users</span>
+        <span class="pill">📞 +974 5560 8507</span>
+      </div>
+    </div>
+
+
+    <!-- ═══ 1. GETTING STARTED ═══ -->
+    <div class="guide-section" id="getting-started">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#eff6ff">🚀</div>
+        <div><div class="guide-section-title">Getting Started</div><div class="guide-section-desc">First-time setup and orientation for new users</div></div>
+      </div>
+      <div class="guide-section-body">
+        <p>Welcome to AssetXAI — QRCS's enterprise asset management platform. This guide walks you through every feature of the system. Whether you are a technician, an end-user, or an administrator, this guide has a dedicated section for you.</p>
+        <div class="feat-grid">
+          <div class="feat-card"><div class="feat-icon">🌐</div><div class="feat-title">Web Browser</div><div class="feat-desc">Access at <strong>assetxai.live</strong> from any modern browser (Chrome, Edge, Firefox, Safari)</div></div>
+          <div class="feat-card"><div class="feat-icon">📲</div><div class="feat-title">Mobile App</div><div class="feat-desc">Download AssetXAI from Google Play or Apple App Store for on-the-go access</div></div>
+          <div class="feat-card"><div class="feat-icon">📡</div><div class="feat-title">Handheld Device</div><div class="feat-desc">Open assetxai.live on the handheld browser — no install needed. Works offline too.</div></div>
+          <div class="feat-card"><div class="feat-icon">📧</div><div class="feat-title">Outlook Add-In</div><div class="feat-desc">Create tickets from any email directly in Microsoft Outlook without switching apps</div></div>
+        </div>
+        <div class="tip"><strong>First Time?</strong> Your IT administrator will send you a welcome email with your login credentials. Follow the link to set your password before logging in.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 2. LOGIN ═══ -->
+    <div class="guide-section" id="login">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#ede9fe">🔐</div>
+        <div><div class="guide-section-title">Login &amp; Authentication</div><div class="guide-section-desc">Sign in with your QRCS email or Microsoft Azure AD account</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3 style="margin-bottom:12px">Option A — Microsoft Azure AD (Recommended)</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Open the platform</div><div class="step-desc">Go to <strong>assetxai.live</strong> in your browser</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Click "Sign in with Microsoft"</div><div class="step-desc">Click the blue Microsoft button on the login page</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Enter your QRCS Microsoft credentials</div><div class="step-desc">Use your QRCS email address (e.g., name@qrcs.org.qa) and Microsoft password. If MFA is enabled, approve the request on your phone.</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">You're in!</div><div class="step-desc">You will be redirected to your personalized portal dashboard automatically.</div></div></div>
+        </div>
+
+        <h3 style="margin-top:20px;margin-bottom:12px">Option B — Email &amp; Password</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Enter your email address</div><div class="step-desc">Type your QRCS email address in the Email field</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Enter your password</div><div class="step-desc">Type your password. Click the eye icon to show/hide it.</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Click "Sign In"</div><div class="step-desc">Press the Sign In button or hit Enter on your keyboard</div></div></div>
+        </div>
+        <div class="tip"><strong>Forgot your password?</strong> Click "Forgot password?" on the login page and enter your email. You will receive a reset link within 5 minutes.</div>
+        <div class="warn"><strong>Account Pending?</strong> New accounts require administrator approval. If you see a "Pending Approval" screen, contact your IT administrator or call <strong>+974 5560 8507</strong>.</div>
+
+        <h3 style="margin-top:20px;margin-bottom:8px">Changing Your Password</h3>
+        <p>Go to <strong>Settings → Your Profile → Change Password</strong>. Enter your current password, then your new password twice. Passwords must be at least 8 characters.</p>
+      </div>
+    </div>
+
+
+    <!-- ═══ 3. DASHBOARD ═══ -->
+    <div class="guide-section" id="dashboard">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#fef9c3">📊</div>
+        <div><div class="guide-section-title">Dashboard Overview</div><div class="guide-section-desc">Your command centre — key metrics at a glance</div></div>
+      </div>
+      <div class="guide-section-body">
+        <p>The dashboard is the first screen you see after logging in. It gives you a real-time overview of all key metrics relevant to your role.</p>
+        <div class="feat-grid">
+          <div class="feat-card"><div class="feat-icon">📦</div><div class="feat-title">Asset Summary</div><div class="feat-desc">Total assets, active, borrowed, in maintenance, and disposed counts</div></div>
+          <div class="feat-card"><div class="feat-icon">🎫</div><div class="feat-title">Ticket Overview</div><div class="feat-desc">Open, in-progress, and overdue tickets with SLA status indicators</div></div>
+          <div class="feat-card"><div class="feat-icon">📡</div><div class="feat-title">RFID Live Status</div><div class="feat-desc">Number of active tags, low battery alerts, and zone breach events</div></div>
+          <div class="feat-card"><div class="feat-icon">⚠️</div><div class="feat-title">AI Alerts</div><div class="feat-desc">AI-generated recommendations for maintenance, restocking, and anomalies</div></div>
+          <div class="feat-card"><div class="feat-icon">👥</div><div class="feat-title">Staff Activity</div><div class="feat-desc">Technician performance and recent actions across all sites</div></div>
+          <div class="feat-card"><div class="feat-icon">🌓</div><div class="feat-title">Dark / Light Mode</div><div class="feat-desc">Toggle theme using the icon in the top-right corner of the sidebar</div></div>
+        </div>
+        <div class="note"><strong>Role-Based View:</strong> Your dashboard automatically shows information relevant to your role. Admins see everything; end-users see only their assigned assets and open tickets.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 4. NAVIGATION ═══ -->
+    <div class="guide-section" id="navigation">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#f0fdf4">🗺️</div>
+        <div><div class="guide-section-title">Navigation Guide</div><div class="guide-section-desc">Finding your way around the platform</div></div>
+      </div>
+      <div class="guide-section-body">
+        <p>The left sidebar is your main navigation. It is organized into sections. Click any item to navigate. The active page is highlighted.</p>
+        <table class="guide-table">
+          <thead><tr><th>Sidebar Section</th><th>What You'll Find</th><th>Who Uses It</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Main</strong></td><td>Dashboard, AI Analysis, Reports, Planner, Staff Activity</td><td>All users</td></tr>
+            <tr><td><strong>Assets</strong></td><td>Assets, Borrowing, Spare Parts, Service Contracts, Stocktaking, Policies</td><td>Technicians, Managers</td></tr>
+            <tr><td><strong>Tracking</strong></td><td>Asset Location, RFID, Passageways, Handheld Reports, Inspection Routes, Vehicle Tracking</td><td>Technicians, RFID Team</td></tr>
+            <tr><td><strong>Support</strong></td><td>Tickets, Inventory Audit, SLA Compliance, Approval Requests</td><td>All users</td></tr>
+            <tr><td><strong>System</strong></td><td>Settings, SLA Config, Workflows, SSO, ERP, ITSM, System Parameters</td><td>Administrators only</td></tr>
+          </tbody>
+        </table>
+        <div class="tip"><strong>Language:</strong> Switch between English and Arabic using the language toggle (🌐) in the sidebar header. The platform fully supports RTL Arabic layout.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 5. ASSETS ═══ -->
+    <div class="guide-section" id="assets">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#dbeafe">📦</div>
+        <div><div class="guide-section-title">Asset Management</div><div class="guide-section-desc">Register, track, assign, and manage all QRCS assets</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Registering a New Asset</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Go to Assets</div><div class="step-desc">Click "Assets" in the left sidebar</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Click "+ New Asset" button</div><div class="step-desc">Top-right corner of the assets page</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Fill in asset details</div><div class="step-desc">Name, type, serial number, purchase date, cost, location, and assigned user</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">Attach RFID tag (optional)</div><div class="step-desc">Scan the RFID tag ID or enter it manually to link the tag to this asset</div></div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-content"><div class="step-title">Save</div><div class="step-desc">Click Save. An asset ID and barcode are generated automatically.</div></div></div>
+        </div>
+
+        <h3 style="margin-top:20px">Bulk Import from Excel</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Go to Admin → Data Migration</div><div class="step-desc">Access the data migration wizard from the sidebar</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Download the template</div><div class="step-desc">Click "Download Template" for Assets to get the correct Excel format</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Fill in the template</div><div class="step-desc">Add your asset data. Do not change column headers.</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">Upload and run Dry Run first</div><div class="step-desc">Upload the file, enable "Dry Run" to preview errors before committing data</div></div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-content"><div class="step-title">Uncheck Dry Run and Import</div><div class="step-desc">Once the dry run passes, uncheck Dry Run and click Import</div></div></div>
+        </div>
+
+        <h3 style="margin-top:20px">Assigning an Asset to a User</h3>
+        <p>Open the asset → Click "Assign" → Search for the user by name or email → Set assignment date → Save. The user receives an email notification and the asset status changes to "Active".</p>
+
+        <h3 style="margin-top:16px">Asset Status Meanings</h3>
+        <table class="guide-table">
+          <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Active</strong></td><td>Asset is in use and assigned to a user or location</td></tr>
+            <tr><td><strong>Borrowed</strong></td><td>Temporarily borrowed with an expected return date</td></tr>
+            <tr><td><strong>Returned</strong></td><td>Borrowing ended; asset is back in stock</td></tr>
+            <tr><td><strong>Reserved</strong></td><td>Allocated for a future assignment or project</td></tr>
+            <tr><td><strong>Maintenance</strong></td><td>Asset is under repair or scheduled service</td></tr>
+            <tr><td><strong>Disposed</strong></td><td>Asset scrapped, transferred, or reported as loss</td></tr>
+            <tr><td><strong>Lost Reported</strong></td><td>Asset reported missing — investigation in progress</td></tr>
+          </tbody>
+        </table>
+        <div class="tip"><strong>Quick Search:</strong> Use the search bar at the top of the Assets page to find any asset by name, ID, serial number, barcode, or RFID tag ID.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 6. BORROWING ═══ -->
+    <div class="guide-section" id="borrowing">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#fce7f3">↔️</div>
+        <div><div class="guide-section-title">Borrowing &amp; Returns</div><div class="guide-section-desc">Track temporary asset loans with automatic overdue alerts</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Borrowing an Asset</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Go to Borrowing &amp; Returns</div><div class="step-desc">Click "Borrowing &amp; Returns" in the Assets section of the sidebar</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Open the Asset</div><div class="step-desc">Search for the asset you want to borrow from the Assets page, then click it</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Fill borrow details</div><div class="step-desc">Specify the borrower name/email, borrow location, expected return date, and any notes</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">Confirm</div><div class="step-desc">Click "Borrow". The asset status changes to "Borrowed" and the borrower receives a confirmation email.</div></div></div>
+        </div>
+
+        <h3 style="margin-top:16px">Returning an Asset</h3>
+        <p>Go to <strong>Borrowing &amp; Returns</strong> → Find the borrow record → Click <strong>"Return"</strong> → Confirm. The asset status changes to "Returned" and the record is closed.</p>
+
+        <div class="warn"><strong>Overdue Alerts:</strong> If an asset is not returned by its expected return date, the system automatically sends an email reminder to the borrower and marks the record as "Overdue". The borrowing administrator is also notified.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 7. DISPOSAL ═══ -->
+    <div class="guide-section" id="disposal">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#fee2e2">🗑️</div>
+        <div><div class="guide-section-title">Asset Disposal &amp; Lifecycle</div><div class="guide-section-desc">Scrap, transfer, or report assets as lost</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Disposing of an Asset</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Open the asset</div><div class="step-desc">Find the asset on the Assets page and click it to open the detail view</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Click "Dispose"</div><div class="step-desc">Look for the Dispose button in the asset action menu (three dots or top toolbar)</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Choose disposal type</div><div class="step-desc">Select: Scrap, Transfer to another entity, or Report as Loss</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">Submit for approval (if required)</div><div class="step-desc">Depending on your organization's approval settings, disposal may require manager approval before it is finalized</div></div></div>
+        </div>
+        <div class="note"><strong>Data Retention:</strong> Disposed assets are never permanently deleted. Their full history is preserved for audit and reporting purposes.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 8. STOCKTAKING ═══ -->
+    <div class="guide-section" id="stocktaking">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#ede9fe">📋</div>
+        <div><div class="guide-section-title">Stocktaking</div><div class="guide-section-desc">Full, random, self, and automatic RFID-based inventory counts</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Creating a Stocktaking Plan</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Go to Stocktaking</div><div class="step-desc">Click "Stocktaking" in the Assets section of the sidebar</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Click "+ New Plan"</div><div class="step-desc">Top-right corner of the Stocktaking page</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Choose the stocktaking type</div><div class="step-desc"><strong>Full</strong> — all assets; <strong>Random</strong> — a spot-check sample; <strong>Self</strong> — each custodian counts their own; <strong>Automatic</strong> — RFID-based continuous detection</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">Set scope and schedule</div><div class="step-desc">Enter the plan name, description, assign an executor, and set the scheduled date</div></div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-content"><div class="step-title">Start and Complete</div><div class="step-desc">Click "Start" when ready, then "Complete" when finished. Export the summary as Excel from the plan detail page.</div></div></div>
+        </div>
+        <div class="tip"><strong>Quick RFID Stocktaking:</strong> Use the "Quick Stocktaking Policy" button to configure a threshold: any asset detected by RFID within X minutes is automatically counted as in-stock — no manual scanning needed.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 9. INSPECTION ROUTES ═══ -->
+    <div class="guide-section" id="inspection">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#f0fdf4">🔍</div>
+        <div><div class="guide-section-title">Inspection Routes</div><div class="guide-section-desc">Scheduled asset inspections with delivery rate tracking</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Creating an Inspection Route</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Go to Inspection Routes</div><div class="step-desc">Click "Inspection Routes" in the Tracking section of the sidebar</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Click "+ New Route"</div><div class="step-desc">Enter route name, description, inspection period in days, and assign a responsible technician</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Set the period</div><div class="step-desc">Enter how many days between each inspection (e.g., 30 = monthly). The system auto-calculates the next due date.</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">Mark as Complete after each inspection</div><div class="step-desc">Click "Mark Complete" after performing the inspection. The system records whether it was on time and calculates delivery/success rates automatically.</div></div></div>
+        </div>
+        <div class="note"><strong>Overdue Inspections:</strong> Routes past their due date are highlighted in red. The system sends email reminders to the assigned technician.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 10. SPARE PARTS ═══ -->
+    <div class="guide-section" id="spare-parts">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#fef9c3">🔧</div>
+        <div><div class="guide-section-title">Spare Parts &amp; Service Contracts</div><div class="guide-section-desc">Track inventory of parts and manage vendor service agreements</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Adding a Spare Part</h3>
+        <p>Go to <strong>Spare Parts</strong> (Assets section) → Click <strong>"+ Add Part"</strong> → Enter the part name, part number, quantity, unit cost, reorder level, and storage location → Save.</p>
+        <div class="warn"><strong>Low Stock Alert:</strong> When a part's quantity falls to or below its reorder level, the system automatically flags it in orange and sends a daily alert email to administrators. Reorder immediately to avoid maintenance delays.</div>
+
+        <h3 style="margin-top:16px">Using a Spare Part Against a Ticket</h3>
+        <p>When resolving a maintenance ticket, go to the ticket → Click the <strong>"Use Parts"</strong> button → Select the part and quantity used → Confirm. The inventory is reduced automatically and the usage is recorded in the ticket history.</p>
+
+        <h3 style="margin-top:16px">Service Contracts</h3>
+        <p>Go to <strong>Service Contracts</strong> (Assets section) → <strong>"+ New Contract"</strong> → Fill in the title, vendor, start/end dates, coverage details, and cost. Set <strong>"Notify Days Before Expiry"</strong> to receive email alerts ahead of contract renewal deadlines.</p>
+      </div>
+    </div>
+
+
+    <!-- ═══ 11. TICKETS ═══ -->
+    <div class="guide-section" id="tickets">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#dbeafe">🎫</div>
+        <div><div class="guide-section-title">Tickets</div><div class="guide-section-desc">Create, track, and resolve support and maintenance requests</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Creating a Ticket</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Go to Tickets or the Portal</div><div class="step-desc">End-users: use the Self-Service Portal. Technicians: use the Tickets section directly.</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Click "+ New Ticket"</div><div class="step-desc">A dialog box opens for you to fill in the details</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Fill in the form</div><div class="step-desc"><strong>Title:</strong> Brief description of the issue · <strong>Type:</strong> Incident / Maintenance / Damage / Loss / Request · <strong>Priority:</strong> Low / Medium / High / Critical · <strong>Asset:</strong> Link to an asset (optional) · <strong>Description:</strong> Full details</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">Attach files (optional)</div><div class="step-desc">Upload photos, screenshots, or documents to help the support team understand the issue</div></div></div>
+          <div class="step"><div class="step-num">5</div><div class="step-content"><div class="step-title">Submit</div><div class="step-desc">Click Submit. You receive a ticket reference number (e.g., TKT-00042) and a confirmation email. SLA countdown starts immediately.</div></div></div>
+        </div>
+
+        <h3 style="margin-top:20px">Ticket Creation Channels</h3>
+        <div class="feat-grid">
+          <div class="feat-card"><div class="feat-icon">🌐</div><div class="feat-title">Web Portal</div><div class="feat-desc">Log in to assetxai.live and click "+ New Ticket" from anywhere</div></div>
+          <div class="feat-card"><div class="feat-icon">📲</div><div class="feat-title">Mobile App</div><div class="feat-desc">Open the app → Tickets tab → New Ticket. Works offline too.</div></div>
+          <div class="feat-card"><div class="feat-icon">📧</div><div class="feat-title">Email</div><div class="feat-desc">Send an email to support@assetxai.live — a ticket is created automatically</div></div>
+          <div class="feat-card"><div class="feat-icon">📡</div><div class="feat-title">RFID Scan</div><div class="feat-desc">Scan an asset tag on the handheld → "Create Ticket" appears automatically</div></div>
+          <div class="feat-card"><div class="feat-icon">📮</div><div class="feat-title">Outlook Add-In</div><div class="feat-desc">Click the AssetXAI button in Outlook to raise a ticket from any email</div></div>
+        </div>
+
+        <h3 style="margin-top:16px">Ticket Status Meanings</h3>
+        <table class="guide-table">
+          <thead><tr><th>Status</th><th>Meaning</th><th>Next Action</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Open</strong></td><td>Submitted, awaiting assignment</td><td>Wait for assignment email</td></tr>
+            <tr><td><strong>In Progress</strong></td><td>Assigned and being worked on</td><td>Check for update messages</td></tr>
+            <tr><td><strong>Pending</strong></td><td>Waiting for information from you</td><td>Reply with the requested info</td></tr>
+            <tr><td><strong>Escalated</strong></td><td>SLA breached — auto-escalated to senior team</td><td>Await priority resolution</td></tr>
+            <tr><td><strong>Resolved</strong></td><td>Fix applied — confirm if satisfied</td><td>Confirm or reopen with reason</td></tr>
+            <tr><td><strong>Closed</strong></td><td>Ticket completed and archived</td><td>Reopen if issue returns</td></tr>
+            <tr><td><strong>Reopened</strong></td><td>Resolved ticket reopened due to recurrence</td><td>Provide reason for reopening</td></tr>
+          </tbody>
+        </table>
+        <div class="tip"><strong>Reopening a Ticket:</strong> If a resolved issue returns, you can reopen the ticket instead of creating a new one. Go to the ticket → Click "Reopen" → Provide a reason (required). This keeps the full history together.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 12. APPROVAL ═══ -->
+    <div class="guide-section" id="approval">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#f0fdf4">✅</div>
+        <div><div class="guide-section-title">Approval Requests</div><div class="guide-section-desc">Review and action pending approvals for assets and tickets</div></div>
+      </div>
+      <div class="guide-section-body">
+        <p>Certain actions (asset disposal, borrowing of critical assets, high-value requests) require manager approval before they are processed.</p>
+        <h3>Viewing Pending Approvals</h3>
+        <p>Go to <strong>Approval Requests</strong> in the Support section of the sidebar. You will see all requests assigned to you, with the requester, request type, and reference details.</p>
+        <h3 style="margin-top:12px">Approving or Rejecting</h3>
+        <p>Click the request → Review the details → Click <strong>"Approve"</strong> or <strong>"Reject"</strong>. If rejecting, a reason is required. The requester is notified by email immediately.</p>
+        <div class="note"><strong>Email Reminders:</strong> If you have a pending approval that has not been actioned for 24 hours, the system automatically sends you an email reminder. Approvals pending for more than 48 hours are escalated to your manager.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 13. SLA ═══ -->
+    <div class="guide-section" id="sla">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#fce7f3">⏱️</div>
+        <div><div class="guide-section-title">SLA Management</div><div class="guide-section-desc">Monitor service level targets and compliance rates</div></div>
+      </div>
+      <div class="guide-section-body">
+        <p>The SLA (Service Level Agreement) engine automatically assigns resolution targets to tickets based on their category and priority, then monitors progress in real time.</p>
+        <div class="feat-grid">
+          <div class="feat-card"><div class="feat-icon">📊</div><div class="feat-title">SLA Compliance Dashboard</div><div class="feat-desc">Go to Support → SLA Compliance to see compliance % by priority and category with trend charts</div></div>
+          <div class="feat-card"><div class="feat-icon">⚙️</div><div class="feat-title">SLA Policies (Admin)</div><div class="feat-desc">Settings → SLA &amp; Escalation to configure response/resolution hours per ticket category and priority</div></div>
+          <div class="feat-card"><div class="feat-icon">🔺</div><div class="feat-title">Escalation Rules (Admin)</div><div class="feat-desc">Define escalation tiers — when a ticket is overdue, it auto-escalates and the team is notified</div></div>
+          <div class="feat-card"><div class="feat-icon">📧</div><div class="feat-title">Breach Notifications</div><div class="feat-desc">Automatic emails sent when a ticket is approaching or has passed its SLA resolution target</div></div>
+        </div>
+        <div class="tip"><strong>For End-Users:</strong> You can see the "Resolve By" date on any ticket you created. If this date is close and the ticket has not been updated, use the escalation button or call support.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 14. RFID ═══ -->
+    <div class="guide-section" id="rfid">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#ede9fe">📡</div>
+        <div><div class="guide-section-title">RFID Platform</div><div class="guide-section-desc">Real-time asset tracking using active and passive RFID tags</div></div>
+      </div>
+      <div class="guide-section-body">
+        <p>The AssetXAI RFID platform processes data from Active BLE tags and Passive UHF tags to locate assets in real time, detect zone breaches, and generate tamper alerts.</p>
+        <h3>RFID Dashboard</h3>
+        <p>Go to <strong>RFID &amp; BLE Tracking</strong> in the sidebar. You will see:</p>
+        <div class="feat-grid">
+          <div class="feat-card"><div class="feat-icon">🗺️</div><div class="feat-title">Live Floor Map</div><div class="feat-desc">View asset positions on 2D/3D floor maps in real time as RFID readers detect tags</div></div>
+          <div class="feat-card"><div class="feat-icon">🏷️</div><div class="feat-title">Tags List</div><div class="feat-desc">All registered RFID tags with battery level, last seen time, and linked asset</div></div>
+          <div class="feat-card"><div class="feat-icon">📍</div><div class="feat-title">Zones</div><div class="feat-desc">Configure named zones (rooms, floors, sites) and link them to RFID reader MAC addresses</div></div>
+          <div class="feat-card"><div class="feat-icon">🔔</div><div class="feat-title">Alerts</div><div class="feat-desc">View and resolve RFID alert events: zone breach, tamper, low battery, missing asset</div></div>
+        </div>
+
+        <h3 style="margin-top:16px">Linking a Tag to an Asset</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Go to RFID → Tags</div><div class="step-desc">Find the unassigned tag (status: Unassigned) by its Tag ID</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Click "Assign to Asset"</div><div class="step-desc">Search for the target asset and confirm the binding. The tag is now linked 1-to-1.</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Attach the physical tag</div><div class="step-desc">Physically attach the RFID tag to the asset using tamper-evident adhesive</div></div></div>
+        </div>
+
+        <div class="warn"><strong>Tag Removal Alert:</strong> Once a tag is physically attached and active in the system, any unauthorized removal triggers an immediate alarm. Only remove tags after logging an authorized removal request in the system.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 15. HANDHELD ═══ -->
+    <div class="guide-section" id="handheld">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#fef9c3">📱</div>
+        <div><div class="guide-section-title">Handheld Devices</div><div class="guide-section-desc">Field scanning, offline mode, and bulk operations</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Starting a Handheld Session</h3>
+        <div class="steps">
+          <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">Open the browser on the handheld device</div><div class="step-desc">Navigate to assetxai.live and log in with your credentials</div></div></div>
+          <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">Go to Assets → Handheld Mode</div><div class="step-desc">The platform detects handheld devices and switches to the optimized handheld interface automatically</div></div></div>
+          <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">Start scanning</div><div class="step-desc">Point the built-in camera or external scanner at a barcode, QR code, or RFID tag. The asset details appear instantly.</div></div></div>
+          <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">Perform actions</div><div class="step-desc">From the scan result, you can: Create a ticket · Assign the asset · Move it · Check history · Update status</div></div></div>
+        </div>
+
+        <h3 style="margin-top:16px">Offline Mode</h3>
+        <p>If your handheld device loses internet connectivity in the field, AssetXAI continues to work offline. All scans and actions are queued locally and <strong>automatically synchronized</strong> as soon as connectivity is restored. No data is ever lost.</p>
+        <div class="tip"><strong>Connectivity Indicator:</strong> A green dot in the top-right means online. A yellow dot means offline — your actions are being queued. A red dot means an error — check your WiFi settings.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 16. PASSAGEWAYS ═══ -->
+    <div class="guide-section" id="passageways">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#dbeafe">🚪</div>
+        <div><div class="guide-section-title">Passageway Access Control</div><div class="guide-section-desc">Monitor asset entry and exit at all 7 QRCS sites</div></div>
+      </div>
+      <div class="guide-section-body">
+        <p>Passageway readers are installed at QRCS site entrances and exits. When an asset carrying an RFID tag passes through, the system automatically records the movement and checks whether it is authorized.</p>
+        <h3>Viewing Passageway Events</h3>
+        <p>Go to <strong>Passageways (7 Sites)</strong> in the Tracking section. Each site shows its RFID reader status, recent entry/exit events, and any unauthorized movement alerts.</p>
+        <h3 style="margin-top:12px">Unauthorized Exit Alert</h3>
+        <p>If an asset exits a site without an authorized transfer record, the system <strong>immediately generates an alert</strong>, sends an email to the site manager, and creates a ticket for investigation.</p>
+        <div class="note"><strong>RFID Standards:</strong> All passageway readers are compatible with EPC Gen2, ISO 18000-6C, and BLE 5.0. The RFID Standards panel (visible in the Passageways page) lists all supported protocols.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 17. REPORTS ═══ -->
+    <div class="guide-section" id="reports">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#f0fdf4">📈</div>
+        <div><div class="guide-section-title">Reports &amp; Analytics</div><div class="guide-section-desc">Generate, export, and print reports for any module</div></div>
+      </div>
+      <div class="guide-section-body">
+        <table class="guide-table">
+          <thead><tr><th>Report Type</th><th>Where to Find</th><th>Export Format</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Asset Report</strong></td><td>Assets → Print Report button</td><td>PDF, Excel</td></tr>
+            <tr><td><strong>Ticket Summary</strong></td><td>Tickets → Ticket Dashboard</td><td>PDF, Print</td></tr>
+            <tr><td><strong>SLA Compliance Report</strong></td><td>SLA Compliance → Export button</td><td>Excel, Print</td></tr>
+            <tr><td><strong>Inventory Audit Report</strong></td><td>Inventory Audit → Generate Report</td><td>PDF, Excel</td></tr>
+            <tr><td><strong>Missing Inventory Report</strong></td><td>Reports → Missing Inventory</td><td>Print, PDF</td></tr>
+            <tr><td><strong>Stocktaking Summary</strong></td><td>Stocktaking → Plan → Export</td><td>Excel</td></tr>
+            <tr><td><strong>Handheld Activity Report</strong></td><td>Handheld &amp; Battery Reports</td><td>Excel, Print</td></tr>
+            <tr><td><strong>RFID Movement Report</strong></td><td>RFID → Movement Timeline</td><td>On-screen, PDF</td></tr>
+            <tr><td><strong>Staff Performance Report</strong></td><td>Staff Activity → Reports</td><td>Print, PDF</td></tr>
+          </tbody>
+        </table>
+        <div class="tip"><strong>Printing any report:</strong> Every report page has a "Print" or "Export" button. Click it and choose "Save as PDF" in the browser print dialog for a professional PDF document.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 18. POLICIES ═══ -->
+    <div class="guide-section" id="policies">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#f0fdf4">📜</div>
+        <div><div class="guide-section-title">Policies &amp; Digital Acknowledgment</div><div class="guide-section-desc">Accept asset usage policies and digitally acknowledge asset receipt</div></div>
+      </div>
+      <div class="guide-section-body">
+        <h3>Accepting a Policy</h3>
+        <p>When an administrator publishes a new policy requiring your acceptance, you will receive an email notification. Go to <strong>Policies &amp; Acknowledgments</strong> in the Assets section. Read the policy text and click <strong>"Accept Policy"</strong>. Your acceptance is recorded with a timestamp and your IP address.</p>
+
+        <h3 style="margin-top:14px">Digital Asset Acknowledgment</h3>
+        <p>When you receive a new asset, go to <strong>Policies &amp; Acknowledgments</strong> → Click <strong>"Acknowledge Asset"</strong> → Enter the Asset ID (or scan the barcode) → Sign digitally by clicking <strong>"Sign &amp; Acknowledge"</strong>. This creates a permanent record of your receipt.</p>
+        <div class="note"><strong>Policy Gate:</strong> If there are policies requiring your acceptance, you will be reminded before you can access certain asset features. Accept all pending policies to unlock full access.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 19. SETTINGS ═══ -->
+    <div class="guide-section" id="settings">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#f1f5f9">⚙️</div>
+        <div><div class="guide-section-title">Settings &amp; Administration</div><div class="guide-section-desc">System configuration — for administrators only</div></div>
+      </div>
+      <div class="guide-section-body">
+        <div class="warn"><strong>Administrator Access Only:</strong> The System section of the sidebar is only visible to users with the ADMIN role. Unauthorized changes can affect all QRCS users.</div>
+        <table class="guide-table">
+          <thead><tr><th>Setting Page</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><strong>User Management</strong></td><td>Add, edit, delete users; assign roles; set page/button permissions</td></tr>
+            <tr><td><strong>SLA &amp; Escalation</strong></td><td>Configure response/resolution hours per ticket category and priority; define escalation tiers</td></tr>
+            <tr><td><strong>Ticket Workflows</strong></td><td>Customize status workflows and auto-routing rules per ticket category</td></tr>
+            <tr><td><strong>Policies (Admin)</strong></td><td>Create and publish policy documents that users must accept</td></tr>
+            <tr><td><strong>Azure AD SSO</strong></td><td>Configure Microsoft Azure AD single sign-on — follow the step-by-step guide on the page</td></tr>
+            <tr><td><strong>ERP — Dynamics 365</strong></td><td>Configure and monitor the Microsoft Dynamics 365 integration and sync logs</td></tr>
+            <tr><td><strong>ITSM &amp; Email Integration</strong></td><td>Set up email-to-ticket webhook for Gmail, Outlook, or any SMTP provider</td></tr>
+            <tr><td><strong>System Parameters</strong></td><td>Adjust platform-wide settings (RFID threshold, SLA defaults, notification limits) without code changes</td></tr>
+            <tr><td><strong>Data Migration</strong></td><td>Import asset and ticket data from existing systems via Excel upload</td></tr>
+            <tr><td><strong>Compliance &amp; Audit</strong></td><td>View full audit log of all user actions with advanced search and PDF export</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- ═══ 20. MOBILE APP ═══ -->
+    <div class="guide-section" id="mobile">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#dbeafe">📲</div>
+        <div><div class="guide-section-title">Mobile App (Android &amp; iOS)</div><div class="guide-section-desc">Full asset management on your smartphone</div></div>
+      </div>
+      <div class="guide-section-body">
+        <p>The AssetXAI mobile app brings the full platform to your Android or Apple smartphone. It is optimized for field use by technicians.</p>
+        <div class="feat-grid">
+          <div class="feat-card"><div class="feat-icon">🔐</div><div class="feat-title">Azure AD Login</div><div class="feat-desc">Sign in with your QRCS Microsoft account using the same SSO as the web platform</div></div>
+          <div class="feat-card"><div class="feat-icon">📦</div><div class="feat-title">My Assets</div><div class="feat-desc">View and manage your assigned assets with full detail and history</div></div>
+          <div class="feat-card"><div class="feat-icon">🎫</div><div class="feat-title">Create Tickets</div><div class="feat-desc">Raise support tickets with photo attachments from the field</div></div>
+          <div class="feat-card"><div class="feat-icon">📸</div><div class="feat-title">Scan Assets</div><div class="feat-desc">Use your phone camera to scan barcodes, QR codes, and RFID tags</div></div>
+          <div class="feat-card"><div class="feat-icon">🔌</div><div class="feat-title">Offline Mode</div><div class="feat-desc">All actions queued offline and synced automatically when you reconnect</div></div>
+          <div class="feat-card"><div class="feat-icon">🔔</div><div class="feat-title">Push Notifications</div><div class="feat-desc">Instant alerts for ticket updates, SLA breaches, and overdue items</div></div>
+        </div>
+        <div class="tip"><strong>Install the App:</strong> Search for <strong>"AssetXAI"</strong> on Google Play Store or Apple App Store. Contact your administrator if the app is not yet listed — they can provide the direct installation link.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 21. SHORTCUTS ═══ -->
+    <div class="guide-section" id="shortcuts">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#f1f5f9">⌨️</div>
+        <div><div class="guide-section-title">Keyboard Shortcuts</div><div class="guide-section-desc">Work faster with these time-saving shortcuts</div></div>
+      </div>
+      <div class="guide-section-body">
+        <div class="qr-row"><span class="qr-label">Global Search</span><span class="qr-val"><span class="shortcut"><span class="key">Ctrl</span> + <span class="key">K</span></span></span></div>
+        <div class="qr-row"><span class="qr-label">New Ticket</span><span class="qr-val"><span class="shortcut"><span class="key">Ctrl</span> + <span class="key">T</span></span></span></div>
+        <div class="qr-row"><span class="qr-label">Go to Dashboard</span><span class="qr-val"><span class="shortcut"><span class="key">Ctrl</span> + <span class="key">H</span></span></span></div>
+        <div class="qr-row"><span class="qr-label">Go to Assets</span><span class="qr-val"><span class="shortcut"><span class="key">Ctrl</span> + <span class="key">A</span></span></span></div>
+        <div class="qr-row"><span class="qr-label">Toggle Dark / Light Mode</span><span class="qr-val"><span class="shortcut"><span class="key">Ctrl</span> + <span class="key">D</span></span></span></div>
+        <div class="qr-row"><span class="qr-label">Save / Submit form</span><span class="qr-val"><span class="shortcut"><span class="key">Enter</span> (when focused on form)</span></span></div>
+        <div class="qr-row"><span class="qr-label">Close dialog / Cancel</span><span class="qr-val"><span class="shortcut"><span class="key">Esc</span></span></span></div>
+        <div class="qr-row"><span class="qr-label">Print current page</span><span class="qr-val"><span class="shortcut"><span class="key">Ctrl</span> + <span class="key">P</span></span></span></div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 22. TROUBLESHOOTING ═══ -->
+    <div class="guide-section" id="troubleshoot">
+      <div class="guide-section-header">
+        <div class="guide-section-icon" style="background:#fef9c3">🛠️</div>
+        <div><div class="guide-section-title">Troubleshooting</div><div class="guide-section-desc">Solutions to common issues before contacting support</div></div>
+      </div>
+      <div class="guide-section-body">
+        <table class="guide-table">
+          <thead><tr><th>Problem</th><th>Try This First</th><th>If Still Not Fixed</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Cannot log in</strong></td><td>Check Caps Lock · Try "Forgot Password" · Clear browser cache (Ctrl+Shift+Del)</td><td>Call +974 5560 8507</td></tr>
+            <tr><td><strong>Page is slow or freezes</strong></td><td>Refresh the page (F5) · Switch browser · Check internet connection</td><td>Email support@assetxai.live</td></tr>
+            <tr><td><strong>RFID tag not detected</strong></td><td>Check tag battery level · Verify tag is registered in the system · Ensure reader is online in the RFID dashboard</td><td>Submit a P2 ticket</td></tr>
+            <tr><td><strong>Barcode won't scan</strong></td><td>Clean the camera lens · Ensure good lighting · Try increasing camera distance</td><td>Enter asset ID manually</td></tr>
+            <tr><td><strong>Ticket not receiving updates</strong></td><td>Check spam folder · Verify email address in your profile · Check notification settings</td><td>Check ticket directly in portal</td></tr>
+            <tr><td><strong>Offline sync not working</strong></td><td>Ensure WiFi is connected · Force-close and reopen the app · Log out and back in</td><td>Submit a P3 ticket with device details</td></tr>
+            <tr><td><strong>Asset not appearing</strong></td><td>Check your role permissions with your admin · Try searching by full asset ID · Check if asset is disposed</td><td>Contact your IT administrator</td></tr>
+            <tr><td><strong>Excel import failed</strong></td><td>Download a fresh template · Ensure no merged cells · Check date format (YYYY-MM-DD)</td><td>Submit a P3 ticket with the file attached</td></tr>
+          </tbody>
+        </table>
+        <div class="tip"><strong>Error Codes:</strong> If you see an error code on screen, screenshot it and include it in your support ticket. This helps our team diagnose the issue much faster.</div>
+      </div>
+    </div>
+
+
+    <!-- ═══ 23. CONTACT ═══ -->
+    <div class="contact-section" id="contact">
+      <div class="hero-eyebrow" style="color:#818cf8;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">Need Help?</div>
+      <h2>Contact AssetXAI Support</h2>
+      <div class="sub">Our team is here to help. Use the right channel for the fastest response.</div>
+
+      <div class="contact-grid">
+        <div class="contact-card highlight">
+          <div class="c-icon">📞</div>
+          <div class="c-label">Emergency Hotline — P1 Critical Only</div>
+          <div class="c-value">+974 5560 8507</div>
+          <div class="c-sub">System-wide outages · All users affected · No workaround available</div>
+          <div class="hours-badge">🟢 24 / 7 · 365 Days</div>
+        </div>
+
+        <div class="contact-card">
+          <div class="c-icon">📧</div>
+          <div class="c-label">General Support Email</div>
+          <div class="c-value">support@assetxai.live</div>
+          <div class="c-sub">All ticket priorities · Auto-creates a ticket with a reference number · Best for P2 – P5</div>
+          <div class="hours-badge">📅 Sun – Thu · 08:00 – 18:00 AST</div>
+        </div>
+
+        <div class="contact-card">
+          <div class="c-icon">🌐</div>
+          <div class="c-label">Support Portal (Self-Service)</div>
+          <div class="c-value">assetxai.live/portal</div>
+          <div class="c-sub">Create tickets, track status, view history, download reports — always available</div>
+          <div class="hours-badge">🟢 24 / 7 Available</div>
+        </div>
+
+        <div class="contact-card">
+          <div class="c-icon">📮</div>
+          <div class="c-label">Outlook Add-In</div>
+          <div class="c-value">Built into Microsoft Outlook</div>
+          <div class="c-sub">Click the AssetXAI button in Outlook to create a ticket directly from any email without leaving your inbox</div>
+          <div class="hours-badge">🟢 Always Available</div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:18px 22px">
+        <div style="font-size:12px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Response Time Targets</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+          <div style="background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);border-radius:10px;padding:10px 14px">
+            <div style="font-size:10px;font-weight:800;color:#f87171;text-transform:uppercase">P1 Critical</div>
+            <div style="font-size:16px;font-weight:900;color:#fca5a5;margin:2px 0">4 hour response</div>
+            <div style="font-size:11px;color:#64748b">Workaround within 24h · Full fix 3 business days</div>
+          </div>
+          <div style="background:rgba(234,88,12,.1);border:1px solid rgba(234,88,12,.25);border-radius:10px;padding:10px 14px">
+            <div style="font-size:10px;font-weight:800;color:#fb923c;text-transform:uppercase">P2 High</div>
+            <div style="font-size:16px;font-weight:900;color:#fed7aa;margin:2px 0">8 business hour response</div>
+            <div style="font-size:11px;color:#64748b">Resolution: 7 business days</div>
+          </div>
+          <div style="background:rgba(202,138,4,.1);border:1px solid rgba(202,138,4,.25);border-radius:10px;padding:10px 14px">
+            <div style="font-size:10px;font-weight:800;color:#fbbf24;text-transform:uppercase">P3 Medium</div>
+            <div style="font-size:16px;font-weight:900;color:#fde68a;margin:2px 0">2 business day response</div>
+            <div style="font-size:11px;color:#64748b">Resolution: 15 business days</div>
+          </div>
+          <div style="background:rgba(29,78,216,.1);border:1px solid rgba(29,78,216,.25);border-radius:10px;padding:10px 14px">
+            <div style="font-size:10px;font-weight:800;color:#60a5fa;text-transform:uppercase">P4 Low</div>
+            <div style="font-size:16px;font-weight:900;color:#bfdbfe;margin:2px 0">3 business day response</div>
+            <div style="font-size:11px;color:#64748b">Resolution: 30 business days</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <div style="text-align:center;padding:20px;font-size:12px;color:#94a3b8;border-top:1px solid var(--border);background:#fff;border-radius:12px">
+      AssetXAI User Guide · QRCS Edition · Version 1.0 · April 2026 &nbsp;|&nbsp;
+      For support: <strong>support@assetxai.live</strong> &nbsp;|&nbsp; Emergency: <strong>+974 5560 8507</strong>
+    </div>
+
+  </div><!-- end .content -->
+</div><!-- end .main -->
+
+<script>
+function scrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+  }
+}
+
+function searchGuide(q) {
+  const sections = document.querySelectorAll('.guide-section, .contact-section');
+  const lq = q.toLowerCase();
+  sections.forEach(s => {
+    if (!lq) { s.style.display = ''; return; }
+    s.style.display = s.textContent.toLowerCase().includes(lq) ? '' : 'none';
+  });
+}
+
+// Highlight active sidebar link on scroll
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+    }
+  });
+}, { threshold: 0.3 });
+document.querySelectorAll('.guide-section[id],.contact-section[id]').forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
