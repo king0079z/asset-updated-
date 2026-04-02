@@ -284,11 +284,6 @@ function Sidebar({ className }: SidebarProps) {
         href: "/rfid/passageways",
       },
       {
-        title: "Handheld & Battery Reports",
-        icon: Smartphone,
-        href: "/rfid/handheld-reports",
-      },
-      {
         title: "Inspection Routes",
         icon: Route,
         href: "/inspection-routes",
@@ -311,8 +306,8 @@ function Sidebar({ className }: SidebarProps) {
         href: "/tickets",
       },
       {
-        title: "Inventory Audit",
-        icon: ClipboardList,
+        title: "Handheld Audit",
+        icon: Smartphone,
         href: "/audit",
       },
       {
