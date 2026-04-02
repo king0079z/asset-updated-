@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AssetXAI – Service Level Agreement | QRCS 2026</title>
+<style>
+/* ── Variables ── */
+:root {
+  --navy:   #0f172a;
+  --blue:   #1d4ed8;
+  --indigo: #4f46e5;
+  --green:  #16a34a;
+  --red:    #dc2626;
+  --amber:  #d97706;
+  --gray:   #64748b;
+  --border: #e2e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;line-height:1.6}
+
+/* ── Print button ── */
+.print-btn{position:fixed;top:18px;right:20px;z-index:999;background:linear-gradient(135deg,#4f46e5,#2563eb);color:#fff;border:none;padding:11px 22px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(79,70,229,.4);display:flex;align-items:center;gap:8px;transition:all .2s}
+.print-btn:hover{box-shadow:0 6px 20px rgba(79,70,229,.6);transform:translateY(-1px)}
+
+/* ── Page wrapper ── */
+.page{max-width:960px;margin:0 auto;padding:32px 20px 60px}
+
+/* ── Cover ── */
+.cover{background:var(--navy);border-radius:20px;overflow:hidden;margin-bottom:32px;position:relative}
+.cover-top{background:linear-gradient(135deg,#1e1b4b 0%,#0f172a 60%,#0c1a3a 100%);padding:48px 52px 36px;position:relative;overflow:hidden}
+.cover-top::before{content:'';position:absolute;top:-60px;right:-60px;width:320px;height:320px;border-radius:50%;background:rgba(79,70,229,.12)}
+.cover-top::after{content:'';position:absolute;bottom:-40px;left:-40px;width:200px;height:200px;border-radius:50%;background:rgba(37,99,235,.1)}
+.cover-eyebrow{display:flex;align-items:center;gap:10px;margin-bottom:24px}
+.cover-logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#fff;flex-shrink:0}
+.cover-brand{font-size:13px;font-weight:800;color:#818cf8;letter-spacing:.07em;text-transform:uppercase}
+.cover-title{font-size:38px;font-weight:900;color:#fff;letter-spacing:-.5px;line-height:1.1;margin-bottom:10px;position:relative;z-index:1}
+.cover-title span{background:linear-gradient(90deg,#818cf8,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.cover-subtitle{font-size:16px;color:#94a3b8;margin-bottom:28px;position:relative;z-index:1}
+.cover-meta-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;position:relative;z-index:1}
+.cover-meta-item{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px}
+.cover-meta-item label{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:4px}
+.cover-meta-item span{font-size:13px;font-weight:700;color:#e2e8f0}
+.cover-bottom{background:linear-gradient(to right,#312e81,#1e3a8a);padding:16px 52px;display:flex;align-items:center;justify-content:space-between}
+.cover-bottom-left{font-size:12px;color:#93c5fd;font-weight:600}
+.cover-bottom-right{display:flex;gap:8px}
+.pill{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#e0e7ff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px}
+
+/* ── Section ── */
+.section{background:#fff;border-radius:16px;border:1px solid var(--border);margin-bottom:20px;overflow:hidden}
+.section-header{background:linear-gradient(to right,#1e293b,#0f172a);padding:16px 28px;display:flex;align-items:center;gap:12px}
+.section-num{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#4f46e5,#2563eb);color:#fff;font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.section-header h2{font-size:15px;font-weight:800;color:#fff;letter-spacing:-.2px}
+.section-body{padding:24px 28px}
+
+/* ── Typography inside sections ── */
+.section-body p{color:#475569;font-size:13px;margin-bottom:10px;line-height:1.7}
+.section-body p:last-child{margin-bottom:0}
+.section-body h3{font-size:13px;font-weight:800;color:#1e293b;margin:18px 0 8px}
+.section-body h3:first-child{margin-top:0}
+.section-body ul{list-style:none;margin-bottom:12px}
+.section-body ul li{font-size:13px;color:#475569;padding:4px 0 4px 20px;position:relative;line-height:1.6}
+.section-body ul li::before{content:'›';position:absolute;left:0;color:#4f46e5;font-weight:900;font-size:16px;line-height:1.2}
+
+/* ── Info grid ── */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.info-box{background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.info-box label{font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:4px}
+.info-box span{font-size:13px;font-weight:600;color:#1e293b}
+
+/* ── Priority table ── */
+.priority-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.priority-table thead tr{background:#0f172a}
+.priority-table th{padding:11px 14px;text-align:left;font-size:11px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.priority-table th:first-child{border-radius:8px 0 0 0}
+.priority-table th:last-child{border-radius:0 8px 0 0}
+.priority-table td{padding:11px 14px;border-bottom:1px solid #f1f5f9;vertical-align:top;color:#475569}
+.priority-table tr:hover td{background:#fafbff}
+.priority-table tr:last-child td{border-bottom:none}
+.p-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap}
+.p1{background:#fee2e2;color:#dc2626;border:1px solid #fca5a5}
+.p2{background:#ffedd5;color:#ea580c;border:1px solid #fdba74}
+.p3{background:#fef9c3;color:#ca8a04;border:1px solid #fde047}
+.p4{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd}
+.p5{background:#f0fdf4;color:#16a34a;border:1px solid #86efac}
+
+/* ── Highlight box ── */
+.highlight-box{border-left:4px solid var(--indigo);background:linear-gradient(to right,#eff6ff,#f8fafc);border-radius:0 12px 12px 0;padding:16px 20px;margin:12px 0;font-size:13px;color:#1e293b}
+.highlight-box strong{color:var(--blue)}
+.warn-box{border-left:4px solid var(--amber);background:#fffbeb;border-radius:0 12px 12px 0;padding:14px 18px;margin:10px 0;font-size:12px;color:#92400e}
+.success-box{border-left:4px solid var(--green);background:#f0fdf4;border-radius:0 12px 12px 0;padding:14px 18px;margin:10px 0;font-size:13px;color:#14532d}
+
+/* ── Escalation ── */
+.escalation-chain{display:flex;gap:0;margin:12px 0;align-items:stretch;flex-wrap:wrap;gap:8px}
+.esc-step{flex:1;min-width:150px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative}
+.esc-step::after{content:'▶';position:absolute;right:-14px;top:50%;transform:translateY(-50%);color:#cbd5e1;font-size:12px;z-index:1}
+.esc-step:last-child::after{display:none}
+.esc-level{font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.esc-role{font-size:13px;font-weight:800;color:#1e293b;margin-bottom:2px}
+.esc-time{font-size:11px;color:#64748b}
+
+/* ── Credits table ── */
+.credits-table{width:100%;border-collapse:collapse;font-size:13px}
+.credits-table th{background:#0f172a;color:#fff;padding:10px 14px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.credits-table td{padding:10px 14px;border-bottom:1px solid #f1f5f9;color:#475569}
+.credits-table tr:last-child td{border-bottom:none}
+.credits-table tr:hover td{background:#fafbff}
+
+/* ── Hours grid ── */
+.hours-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center}
+.hours-day{border-radius:8px;padding:10px 6px;font-size:11px;font-weight:700}
+.day-on{background:#dcfce7;color:#15803d;border:1px solid #86efac}
+.day-off{background:#f1f5f9;color:#94a3b8;border:1px solid var(--border)}
+
+/* ── Availability ring ── */
+.avail-row{display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid #f1f5f9}
+.avail-row:last-child{border-bottom:none}
+.avail-label{flex:1;font-size:13px;color:#1e293b;font-weight:600}
+.avail-value{font-size:13px;font-weight:800;color:#16a34a}
+.avail-bar{flex:2;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden}
+.avail-bar-inner{height:100%;border-radius:3px;background:linear-gradient(to right,#16a34a,#22c55e)}
+
+/* ── Definitions ── */
+.def-row{display:grid;grid-template-columns:180px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid #f8fafc;font-size:13px}
+.def-row:last-child{border-bottom:none}
+.def-term{font-weight:800;color:#1e293b}
+.def-meaning{color:#475569}
+
+/* ── Footer ── */
+.doc-footer{text-align:center;padding:24px;font-size:12px;color:#94a3b8;margin-top:8px}
+
+/* ── PRINT ── */
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  @page{size:A4 portrait;margin:0}
+  html,body{background:#fff!important;font-size:10pt}
+  .print-btn{display:none!important}
+  .page{max-width:100%;padding:0;margin:0}
+  .cover{border-radius:0;margin-bottom:0;page-break-after:always}
+  .cover-top{padding:36px 40px 28px}
+  .cover-title{font-size:28pt}
+  .section{border-radius:0;border-left:none;border-right:none;margin-bottom:0;border-bottom:2px solid #e2e8f0;page-break-inside:avoid}
+  .section-header{padding:12px 24px}
+  .section-body{padding:16px 24px}
+  .escalation-chain{flex-wrap:nowrap}
+  .cover-meta-grid{grid-template-columns:repeat(4,1fr)}
+  .info-grid{grid-template-columns:1fr 1fr}
+  .hours-grid{grid-template-columns:repeat(7,1fr)}
+  .priority-table th,.credits-table th{background:#0f172a!important}
+  .sec-keep{page-break-inside:avoid}
+  .cover-bottom{background:#1e3a8a!important}
+  .p1{background:#fee2e2!important;color:#dc2626!important}
+  .p2{background:#ffedd5!important;color:#ea580c!important}
+  .p3{background:#fef9c3!important;color:#ca8a04!important}
+  .p4{background:#dbeafe!important;color:#1d4ed8!important}
+  .p5{background:#f0fdf4!important;color:#16a34a!important}
+  .highlight-box,.success-box,.warn-box{page-break-inside:avoid}
+  .doc-footer{page-break-inside:avoid;border-top:1px solid #e2e8f0;margin-top:0}
+}
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+  Save as PDF
+</button>
+
+<div class="page">
+
+<!-- ══════════════════ COVER ══════════════════ -->
+<div class="cover">
+  <div class="cover-top">
+    <div class="cover-eyebrow">
+      <div class="cover-logo">A</div>
+      <span class="cover-brand">AssetXAI Platform — Enterprise Support</span>
+    </div>
+    <div class="cover-title">Service Level<br><span>Agreement</span></div>
+    <div class="cover-subtitle">Asset Management &amp; Ticketing System Integrated with RFID Technology</div>
+    <div class="cover-meta-grid">
+      <div class="cover-meta-item"><label>Client</label><span>Qatar Red Crescent Society</span></div>
+      <div class="cover-meta-item"><label>Vendor</label><span>AssetXAI</span></div>
+      <div class="cover-meta-item"><label>Effective Date</label><span>Upon Contract Award</span></div>
+      <div class="cover-meta-item"><label>Document Ref</label><span>AX-SLA-2026-001 v1.0</span></div>
+    </div>
+  </div>
+  <div class="cover-bottom">
+    <span class="cover-bottom-left">Document Status: Final &nbsp;|&nbsp; Classification: Confidential &nbsp;|&nbsp; April 2026</span>
+    <div class="cover-bottom-right">
+      <span class="pill">QRCS · 20 Technicians · 900 End Users</span>
+      <span class="pill">7 Sites · 30,000 Assets</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 1. INTRODUCTION ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <h2>Introduction &amp; Purpose</h2>
+  </div>
+  <div class="section-body">
+    <p>This Service Level Agreement (<strong>"SLA"</strong>) defines the performance standards, support obligations, and service commitments that <strong>AssetXAI</strong> (the "Vendor") provides to the <strong>Qatar Red Crescent Society (QRCS)</strong> (the "Client") in connection with the AssetXAI Enterprise Asset Management, Ticketing, and RFID Platform deployed across QRCS operational sites.</p>
+    <p>This agreement establishes measurable benchmarks for system availability, incident response, resolution timelines, escalation procedures, and reporting — ensuring QRCS receives a consistent, reliable, and high-quality service experience throughout the contract term.</p>
+    <div class="highlight-box">
+      <strong>Commitment:</strong> AssetXAI is committed to delivering enterprise-grade support that maximises system uptime, minimises operational disruption, and continuously improves service quality for all 920 QRCS users across 7 sites and 30,000 tracked assets.
+    </div>
+    <div class="info-grid">
+      <div class="info-box"><label>Agreement Term</label><span>12 months, auto-renewable annually</span></div>
+      <div class="info-box"><label>Review Cycle</label><span>Quarterly Service Review Meetings</span></div>
+      <div class="info-box"><label>Governing Language</label><span>English (Arabic translation available)</span></div>
+      <div class="info-box"><label>Supersedes</label><span>All prior informal support arrangements</span></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 2. SCOPE ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <h2>Scope of Services Covered</h2>
+  </div>
+  <div class="section-body">
+    <p>This SLA covers all components of the AssetXAI platform as deployed for QRCS, including:</p>
+    <div class="info-grid">
+      <div class="info-box">
+        <label>Platform Modules Covered</label>
+        <span>Asset Management · Ticketing System · RFID Platform · Handheld Integration · Mobile App · ERP (D365) Connector · SLA Engine · Borrowing & Returns · Spare Parts · Service Contracts · Inspection Routes · Stocktaking</span>
+      </div>
+      <div class="info-box">
+        <label>Infrastructure Covered</label>
+        <span>Web Application · REST API · Database (PostgreSQL) · Authentication (Supabase + Azure AD) · Cloud Hosting · RFID Webhook Endpoint · Vercel Cron Jobs · Email Service</span>
+      </div>
+      <div class="info-box">
+        <label>Users Covered</label>
+        <span>20 Technicians · 900 End Users · All QRCS staff with provisioned accounts</span>
+      </div>
+      <div class="info-box">
+        <label>Sites Covered</label>
+        <span>All 7 QRCS operational sites and passageways as surveyed and configured</span>
+      </div>
+    </div>
+    <h3>Out of Scope</h3>
+    <ul>
+      <li>Physical RFID hardware (readers, tags, handheld devices) — covered under hardware warranty</li>
+      <li>Third-party network infrastructure, internet connectivity, or VPN at client sites</li>
+      <li>Client-side device configuration (laptops, mobile phones) unless directly related to the AssetXAI app</li>
+      <li>Microsoft Azure AD tenant administration (client-managed)</li>
+      <li>Microsoft Dynamics 365 environment issues (D365 vendor responsibility)</li>
+      <li>Force majeure events or issues originating with third-party providers (AWS, Supabase, Vercel)</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 3. SERVICE AVAILABILITY ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <h2>Service Availability &amp; Uptime Commitments</h2>
+  </div>
+  <div class="section-body">
+    <div class="avail-row">
+      <span class="avail-label">Platform Uptime (Monthly)</span>
+      <div class="avail-bar"><div class="avail-bar-inner" style="width:99.5%"></div></div>
+      <span class="avail-value">99.5% SLA</span>
+    </div>
+    <div class="avail-row">
+      <span class="avail-label">API Response Time (p95)</span>
+      <div class="avail-bar"><div class="avail-bar-inner" style="width:92%"></div></div>
+      <span class="avail-value">&lt; 800ms</span>
+    </div>
+    <div class="avail-row">
+      <span class="avail-label">RFID Webhook Processing</span>
+      <div class="avail-bar"><div class="avail-bar-inner" style="width:96%"></div></div>
+      <span class="avail-value">&lt; 2 seconds per batch</span>
+    </div>
+    <div class="avail-row">
+      <span class="avail-label">Mobile App Availability</span>
+      <div class="avail-bar"><div class="avail-bar-inner" style="width:99%"></div></div>
+      <span class="avail-value">99.0% SLA</span>
+    </div>
+    <div class="avail-row">
+      <span class="avail-label">Database Query Performance (p95)</span>
+      <div class="avail-bar"><div class="avail-bar-inner" style="width:94%"></div></div>
+      <span class="avail-value">&lt; 500ms</span>
+    </div>
+
+    <h3>Planned Maintenance Windows</h3>
+    <p>Scheduled maintenance is performed outside peak operational hours to minimise impact on QRCS operations:</p>
+    <ul>
+      <li><strong>Standard Window:</strong> Fridays and Saturdays, 02:00 – 06:00 Arabia Standard Time (AST)</li>
+      <li><strong>Notice Period:</strong> Minimum 72 hours advance notice via email and in-platform notification</li>
+      <li><strong>Emergency Patching:</strong> Critical security patches deployed within 24 hours with 2-hour advance notice where operationally feasible</li>
+      <li><strong>Maximum Planned Downtime:</strong> 4 hours per month, not counted against uptime SLA</li>
+    </ul>
+
+    <div class="highlight-box">
+      <strong>Availability Calculation:</strong> Monthly Uptime % = ((Total Minutes − Unplanned Downtime Minutes) ÷ Total Minutes) × 100. Planned maintenance windows and third-party infrastructure incidents are excluded from this calculation.
+    </div>
+
+    <h3>Uptime Monitoring</h3>
+    <p>AssetXAI operates continuous automated monitoring of all platform components. Synthetic health checks run every 60 seconds from multiple geographic nodes. The AssetXAI status page provides real-time transparency for QRCS administrators.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 4. SUPPORT HOURS ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <h2>Support Hours &amp; Coverage</h2>
+  </div>
+  <div class="section-body">
+    <h3>Standard Business Hours Support</h3>
+    <div class="hours-grid" style="margin-bottom:12px">
+      <div class="hours-day day-on">Sun<br><small>08:00–18:00</small></div>
+      <div class="hours-day day-on">Mon<br><small>08:00–18:00</small></div>
+      <div class="hours-day day-on">Tue<br><small>08:00–18:00</small></div>
+      <div class="hours-day day-on">Wed<br><small>08:00–18:00</small></div>
+      <div class="hours-day day-on">Thu<br><small>08:00–18:00</small></div>
+      <div class="hours-day day-off">Fri<br><small>Closed</small></div>
+      <div class="hours-day day-off">Sat<br><small>Closed</small></div>
+    </div>
+    <p style="font-size:12px;color:#64748b;margin-bottom:16px">All times in Arabia Standard Time (AST, UTC+3). Standard support covers 50 hours per week, Sunday through Thursday.</p>
+
+    <h3>Out-of-Hours Critical Support</h3>
+    <div class="success-box">
+      <strong>Priority 1 (Critical) Incidents Only:</strong> For system-wide outages or critical failures affecting all QRCS users outside standard hours, a dedicated emergency contact channel is available 24 hours a day, 7 days a week via the emergency support email and phone hotline. Response acknowledgement is guaranteed within 2 hours of notification.
+    </div>
+
+    <h3>Self-Service &amp; Automated Support — Always Available</h3>
+    <p>The AssetXAI platform includes comprehensive self-service capabilities that are operational 24/7, independent of human support staff:</p>
+    <ul>
+      <li><strong>Support Portal:</strong> Ticket submission, status tracking, and asset management — available 24/7</li>
+      <li><strong>Automated SLA Engine:</strong> Monitors ticket response targets, triggers escalations, and sends reminders automatically</li>
+      <li><strong>Knowledge Base &amp; In-App Help:</strong> Guided workflows, tooltips, and contextual help for all 920 users</li>
+      <li><strong>Automated System Health Monitoring:</strong> Continuous uptime checks with instant alerting</li>
+      <li><strong>Automated Email Notifications:</strong> Ticket updates, SLA breach warnings, overdue alerts — sent immediately without manual intervention</li>
+      <li><strong>Offline Mode:</strong> Handheld devices continue operating and queue actions automatically during connectivity issues</li>
+    </ul>
+
+    <div class="info-grid" style="margin-top:12px">
+      <div class="info-box"><label>Support Portal</label><span>24 / 7 Self-Service</span></div>
+      <div class="info-box"><label>Standard Support</label><span>Sun – Thu · 08:00 – 18:00 AST</span></div>
+      <div class="info-box"><label>P1 Emergency Hotline</label><span>24 / 7 · 365 days</span></div>
+      <div class="info-box"><label>Automated Monitoring</label><span>24 / 7 · Every 60 seconds</span></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 5. INCIDENT CLASSIFICATION ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <h2>Incident Classification &amp; Priority Levels</h2>
+  </div>
+  <div class="section-body">
+    <p>All support requests are classified into five priority levels. Classification is performed by the AssetXAI support team upon ticket receipt, taking into account business impact, number of users affected, and operational urgency.</p>
+    <table class="priority-table">
+      <thead>
+        <tr>
+          <th>Priority</th>
+          <th>Classification</th>
+          <th>Definition</th>
+          <th>Examples</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="p-badge p1">P1 · Critical</span></td>
+          <td>System-Wide Outage</td>
+          <td>Complete platform unavailability or data loss affecting all users. No workaround available.</td>
+          <td>Platform inaccessible; database failure; all RFID readers offline; authentication failure</td>
+        </tr>
+        <tr>
+          <td><span class="p-badge p2">P2 · High</span></td>
+          <td>Major Functionality Loss</td>
+          <td>Core functionality severely impaired affecting multiple users or a critical site. Partial workaround exists.</td>
+          <td>Ticket creation failed; RFID zone alerts not triggering; bulk asset import failing; SLA engine stopped</td>
+        </tr>
+        <tr>
+          <td><span class="p-badge p3">P3 · Medium</span></td>
+          <td>Partial Degradation</td>
+          <td>Non-critical feature impaired or single-user issue. Workaround available. Business continues.</td>
+          <td>Report export error; dashboard widget not loading; notification email delayed; filter not working</td>
+        </tr>
+        <tr>
+          <td><span class="p-badge p4">P4 · Low</span></td>
+          <td>Minor Issue / Query</td>
+          <td>Minor cosmetic issue, question, or enhancement request with no operational impact.</td>
+          <td>UI misalignment; translation request; how-to question; configuration guidance</td>
+        </tr>
+        <tr>
+          <td><span class="p-badge p5">P5 · Enhancement</span></td>
+          <td>Feature Request</td>
+          <td>New feature or improvement suggestion. Logged for product roadmap consideration.</td>
+          <td>New report format; additional dashboard widget; custom field request; integration extension</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="warn-box" style="margin-top:14px">
+      <strong>Client Right to Reclassify:</strong> QRCS may request reclassification of any ticket if they believe the initial priority does not reflect operational impact. Reclassification requests are reviewed within 1 business hour during standard support hours.
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 6. RESPONSE & RESOLUTION TARGETS ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <h2>Response &amp; Resolution Time Targets</h2>
+  </div>
+  <div class="section-body">
+    <p>Response time is defined as the elapsed time between a ticket being submitted and the first meaningful acknowledgement from an AssetXAI support engineer. Resolution time is defined as the elapsed time from ticket submission to confirmed fix or workaround accepted by QRCS.</p>
+
+    <table class="priority-table">
+      <thead>
+        <tr>
+          <th>Priority</th>
+          <th>Initial Response</th>
+          <th>Update Frequency</th>
+          <th>Resolution Target</th>
+          <th>SLA Credit Trigger</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="p-badge p1">P1 · Critical</span></td>
+          <td><strong>2 hours</strong><br><small>(24/7, inc. weekends)</small></td>
+          <td>Every 2 hours until resolved</td>
+          <td><strong>8 business hours</strong></td>
+          <td>Response &gt; 2h or Resolution &gt; 8h</td>
+        </tr>
+        <tr>
+          <td><span class="p-badge p2">P2 · High</span></td>
+          <td><strong>4 business hours</strong></td>
+          <td>Every 4 hours until resolved</td>
+          <td><strong>2 business days</strong></td>
+          <td>Response &gt; 4h or Resolution &gt; 2d</td>
+        </tr>
+        <tr>
+          <td><span class="p-badge p3">P3 · Medium</span></td>
+          <td><strong>8 business hours</strong></td>
+          <td>Every business day</td>
+          <td><strong>5 business days</strong></td>
+          <td>Response &gt; 8h or Resolution &gt; 5d</td>
+        </tr>
+        <tr>
+          <td><span class="p-badge p4">P4 · Low</span></td>
+          <td><strong>1 business day</strong></td>
+          <td>Upon meaningful update</td>
+          <td><strong>10 business days</strong></td>
+          <td>Response &gt; 1d</td>
+        </tr>
+        <tr>
+          <td><span class="p-badge p5">P5 · Enhancement</span></td>
+          <td><strong>2 business days</strong></td>
+          <td>Upon roadmap decision</td>
+          <td>Per product roadmap</td>
+          <td>N/A</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="highlight-box" style="margin-top:16px">
+      <strong>Business Hours Definition:</strong> Sunday through Thursday, 08:00 – 18:00 Arabia Standard Time (AST), excluding Qatar public holidays. P1 Critical response is measured in calendar hours (24/7).
+    </div>
+
+    <h3>Clock Pause Conditions</h3>
+    <p>Resolution clocks are paused in the following circumstances and resume immediately upon condition clearance:</p>
+    <ul>
+      <li>Awaiting information, access, or approval from QRCS that is required to proceed</li>
+      <li>Issue caused by third-party systems (Dynamics 365, Azure AD, hardware vendor) pending their resolution</li>
+      <li>QRCS-requested deferral of resolution to a preferred maintenance window</li>
+      <li>Scheduled maintenance windows affecting the service component in question</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 7. ESCALATION MATRIX ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <h2>Escalation Matrix &amp; Procedures</h2>
+  </div>
+  <div class="section-body">
+    <p>If a ticket is not progressing toward resolution within expected timeframes, the following escalation procedure is activated automatically by the AssetXAI SLA Engine and can also be triggered manually by QRCS at any time.</p>
+
+    <h3>Automatic Escalation Triggers</h3>
+    <ul>
+      <li>P1: No response within 1.5 hours → Auto-escalate to Level 2 and notify QRCS Account Manager</li>
+      <li>P2: No response within 3 hours (business hours) → Auto-escalate to Level 2</li>
+      <li>P1/P2: No resolution within 50% of target time → Escalate to Level 3</li>
+      <li>Any priority: SLA resolution target exceeded → Escalate to Level 3 + service credit assessment</li>
+    </ul>
+
+    <div class="escalation-chain">
+      <div class="esc-step">
+        <div class="esc-level">Level 1 — First Response</div>
+        <div class="esc-role">Support Engineer</div>
+        <div class="esc-time">Triage · Diagnosis · Initial Fix</div>
+      </div>
+      <div class="esc-step">
+        <div class="esc-level">Level 2 — Technical Lead</div>
+        <div class="esc-role">Senior Engineer</div>
+        <div class="esc-time">Deep Diagnosis · Code Review · Hotfix Deployment</div>
+      </div>
+      <div class="esc-step">
+        <div class="esc-level">Level 3 — Management</div>
+        <div class="esc-role">Account Manager</div>
+        <div class="esc-time">Client Communication · Priority Override · Resource Allocation</div>
+      </div>
+      <div class="esc-step">
+        <div class="esc-level">Level 4 — Executive</div>
+        <div class="esc-role">CEO / CTO</div>
+        <div class="esc-time">Crisis Management · SLA Remediation · Executive Commitment</div>
+      </div>
+    </div>
+
+    <h3>Client-Initiated Escalation</h3>
+    <p>QRCS may escalate any ticket to a higher priority at any time by contacting the dedicated Account Manager directly. Escalation requests are acknowledged within 30 minutes during business hours and within 1 hour outside business hours for P1/P2 tickets.</p>
+
+    <div class="info-grid" style="margin-top:12px">
+      <div class="info-box"><label>Account Manager (Primary)</label><span>Dedicated QRCS Account Manager · Direct Email &amp; Phone</span></div>
+      <div class="info-box"><label>Emergency Hotline</label><span>24/7 P1 Emergency Line · Guaranteed 2-Hour Response</span></div>
+      <div class="info-box"><label>Executive Escalation</label><span>Available for P1 unresolved &gt;4 hours or repeated SLA misses</span></div>
+      <div class="info-box"><label>Escalation Portal</label><span>In-platform escalation button available on every ticket</span></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 8. SERVICE CREDITS ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">8</div>
+    <h2>Service Credits &amp; SLA Breach Remedies</h2>
+  </div>
+  <div class="section-body">
+    <p>In the event of verified SLA breaches, AssetXAI provides service credits to QRCS as a goodwill remedy. Credits are automatically calculated monthly and applied as a deduction to the following month's service invoice or accumulated for annual settlement.</p>
+
+    <h3>Uptime Credits</h3>
+    <table class="credits-table">
+      <thead><tr><th>Monthly Uptime Achieved</th><th>Credit Applied</th><th>Applies To</th></tr></thead>
+      <tbody>
+        <tr><td>99.5% – 100%</td><td>No credit (within SLA)</td><td>—</td></tr>
+        <tr><td>99.0% – 99.49%</td><td>5% of monthly service fee</td><td>Platform availability</td></tr>
+        <tr><td>98.0% – 98.99%</td><td>10% of monthly service fee</td><td>Platform availability</td></tr>
+        <tr><td>95.0% – 97.99%</td><td>20% of monthly service fee</td><td>Platform availability</td></tr>
+        <tr><td>Below 95.0%</td><td>30% of monthly service fee</td><td>Platform availability</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Response Time Credits</h3>
+    <table class="credits-table" style="margin-top:12px">
+      <thead><tr><th>Incident Priority</th><th>Credit per Breach</th><th>Cap per Month</th></tr></thead>
+      <tbody>
+        <tr><td><span class="p-badge p1">P1 · Critical</span></td><td>2% of monthly fee per incident</td><td>20% of monthly fee</td></tr>
+        <tr><td><span class="p-badge p2">P2 · High</span></td><td>1% of monthly fee per incident</td><td>10% of monthly fee</td></tr>
+        <tr><td><span class="p-badge p3">P3 · Medium</span></td><td>0.5% of monthly fee per incident</td><td>5% of monthly fee</td></tr>
+        <tr><td><span class="p-badge p4">P4 · Low</span></td><td>Goodwill credit as agreed</td><td>—</td></tr>
+      </tbody>
+    </table>
+
+    <div class="warn-box" style="margin-top:14px">
+      <strong>Credit Claims:</strong> QRCS must report SLA breach claims within 30 calendar days of the incident. AssetXAI will review and confirm or dispute within 10 business days. Maximum total monthly credits are capped at 30% of the monthly service fee. Credits do not apply if the breach resulted from QRCS-side actions, third-party failures, or force majeure events.
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 9. SUPPORT CHANNELS ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">9</div>
+    <h2>Support Channels &amp; Contact Procedures</h2>
+  </div>
+  <div class="section-body">
+    <div class="info-grid">
+      <div class="info-box">
+        <label>Primary — Support Portal</label>
+        <span>In-platform ticket creation at assetxai.live/portal · Recommended for all P3–P5 incidents · Auto-classifies and routes tickets · Full audit trail</span>
+      </div>
+      <div class="info-box">
+        <label>Email — General Support</label>
+        <span>support@assetxai.live · All priorities · Auto-creates ticket with unique reference · Response within SLA targets above</span>
+      </div>
+      <div class="info-box">
+        <label>Email — Account Manager</label>
+        <span>Dedicated QRCS Account Manager email · P1/P2 escalation · Quarterly reviews · Contract matters</span>
+      </div>
+      <div class="info-box">
+        <label>Emergency Hotline — P1 Only</label>
+        <span>24/7 emergency phone line for system-wide outages only · Provided in onboarding pack · Not for general queries</span>
+      </div>
+      <div class="info-box">
+        <label>Email-to-Ticket (Outlook/Gmail)</label>
+        <span>Forward any email to the support inbox to auto-create a ticket · AI classifies priority · Confirmation sent to sender</span>
+      </div>
+      <div class="info-box">
+        <label>Microsoft Outlook Add-In</label>
+        <span>Create and track tickets directly from Outlook without leaving email · Ideal for technicians and end-users</span>
+      </div>
+    </div>
+
+    <h3>Ticket Submission Best Practices</h3>
+    <p>To ensure the fastest possible resolution, QRCS users are encouraged to include the following when submitting a ticket:</p>
+    <ul>
+      <li>Asset ID, Ticket ID, or affected module name</li>
+      <li>Exact error message or screenshot of the issue</li>
+      <li>Steps to reproduce the issue</li>
+      <li>Number of users affected and business impact</li>
+      <li>Device type and browser/app version (if applicable)</li>
+      <li>Suggested priority level and business justification</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 10. CHANGE MANAGEMENT ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">10</div>
+    <h2>Change Management &amp; Release Policy</h2>
+  </div>
+  <div class="section-body">
+    <h3>Change Categories</h3>
+    <table class="priority-table">
+      <thead>
+        <tr><th>Change Type</th><th>Examples</th><th>Notice Period</th><th>Testing</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Emergency</strong></td>
+          <td>Critical security patches, data integrity fixes</td>
+          <td>2 hours (minimum)</td>
+          <td>Automated regression + spot check</td>
+        </tr>
+        <tr>
+          <td><strong>Standard</strong></td>
+          <td>Bug fixes, minor improvements, UI updates</td>
+          <td>48 hours</td>
+          <td>Full regression suite</td>
+        </tr>
+        <tr>
+          <td><strong>Major</strong></td>
+          <td>New modules, schema migrations, integrations</td>
+          <td>5 business days</td>
+          <td>Full QA + UAT sign-off by QRCS</td>
+        </tr>
+        <tr>
+          <td><strong>Customisation</strong></td>
+          <td>QRCS-specific feature requests (within 15% scope)</td>
+          <td>Agreed per request</td>
+          <td>Full QA + QRCS acceptance testing</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Deployment Policy</h3>
+    <ul>
+      <li>All deployments are performed during planned maintenance windows unless emergency</li>
+      <li>A rollback plan is maintained for every deployment and executed within 15 minutes if critical regression detected</li>
+      <li>QRCS is notified of all deployments via email and in-platform notification prior to release</li>
+      <li>Release notes are published to the QRCS account portal within 24 hours of each deployment</li>
+    </ul>
+
+    <div class="success-box">
+      <strong>Zero-Downtime Deployments:</strong> The AssetXAI platform uses serverless architecture on Vercel with automatic zero-downtime deployments for standard and emergency releases. Major schema changes may require brief planned maintenance windows.
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 11. REPORTING & GOVERNANCE ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">11</div>
+    <h2>Reporting &amp; Service Governance</h2>
+  </div>
+  <div class="section-body">
+    <h3>Automated Real-Time Reporting</h3>
+    <p>QRCS administrators have access to a live SLA compliance dashboard within the AssetXAI platform, displaying:</p>
+    <ul>
+      <li>Real-time ticket status and resolution progress across all 7 sites</li>
+      <li>SLA compliance rate by priority and category</li>
+      <li>Average response and resolution times against targets</li>
+      <li>Escalation events and resolution trends</li>
+      <li>Platform uptime and performance metrics</li>
+      <li>Handheld device activity and RFID scan statistics</li>
+    </ul>
+
+    <h3>Periodic Reporting Schedule</h3>
+    <table class="credits-table">
+      <thead><tr><th>Report</th><th>Frequency</th><th>Delivery Method</th><th>Recipient</th></tr></thead>
+      <tbody>
+        <tr><td>Weekly Ticket Summary</td><td>Every Monday</td><td>Automated email PDF</td><td>QRCS IT Manager</td></tr>
+        <tr><td>Monthly SLA Performance Report</td><td>1st of each month</td><td>Email + portal</td><td>QRCS IT Manager + Finance</td></tr>
+        <tr><td>Quarterly Service Review</td><td>Every 3 months</td><td>Video/in-person meeting</td><td>QRCS Management</td></tr>
+        <tr><td>Annual Contract Review</td><td>Annually</td><td>Formal meeting</td><td>QRCS Executive + AssetXAI</td></tr>
+        <tr><td>Incident Post-Mortem (P1/P2)</td><td>Within 5 days of incident</td><td>Formal report</td><td>QRCS IT Manager</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Monthly SLA Performance Report Contents</h3>
+    <ul>
+      <li>Platform uptime achieved vs. target</li>
+      <li>Total tickets by priority, category, and status</li>
+      <li>SLA compliance % by priority level</li>
+      <li>Average response and resolution times</li>
+      <li>Top recurring issue categories with root cause analysis</li>
+      <li>Service credit calculation (if applicable)</li>
+      <li>Actions taken and planned improvements</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 12. CLIENT RESPONSIBILITIES ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">12</div>
+    <h2>QRCS Responsibilities</h2>
+  </div>
+  <div class="section-body">
+    <p>To enable AssetXAI to deliver services within the commitments set out in this SLA, QRCS agrees to the following responsibilities:</p>
+    <ul>
+      <li><strong>Designated IT Contact:</strong> Maintain at least one designated QRCS IT contact who is the primary liaison for all support and change requests</li>
+      <li><strong>Timely Information:</strong> Respond to AssetXAI requests for information, access, or approvals within 1 business day to avoid resolution clock pauses</li>
+      <li><strong>Accurate Reporting:</strong> Report incidents through the designated support channels with accurate description, priority assessment, and impact details</li>
+      <li><strong>User Training:</strong> Ensure all 920 QRCS users complete the AssetXAI onboarding training provided at project go-live</li>
+      <li><strong>Infrastructure:</strong> Maintain adequate network connectivity, device compatibility, and Azure AD configuration as agreed during deployment</li>
+      <li><strong>Access Provision:</strong> Grant AssetXAI engineers timely access to QRCS-side systems (Azure AD, network logs) required for diagnosis of complex issues</li>
+      <li><strong>Change Approval:</strong> Review and approve or reject proposed major changes within the agreed notice periods</li>
+      <li><strong>Security:</strong> Safeguard API keys, admin credentials, and RFID webhook secrets. Report any suspected security breach immediately</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 13. SECURITY & DATA ══════════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">13</div>
+    <h2>Security, Data Protection &amp; Confidentiality</h2>
+  </div>
+  <div class="section-body">
+    <div class="info-grid">
+      <div class="info-box"><label>Data Encryption (Transit)</label><span>TLS 1.3 for all API and web traffic</span></div>
+      <div class="info-box"><label>Data Encryption (At Rest)</label><span>AES-256 via Supabase managed PostgreSQL</span></div>
+      <div class="info-box"><label>Authentication</label><span>Supabase Auth + Azure AD SSO + MFA</span></div>
+      <div class="info-box"><label>Access Control</label><span>Role-based, per-page, per-button granular permissions</span></div>
+      <div class="info-box"><label>Audit Logging</label><span>100% of user actions logged with timestamp &amp; IP</span></div>
+      <div class="info-box"><label>Data Retention</label><span>Audit logs: 365 days minimum. Asset data: indefinite.</span></div>
+      <div class="info-box"><label>Backup Frequency</label><span>Continuous replication; point-in-time recovery</span></div>
+      <div class="info-box"><label>Data Residency</label><span>AWS Asia Pacific (South) region — configurable on request</span></div>
+    </div>
+    <h3>Breach Notification</h3>
+    <p>In the event of a confirmed data security breach affecting QRCS data, AssetXAI will notify the QRCS designated contact within <strong>24 hours</strong> of detection, with a full incident report and remediation plan within <strong>72 hours</strong>.</p>
+    <ul>
+      <li>All QRCS data is logically isolated from other tenants within the multi-tenant architecture</li>
+      <li>AssetXAI staff access to QRCS production data requires QRCS approval and is fully audited</li>
+      <li>Penetration testing is conducted annually; results summary shared with QRCS upon request</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════ 14. DEFINITIONS ══════════════════ -->
+<div class="section sec-keep">
+  <div class="section-header">
+    <div class="section-num">14</div>
+    <h2>Definitions &amp; Glossary</h2>
+  </div>
+  <div class="section-body">
+    <div class="def-row"><span class="def-term">Availability / Uptime</span><span class="def-meaning">The percentage of time the AssetXAI platform is accessible and functional within a calendar month, excluding planned maintenance.</span></div>
+    <div class="def-row"><span class="def-term">Business Hours</span><span class="def-meaning">Sunday through Thursday, 08:00 – 18:00 Arabia Standard Time (UTC+3), excluding Qatar public holidays.</span></div>
+    <div class="def-row"><span class="def-term">Calendar Hours</span><span class="def-meaning">All 24 hours of every day, including weekends and public holidays. Used for P1 response targets only.</span></div>
+    <div class="def-row"><span class="def-term">Incident</span><span class="def-meaning">Any unplanned interruption or reduction in quality of the AssetXAI service reported by QRCS or detected by automated monitoring.</span></div>
+    <div class="def-row"><span class="def-term">Initial Response</span><span class="def-meaning">The first meaningful technical acknowledgement from an AssetXAI engineer, confirming receipt and initial assessment — not an automated acknowledgement email.</span></div>
+    <div class="def-row"><span class="def-term">Resolution</span><span class="def-meaning">The incident is fixed, a workaround accepted by QRCS is in place, or the ticket is closed with QRCS agreement.</span></div>
+    <div class="def-row"><span class="def-term">Service Credit</span><span class="def-meaning">A financial credit applied to QRCS's account as a remedy for verified SLA breaches, deducted from future invoices.</span></div>
+    <div class="def-row"><span class="def-term">SLA Engine</span><span class="def-meaning">The AssetXAI automated system that monitors ticket response targets, triggers escalation notifications, and tracks compliance in real time.</span></div>
+    <div class="def-row"><span class="def-term">Planned Maintenance</span><span class="def-meaning">Scheduled system downtime for upgrades, patches, or infrastructure work, communicated to QRCS at least 72 hours in advance.</span></div>
+    <div class="def-row"><span class="def-term">Force Majeure</span><span class="def-meaning">Events beyond reasonable control: natural disasters, war, government actions, widespread internet outages, or third-party cloud provider failures.</span></div>
+    <div class="def-row"><span class="def-term">P1 Emergency Hotline</span><span class="def-meaning">A dedicated 24/7 phone contact for system-wide critical incidents only, details provided in the QRCS onboarding documentation.</span></div>
+  </div>
+</div>
+
+
+<!-- ══════════════════ FOOTER ══════════════════ -->
+<div class="doc-footer">
+  AssetXAI Platform &nbsp;·&nbsp; Service Level Agreement &nbsp;·&nbsp; Document Ref: AX-SLA-2026-001 v1.0 &nbsp;·&nbsp; April 2026<br>
+  Prepared for: Qatar Red Crescent Society (QRCS) &nbsp;·&nbsp; Confidential — Not for further distribution
+</div>
+
+</div><!-- end .page -->
+</body>
+</html>
