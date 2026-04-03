@@ -642,79 +642,155 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Total Asset Value */}
-            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-600 via-violet-700 to-purple-800 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group">
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.2),transparent_55%)]" />
-              <div className="relative z-10 p-5">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.12em] text-violet-200/80 font-bold">{t('total_asset_value')}</p>
-                    <p className="text-[10px] text-violet-300/50 mt-0.5">{t('current_valuation')}</p>
-                  </div>
-                  <div className="h-11 w-11 rounded-xl bg-white/15 group-hover:bg-white/25 transition-colors flex items-center justify-center flex-shrink-0 shadow-lg">
-                    <Package className="h-5 w-5 text-white" />
-                  </div>
-                </div>
-                <p className="text-4xl font-black tabular-nums mb-1 leading-none">
-                  {(stats.assetStats?.totalValue || 0).toLocaleString()}
-                </p>
-                <p className="text-xs text-violet-300/60 mb-3">QAR — Original Purchase Value</p>
+            {/* Total Asset Value — world-class depreciation card */}
+            {(() => {
+              const totalVal = stats.assetStats?.totalValue || 0;
+              const bookVal = stats.assetStats?.depreciatedValue || 0;
+              const depPct = stats.assetStats?.depreciationPercent || 0;
+              const lostVal = totalVal - bookVal;
+              const retainedPct = 100 - depPct;
+              const hasDepreciation = bookVal > 0 && depPct > 0;
 
-                {/* Depreciation highlight */}
-                {stats.assetStats?.depreciatedValue != null && stats.assetStats.depreciatedValue > 0 && (
-                  <div className="mb-3 rounded-xl bg-white/10 border border-white/15 p-3 space-y-2">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <TrendingDown className="h-3.5 w-3.5 text-rose-300" />
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-white/60">Depreciation Analysis</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
+              const fmtV = (v: number) => v >= 1_000_000 ? `${(v/1_000_000).toFixed(2)}M` : v >= 1_000 ? `${(v/1_000).toFixed(1)}K` : v.toLocaleString();
+              const depBarColor = depPct > 70 ? 'from-red-400 to-rose-500' : depPct > 45 ? 'from-orange-400 to-red-400' : depPct > 25 ? 'from-violet-400 to-purple-500' : 'from-indigo-300 to-violet-400';
+              const depStatusLabel = depPct > 70 ? 'High Depreciation' : depPct > 45 ? 'Moderate Depreciation' : depPct > 20 ? 'Normal Depreciation' : 'Low Depreciation';
+              const depStatusColor = depPct > 70 ? 'text-red-300' : depPct > 45 ? 'text-orange-300' : 'text-emerald-300';
+
+              return (
+                <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet-700 via-violet-800 to-purple-900 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group">
+                  {/* Background effects */}
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
+                  <div className="absolute -bottom-6 -right-6 h-32 w-32 rounded-full bg-purple-500/20 blur-2xl" />
+                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-400/40 to-transparent" />
+
+                  <div className="relative z-10 p-5 space-y-4">
+                    {/* Header */}
+                    <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-[9px] text-white/50 uppercase tracking-wide">Book Value</p>
-                        <p className="font-black text-emerald-300 tabular-nums text-sm">{(stats.assetStats.depreciatedValue || 0).toLocaleString()} QAR</p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-violet-300/80 font-bold">{t('total_asset_value')}</p>
+                        <p className="text-[10px] text-violet-400/50 mt-0.5">AI-powered valuation · IAS 16</p>
                       </div>
-                      <div>
-                        <p className="text-[9px] text-white/50 uppercase tracking-wide">Depreciated</p>
-                        <p className="font-black text-rose-300 tabular-nums text-sm">{((stats.assetStats.totalValue || 0) - (stats.assetStats.depreciatedValue || 0)).toLocaleString()} QAR</p>
+                      <div className="h-11 w-11 rounded-xl bg-white/15 group-hover:bg-white/25 transition-colors flex items-center justify-center flex-shrink-0 shadow-lg">
+                        <Package className="h-5 w-5 text-white" />
                       </div>
                     </div>
-                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-rose-400 to-rose-600"
-                        style={{ width: `${Math.min(stats.assetStats.depreciationPercent || 0, 100)}%` }}
-                      />
-                    </div>
-                    <p className="text-[9px] text-white/40">{(stats.assetStats.depreciationPercent || 0).toFixed(1)}% of portfolio depreciated</p>
-                  </div>
-                )}
 
-                {/* Asset status breakdown */}
-                <div className="grid grid-cols-2 gap-2">
-                  {(stats.assetStats?.byStatus || []).slice(0, 4).map(s => {
-                    const dotColor = s.status === 'ACTIVE' ? 'bg-emerald-400' : s.status === 'DISPOSED' ? 'bg-rose-400' : 'bg-amber-400';
-                    return (
-                      <div key={s.status} className="bg-white/10 rounded-xl px-3 py-2.5 hover:bg-white/15 transition-colors">
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-                          <p className="text-[9px] text-white/50 uppercase tracking-wide truncate">{s.status}</p>
+                    {/* Main value */}
+                    <div>
+                      <div className="flex items-end gap-2">
+                        <p className="text-4xl font-black tabular-nums leading-none">
+                          {fmtV(totalVal)}
+                        </p>
+                        <span className="text-sm text-violet-300/60 mb-1 font-semibold">QAR</span>
+                      </div>
+                      <p className="text-[10px] text-violet-300/50 mt-1">Original Portfolio Cost</p>
+                    </div>
+
+                    {/* Depreciation panel */}
+                    {hasDepreciation ? (
+                      <div className="rounded-xl bg-black/20 border border-white/10 overflow-hidden backdrop-blur-sm">
+                        {/* Panel header */}
+                        <div className="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/10">
+                          <div className="flex items-center gap-1.5">
+                            <TrendingDown className="h-3.5 w-3.5 text-rose-300" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-white/70">AI Depreciation Analysis</span>
+                          </div>
+                          <span className={`text-[10px] font-bold ${depStatusColor}`}>{depStatusLabel}</span>
                         </div>
-                        <p className="font-black text-white text-lg tabular-nums">{s.count}</p>
-                      </div>
-                    );
-                  })}
-                  {(stats.assetStats?.byStatus || []).length === 0 && (
-                    <div className="col-span-2 bg-white/10 rounded-xl px-3 py-2.5 text-center">
-                      <p className="text-white/60 text-sm font-bold">{stats.totalAssets}</p>
-                      <p className="text-[10px] text-white/40">total tracked</p>
-                    </div>
-                  )}
-                </div>
 
-                <button onClick={() => router.push('/assets')}
-                  className="mt-4 w-full text-xs font-bold bg-white/15 hover:bg-white/25 rounded-xl py-2 flex items-center justify-center gap-2 transition-all">
-                  <ArrowRight className="h-3.5 w-3.5" /> View All Assets
-                </button>
-              </div>
-            </div>
+                        <div className="p-3 space-y-3">
+                          {/* KPI trio */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="rounded-lg bg-white/10 px-2 py-2 text-center">
+                              <p className="text-[8px] font-bold uppercase tracking-wide text-white/40 mb-0.5">Book Value</p>
+                              <p className="text-sm font-black text-emerald-300 tabular-nums">{fmtV(bookVal)}</p>
+                              <p className="text-[8px] text-white/30">QAR</p>
+                            </div>
+                            <div className="rounded-lg bg-white/10 px-2 py-2 text-center">
+                              <p className="text-[8px] font-bold uppercase tracking-wide text-white/40 mb-0.5">Depreciated</p>
+                              <p className="text-sm font-black text-rose-300 tabular-nums">{fmtV(lostVal)}</p>
+                              <p className="text-[8px] text-white/30">QAR</p>
+                            </div>
+                            <div className="rounded-lg bg-white/10 px-2 py-2 text-center">
+                              <p className="text-[8px] font-bold uppercase tracking-wide text-white/40 mb-0.5">Dep. Rate</p>
+                              <p className="text-sm font-black text-orange-300 tabular-nums">{depPct.toFixed(1)}%</p>
+                              <p className="text-[8px] text-white/30">of total</p>
+                            </div>
+                          </div>
+
+                          {/* Value retention bar */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[9px] text-white/40 font-semibold uppercase tracking-wide">Value Retention</span>
+                              <span className="text-[9px] text-emerald-300 font-bold">{retainedPct.toFixed(1)}% retained</span>
+                            </div>
+                            <div className="relative h-3 rounded-full bg-white/10 overflow-hidden">
+                              {/* Retained value (emerald) */}
+                              <div
+                                className="absolute left-0 top-0 h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-700"
+                                style={{ width: `${Math.min(retainedPct, 100)}%` }}
+                              />
+                              {/* Depreciated portion */}
+                              <div
+                                className={`absolute top-0 h-full bg-gradient-to-r ${depBarColor} transition-all duration-700`}
+                                style={{ left: `${Math.min(retainedPct, 100)}%`, width: `${Math.min(depPct, 100)}%` }}
+                              />
+                              {/* Shine overlay */}
+                              <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent rounded-full" />
+                            </div>
+                            <div className="flex justify-between mt-0.5">
+                              <span className="text-[9px] text-emerald-400">{fmtV(bookVal)} QAR current</span>
+                              <span className="text-[9px] text-rose-400">{fmtV(lostVal)} QAR lost</span>
+                            </div>
+                          </div>
+
+                          {/* Method note */}
+                          <div className="flex items-center gap-1.5 text-[9px] text-white/30 border-t border-white/5 pt-2">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-white/50 font-semibold">Straight-Line</span>
+                            <span>·</span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-white/50 font-semibold">IAS 16 Compliant</span>
+                            <span>·</span>
+                            <span className="text-white/30">AI-enhanced</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl bg-white/10 border border-white/10 px-3 py-2.5 flex items-center gap-2">
+                        <TrendingDown className="h-4 w-4 text-violet-300/60 shrink-0" />
+                        <p className="text-[11px] text-white/40">Depreciation data loading…</p>
+                      </div>
+                    )}
+
+                    {/* Asset status breakdown */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {(stats.assetStats?.byStatus || []).slice(0, 4).map(s => {
+                        const dotColor = s.status === 'ACTIVE' ? 'bg-emerald-400' : s.status === 'DISPOSED' ? 'bg-rose-400' : 'bg-amber-400';
+                        return (
+                          <div key={s.status} className="bg-white/10 rounded-xl px-3 py-2.5 hover:bg-white/15 transition-colors">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+                              <p className="text-[9px] text-white/50 uppercase tracking-wide truncate">{s.status}</p>
+                            </div>
+                            <p className="font-black text-white text-lg tabular-nums">{s.count}</p>
+                          </div>
+                        );
+                      })}
+                      {(stats.assetStats?.byStatus || []).length === 0 && (
+                        <div className="col-span-2 bg-white/10 rounded-xl px-3 py-2.5 text-center">
+                          <p className="text-white/60 text-sm font-bold">{stats.totalAssets}</p>
+                          <p className="text-[10px] text-white/40">total tracked</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <button onClick={() => router.push('/assets')}
+                      className="w-full text-xs font-bold bg-white/15 hover:bg-white/25 rounded-xl py-2.5 flex items-center justify-center gap-2 transition-all border border-white/10 hover:border-white/20">
+                      <ArrowRight className="h-3.5 w-3.5" /> View All Assets
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Food Supply */}
             <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 group">
