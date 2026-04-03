@@ -1105,6 +1105,8 @@ enum AssetHistoryAction {
   UNASSIGNED
   CLEARANCE
   AUDIT_COMMENT
+  ASSIGNMENT_SIGNED
+  BORROW_SIGNED
 }
 
 enum TicketStatus {
