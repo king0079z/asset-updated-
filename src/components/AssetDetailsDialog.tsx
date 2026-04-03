@@ -42,7 +42,11 @@ import {
   ZoomIn,
   X,
   MessageSquare,
+  Wrench,
+  ArrowLeftRight,
+  RotateCcw,
 } from "lucide-react";
+import { BorrowReturnDialog } from "./BorrowReturnDialog";
 import { EditAssetDialog } from "./EditAssetDialog";
 import { AssignAssetDialog } from "./AssignAssetDialog";
 import { useRef, useState, useEffect, useCallback, Suspense, lazy } from "react";
@@ -145,6 +149,9 @@ const HISTORY_CONFIG: Record<string, { color: string; bg: string; border: string
   UPDATED:        { color: "text-emerald-600",bg: "bg-emerald-50 dark:bg-emerald-950/30",border: "border-emerald-200 dark:border-emerald-800",icon: Edit },
   REGISTERED:     { color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950/30", border: "border-indigo-200 dark:border-indigo-800",icon: Package },
   AUDIT_COMMENT:  { color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950/30", border: "border-indigo-200 dark:border-indigo-800",icon: MessageSquare },
+  ASSIGNED:       { color: "text-blue-700",   bg: "bg-blue-50 dark:bg-blue-950/30",     border: "border-blue-200 dark:border-blue-800",   icon: ArrowLeftRight },
+  UNASSIGNED:     { color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/30", border: "border-orange-200 dark:border-orange-800",icon: RotateCcw },
+  STATUS_CHANGED: { color: "text-teal-600",   bg: "bg-teal-50 dark:bg-teal-950/30",     border: "border-teal-200 dark:border-teal-800",   icon: CheckCircle2 },
 };
 
 function InfoRow({ icon: Icon, label, value, mono = false }: { icon: any; label: string; value: React.ReactNode; mono?: boolean }) {
@@ -179,6 +186,8 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
   const [currentAsset, setCurrentAsset] = useState(asset);
   const [rfidTag, setRfidTag] = useState<Asset["rfidTag"] | null>(null);
   const [rfidLoading, setRfidLoading] = useState(false);
+  const [activeBorrow, setActiveBorrow] = useState<any>(null);
+  const [showBorrowDialog, setShowBorrowDialog] = useState(false);
 
   const handleAssetUpdated = async () => {
     setIsEditDialogOpen(false);
@@ -230,6 +239,16 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
           if (updated?.id) setCurrentAsset(updated);
         })
         .catch(() => {});
+
+      // Fetch active borrow for this asset
+      fetch(`/api/borrowing?assetId=${asset.id}`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : [])
+        .then((list: any[]) => {
+          if (!Array.isArray(list)) return;
+          const active = list.find(b => b.status === 'BORROWED' || b.status === 'OVERDUE');
+          setActiveBorrow(active || null);
+        })
+        .catch(() => setActiveBorrow(null));
 
       setRfidLoading(true);
       fetch("/api/rfid/tags")
@@ -342,8 +361,66 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
               </div>
             </div>
 
+            {/* ── SPARE PART banner ── */}
+            {((currentAsset as any)?.isSparePart || displayAsset.type === 'SPARE_PART') && (
+              <div className="mt-3 flex items-center gap-2.5 bg-amber-500/25 border border-amber-400/50 rounded-xl px-3 py-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-400/40 flex items-center justify-center flex-shrink-0 shadow-inner">
+                  <Wrench className="h-4 w-4 text-amber-200" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-black text-amber-200 uppercase tracking-wider">🔧 Spare Part Asset</span>
+                    <span className="px-1.5 py-0.5 rounded-md bg-amber-400/30 border border-amber-400/40 text-[9px] font-bold text-amber-100 uppercase">SPARE</span>
+                  </div>
+                  <p className="text-[10px] text-amber-300/80">
+                    {(currentAsset as any)?.department?.name
+                      ? `Department: ${(currentAsset as any).department.name}`
+                      : 'Assigned to department — no individual person assignment'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ── BORROW status banner ── */}
+            {activeBorrow && (() => {
+              const diff = Math.ceil((new Date(activeBorrow.expectedReturnAt).getTime() - Date.now()) / 86_400_000);
+              const isOverdue = diff < 0;
+              const isUrgent = diff >= 0 && diff <= 2;
+              const bgCls = isOverdue ? 'bg-red-500/25 border-red-400/50' : isUrgent ? 'bg-orange-500/25 border-orange-400/50' : 'bg-blue-500/20 border-blue-400/30';
+              const iconCls = isOverdue ? 'bg-red-400/40 text-red-200' : isUrgent ? 'bg-orange-400/40 text-orange-200' : 'bg-blue-400/30 text-blue-200';
+              const textCls = isOverdue ? 'text-red-200' : isUrgent ? 'text-orange-200' : 'text-blue-200';
+              return (
+                <div className={`mt-3 flex items-center gap-2.5 rounded-xl px-3 py-2.5 border ${bgCls}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconCls}`}>
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-black uppercase tracking-wide mb-0.5 ${textCls}`}>
+                      {isOverdue ? `⚠ ${Math.abs(diff)}d overdue` : diff === 0 ? '⚡ Due TODAY' : isUrgent ? `⏰ ${diff} day${diff !== 1 ? 's' : ''} remaining` : `↗ Borrowed · ${diff} days remaining`}
+                    </p>
+                    <p className="text-[10px] text-white/60 truncate">
+                      Borrower: <strong className="text-white/85">{activeBorrow.borrowedBy?.email || activeBorrow.custodianName || '—'}</strong>
+                      {activeBorrow.expectedReturnAt && ` · Due ${new Date(activeBorrow.expectedReturnAt).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <button onClick={() => setShowBorrowDialog(true)}
+                    className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 text-white text-[10px] font-bold transition-all">
+                    <RotateCcw className="h-3 w-3" /> Return
+                  </button>
+                </div>
+              );
+            })()}
+
+            {/* Borrow button when available */}
+            {!activeBorrow && displayAsset.type !== 'SPARE_PART' && !(currentAsset as any)?.isSparePart && (
+              <button onClick={() => setShowBorrowDialog(true)}
+                className="mt-3 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/30 text-blue-200 text-xs font-semibold transition-all w-fit">
+                <ArrowLeftRight className="h-3.5 w-3.5" /> Borrow this Asset
+              </button>
+            )}
+
             {/* Assignment strip */}
-            {currentAsset?.assignedToName ? (
+            {currentAsset?.assignedToName && !(currentAsset as any)?.isSparePart ? (
               <div className="mt-4 flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
                 <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
                   {currentAsset.assignedToName[0]?.toUpperCase()}
@@ -801,6 +878,29 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                   <p className="text-muted-foreground">{record.details.ticketDescription}</p>
                                 </div>
                               )}
+                              {record.action === "ASSIGNED" && record.details && (
+                                <div className="text-xs space-y-0.5">
+                                  {record.details.borrowId && (
+                                    <div className="flex items-center gap-1.5 mt-1 px-2 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
+                                      <ArrowLeftRight className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                                      <span className="font-semibold text-blue-700 dark:text-blue-300">Asset Borrowed</span>
+                                      {record.details.borrowedById && <span className="text-blue-500">by {record.details.borrowedById.slice(0, 8)}…</span>}
+                                      {record.details.expectedReturnAt && <span className="ml-auto text-blue-400">Due: {new Date(record.details.expectedReturnAt).toLocaleDateString()}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {record.action === "UNASSIGNED" && record.details && (
+                                <div className="text-xs space-y-0.5">
+                                  {record.details.returnedAt && (
+                                    <div className="flex items-center gap-1.5 mt-1 px-2 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800">
+                                      <RotateCcw className="h-3 w-3 text-emerald-600 flex-shrink-0" />
+                                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">Asset Returned</span>
+                                      <span className="ml-auto text-emerald-400">{new Date(record.details.returnedAt).toLocaleString()}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               {record.action === "UPDATED" && record.details && (() => {
                                 /* Clearance-type UPDATED records have a `type` field starting with CLEARANCE_ */
                                 const d = record.details as any;
@@ -955,6 +1055,24 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
           onOpenChange={setIsCreateTicketDialogOpen}
           onTicketCreated={handleTicketCreated}
           assetId={asset.id}
+        />
+        <BorrowReturnDialog
+          open={showBorrowDialog}
+          onOpenChange={setShowBorrowDialog}
+          asset={currentAsset as any}
+          onSuccess={() => {
+            // Refresh borrow state and asset
+            fetch(`/api/borrowing?assetId=${asset.id}`, { credentials: 'include' })
+              .then(r => r.ok ? r.json() : [])
+              .then((list: any[]) => {
+                if (!Array.isArray(list)) return;
+                const active = list.find(b => b.status === 'BORROWED' || b.status === 'OVERDUE');
+                setActiveBorrow(active || null);
+              })
+              .catch(() => {});
+            fetchHistory();
+            onAssetUpdated?.();
+          }}
         />
       </DialogContent>
     </Dialog>

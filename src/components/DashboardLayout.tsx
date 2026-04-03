@@ -227,16 +227,6 @@ function Sidebar({ className }: SidebarProps) {
         href: "/assets",
       },
       {
-        title: "Borrowing & Returns",
-        icon: ArrowLeftRight,
-        href: "/borrowing",
-      },
-      {
-        title: "Spare Parts",
-        icon: Wrench,
-        href: "/spare-parts",
-      },
-      {
         title: "Service Contracts",
         icon: FileText,
         href: "/service-contracts",

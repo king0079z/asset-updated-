@@ -353,6 +353,7 @@ export default function AssetsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [borrowFilter, setBorrowFilter] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   const moveFormSchema = z.object({
@@ -731,7 +732,8 @@ export default function AssetsPage() {
       (asset.vendor?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = typeFilter === 'all' || asset.type === typeFilter;
     const matchesStatus = statusFilter === 'all' || asset.status === statusFilter;
-    return matchesSearch && matchesType && matchesStatus;
+    const matchesBorrow = !borrowFilter || (Array.isArray((asset as any).borrows) && (asset as any).borrows.length > 0);
+    return matchesSearch && matchesType && matchesStatus && matchesBorrow;
   });
 
   const { t } = useTranslation();
@@ -1304,6 +1306,7 @@ export default function AssetsPage() {
                   <SelectItem value="FURNITURE">Furniture</SelectItem>
                   <SelectItem value="EQUIPMENT">Equipment</SelectItem>
                   <SelectItem value="ELECTRONICS">Electronics</SelectItem>
+                  <SelectItem value="SPARE_PART">🔧 Spare Parts</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -1314,10 +1317,20 @@ export default function AssetsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="BORROWED">↗ Borrowed</SelectItem>
                   <SelectItem value="IN_TRANSIT">In Transit</SelectItem>
                   <SelectItem value="DISPOSED">Disposed</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Borrowed filter quick button */}
+              <button
+                onClick={() => setBorrowFilter(b => !b)}
+                className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                  borrowFilter ? 'bg-blue-600 text-white border-blue-600' : 'border-border/60 text-muted-foreground hover:border-blue-300 hover:text-blue-600'
+                }`}>
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                Borrowed
+              </button>
             </div>
           </CardHeader>
 
