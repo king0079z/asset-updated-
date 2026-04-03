@@ -261,13 +261,15 @@ export default async function handler(
         break;
       
       case 'vehicle':
+        // Vehicle has no userId — filter by organizationId when available, else return all
         reportData = await prisma.vehicle.findMany({
           where: {
             ...itemFilter,
-            ...(isPrivilegedUser && currentUser?.organizationId
+            ...(currentUser?.organizationId
               ? { organizationId: currentUser.organizationId }
-              : { userId: user.id }),
+              : {}), // No userId on Vehicle — omit user filter entirely
           },
+          orderBy: { createdAt: 'desc' },
           include: {
             rentals: {
               orderBy: { startDate: 'desc' },
