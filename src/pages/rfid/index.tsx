@@ -18,7 +18,7 @@ import {
   Battery, BatteryLow, BatteryCharging, AlertTriangle, CheckCircle2,
   Settings, Copy, X, Search, Zap, Activity, Eye, ChevronDown, ChevronUp,
   Signal, Clock, Package, Link, Unlink, Info, ExternalLink, Layers, Bell,
-  ArrowRight, LogOut, History, Shield, Printer, QrCode, DoorOpen, Route,
+  ArrowRight, LogOut, History, Shield, Printer, QrCode, DoorOpen,
 } from 'lucide-react';
 
 const ZoneMapEditor        = dynamic(() => import('@/components/rfid/ZoneMapEditor'),        { ssr: false });
@@ -29,7 +29,6 @@ const FloorMap3D           = dynamic(() => import('@/components/rfid/FloorMap3D'
 const RFIDMovementTimeline = dynamic(() => import('@/components/rfid/RFIDMovementTimeline').then(m => ({ default: m.RFIDMovementTimeline })), { ssr: false });
 const RoomTagPrintDialog    = dynamic(() => import('@/components/rfid/RoomTagPrintDialog').then(m => ({ default: m.RoomTagPrintDialog })), { ssr: false });
 const RfidPassagewaysPanel = dynamic(() => import('@/components/rfid/RfidPassagewaysPanel').then(m => ({ default: m.RfidPassagewaysPanel })), { ssr: false });
-const RfidInspectionRoutesPanel = dynamic(() => import('@/components/rfid/RfidInspectionRoutesPanel').then(m => ({ default: m.RfidInspectionRoutesPanel })), { ssr: false });
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface RFIDTag {
@@ -81,7 +80,7 @@ const timeAgo = (ts?: string | null) => {
 };
 
 const RFID_TABS = [
-  'overview', 'passageways', 'inspections', 'movements', 'tags', 'zones', 'room-tags', 'zone-map', 'alerts', 'setup',
+  'overview', 'passageways', 'movements', 'tags', 'zones', 'room-tags', 'zone-map', 'alerts', 'setup',
 ] as const;
 type RfidTabId = (typeof RFID_TABS)[number];
 
@@ -152,14 +151,19 @@ export default function RFIDPage() {
     }
   }, []);
 
-  // Deep-link & sidebar: /rfid?tab=passageways | inspections | …
+  // Deep-link: /rfid?tab=passageways | movements | … (legacy ?tab=inspections → passageways)
   useEffect(() => {
     const q = router.query?.tab;
     const t = typeof q === 'string' ? q : Array.isArray(q) ? q[0] : '';
+    if (t === 'inspections') {
+      setActiveTab('passageways');
+      router.replace({ pathname: router.pathname, query: { ...router.query, tab: 'passageways' } }, undefined, { shallow: true });
+      return;
+    }
     if (t && (RFID_TABS as readonly string[]).includes(t)) {
       setActiveTab(t as RfidTabId);
     }
-  }, [router.query.tab]);
+  }, [router.query.tab, router]);
 
   const goTab = useCallback((id: RfidTabId) => {
     setActiveTab(id);
@@ -390,7 +394,7 @@ export default function RFIDPage() {
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 uppercase tracking-widest">Live</span>
                   </div>
                   <p className="text-slate-400 text-sm max-w-xl">
-                    Tags, zones, movement, alerts, <span className="text-slate-300">seven-site passageways</span>, and <span className="text-slate-300">inspection routes</span> — unified for QRCS-scale operations.
+                    Tags, zones, movement, alerts, and <span className="text-slate-300">seven-site passageways</span> — unified for QRCS-scale operations. Field audits use <span className="text-slate-300">Handheld Audit</span>.
                   </p>
                 </div>
               </div>
@@ -454,7 +458,6 @@ export default function RFIDPage() {
               {([
                 { id: 'overview',     label: 'Live overview',      icon: Activity },
                 { id: 'passageways',  label: 'Passageways',        icon: DoorOpen },
-                { id: 'inspections',  label: 'Inspections',        icon: Route },
                 { id: 'movements',    label: 'Movement',           icon: History },
                 { id: 'tags',         label: 'Tags',               icon: Tag },
                 { id: 'zones',        label: 'Zones / APs',        icon: Building2 },
@@ -587,9 +590,6 @@ export default function RFIDPage() {
               }))}
             />
           )}
-
-          {/* ══ INSPECTION ROUTES TAB ═══════════════════════════════════════ */}
-          {activeTab === 'inspections' && <RfidInspectionRoutesPanel />}
 
           {/* ══ MOVEMENTS TAB ════════════════════════════════════════════ */}
           {activeTab === 'movements' && (

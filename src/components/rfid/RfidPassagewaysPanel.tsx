@@ -87,7 +87,7 @@ export function RfidPassagewaysPanel({ zones = [] }: { zones?: ZoneLite[] }) {
       if (j.skipped) {
         toast({ title: 'Demo already present', description: j.message || 'Use refresh to see data.' });
       } else {
-        toast({ title: 'Demo passageways & inspections loaded', description: j.message || '7 sites + 3 routes.' });
+        toast({ title: 'Demo passageways loaded', description: j.message || 'Seven demo gate readers.' });
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('rfid-site-ops-seeded'));
       }
       fetchPassageways();

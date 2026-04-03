@@ -13,8 +13,8 @@ import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { getUserRoleData } from '@/util/roleCheck';
 import {
-  deleteAllSiteOperationsForOrg,
-  seedSiteOperationsDemoContent,
+  deleteAllPassagewaysForOrg,
+  seedPassagewayDemoContent,
 } from '@/lib/rfid/seed-site-operations-demo';
 
 // ── ID generation (matches create.ts format) ──────────────────────────────────
@@ -180,7 +180,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await prisma.rFIDTag.updateMany({ where: { organizationId: orgId ?? undefined }, data: { assetId: null } });
       await prisma.rFIDTag.deleteMany({ where: { organizationId: orgId ?? undefined } });
       try {
-        await deleteAllSiteOperationsForOrg(prisma, orgId);
+        await deleteAllPassagewaysForOrg(prisma, orgId);
       } catch (e) {
         console.warn('[seed-demo] site-ops clear skipped (tables or permissions):', e);
       }
@@ -389,19 +389,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // ── 7. Passageways & inspection routes (demo) ─────────────────────────────
-    let siteOps = { passageways: 0, routes: 0, completions: 0 };
+    // ── 7. Demo passageways (seven sites) ─────────────────────────────────────
+    let siteOps = { passageways: 0 };
     let siteOpsError: string | null = null;
     try {
-      siteOps = await seedSiteOperationsDemoContent(prisma, {
+      siteOps = await seedPassagewayDemoContent(prisma, {
         organizationId: orgId,
-        userId,
         zoneMap,
-        assetIds: seededAssetIds,
       });
     } catch (e: any) {
       siteOpsError = e?.message ?? String(e);
-      console.error('[seed-demo] site-operations seed failed:', e);
+      console.error('[seed-demo] passageway demo seed failed:', e);
     }
 
     // ── 8. Summary ───────────────────────────────────────────────────────────
@@ -416,8 +414,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         alertRules:  ruleDefs.length,
         alerts:      missingTags.length + lowBatTags.length + 2, // +resolved +restricted
         passageways: siteOps.passageways,
-        inspectionRoutes: siteOps.routes,
-        inspectionCompletions: siteOps.completions,
       },
       ...(siteOpsError ? { siteOpsError } : {}),
       company: 'Apex Medical Center (AMC)',
