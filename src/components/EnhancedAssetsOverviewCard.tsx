@@ -1,13 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Building, ArrowRight, Package, AlertTriangle, RefreshCw, Wallet, BarChart3 } from "lucide-react";
+import { Building, ArrowRight, Package, AlertTriangle, RefreshCw, Wallet, BarChart3, TrendingDown, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTranslation } from "@/contexts/TranslationContext";
 import { useToast } from "@/components/ui/use-toast";
+import { calculatePortfolioDepreciation } from "@/lib/depreciation";
 
 interface AssetDetail {
   id: string;
@@ -45,8 +46,19 @@ export function EnhancedAssetsOverviewCard({ totalAssets = 0, assetStats = { byS
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [assets, setAssets] = useState<AssetDetail[]>([]);
+  const [showDepreciation, setShowDepreciation] = useState(false);
   const { t, dir } = useTranslation();
   const { toast } = useToast();
+
+  const portfolio = useMemo(() => {
+    if (!assets.length) return null;
+    try {
+      return calculatePortfolioDepreciation(assets.map(a => ({
+        id: a.id, name: a.name, type: a.type,
+        purchaseAmount: a.purchaseAmount, purchaseDate: null, createdAt: a.createdAt,
+      })));
+    } catch { return null; }
+  }, [assets]);
 
   const fetchAssets = async (forceRefresh = false) => {
     try {
@@ -201,6 +213,72 @@ export function EnhancedAssetsOverviewCard({ totalAssets = 0, assetStats = { byS
               indicatorClassName="bg-gradient-to-r from-rose-500 to-pink-600" 
             />
           </div>
+
+          {/* Portfolio Depreciation */}
+          {portfolio && portfolio.totalCost > 0 && (
+            <div className="rounded-lg border border-violet-200 dark:border-violet-800/50 overflow-hidden">
+              <button
+                onClick={() => setShowDepreciation(v => !v)}
+                className="w-full flex items-center justify-between px-3 py-2.5 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                  <span className="text-xs font-bold text-violet-700 dark:text-violet-300">Depreciation Analysis</span>
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-200 dark:bg-violet-800 text-violet-700 dark:text-violet-300">AI</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-rose-600 dark:text-rose-400">{portfolio.overallDepreciationPercent.toFixed(1)}% dep.</span>
+                  {showDepreciation ? <ChevronUp className="w-3.5 h-3.5 text-violet-500" /> : <ChevronDown className="w-3.5 h-3.5 text-violet-500" />}
+                </div>
+              </button>
+
+              {showDepreciation && (
+                <div className="p-3 bg-white dark:bg-slate-900 space-y-3">
+                  {/* KPI row */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Original Cost", val: formatCurrency(portfolio.totalCost), color: "text-slate-700 dark:text-slate-200" },
+                      { label: "Book Value", val: formatCurrency(portfolio.totalCurrentValue), color: "text-emerald-700 dark:text-emerald-400" },
+                      { label: "Depreciated", val: formatCurrency(portfolio.totalAccumulatedDepreciation), color: "text-rose-600 dark:text-rose-400" },
+                    ].map(({ label, val, color }) => (
+                      <div key={label} className="text-center">
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">{label}</p>
+                        <p className={`text-xs font-bold ${color}`}>{val}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Decay bar */}
+                  <div>
+                    <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(portfolio.overallDepreciationPercent, 100)}%`,
+                          background: portfolio.overallDepreciationPercent > 75 ? '#ef4444' : portfolio.overallDepreciationPercent > 50 ? '#f97316' : portfolio.overallDepreciationPercent > 25 ? '#f59e0b' : '#8b5cf6',
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 text-right mt-0.5">{portfolio.overallDepreciationPercent.toFixed(1)}% of portfolio depreciated</p>
+                  </div>
+
+                  {/* Top depreciated types */}
+                  {portfolio.byType.slice(0, 3).map(t => (
+                    <div key={t.type} className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-500 w-24 truncate">{t.type}</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-violet-500"
+                          style={{ width: `${Math.min(t.depreciationPercent, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 w-10 text-right">{t.depreciationPercent.toFixed(0)}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Asset Details */}
           <div className="mt-4">

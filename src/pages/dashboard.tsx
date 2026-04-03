@@ -108,6 +108,8 @@ interface DashboardStats {
     }>;
     totalValue: number;
     disposedValue: number;
+    depreciatedValue?: number;
+    depreciationPercent?: number;
   };
 }
 
@@ -137,14 +139,14 @@ export default function Dashboard() {
       totalAssets: 0, totalFoodItems: 0, activeVehicleRentals: 0, lowStockItems: 0,
       totalFoodCost: 0, totalVehicleCost: 0, totalFoodConsumption: 0, totalFoodSupplyValue: 0,
       totalAmountSpent: 0, amountSpentBreakdown: { foodConsumption: 0, assetsPurchased: 0, vehicleRentalCosts: 0 },
-      recentRentals: [], vehicleStats: [], assetStats: { byStatus: [], totalValue: 0, disposedValue: 0 }
+      recentRentals: [], vehicleStats: [],       assetStats: { byStatus: [], totalValue: 0, disposedValue: 0, depreciatedValue: 0, depreciationPercent: 0 }
     };
     return {
       totalAssets: c.totalAssets ?? 0, totalFoodItems: c.totalFoodItems ?? 0,
       activeVehicleRentals: c.activeVehicleRentals ?? 0, lowStockItems: c.lowStockItems ?? 0,
       totalFoodCost: c.totalFoodCost ?? 0, totalVehicleCost: c.totalVehicleCost ?? 0,
       recentRentals: c.recentRentals ?? [], vehicleStats: c.vehicleStats ?? [],
-      assetStats: c.assetStats ?? { byStatus: [], totalValue: 0, disposedValue: 0 },
+      assetStats: c.assetStats ?? { byStatus: [], totalValue: 0, disposedValue: 0, depreciatedValue: 0, depreciationPercent: 0 },
     };
   });
 
@@ -654,7 +656,34 @@ export default function Dashboard() {
                 <p className="text-4xl font-black tabular-nums mb-1 leading-none">
                   {(stats.assetStats?.totalValue || 0).toLocaleString()}
                 </p>
-                <p className="text-xs text-violet-300/60 mb-5">QAR</p>
+                <p className="text-xs text-violet-300/60 mb-3">QAR — Original Purchase Value</p>
+
+                {/* Depreciation highlight */}
+                {stats.assetStats?.depreciatedValue != null && stats.assetStats.depreciatedValue > 0 && (
+                  <div className="mb-3 rounded-xl bg-white/10 border border-white/15 p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <TrendingDown className="h-3.5 w-3.5 text-rose-300" />
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-white/60">Depreciation Analysis</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[9px] text-white/50 uppercase tracking-wide">Book Value</p>
+                        <p className="font-black text-emerald-300 tabular-nums text-sm">{(stats.assetStats.depreciatedValue || 0).toLocaleString()} QAR</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-white/50 uppercase tracking-wide">Depreciated</p>
+                        <p className="font-black text-rose-300 tabular-nums text-sm">{((stats.assetStats.totalValue || 0) - (stats.assetStats.depreciatedValue || 0)).toLocaleString()} QAR</p>
+                      </div>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-rose-400 to-rose-600"
+                        style={{ width: `${Math.min(stats.assetStats.depreciationPercent || 0, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[9px] text-white/40">{(stats.assetStats.depreciationPercent || 0).toFixed(1)}% of portfolio depreciated</p>
+                  </div>
+                )}
 
                 {/* Asset status breakdown */}
                 <div className="grid grid-cols-2 gap-2">

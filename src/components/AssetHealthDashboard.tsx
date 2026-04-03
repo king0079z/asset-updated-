@@ -6,8 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AssetHealthScoreCard } from "./AssetHealthScoreCard";
 import { PredictiveMaintenanceCard } from "./PredictiveMaintenanceCard";
 import { AssetLifecycleVisualization } from "./AssetLifecycleVisualization";
+import { AssetDepreciationPanel } from "./AssetDepreciationPanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Calendar, Clock, Download, FileText, RefreshCw, DollarSign, PieChart } from "lucide-react";
+import { Calendar, Clock, Download, FileText, RefreshCw, DollarSign, PieChart, TrendingDown } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 interface Asset {
@@ -181,6 +182,18 @@ export function AssetHealthDashboard({ asset }: AssetHealthDashboardProps) {
             <Download className="h-4 w-4 mr-2" />
             Export Report
           </Button>
+        </div>
+      </div>
+
+      {/* ── AI Depreciation Panel — shown before all health tabs ── */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 p-1">
+        <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+          <TrendingDown className="w-4 h-4 text-violet-500" />
+          <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Depreciation &amp; Valuation</span>
+          <span className="ml-auto text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 border border-violet-200 dark:border-violet-700">AI Powered</span>
+        </div>
+        <div className="p-4">
+          <AssetDepreciationPanel asset={asset} />
         </div>
       </div>
 

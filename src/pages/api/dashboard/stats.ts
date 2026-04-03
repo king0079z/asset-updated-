@@ -2,6 +2,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/util/supabase/require-auth';
+import { calculatePortfolioDepreciation } from '@/lib/depreciation';
 
 // Enhanced logging function
 const logApiEvent = (message: string, data?: any) => {
@@ -313,7 +314,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const totalAssetValue = safeNumber(totalAssetCosts._sum?.purchaseAmount, 0);
       const disposedAssetValue = safeNumber(disposedAssetCosts._sum?.purchaseAmount, 0);
 
-      logApiEvent('Asset values', { totalAssetValue, disposedAssetValue });
+      // Portfolio depreciation calculation
+      let depreciatedValue = 0;
+      let depreciationPercent = 0;
+      try {
+        const assetsForDep = await prisma.asset.findMany({
+          where: { status: { not: 'DISPOSED' }, purchaseAmount: { not: null } },
+          select: { id: true, name: true, type: true, purchaseAmount: true, purchaseDate: true, createdAt: true },
+          take: 500,
+        });
+        const portfolio = calculatePortfolioDepreciation(assetsForDep.map(a => ({
+          id: a.id, name: a.name, type: a.type,
+          purchaseAmount: a.purchaseAmount, purchaseDate: a.purchaseDate, createdAt: a.createdAt,
+        })));
+        depreciatedValue = portfolio.totalCurrentValue;
+        depreciationPercent = portfolio.overallDepreciationPercent;
+      } catch (depErr) {
+        logApiEvent('Depreciation calculation warning', depErr?.message);
+      }
+
+      logApiEvent('Asset values', { totalAssetValue, disposedAssetValue, depreciatedValue });
 
       // Prepare the response with safe values
       const response = {
@@ -349,7 +369,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         assetStats: {
           byStatus: assetStatsArray,
           totalValue: Number(totalAssetValue),
-          disposedValue: Number(disposedAssetValue)
+          disposedValue: Number(disposedAssetValue),
+          depreciatedValue: Number(depreciatedValue),
+          depreciationPercent: Number(depreciationPercent),
         }
       };
 

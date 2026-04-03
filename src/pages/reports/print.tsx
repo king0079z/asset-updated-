@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { fetchWithCache, getFromCache } from "@/lib/api-cache";
+import { calculateDepreciation, calculatePortfolioDepreciation, USEFUL_LIFE_BY_TYPE, SALVAGE_RATE } from "@/lib/depreciation";
 const REPORTS_HISTORY_KEY = "/api/reports/history";
 const REPORTS_TTL = 2 * 60_000;
 import { useTranslation } from "@/contexts/TranslationContext";
@@ -546,6 +547,139 @@ export default function PrintReportPage() {
             </div>`;
         }
 
+        // ── Depreciation ──────────────────────────────────────────────────────
+        let depreciationHtml = '';
+        if (asset.purchaseAmount && asset.purchaseAmount > 0) {
+          const depCost = Number(asset.purchaseAmount);
+          const depType = asset.type ?? 'OTHER';
+          const depLife = USEFUL_LIFE_BY_TYPE[depType] ?? 7;
+          const depDate = asset.purchaseDate ? new Date(asset.purchaseDate) : (asset.createdAt ? new Date(asset.createdAt) : null);
+
+          if (depDate && !isNaN(depDate.getTime())) {
+            try {
+              const dep = calculateDepreciation({ cost: depCost, purchaseDate: depDate, usefulLifeYears: depLife });
+              const depPct = Math.min(dep.depreciationPercent, 100);
+              const barPct = Math.round(depPct);
+              const barColor = depPct > 75 ? '#ef4444' : depPct > 50 ? '#f97316' : depPct > 25 ? '#f59e0b' : '#8b5cf6';
+              const condBg = dep.condition === 'EXCELLENT' ? '#dcfce7' : dep.condition === 'GOOD' ? '#dbeafe' : dep.condition === 'FAIR' ? '#fef3c7' : dep.condition === 'POOR' ? '#ffedd5' : '#fee2e2';
+              const condColor = dep.condition === 'EXCELLENT' ? '#166534' : dep.condition === 'GOOD' ? '#1e40af' : dep.condition === 'FAIR' ? '#92400e' : dep.condition === 'POOR' ? '#9a3412' : '#991b1b';
+              const replDate = dep.recommendedReplacement.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+
+              const scheduleRows = dep.schedule.map(row => {
+                const isCurrent = row.year === dep.ageYearsInt + 1;
+                const bg = isCurrent ? 'background:#ede9fe' : (row.year <= dep.ageYearsInt ? 'background:#f8fafc' : 'background:#fff');
+                return `<tr style="${bg}">
+                  <td style="font-weight:${isCurrent ? '700' : '400'};color:${isCurrent ? '#6d28d9' : '#334155'}">${isCurrent ? '▶ ' : ''}Year ${row.year} (${row.calendarYear})</td>
+                  <td style="font-family:monospace">QAR ${row.openingBookValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style="font-family:monospace;color:#dc2626;font-weight:600">QAR ${row.depreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style="font-family:monospace">QAR ${row.accumulatedDepreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style="font-family:monospace;color:#059669;font-weight:600">QAR ${row.closingBookValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td>${row.percentDepreciated.toFixed(0)}%</td>
+                </tr>`;
+              }).join('');
+
+              depreciationHtml = `
+              <div class="card" style="break-inside:avoid">
+                <div class="card-hdr" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:#4338ca">
+                  ◆ AI Depreciation &amp; Valuation Analysis &nbsp;·&nbsp; Straight-Line Method (IAS 16)
+                </div>
+                <div class="card-body">
+
+                  <!-- KPI row -->
+                  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+                    <div style="background:#eef2ff;border-radius:8px;padding:10px 12px;border:1px solid #c7d2fe">
+                      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6366f1;margin-bottom:3px">Purchase Cost</div>
+                      <div style="font-size:15px;font-weight:900;color:#312e81">QAR ${depCost.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                      <div style="font-size:9px;color:#818cf8">${fmtDate(dep.purchaseDate.toISOString())}</div>
+                    </div>
+                    <div style="background:#fdf2f8;border-radius:8px;padding:10px 12px;border:1px solid #fbcfe8">
+                      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#be185d;margin-bottom:3px">Current Book Value</div>
+                      <div style="font-size:15px;font-weight:900;color:#831843">QAR ${dep.currentBookValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                      <div style="font-size:9px;color:#f472b6">${depPct.toFixed(1)}% depreciated</div>
+                    </div>
+                    <div style="background:#fff7ed;border-radius:8px;padding:10px 12px;border:1px solid #fed7aa">
+                      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#c2410c;margin-bottom:3px">Depreciation To Date</div>
+                      <div style="font-size:15px;font-weight:900;color:#7c2d12">QAR ${dep.accumulatedDepreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                      <div style="font-size:9px;color:#fb923c">QAR ${dep.annualDepreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}/yr</div>
+                    </div>
+                    <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;border:1px solid #bbf7d0">
+                      <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#15803d;margin-bottom:3px">Remaining Life</div>
+                      <div style="font-size:15px;font-weight:900;color:#14532d">${dep.remainingLife.toFixed(1)} yrs</div>
+                      <div style="font-size:9px;color:#4ade80">Replace by ${replDate}</div>
+                    </div>
+                  </div>
+
+                  <!-- Value decay bar -->
+                  <div style="margin-bottom:14px">
+                    <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:700;color:#64748b;margin-bottom:4px">
+                      <span>Value Decay Progress</span>
+                      <span>Age: ${dep.ageYears.toFixed(1)} / ${dep.usefulLifeYears} years (${dep.depreciationRate.toFixed(1)}%/yr)</span>
+                    </div>
+                    <div style="height:14px;background:#f1f5f9;border-radius:999px;overflow:hidden;border:1px solid #e2e8f0">
+                      <div style="height:100%;width:${barPct}%;background:${barColor};border-radius:999px"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-top:3px">
+                      <span>Purchase: QAR ${depCost.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                      <span>Book Value: QAR ${dep.currentBookValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                      <span>Salvage: QAR ${dep.salvageValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  </div>
+
+                  <!-- Condition badge + AI insights -->
+                  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+                    <div style="background:${condBg};border:1px solid;border-color:${condColor}40;border-radius:8px;padding:8px 14px;display:inline-flex;align-items:center;gap:6px">
+                      <span style="font-size:12px;font-weight:900;color:${condColor}">${dep.condition} CONDITION</span>
+                      <span style="font-size:10px;color:${condColor};opacity:.7">Score: ${dep.conditionScore}/100</span>
+                    </div>
+                    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:8px 14px">
+                      <span style="font-size:10px;font-weight:700;color:#6b21a8">Replacement Budget (est.):</span>
+                      <span style="font-size:10px;font-weight:900;color:#581c87;margin-left:4px">QAR ${dep.replacementBudget.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                      <span style="font-size:9px;color:#a78bfa;margin-left:4px">(3% p.a. inflation)</span>
+                    </div>
+                    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 14px">
+                      <span style="font-size:10px;font-weight:700;color:#1e40af">Useful Life:</span>
+                      <span style="font-size:10px;font-weight:900;color:#1e3a8a;margin-left:4px">${dep.usefulLifeYears} years</span>
+                      <span style="font-size:9px;color:#60a5fa;margin-left:4px">· Salvage ${(SALVAGE_RATE * 100).toFixed(0)}%</span>
+                    </div>
+                  </div>
+
+                  <!-- Depreciation schedule table -->
+                  <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6d28d9;margin-bottom:6px">Annual Depreciation Schedule</div>
+                  <table>
+                    <thead><tr style="background:#ede9fe">
+                      <th style="color:#5b21b6">Year</th>
+                      <th style="color:#5b21b6">Opening Book Value</th>
+                      <th style="color:#5b21b6">Depreciation</th>
+                      <th style="color:#5b21b6">Accumulated</th>
+                      <th style="color:#5b21b6">Closing Book Value</th>
+                      <th style="color:#5b21b6">% Depreciated</th>
+                    </tr></thead>
+                    <tbody>${scheduleRows}</tbody>
+                  </table>
+
+                  <!-- Method comparison -->
+                  <div style="margin-top:14px;background:#f8fafc;border-radius:8px;padding:10px 12px;border:1px solid #e2e8f0">
+                    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#475569;margin-bottom:8px">Multi-Method Comparison (Current Book Value)</div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+                      ${[
+                        { label: 'Straight-Line (SL)', bv: dep.comparison.sl.bookValue, acc: dep.comparison.sl.accumulatedDepreciation, color: '#6366f1', bg: '#eef2ff' },
+                        { label: 'Double Declining (DDB)', bv: dep.comparison.ddb.bookValue, acc: dep.comparison.ddb.accumulatedDepreciation, color: '#e11d48', bg: '#fff1f2' },
+                        { label: "Sum-of-Years' Digits (SYD)", bv: dep.comparison.syd.bookValue, acc: dep.comparison.syd.accumulatedDepreciation, color: '#d97706', bg: '#fffbeb' },
+                      ].map(m => `
+                        <div style="background:${m.bg};border-radius:6px;padding:8px 10px;border:1px solid ${m.color}30">
+                          <div style="font-size:9px;font-weight:700;color:${m.color};margin-bottom:4px">${m.label}</div>
+                          <div style="font-size:12px;font-weight:900;color:#0f172a">BV: QAR ${m.bv.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                          <div style="font-size:9px;color:#64748b">Accum.: QAR ${m.acc.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                </div>
+              </div>`;
+            } catch { /* skip depreciation if calculation fails */ }
+          }
+        }
+
         // Stat chips
         const locText = asset.location
           ? `${asset.location.building ? asset.location.building + ' · ' : ''}Floor ${asset.location.floorNumber ?? 'N/A'}, Room ${asset.location.roomNumber ?? 'N/A'}`
@@ -583,6 +717,7 @@ export default function PrintReportPage() {
               : `<div class="assign-none-text">Not assigned to anyone</div>`}
               </div>
               
+          ${depreciationHtml}
           ${healthHtml}
               ${historyHtml}
               ${ticketsHtml}
@@ -595,41 +730,130 @@ export default function PrintReportPage() {
         const activeCount = dataArray.filter((a: any) => a.status?.toUpperCase() === 'ACTIVE').length;
         const typeCount = new Set(dataArray.map((a: any) => a.type)).size;
 
+        // ── Portfolio depreciation ────────────────────────────────────────
+        const portfolio = calculatePortfolioDepreciation(dataArray.map((a: any) => ({
+          id: a.id, name: a.name, type: a.type,
+          purchaseAmount: a.purchaseAmount, purchaseDate: a.purchaseDate, createdAt: a.createdAt,
+        })));
+        const portDepBarPct = Math.min(Math.round(portfolio.overallDepreciationPercent), 100);
+        const portBarColor = portDepBarPct > 75 ? '#ef4444' : portDepBarPct > 50 ? '#f97316' : portDepBarPct > 25 ? '#f59e0b' : '#8b5cf6';
+
+        // ── Per-asset rows with depreciation ────────────────────────────
         const rows = dataArray.map((asset: any, i: number) => {
           const loc = asset.location
             ? `Floor ${asset.location.floorNumber ?? 'N/A'}, Rm ${asset.location.roomNumber ?? 'N/A'}`
             : (asset.floorNumber ? `Floor ${asset.floorNumber}` : 'N/A');
+
+          let depBV = '—', depAcc = '—', depPctCell = '—';
+          if (asset.purchaseAmount && asset.purchaseAmount > 0) {
+            try {
+              const dDate = asset.purchaseDate ? new Date(asset.purchaseDate) : (asset.createdAt ? new Date(asset.createdAt) : null);
+              if (dDate && !isNaN(dDate.getTime())) {
+                const d = calculateDepreciation({
+                  cost: Number(asset.purchaseAmount),
+                  purchaseDate: dDate,
+                  usefulLifeYears: USEFUL_LIFE_BY_TYPE[asset.type ?? 'OTHER'] ?? 7,
+                });
+                depBV = `QAR ${d.currentBookValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+                depAcc = `QAR ${d.accumulatedDepreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+                depPctCell = `${d.depreciationPercent.toFixed(0)}%`;
+              }
+            } catch {}
+          }
+
           return `<tr>
             <td class="mono" style="font-size:11px">${asset.assetId || asset.id}</td>
             <td style="font-weight:600">${asset.name || 'N/A'}</td>
             <td>${asset.type || 'N/A'}</td>
             <td>${loc}</td>
             <td>${statusBadge(asset.status)}</td>
-            <td>QAR ${asset.purchaseAmount ? Number(asset.purchaseAmount).toLocaleString() : 'N/A'}</td>
+            <td style="font-family:monospace">QAR ${asset.purchaseAmount ? Number(asset.purchaseAmount).toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'N/A'}</td>
+            <td style="font-family:monospace;color:#059669;font-weight:600">${depBV}</td>
+            <td style="font-family:monospace;color:#dc2626">${depAcc}</td>
+            <td style="font-size:11px;font-weight:700;color:${depPctCell !== '—' && parseInt(depPctCell) > 75 ? '#dc2626' : '#475569'}">${depPctCell}</td>
             <td>${fmtDate(asset.purchaseDate)}</td>
           </tr>`;
         }).join('');
 
+        // ── By-type depreciation rows ────────────────────────────────────
+        const byTypeRows = portfolio.byType.map(t => {
+          const pctColor = t.depreciationPercent > 75 ? '#dc2626' : t.depreciationPercent > 50 ? '#d97706' : '#059669';
+          return `<tr>
+            <td style="font-weight:700">${t.type}</td>
+            <td style="text-align:center">${t.count}</td>
+            <td style="font-family:monospace">QAR ${t.totalCost.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+            <td style="font-family:monospace;color:#059669;font-weight:600">QAR ${t.totalBookValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+            <td style="font-family:monospace;color:#dc2626">QAR ${t.totalDepreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+            <td style="font-weight:700;color:${pctColor}">${t.depreciationPercent.toFixed(1)}%</td>
+          </tr>`;
+        }).join('');
+
         bodyHtml = `
-          <div class="stat-grid">
+          <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
             <div class="stat-card" style="background:#eef2ff;border-color:#c7d2fe">
               <div class="stat-label" style="color:#4338ca">Total Assets</div>
               <div class="stat-value" style="color:#312e81">${dataArray.length}</div>
             </div>
             <div class="stat-card" style="background:#f0fdf4;border-color:#bbf7d0">
-              <div class="stat-label" style="color:#15803d">Portfolio Value</div>
-              <div class="stat-value" style="color:#14532d;font-size:16px">QAR ${totalVal.toLocaleString('en-US', { minimumFractionDigits: 0 })}</div>
+              <div class="stat-label" style="color:#15803d">Original Portfolio Value</div>
+              <div class="stat-value" style="color:#14532d;font-size:16px">QAR ${totalVal.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
             </div>
-            <div class="stat-card" style="background:#faf5ff;border-color:#e9d5ff">
-              <div class="stat-label" style="color:#7e22ce">Active Assets</div>
-              <div class="stat-value" style="color:#581c87">${activeCount}</div>
+            <div class="stat-card" style="background:#fdf4ff;border-color:#e9d5ff">
+              <div class="stat-label" style="color:#7e22ce">Current Book Value</div>
+              <div class="stat-value" style="color:#581c87;font-size:16px">QAR ${portfolio.totalCurrentValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+            </div>
+            <div class="stat-card" style="background:#fff7ed;border-color:#fed7aa">
+              <div class="stat-label" style="color:#c2410c">Total Depreciated</div>
+              <div class="stat-value" style="color:#7c2d12;font-size:16px">QAR ${portfolio.totalAccumulatedDepreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
             </div>
           </div>
+
+          <!-- Portfolio Depreciation Summary -->
+          <div class="card" style="break-inside:avoid">
+            <div class="card-hdr" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:#4338ca">
+              ◆ Portfolio Depreciation Analysis
+            </div>
+            <div class="card-body">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                <div style="flex:1">
+                  <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:700;color:#64748b;margin-bottom:4px">
+                    <span>Overall Portfolio Depreciation</span><span>${portfolio.overallDepreciationPercent.toFixed(1)}%</span>
+                  </div>
+                  <div style="height:16px;background:#f1f5f9;border-radius:999px;overflow:hidden;border:1px solid #e2e8f0">
+                    <div style="height:100%;width:${portDepBarPct}%;background:${portBarColor};border-radius:999px"></div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-top:3px">
+                    <span>Original: QAR ${portfolio.totalCost.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                    <span>Current BV: QAR ${portfolio.totalCurrentValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                    <span>Depreciated: QAR ${portfolio.totalAccumulatedDepreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                </div>
+              </div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6d28d9;margin:12px 0 6px">Depreciation by Asset Type</div>
+              <table>
+                <thead><tr style="background:#ede9fe">
+                  <th style="color:#5b21b6">Asset Type</th><th style="color:#5b21b6;text-align:center">Count</th>
+                  <th style="color:#5b21b6">Original Cost</th><th style="color:#5b21b6">Book Value</th>
+                  <th style="color:#5b21b6">Depreciated</th><th style="color:#5b21b6">Dep. %</th>
+                </tr></thead>
+                <tbody>${byTypeRows || '<tr><td colspan="6" style="text-align:center;color:#94a3b8">No assets with purchase data</td></tr>'}</tbody>
+                ${portfolio.totalCost > 0 ? `<tfoot><tr style="background:#1e1b4b">
+                  <td style="font-weight:900;color:#fff;padding:8px 10px">TOTAL</td>
+                  <td style="font-weight:900;color:#fff;text-align:center;padding:8px 10px">${portfolio.byType.reduce((s, t) => s + t.count, 0)}</td>
+                  <td style="font-weight:900;color:#fff;font-family:monospace;padding:8px 10px">QAR ${portfolio.totalCost.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style="font-weight:900;color:#6ee7b7;font-family:monospace;padding:8px 10px">QAR ${portfolio.totalCurrentValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style="font-weight:900;color:#fca5a5;font-family:monospace;padding:8px 10px">QAR ${portfolio.totalAccumulatedDepreciation.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style="font-weight:900;color:#fde68a;padding:8px 10px">${portfolio.overallDepreciationPercent.toFixed(1)}%</td>
+                </tr></tfoot>` : ''}
+              </table>
+            </div>
+          </div>
+
           <div class="card">
-            <div class="card-hdr" style="background:#eef2ff;border-color:#c7d2fe;color:#3730a3">Complete Asset Inventory (${dataArray.length} assets)</div>
+            <div class="card-hdr" style="background:#eef2ff;border-color:#c7d2fe;color:#3730a3">Complete Asset Inventory (${dataArray.length} assets) — With Depreciation Values</div>
             <div class="card-body" style="padding:0">
               <table>
-                <thead><tr><th>Asset ID</th><th>Name</th><th>Type</th><th>Location</th><th>Status</th><th>Value</th><th>Purchase Date</th></tr></thead>
+                <thead><tr><th>Asset ID</th><th>Name</th><th>Type</th><th>Location</th><th>Status</th><th>Original Cost</th><th>Book Value</th><th>Depreciation</th><th>Dep. %</th><th>Purchase Date</th></tr></thead>
                 <tbody>${rows}</tbody>
               </table>
             </div>
