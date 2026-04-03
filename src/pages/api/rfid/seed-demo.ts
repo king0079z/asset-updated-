@@ -179,7 +179,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       await prisma.rFIDTag.updateMany({ where: { organizationId: orgId ?? undefined }, data: { assetId: null } });
       await prisma.rFIDTag.deleteMany({ where: { organizationId: orgId ?? undefined } });
-      await deleteAllSiteOperationsForOrg(prisma, orgId);
+      try {
+        await deleteAllSiteOperationsForOrg(prisma, orgId);
+      } catch (e) {
+        console.warn('[seed-demo] site-ops clear skipped (tables or permissions):', e);
+      }
       await prisma.rFIDZone.deleteMany({ where: { organizationId: orgId ?? undefined } });
       await prisma.floorPlan.deleteMany({ where: { organizationId: orgId ?? undefined } });
 
@@ -386,12 +390,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // ── 7. Passageways & inspection routes (demo) ─────────────────────────────
-    const siteOps = await seedSiteOperationsDemoContent(prisma, {
-      organizationId: orgId,
-      userId,
-      zoneMap,
-      assetIds: seededAssetIds,
-    });
+    let siteOps = { passageways: 0, routes: 0, completions: 0 };
+    let siteOpsError: string | null = null;
+    try {
+      siteOps = await seedSiteOperationsDemoContent(prisma, {
+        organizationId: orgId,
+        userId,
+        zoneMap,
+        assetIds: seededAssetIds,
+      });
+    } catch (e: any) {
+      siteOpsError = e?.message ?? String(e);
+      console.error('[seed-demo] site-operations seed failed:', e);
+    }
 
     // ── 8. Summary ───────────────────────────────────────────────────────────
     const summary = {
@@ -408,14 +419,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         inspectionRoutes: siteOps.routes,
         inspectionCompletions: siteOps.completions,
       },
+      ...(siteOpsError ? { siteOpsError } : {}),
       company: 'Apex Medical Center (AMC)',
       building: 'AMC Main Building',
       floors:  ['Floor 1 — Emergency & Diagnostic', 'Floor 2 — ICU & Critical Care', 'Floor 3 — Patient Wards & Admin'],
     };
 
     return res.status(200).json(summary);
-  } catch (err) {
+  } catch (err: any) {
     console.error('[seed-demo]', err);
-    return res.status(500).json({ error: 'Seed failed', details: String(err) });
+    const msg = err?.message ?? String(err);
+    return res.status(500).json({
+      error: 'Seed failed',
+      details: msg,
+      code: err?.code,
+    });
   }
 }

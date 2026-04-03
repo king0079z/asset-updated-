@@ -13,6 +13,7 @@ import { getUserRoleData } from '@/util/roleCheck';
 import {
   SITE_OPS_DEMO_MARKER,
   deleteDemoSiteOperations,
+  orgWhereEquals,
   seedSiteOperationsDemoContent,
 } from '@/lib/rfid/seed-site-operations-demo';
 
@@ -37,7 +38,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await deleteDemoSiteOperations(prisma, orgId);
     } else {
       const existing = await prisma.passagewayConfig.count({
-        where: { organizationId: orgId ?? undefined, notes: { contains: SITE_OPS_DEMO_MARKER } },
+        where: {
+          AND: [orgWhereEquals(orgId), { notes: { contains: SITE_OPS_DEMO_MARKER } }],
+        },
       });
       if (existing > 0) {
         return res.status(200).json({
@@ -49,14 +52,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const zones = await prisma.rFIDZone.findMany({
-      where: { organizationId: orgId ?? undefined },
+      where: orgWhereEquals(orgId),
       select: { id: true, name: true },
     });
     const zoneMap: Record<string, string> = {};
     for (const z of zones) zoneMap[z.name] = z.id;
 
     const assets = await prisma.asset.findMany({
-      where: { organizationId: orgId ?? undefined },
+      where: orgWhereEquals(orgId),
       take: 40,
       orderBy: { createdAt: 'desc' },
       select: { id: true },
@@ -76,8 +79,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ...out,
       message: `Created ${out.passageways} passageways, ${out.routes} inspection routes, ${out.completions} completion records.`,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[seed-site-operations]', err);
-    return res.status(500).json({ error: 'Seed failed', details: String(err) });
+    const msg = err?.message ?? String(err);
+    const code = err?.code;
+    return res.status(500).json({ error: 'Seed failed', details: msg, code });
   }
 }

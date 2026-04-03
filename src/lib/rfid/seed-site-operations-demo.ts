@@ -4,8 +4,18 @@
  * Marked with SITE_OPS_DEMO_MARKER for safe replace.
  */
 import type { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export const SITE_OPS_DEMO_MARKER = 'DEMO:RFID_SITE_OPS';
+
+/** Prisma strips `undefined` in where — use explicit null vs string so we never match all rows. */
+export function orgWhereEquals(organizationId: string | null) {
+  return organizationId === null ? { organizationId: null } : { organizationId };
+}
+
+function asJsonIds(ids: string[]): Prisma.InputJsonValue {
+  return ids as unknown as Prisma.InputJsonValue;
+}
 
 function daysAgo(n: number) {
   return new Date(Date.now() - n * 86_400_000);
@@ -13,11 +23,13 @@ function daysAgo(n: number) {
 
 /** Remove only demo-marked rows (safe for orgs with real data). */
 export async function deleteDemoSiteOperations(prisma: PrismaClient, organizationId: string | null) {
-  const org = organizationId ?? undefined;
+  const orgEq = orgWhereEquals(organizationId);
   const routes = await prisma.inspectionRoute.findMany({
     where: {
-      organizationId: org,
-      description: { contains: SITE_OPS_DEMO_MARKER },
+      AND: [
+        orgEq,
+        { description: { contains: SITE_OPS_DEMO_MARKER } },
+      ],
     },
     select: { id: true },
   });
@@ -28,17 +40,19 @@ export async function deleteDemoSiteOperations(prisma: PrismaClient, organizatio
   }
   await prisma.passagewayConfig.deleteMany({
     where: {
-      organizationId: org,
-      notes: { contains: SITE_OPS_DEMO_MARKER },
+      AND: [
+        orgEq,
+        { notes: { contains: SITE_OPS_DEMO_MARKER } },
+      ],
     },
   });
 }
 
 /** Full org wipe for RFID seed-demo clear (not only demo marker). */
 export async function deleteAllSiteOperationsForOrg(prisma: PrismaClient, organizationId: string | null) {
-  const org = organizationId ?? undefined;
+  const orgEq = orgWhereEquals(organizationId);
   const routes = await prisma.inspectionRoute.findMany({
-    where: { organizationId: org },
+    where: orgEq,
     select: { id: true },
   });
   const routeIds = routes.map((r) => r.id);
@@ -46,7 +60,7 @@ export async function deleteAllSiteOperationsForOrg(prisma: PrismaClient, organi
     await prisma.inspectionCompletion.deleteMany({ where: { routeId: { in: routeIds } } });
     await prisma.inspectionRoute.deleteMany({ where: { id: { in: routeIds } } });
   }
-  await prisma.passagewayConfig.deleteMany({ where: { organizationId: org } });
+  await prisma.passagewayConfig.deleteMany({ where: orgEq });
 }
 
 const PASSAGEWAY_DEF = [
@@ -76,7 +90,7 @@ export async function seedSiteOperationsDemoContent(
   const actor = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   const completionUserId = actor?.id ?? null;
 
-  const markerNote = `${SITE_OPS_DEMO_MARKER} Demo gate reader — replace anytime from RFID hub`;
+  const markerNote = `${SITE_OPS_DEMO_MARKER} Demo gate reader - replace anytime from RFID hub`;
   const desc = (line: string) => `${SITE_OPS_DEMO_MARKER} ${line}`;
 
   let passageways = 0;
@@ -132,7 +146,7 @@ export async function seedSiteOperationsDemoContent(
     data: {
       name: 'Monthly warehouse & ward audit',
       description: desc('Verify tags in supply areas, wards, and nursing stations'),
-      assetIds: slice(8, 18).length ? slice(8, 18) : slice(0, Math.min(6, a.length)),
+      assetIds: asJsonIds(slice(8, 18).length ? slice(8, 18) : slice(0, Math.min(6, a.length))),
       periodDays: 30,
       assignedToId: completionUserId ?? undefined,
       organizationId,
@@ -158,7 +172,7 @@ export async function seedSiteOperationsDemoContent(
     data: {
       name: 'Quarterly full portfolio RFID attestation',
       description: desc('Cross-site sample verification for compliance reporting'),
-      assetIds: slice(18, 28).length ? slice(18, 28) : a.slice(0, Math.min(10, a.length)),
+      assetIds: asJsonIds(slice(18, 28).length ? slice(18, 28) : a.slice(0, Math.min(10, a.length))),
       periodDays: 90,
       assignedToId: completionUserId ?? undefined,
       organizationId,
