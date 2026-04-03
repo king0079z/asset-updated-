@@ -68,12 +68,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Log BORROW_SIGNED history (with signature) if signature provided
     if (signatureDataUrl) {
       let docId: string | null = null;
-      // Store full PDF as AssetDocument
+      // Store full PDF as AssetDocument (outside any transaction)
       if (pdfDataUrl) {
         const doc = await prisma.assetDocument.create({
           data: {
             assetId,
-            fileName: `Borrow-Agreement-${asset.assetId || assetId}-${Date.now()}.png`,
+            fileName: `Borrow-Agreement-${asset.assetId || assetId}-${Date.now()}.jpg`,
             fileUrl: pdfDataUrl,
             fileType: 'image/png',
             fileSize: Math.round((pdfDataUrl.length * 3) / 4),
