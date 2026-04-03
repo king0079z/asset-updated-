@@ -23,7 +23,9 @@ import {
   Keyboard,
   CheckCircle2,
   AlertCircle,
+  Clock,
 } from 'lucide-react';
+import { BorrowReturnDialog } from '@/components/BorrowReturnDialog';
 import BarcodeScanner from '@/components/BarcodeScanner2';
 import { AssignAssetDialog } from '@/components/AssignAssetDialog';
 import { AssetDetailsDialog } from '@/components/AssetDetailsDialog';
@@ -82,6 +84,7 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
   const [showDetails, setShowDetails] = useState(false);
   const [showMove, setShowMove] = useState(false);
   const [showStatus, setShowStatus] = useState(false);
+  const [showBorrow, setShowBorrow] = useState(false);
   const [moving, setMoving] = useState(false);
   const [disposing, setDisposing] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
@@ -324,6 +327,14 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
                 <RefreshCw className="h-5 w-5" />
                 <span className="text-xs">Status</span>
               </Button>
+              {/* Borrow / Return */}
+              <Button type="button" size="lg"
+                variant={asset?.status === 'BORROWED' ? 'default' : 'outline'}
+                className={`h-14 flex flex-col gap-0.5 col-span-2 ${asset?.status === 'BORROWED' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'border-blue-200 text-blue-700 hover:bg-blue-50'}`}
+                onClick={() => openAfterTap(() => setShowBorrow(true))}>
+                <Clock className="h-5 w-5" />
+                <span className="text-xs font-semibold">{asset?.status === 'BORROWED' ? '↩ Return Asset' : '↗ Borrow Asset'}</span>
+              </Button>
             </div>
             <Button
               size="lg"
@@ -348,6 +359,14 @@ export function HandheldAssetScanner({ standalone, onAssetSelected }: HandheldAs
         open={scanDialogOpen}
         onOpenChange={setScanDialogOpen}
         onScan={handleScanResult}
+      />
+
+      {/* Borrow / Return dialog */}
+      <BorrowReturnDialog
+        open={showBorrow}
+        onOpenChange={setShowBorrow}
+        asset={asset}
+        onSuccess={() => { if (asset) lookup(asset.barcode || asset.assetId || asset.id); }}
       />
 
       {/* View details */}

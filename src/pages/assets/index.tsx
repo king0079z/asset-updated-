@@ -108,6 +108,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { PrintAssetReportButton } from "@/components/PrintAssetReportButton";
 import AssetDuplicateButton from "@/components/AssetDuplicateButton";
 import HandheldAssetScanner from "@/components/HandheldAssetScanner";
+import { BorrowReturnDialog } from "@/components/BorrowReturnDialog";
+import { ArrowLeftRight, Wrench } from "lucide-react";
 
 const assetFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -183,6 +185,8 @@ export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>(() => getFromCache<Asset[]>(ASSETS_KEY, ASSETS_TTL) ?? []);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [showBarcodeDialog, setShowBarcodeDialog] = useState(false);
+  const [borrowAsset, setBorrowAsset] = useState<Asset | null>(null);
+  const [showBorrowDialog, setShowBorrowDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [handheldMode, setHandheldMode] = useState(false);
   const { toast } = useToast();
@@ -1486,9 +1490,22 @@ export default function AssetsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredAssets.map((asset, idx) => (
+                    {filteredAssets.map((asset, idx) => {
+                      const activeBorrow = Array.isArray(asset.borrows) ? asset.borrows[0] : null;
+                      const remainMs = activeBorrow?.expectedReturnAt ? new Date(activeBorrow.expectedReturnAt).getTime() - Date.now() : null;
+                      const remainDays = remainMs != null ? Math.ceil(remainMs / 86_400_000) : null;
+                      const borrowOverdue = remainDays != null && remainDays < 0;
+                      const borrowUrgent = remainDays != null && remainDays >= 0 && remainDays <= 2;
+                      const isSparePart = asset.isSparePart || asset.type === 'SPARE_PART';
+                      return (
                       <TableRow key={asset.id}
-                        className={`cursor-pointer hover:bg-indigo-50/60 dark:hover:bg-indigo-950/25 transition-colors duration-150 group border-border/30 ${idx % 2 === 0 ? '' : 'bg-muted/20 dark:bg-muted/10'}`}
+                        className={`cursor-pointer transition-colors duration-150 group border-border/30 ${
+                          isSparePart ? 'bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-900/30 border-l-4 border-l-amber-400'
+                          : borrowOverdue ? 'bg-red-50/50 dark:bg-red-950/20 hover:bg-red-50 dark:hover:bg-red-950/30'
+                          : borrowUrgent ? 'bg-orange-50/50 dark:bg-orange-950/20 hover:bg-orange-50'
+                          : activeBorrow ? 'bg-blue-50/40 dark:bg-blue-950/20 hover:bg-blue-50/60'
+                          : idx % 2 === 0 ? 'hover:bg-indigo-50/60 dark:hover:bg-indigo-950/25' : 'bg-muted/20 dark:bg-muted/10 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/25'
+                        }`}
                         onClick={() => { setSelectedAsset(asset); setShowBarcodeDialog(true); }}>
                         <TableCell className="py-3.5">
                           <span className="font-mono text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-800/40 px-2 py-0.5 rounded-lg">{asset.assetId}</span>
@@ -1505,10 +1522,12 @@ export default function AssetsPage() {
                               )}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-bold text-sm text-foreground group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors truncate">{asset.name}</p>
-                              {asset.description && (
-                                <p className="text-[11px] text-muted-foreground truncate max-w-[200px] mt-0.5">{asset.description}</p>
-                              )}
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-bold text-sm text-foreground group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors truncate">{asset.name}</p>
+                                {isSparePart && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[9px] font-bold border border-amber-200 flex-shrink-0"><Wrench className="h-2.5 w-2.5" />SPARE</span>}
+                              </div>
+                              {isSparePart && asset.department?.name && <p className="text-[10px] text-amber-600 font-medium mt-0.5">{asset.department.name}</p>}
+                              {!isSparePart && asset.description && <p className="text-[11px] text-muted-foreground truncate max-w-[200px] mt-0.5">{asset.description}</p>}
                             </div>
                           </div>
                         </TableCell>
@@ -1549,23 +1568,47 @@ export default function AssetsPage() {
                           )}
                         </TableCell>
                         <TableCell className="py-3.5">
-                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border ${
-                            asset.status === 'ACTIVE'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700/40'
-                              : asset.status === 'DISPOSED'
-                              ? 'bg-red-50 text-red-700 border-red-200/70 dark:bg-red-900/20 dark:text-red-400 dark:border-red-700/40'
-                              : 'bg-amber-50 text-amber-700 border-amber-200/70 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700/40'
-                          }`}>
-                            <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
-                              asset.status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse'
-                              : asset.status === 'DISPOSED' ? 'bg-red-500'
-                              : 'bg-amber-500'
-                            }`} />
-                            {asset.status === 'IN_TRANSIT' ? 'In Transit' : (asset.status || '').charAt(0) + (asset.status || '').slice(1).toLowerCase()}
-                          </span>
+                          <div className="space-y-1">
+                            <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                              asset.status === 'BORROWED'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400'
+                                : asset.status === 'ACTIVE'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70 dark:bg-emerald-900/20 dark:text-emerald-400'
+                                : asset.status === 'DISPOSED'
+                                ? 'bg-red-50 text-red-700 border-red-200/70 dark:bg-red-900/20 dark:text-red-400'
+                                : 'bg-amber-50 text-amber-700 border-amber-200/70 dark:bg-amber-900/20 dark:text-amber-400'
+                            }`}>
+                              <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                                asset.status === 'BORROWED' ? 'bg-blue-500 animate-pulse'
+                                : asset.status === 'ACTIVE' ? 'bg-emerald-500 animate-pulse'
+                                : asset.status === 'DISPOSED' ? 'bg-red-500'
+                                : 'bg-amber-500'
+                              }`} />
+                              {asset.status === 'IN_TRANSIT' ? 'In Transit' : asset.status === 'BORROWED' ? 'Borrowed' : (asset.status || '').charAt(0) + (asset.status || '').slice(1).toLowerCase()}
+                            </span>
+                            {activeBorrow && remainDays != null && (
+                              <div className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                borrowOverdue ? 'bg-red-100 text-red-700' : borrowUrgent ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                <Clock className="h-2.5 w-2.5" />
+                                {borrowOverdue ? `${Math.abs(remainDays)}d overdue` : remainDays === 0 ? 'Due today!' : `${remainDays}d left`}
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="py-3.5" onClick={e => e.stopPropagation()}>
                           <div className="flex gap-1 justify-end">
+                            {/* Borrow/Return button */}
+                            {!isSparePart && (
+                              <Button variant="ghost" size="icon"
+                                className={`h-8 w-8 rounded-lg transition-colors ${
+                                  activeBorrow ? 'hover:bg-emerald-100 hover:text-emerald-700 text-emerald-600' : 'hover:bg-blue-100 hover:text-blue-700 text-slate-400'
+                                }`}
+                                title={activeBorrow ? 'Return asset' : 'Borrow asset'}
+                                onClick={() => { setBorrowAsset(asset); setShowBorrowDialog(true); }}>
+                                <ArrowLeftRight className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                               onClick={() => { setSelectedAsset(asset); setShowEditDialog(true); }}
                               title="Edit asset">
@@ -1578,7 +1621,8 @@ export default function AssetsPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -1605,6 +1649,14 @@ export default function AssetsPage() {
           renderAssetsContent()
         )}
       </div>
+      {/* Borrow / Return Dialog */}
+      <BorrowReturnDialog
+        open={showBorrowDialog}
+        onOpenChange={setShowBorrowDialog}
+        asset={borrowAsset}
+        onSuccess={() => loadAssets(true)}
+      />
+
       <AssetDetailsDialog
         asset={selectedAsset}
         open={showBarcodeDialog}

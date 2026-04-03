@@ -110,12 +110,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: true, purchaseAmount: true, purchaseDate: true,
         userId: true, vendorId: true,
         vendor: { select: { id: true, name: true } },
+        department: { select: { id: true, name: true } },
+        departmentId: true,
+        isSparePart: true,
         createdAt: true, lastMovedAt: true,
         assignedToName: true,
         assignedToEmail: true,
         assignedToId: true,
         assignedAt: true,
         organizationId: true,
+        borrows: {
+          where: { status: { in: ['BORROWED', 'OVERDUE'] } },
+          select: {
+            id: true, status: true, expectedReturnAt: true,
+            borrowedAt: true,
+            borrowedBy: { select: { email: true } },
+            custodianName: true,
+          },
+          take: 1,
+          orderBy: { borrowedAt: 'desc' },
+        },
       } as const;
 
       const whereAdmin = {};

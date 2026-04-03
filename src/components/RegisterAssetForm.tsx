@@ -31,10 +31,11 @@ import AssetLocationMap from "./AssetLocationMap";
 const assetFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
-  type: z.enum(["FURNITURE", "EQUIPMENT", "ELECTRONICS"]),
-  vendorId: z.string().min(1, "Please select a vendor"),
-  floorNumber: z.string().min(1, "Floor number is required"),
-  roomNumber: z.string().min(1, "Room number is required"),
+  type: z.enum(["FURNITURE", "EQUIPMENT", "ELECTRONICS", "SPARE_PART", "IT", "TOOL", "OTHER", "MEDICAL_EQUIPMENT"]),
+  vendorId: z.string().optional(),
+  departmentId: z.string().optional(),
+  floorNumber: z.string().optional(),
+  roomNumber: z.string().optional(),
   imageUrl: z.string().optional(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
@@ -54,6 +55,7 @@ interface RegisterAssetFormProps {
 
 export function RegisterAssetForm({ onSuccess, onCancel }: RegisterAssetFormProps) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showDuplicationDialog, setShowDuplicationDialog] = useState(false);
@@ -84,6 +86,7 @@ export function RegisterAssetForm({ onSuccess, onCancel }: RegisterAssetFormProp
       description: "",
       type: "FURNITURE",
       vendorId: "",
+      departmentId: "",
       floorNumber: "",
       roomNumber: "",
       imageUrl: "",
@@ -109,6 +112,8 @@ export function RegisterAssetForm({ onSuccess, onCancel }: RegisterAssetFormProp
     };
 
     loadVendors();
+    // Load departments for spare parts
+    fetch('/api/departments').then(r => r.json()).then(d => setDepartments(Array.isArray(d) ? d : [])).catch(() => {});
   }, [t, toast]);
   
   // Check for existing assets of the same type in the same room
@@ -195,6 +200,7 @@ export function RegisterAssetForm({ onSuccess, onCancel }: RegisterAssetFormProp
       }
 
       // Prepare the asset data
+      const isSparePart = values.type === 'SPARE_PART';
       const assetData = {
         ...values,
         imageUrl: imageUrl || null,
@@ -202,6 +208,11 @@ export function RegisterAssetForm({ onSuccess, onCancel }: RegisterAssetFormProp
         longitude: longitude || null,
         locationAccuracy: accuracy || null,
         locationSource: locationSource || null,
+        isSparePart,
+        departmentId: values.departmentId || null,
+        // Spare parts don't need floor/room if not provided
+        floorNumber: values.floorNumber || (isSparePart ? 'SPARE' : ''),
+        roomNumber: values.roomNumber || (isSparePart ? 'PARTS' : ''),
       };
 
       // Create the asset
@@ -333,12 +344,53 @@ export function RegisterAssetForm({ onSuccess, onCancel }: RegisterAssetFormProp
                   <SelectItem value="FURNITURE">{t("furniture")}</SelectItem>
                   <SelectItem value="EQUIPMENT">{t("equipment")}</SelectItem>
                   <SelectItem value="ELECTRONICS">{t("electronics")}</SelectItem>
+                  <SelectItem value="IT">IT / Technology</SelectItem>
+                  <SelectItem value="TOOL">Tool</SelectItem>
+                  <SelectItem value="MEDICAL_EQUIPMENT">Medical Equipment</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                  <SelectItem value="SPARE_PART">🔧 Spare Part</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {/* Spare Part — Department assignment (only shown when type is SPARE_PART) */}
+        {form.watch('type') === 'SPARE_PART' && (
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-amber-800">🔧 Spare Part Configuration</span>
+              <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-semibold">No person assignment</span>
+            </div>
+            <p className="text-xs text-amber-700">Spare parts are assigned to departments instead of individual users.</p>
+            <FormField
+              control={form.control}
+              name="departmentId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-amber-800 font-semibold">Department *</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="border-amber-300 bg-white">
+                        <SelectValue placeholder="Select department…" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {departments.length === 0 ? (
+                        <SelectItem value="__none" disabled>No departments — add in Settings → Departments</SelectItem>
+                      ) : departments.map(d => (
+                        <SelectItem key={d.id} value={d.id}>{d.name}{d.code ? ` (${d.code})` : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        )}
+
         <FormField
           control={form.control}
           name="vendorId"

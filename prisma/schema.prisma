@@ -236,9 +236,12 @@ model Asset {
   assignedToEmail   String?
   assignedToId      String?
   assignedAt        DateTime?
+  departmentId      String?
+  isSparePart       Boolean?      @default(false)
   organization   Organization?   @relation(fields: [organizationId], references: [id])
   user           User            @relation(fields: [userId], references: [id])
   vendor         Vendor?         @relation(fields: [vendorId], references: [id])
+  department     Department?     @relation(fields: [departmentId], references: [id])
   documents        AssetDocument[]
   history          AssetHistory[]
   location         AssetLocation?
@@ -1218,6 +1221,23 @@ enum PassagewayDirection {
   ENTRY
   EXIT
   BOTH
+}
+
+// ── Department model ───────────────────────────────────────────────────────
+
+model Department {
+  id             String   @id @default(cuid())
+  name           String
+  code           String?
+  description    String?
+  organizationId String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  assets         Asset[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 // ── World-Class RFQ New Models ─────────────────────────────────────────────

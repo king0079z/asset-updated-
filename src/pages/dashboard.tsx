@@ -125,6 +125,7 @@ export default function Dashboard() {
   const [kitchenConsumptionOpen, setKitchenConsumptionOpen] = useState(false);
   const [driverTripSummaryOpen, setDriverTripSummaryOpen] = useState(false);
   const [missingInventoryCount, setMissingInventoryCount] = useState(0);
+  const [overdueBorrows, setOverdueBorrows] = useState<any[]>([]);
   const hasFetchedRef = useRef(false);
 
   // Initialize from cache for instant display on revisit — check both cache keys
@@ -175,6 +176,21 @@ export default function Dashboard() {
           .then((r) => (r.ok ? r.json() : []))
           .then((arr) => setMissingInventoryCount(Array.isArray(arr) ? arr.length : 0))
           .catch(() => setMissingInventoryCount(0));
+
+        // Fetch overdue/near-due borrows for dashboard alerts
+        fetch('/api/borrowing?status=BORROWED', { credentials: 'include' })
+          .then(r => r.ok ? r.json() : [])
+          .then((list: any[]) => {
+            if (!Array.isArray(list)) return;
+            const now = Date.now();
+            const alerts = list.filter(b => {
+              if (!b.expectedReturnAt) return false;
+              const diff = new Date(b.expectedReturnAt).getTime() - now;
+              return diff < 3 * 86_400_000; // due within 3 days or overdue
+            });
+            setOverdueBorrows(alerts);
+          })
+          .catch(() => {});
 
         // Use cached fetch — 2 min TTL for core stats, 5 min for secondary metrics.
         // In-flight deduplication is handled by fetchWithCache automatically.
@@ -513,6 +529,39 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+
+        {/* Borrow overdue / near-due alerts */}
+        {overdueBorrows.length > 0 && (
+          <div className="rounded-2xl border-2 border-blue-300 dark:border-blue-700 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/30 p-4 shadow-lg shadow-blue-500/10 mb-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-10 w-10 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
+                <Clock className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-blue-900 dark:text-blue-100">Borrow Alerts — {overdueBorrows.length} asset{overdueBorrows.length !== 1 ? 's' : ''}</p>
+                <p className="text-sm text-blue-700 dark:text-blue-300">Assets borrowed that are overdue or due within 3 days</p>
+              </div>
+              <Button asChild size="sm" className="ml-auto rounded-xl bg-blue-600 hover:bg-blue-700 shrink-0">
+                <Link href="/borrowing">View All</Link>
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {overdueBorrows.slice(0, 3).map(b => {
+                const diff = Math.ceil((new Date(b.expectedReturnAt).getTime() - Date.now()) / 86_400_000);
+                const isOverdue = diff < 0;
+                return (
+                  <div key={b.id} className={`flex items-center gap-3 p-2.5 rounded-xl border text-sm ${isOverdue ? 'bg-red-50 border-red-200 dark:bg-red-950/30' : 'bg-white border-blue-200 dark:bg-blue-950/20'}`}>
+                    <Package className={`h-4 w-4 flex-shrink-0 ${isOverdue ? 'text-red-500' : 'text-blue-500'}`} />
+                    <span className="font-medium flex-1 truncate">{b.asset?.name || 'Asset'}</span>
+                    <span className={`font-bold text-xs px-2 py-0.5 rounded-full ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                      {isOverdue ? `${Math.abs(diff)}d overdue` : diff === 0 ? 'Due today' : `${diff}d left`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {missingInventoryCount > 0 && (
           <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 p-4 flex items-center justify-between gap-4 shadow-lg shadow-amber-500/10 mb-6">

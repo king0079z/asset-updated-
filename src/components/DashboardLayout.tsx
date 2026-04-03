@@ -368,6 +368,11 @@ function Sidebar({ className }: SidebarProps) {
         href: "/settings/system-parameters",
       },
       {
+        title: "Departments",
+        icon: Building2,
+        href: "/settings/departments",
+      },
+      {
         title: "Data Migration",
         icon: Upload,
         href: "/admin/data-migration",

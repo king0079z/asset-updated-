@@ -166,11 +166,13 @@ export default async function handler(
           donorName: donorName && String(donorName).trim() ? String(donorName).trim() : null,
           nextServiceDate: nextServiceDate ? (() => { try { const d = new Date(nextServiceDate); return isNaN(d.getTime()) ? null : d; } catch { return null; } })() : null,
           isProvisional: isProvisional === true || isProvisional === 'true',
-          // Assignment fields
-          assignedToId: assignedToId || null,
-          assignedToEmail: assignedToEmail || null,
-          assignedToName: assignedToName || null,
-          assignedAt: assignedToId ? new Date() : null,
+          isSparePart: type === 'SPARE_PART' || isSparePart === true || isSparePart === 'true',
+          departmentId: departmentId || null,
+          // Assignment fields (spare parts assigned to department, not person)
+          assignedToId: type === 'SPARE_PART' ? null : (assignedToId || null),
+          assignedToEmail: type === 'SPARE_PART' ? null : (assignedToEmail || null),
+          assignedToName: type === 'SPARE_PART' ? null : (assignedToName || null),
+          assignedAt: (type !== 'SPARE_PART' && assignedToId) ? new Date() : null,
           location: latitude && longitude ? {
             create: {
               latitude: parseFloat(latitude),
