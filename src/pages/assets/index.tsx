@@ -75,6 +75,15 @@ import {
   Ticket,
   UserCheck,
   Loader2,
+  Plus,
+  Play,
+  CheckCircle,
+  Calendar,
+  RefreshCw,
+  Wifi,
+  FileCheck,
+  Shield,
+  PenLine,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -87,6 +96,7 @@ const VENDORS_KEY = "/api/vendors";
 const ASSETS_TTL = 60_000;   // 1 min
 const VENDORS_TTL = 5 * 60_000; // 5 min
 import { exportToExcel } from "@/util/excel";
+import * as XLSX from 'xlsx';
 import {
   Table,
   TableBody,
@@ -191,6 +201,27 @@ export default function AssetsPage() {
   const [showBorrowDialog, setShowBorrowDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [handheldMode, setHandheldMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<'assets' | 'stocktaking' | 'policies'>('assets');
+
+  // ── Stocktaking tab state ─────────────────────────────────────────────────
+  const [stPlans, setStPlans] = useState<any[]>([]);
+  const [stLoading, setStLoading] = useState(false);
+  const [stShowNew, setStShowNew] = useState(false);
+  const [stShowPolicy, setStShowPolicy] = useState(false);
+  const [stForm, setStForm] = useState({ type: 'FULL', name: '', description: '', scheduledAt: '' });
+  const [stPolicy, setStPolicy] = useState({ thresholdMinutes: 30, autoMarkPresent: true });
+  const [stSaving, setStSaving] = useState(false);
+  const [stStats, setStStats] = useState({ total: 0, completed: 0, inProgress: 0, planned: 0 });
+
+  // ── Policies & Acknowledgments tab state ──────────────────────────────────
+  const [acks, setAcks] = useState<any[]>([]);
+  const [pendingPolicies, setPendingPolicies] = useState<any[]>([]);
+  const [acksLoading, setAcksLoading] = useState(false);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [sigForm, setSigForm] = useState({ assetId: '', notes: '' });
+  const [showSigForm, setShowSigForm] = useState(false);
+  const [signing, setSigning] = useState(false);
+
   const { toast } = useToast();
   const { latitude, longitude } = useGeolocation();
 
@@ -214,6 +245,114 @@ export default function AssetsPage() {
   useEffect(() => {
     fetch('/api/departments', { credentials: 'include' }).then(r => r.json()).then(d => setDepartments(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
+
+  // ── Stocktaking helpers ───────────────────────────────────────────────────
+  const fetchPlans = async () => {
+    setStLoading(true);
+    const res = await fetch('/api/stocktaking-plans').then(r => r.json()).catch(() => []);
+    const list = Array.isArray(res) ? res : [];
+    setStPlans(list);
+    setStStats({
+      total: list.length,
+      completed: list.filter((p: any) => p.status === 'COMPLETED').length,
+      inProgress: list.filter((p: any) => p.status === 'IN_PROGRESS').length,
+      planned: list.filter((p: any) => p.status === 'PLANNED').length,
+    });
+    setStLoading(false);
+  };
+
+  const createPlan = async () => {
+    if (!stForm.name) { toast({ variant: 'destructive', title: 'Name is required' }); return; }
+    setStSaving(true);
+    const res = await fetch('/api/stocktaking-plans', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stForm),
+    });
+    setStSaving(false);
+    if (res.ok) {
+      toast({ title: 'Stocktaking plan created' });
+      setStShowNew(false);
+      setStForm({ type: 'FULL', name: '', description: '', scheduledAt: '' });
+      fetchPlans();
+    } else toast({ variant: 'destructive', title: 'Failed to create plan' });
+  };
+
+  const updatePlanStatus = async (id: string, status: string) => {
+    const body: any = { status };
+    if (status === 'IN_PROGRESS') body.startedAt = new Date().toISOString();
+    if (status === 'COMPLETED') body.completedAt = new Date().toISOString();
+    await fetch(`/api/stocktaking-plans/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    fetchPlans();
+    toast({ title: `Plan ${status === 'IN_PROGRESS' ? 'started' : 'completed'}` });
+  };
+
+  const exportPlanSummary = (plan: any) => {
+    const wb = XLSX.utils.book_new();
+    const data = [
+      ['Stocktaking Plan Summary'],
+      ['Name', plan.name],
+      ['Type', plan.type],
+      ['Status', plan.status],
+      ['Scheduled', plan.scheduledAt ? new Date(plan.scheduledAt).toLocaleString() : 'N/A'],
+      ['Started', plan.startedAt ? new Date(plan.startedAt).toLocaleString() : 'N/A'],
+      ['Completed', plan.completedAt ? new Date(plan.completedAt).toLocaleString() : 'N/A'],
+      ['Executor', plan.executor?.email || 'N/A'],
+      ['Description', plan.description || ''],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Summary');
+    XLSX.writeFile(wb, `stocktaking_${plan.id}.xlsx`);
+  };
+
+  // ── Policies / Acknowledgments helpers ───────────────────────────────────
+  const fetchAcks = async () => {
+    setAcksLoading(true);
+    const [a, p] = await Promise.all([
+      fetch('/api/acknowledgments').then(r => r.json()).catch(() => []),
+      fetch('/api/policies/pending').then(r => r.json()).catch(() => []),
+    ]);
+    setAcks(Array.isArray(a) ? a : []);
+    setPendingPolicies(Array.isArray(p) ? p : []);
+    setAcksLoading(false);
+  };
+
+  const acceptPolicy = async (policyId: string) => {
+    setAcceptingId(policyId);
+    const res = await fetch(`/api/policies/${policyId}/accept`, { method: 'POST' });
+    setAcceptingId(null);
+    if (res.ok) { toast({ title: 'Policy accepted', description: 'Thank you for accepting the policy.' }); fetchAcks(); }
+    else toast({ variant: 'destructive', title: 'Failed to accept policy' });
+  };
+
+  const signAcknowledgment = async () => {
+    if (!sigForm.assetId) { toast({ variant: 'destructive', title: 'Asset ID required' }); return; }
+    setSigning(true);
+    const res = await fetch('/api/acknowledgments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assetId: sigForm.assetId,
+        notes: sigForm.notes,
+        signature: { signed: true, timestamp: new Date().toISOString(), method: 'digital-click-to-sign' },
+        policyVersion: '1.0',
+      }),
+    });
+    setSigning(false);
+    if (res.ok) {
+      toast({ title: 'Asset acknowledged', description: 'Your digital acknowledgment has been recorded.' });
+      setShowSigForm(false);
+      setSigForm({ assetId: '', notes: '' });
+      fetchAcks();
+    } else toast({ variant: 'destructive', title: 'Failed to acknowledge' });
+  };
+
+  // ── Lazy-load tab data ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (activeTab === 'stocktaking') fetchPlans();
+    if (activeTab === 'policies') fetchAcks();
+  }, [activeTab]);
 
   const loadVendors = async (background = false) => {
     try {
@@ -1703,6 +1842,321 @@ export default function AssetsPage() {
       </div>
   );
 
+  const ST_TYPE_COLORS: Record<string, string> = {
+    FULL: 'bg-purple-100 text-purple-700', RANDOM: 'bg-blue-100 text-blue-700',
+    SELF: 'bg-green-100 text-green-700', AUTOMATIC: 'bg-orange-100 text-orange-700',
+  };
+  const ST_STATUS_COLORS: Record<string, string> = {
+    PLANNED: 'bg-gray-100 text-gray-600', IN_PROGRESS: 'bg-yellow-100 text-yellow-700',
+    COMPLETED: 'bg-green-100 text-green-700', CANCELLED: 'bg-red-100 text-red-600',
+  };
+  const STOCKTAKING_TYPES = [
+    { id: 'FULL', label: 'Full Stocktaking', desc: 'All assets audited by dedicated personnel' },
+    { id: 'RANDOM', label: 'Random Stocktaking', desc: 'Spot-check of a subset of assets' },
+    { id: 'SELF', label: 'Self-Stocktaking', desc: 'Each department/custodian counts their own assets' },
+    { id: 'AUTOMATIC', label: 'Automatic (Key Assets)', desc: 'RFID-based auto-detection at scheduled intervals' },
+  ];
+
+  const renderStocktakingContent = () => (
+    <div className="max-w-6xl mx-auto py-6 space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center">
+            <ClipboardList className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Asset Stocktaking</h2>
+            <p className="text-sm text-gray-500">Full, random, self-stocktaking and automatic key-asset modes</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => setStShowPolicy(p => !p)} variant="outline" size="sm">
+            <Settings className="w-4 h-4 mr-2" />Quick Policy
+          </Button>
+          <Button onClick={() => setStShowNew(p => !p)} size="sm">
+            <Plus className="w-4 h-4 mr-2" />New Plan
+          </Button>
+        </div>
+      </div>
+
+      {stShowPolicy && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2"><Wifi className="w-4 h-4 text-orange-600" />Quick Online Stocktaking Policy</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Threshold (minutes)</label>
+                <Input type="number" min="5" className="w-28" value={stPolicy.thresholdMinutes}
+                  onChange={e => setStPolicy(p => ({ ...p, thresholdMinutes: Number(e.target.value) }))} />
+              </div>
+              <div className="flex items-center gap-2 mt-4">
+                <input type="checkbox" id="stAutoMark" checked={stPolicy.autoMarkPresent}
+                  onChange={e => setStPolicy(p => ({ ...p, autoMarkPresent: e.target.checked }))}
+                  className="w-4 h-4 accent-orange-600" />
+                <label htmlFor="stAutoMark" className="text-sm font-medium">Auto-mark as present if scanned within threshold</label>
+              </div>
+            </div>
+            <p className="text-xs text-orange-700 bg-orange-100 rounded-lg px-3 py-2">
+              Assets scanned by RFID readers within the last <strong>{stPolicy.thresholdMinutes} minutes</strong> will be automatically marked as in-stock.
+            </p>
+            <Button size="sm" className="bg-orange-600 hover:bg-orange-700"
+              onClick={() => { toast({ title: 'Policy saved', description: `Threshold: ${stPolicy.thresholdMinutes}min` }); setStShowPolicy(false); }}>
+              Save Policy
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {stShowNew && (
+        <Card className="border-blue-200">
+          <CardHeader><CardTitle className="text-base">Create New Stocktaking Plan</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase block mb-2">Stocktaking Type</label>
+              <div className="grid grid-cols-2 gap-3">
+                {STOCKTAKING_TYPES.map(t => (
+                  <div key={t.id}
+                    className={`p-3 border-2 rounded-xl cursor-pointer transition-all ${stForm.type === t.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                    onClick={() => setStForm(f => ({ ...f, type: t.id }))}>
+                    <p className="font-semibold text-sm text-gray-900">{t.label}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{t.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Plan Name</label>
+                <Input value={stForm.name} onChange={e => setStForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Q2 2026 Full Stocktaking" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Scheduled Date</label>
+                <Input type="datetime-local" value={stForm.scheduledAt} onChange={e => setStForm(f => ({ ...f, scheduledAt: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Description</label>
+              <textarea className="w-full border rounded-lg px-3 py-2 text-sm resize-none" rows={2}
+                value={stForm.description} onChange={e => setStForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Scope, instructions, notes..." />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={createPlan} disabled={stSaving}>{stSaving ? 'Creating...' : 'Create Plan'}</Button>
+              <Button variant="outline" onClick={() => setStShowNew(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: 'Total Plans', value: stStats.total, color: 'text-gray-700' },
+          { label: 'Planned', value: stStats.planned, color: 'text-gray-500' },
+          { label: 'In Progress', value: stStats.inProgress, color: 'text-yellow-600' },
+          { label: 'Completed', value: stStats.completed, color: 'text-green-600' },
+        ].map(({ label, value, color }) => (
+          <Card key={label} className="text-center py-4">
+            <p className={`text-3xl font-bold ${color}`}>{value}</p>
+            <p className="text-xs text-gray-500 mt-1">{label}</p>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Stocktaking Plans</CardTitle>
+          <Button variant="ghost" size="sm" onClick={fetchPlans}><RefreshCw className="w-4 h-4" /></Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {stLoading ? (
+            <div className="py-12 text-center text-gray-400">Loading plans...</div>
+          ) : stPlans.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">
+              <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p>No stocktaking plans yet. Create one above.</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {stPlans.map(plan => (
+                <div key={plan.id} className="p-4 hover:bg-gray-50 flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <Badge className={`text-xs mt-0.5 ${ST_TYPE_COLORS[plan.type]}`}>{plan.type}</Badge>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{plan.name}</p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                        {plan.executor && <span className="flex items-center gap-1"><User className="w-3 h-3" />{plan.executor.email}</span>}
+                        {plan.scheduledAt && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(plan.scheduledAt).toLocaleDateString()}</span>}
+                        {plan.completedAt && <span className="flex items-center gap-1 text-green-600"><CheckCircle className="w-3 h-3" />Completed {new Date(plan.completedAt).toLocaleDateString()}</span>}
+                      </div>
+                      {plan.description && <p className="text-xs text-gray-400 mt-1 truncate">{plan.description}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Badge className={`text-xs ${ST_STATUS_COLORS[plan.status]}`}>{plan.status}</Badge>
+                    {plan.status === 'PLANNED' && (
+                      <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white" onClick={() => updatePlanStatus(plan.id, 'IN_PROGRESS')}>
+                        <Play className="w-3.5 h-3.5 mr-1" />Start
+                      </Button>
+                    )}
+                    {plan.status === 'IN_PROGRESS' && (
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => updatePlanStatus(plan.id, 'COMPLETED')}>
+                        <CheckCircle className="w-3.5 h-3.5 mr-1" />Complete
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => exportPlanSummary(plan)}>
+                      <Download className="w-3.5 h-3.5 mr-1" />Export
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderPoliciesContent = () => (
+    <div className="max-w-5xl mx-auto py-6 space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center">
+            <FileCheck className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Asset Acknowledgments & Policies</h2>
+            <p className="text-sm text-gray-500">Digital acknowledgment of asset receipt and policy acceptance</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={fetchAcks}><RefreshCw className="w-4 h-4 mr-2" />Refresh</Button>
+          <Button size="sm" onClick={() => setShowSigForm(p => !p)}>
+            <PenLine className="w-4 h-4 mr-2" />Acknowledge Asset
+          </Button>
+        </div>
+      </div>
+
+      {pendingPolicies.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2 text-orange-700">
+              <Shield className="w-4 h-4" />Pending Policy Acceptance ({pendingPolicies.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendingPolicies.map(policy => (
+              <div key={policy.id} className="bg-white border border-orange-200 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-900">{policy.title}</p>
+                    <p className="text-xs text-gray-500 mt-1">Version {policy.version} · Effective {new Date(policy.effectiveDate).toLocaleDateString()}</p>
+                    {policy.content && (
+                      <div className="mt-2 max-h-24 overflow-y-auto text-xs text-gray-600 bg-gray-50 rounded-lg p-2 border">
+                        {policy.content.slice(0, 500)}{policy.content.length > 500 ? '...' : ''}
+                      </div>
+                    )}
+                  </div>
+                  <Button size="sm" className="bg-orange-600 hover:bg-orange-700"
+                    disabled={acceptingId === policy.id}
+                    onClick={() => acceptPolicy(policy.id)}>
+                    {acceptingId === policy.id ? 'Accepting...' : 'Accept Policy'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {showSigForm && (
+        <Card className="border-green-200">
+          <CardHeader>
+            <CardTitle className="text-base">Digital Asset Acknowledgment</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Asset ID</label>
+              <Input value={sigForm.assetId} onChange={e => setSigForm(f => ({ ...f, assetId: e.target.value }))} placeholder="Enter asset ID or scan RFID/barcode" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">Notes (optional)</label>
+              <textarea className="w-full border rounded-lg px-3 py-2 text-sm resize-none" rows={2}
+                value={sigForm.notes} onChange={e => setSigForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Condition on receipt, any notes..." />
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+              <Shield className="w-3.5 h-3.5 inline mr-1" />
+              By clicking "Sign & Acknowledge", you confirm receipt of this asset in satisfactory condition and agree to abide by the asset usage policies.
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={signAcknowledgment} disabled={signing} className="bg-green-600 hover:bg-green-700">
+                <PenLine className="w-4 h-4 mr-2" />{signing ? 'Signing...' : 'Sign & Acknowledge'}
+              </Button>
+              <Button variant="outline" onClick={() => setShowSigForm(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Acknowledgment History ({acks.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {acksLoading ? (
+            <div className="py-12 text-center text-gray-400">Loading...</div>
+          ) : acks.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">
+              <FileCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p>No acknowledgment records yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    {['Asset', 'Acknowledged On', 'IP Address', 'Policy Ver.', 'Notes', 'Signed'].map(h => (
+                      <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {acks.map(ack => (
+                    <tr key={ack.id} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-gray-400" />
+                          <div>
+                            <p className="font-medium text-gray-900">{ack.asset?.name || ack.assetId}</p>
+                            <p className="text-xs text-gray-400">{ack.asset?.assetId}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          {new Date(ack.acknowledgedAt).toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-500 text-xs font-mono">{ack.ipAddress || '—'}</td>
+                      <td className="py-3 px-4"><Badge className="text-xs bg-blue-100 text-blue-700">{ack.policyVersion || '1.0'}</Badge></td>
+                      <td className="py-3 px-4 text-gray-500 text-xs">{ack.notes || '—'}</td>
+                      <td className="py-3 px-4">
+                        {ack.signature ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Clock className="w-4 h-4 text-gray-300" />}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -1717,7 +2171,22 @@ export default function AssetsPage() {
             <HandheldAssetScanner onAssetSelected={(a) => a && setSelectedAsset(a as Asset)} />
           </div>
         ) : (
-          renderAssetsContent()
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+            <TabsList className="mb-4">
+              <TabsTrigger value="assets" className="flex items-center gap-1.5">
+                <Package className="w-4 h-4" />Assets
+              </TabsTrigger>
+              <TabsTrigger value="stocktaking" className="flex items-center gap-1.5">
+                <ClipboardList className="w-4 h-4" />Stocktaking
+              </TabsTrigger>
+              <TabsTrigger value="policies" className="flex items-center gap-1.5">
+                <FileCheck className="w-4 h-4" />Policies & Acknowledgments
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="assets">{renderAssetsContent()}</TabsContent>
+            <TabsContent value="stocktaking">{renderStocktakingContent()}</TabsContent>
+            <TabsContent value="policies">{renderPoliciesContent()}</TabsContent>
+          </Tabs>
         )}
       </div>
       {/* Borrow / Return Dialog */}

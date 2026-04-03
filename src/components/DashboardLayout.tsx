@@ -232,16 +232,6 @@ function Sidebar({ className }: SidebarProps) {
         href: "/service-contracts",
       },
       {
-        title: "Stocktaking",
-        icon: ClipboardList,
-        href: "/stocktaking",
-      },
-      {
-        title: "Policies & Acknowledgments",
-        icon: FileCheck,
-        href: "/acknowledgments",
-      },
-      {
         title: t("food_supply"),
         icon: Utensils,
         href: "/food-supply",
