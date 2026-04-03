@@ -25,12 +25,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'POST') {
     const { name, description, assetIds, periodDays, assignedToId } = req.body;
+    const idsJson = Array.isArray(assetIds) ? assetIds : [];
     const nextDueAt = new Date(Date.now() + (periodDays || 30) * 86_400_000);
     const route = await prisma.inspectionRoute.create({
       data: {
         name,
         description,
-        assetIds: assetIds || [],
+        assetIds: idsJson,
         periodDays: periodDays || 30,
         assignedToId: assignedToId || user.id,
         organizationId: orgId,

@@ -14,9 +14,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     const passageways = await prisma.passagewayConfig.findMany({
-      where: { ...(orgId ? { organizationId: orgId } : {}), isActive: true },
+      where: { ...(orgId ? { organizationId: orgId } : {}) },
       include: { zone: { select: { id: true, name: true, building: true, floorNumber: true } } },
-      orderBy: { siteName: 'asc' },
+      orderBy: [{ siteName: 'asc' }, { updatedAt: 'desc' }],
     });
     return res.status(200).json(passageways);
   }

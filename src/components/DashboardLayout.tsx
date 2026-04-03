@@ -25,9 +25,7 @@ import {
   Wrench,
   Shield,
   FileCheck,
-  DoorOpen,
   Smartphone,
-  Route,
   FileText,
   Database,
   Clock,
@@ -257,16 +255,6 @@ function Sidebar({ className }: SidebarProps) {
         title: "RFID & BLE Tracking",
         icon: Radio,
         href: "/rfid",
-      },
-      {
-        title: "Passageways (7 Sites)",
-        icon: DoorOpen,
-        href: "/rfid/passageways",
-      },
-      {
-        title: "Inspection Routes",
-        icon: Route,
-        href: "/inspection-routes",
       },
       {
         title: t("vehicle_tracking_system"),

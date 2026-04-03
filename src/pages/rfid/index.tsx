@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import { fetchWithCache, getFromCache } from '@/lib/api-cache';
 
@@ -17,7 +18,7 @@ import {
   Battery, BatteryLow, BatteryCharging, AlertTriangle, CheckCircle2,
   Settings, Copy, X, Search, Zap, Activity, Eye, ChevronDown, ChevronUp,
   Signal, Clock, Package, Link, Unlink, Info, ExternalLink, Layers, Bell,
-  ArrowRight, LogOut, History, Shield, Printer, QrCode,
+  ArrowRight, LogOut, History, Shield, Printer, QrCode, DoorOpen, Route,
 } from 'lucide-react';
 
 const ZoneMapEditor        = dynamic(() => import('@/components/rfid/ZoneMapEditor'),        { ssr: false });
@@ -27,6 +28,8 @@ const AlertsLog            = dynamic(() => import('@/components/rfid/AlertsLog')
 const FloorMap3D           = dynamic(() => import('@/components/rfid/FloorMap3D'),           { ssr: false });
 const RFIDMovementTimeline = dynamic(() => import('@/components/rfid/RFIDMovementTimeline').then(m => ({ default: m.RFIDMovementTimeline })), { ssr: false });
 const RoomTagPrintDialog    = dynamic(() => import('@/components/rfid/RoomTagPrintDialog').then(m => ({ default: m.RoomTagPrintDialog })), { ssr: false });
+const RfidPassagewaysPanel = dynamic(() => import('@/components/rfid/RfidPassagewaysPanel').then(m => ({ default: m.RfidPassagewaysPanel })), { ssr: false });
+const RfidInspectionRoutesPanel = dynamic(() => import('@/components/rfid/RfidInspectionRoutesPanel').then(m => ({ default: m.RfidInspectionRoutesPanel })), { ssr: false });
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface RFIDTag {
@@ -77,14 +80,20 @@ const timeAgo = (ts?: string | null) => {
   return `${Math.floor(s / 86400)}d ago`;
 };
 
+const RFID_TABS = [
+  'overview', 'passageways', 'inspections', 'movements', 'tags', 'zones', 'room-tags', 'zone-map', 'alerts', 'setup',
+] as const;
+type RfidTabId = (typeof RFID_TABS)[number];
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function RFIDPage() {
+  const router = useRouter();
   const cachedRfid = getFromCache<any>(RFID_DASH_KEY, RFID_DASH_TTL);
   const [tags,        setTags]        = useState<RFIDTag[]>(cachedRfid?.tags   ?? []);
   const [zones,       setZones]       = useState<RFIDZone[]>(cachedRfid?.zones ?? []);
   const [stats,       setStats]       = useState<Stats | null>(cachedRfid?.stats ?? null);
   const [loading,     setLoading]     = useState(!cachedRfid);
-  const [activeTab,   setActiveTab]   = useState<'overview' | 'tags' | 'zones' | 'zone-map' | 'movements' | 'alerts' | 'setup' | 'room-tags'>('overview');
+  const [activeTab,   setActiveTab]   = useState<RfidTabId>('overview');
   const [unresolvedAlerts, setUnresolvedAlerts] = useState(0);
   const [zoneMapMode, setZoneMapMode] = useState<'edit' | 'live' | '3d'>('3d');
   const [seedingDemo, setSeedingDemo] = useState(false);
@@ -142,6 +151,20 @@ export default function RFIDPage() {
       loadAll();
     }
   }, []);
+
+  // Deep-link & sidebar: /rfid?tab=passageways | inspections | …
+  useEffect(() => {
+    const q = router.query?.tab;
+    const t = typeof q === 'string' ? q : Array.isArray(q) ? q[0] : '';
+    if (t && (RFID_TABS as readonly string[]).includes(t)) {
+      setActiveTab(t as RfidTabId);
+    }
+  }, [router.query.tab]);
+
+  const goTab = useCallback((id: RfidTabId) => {
+    setActiveTab(id);
+    router.replace({ pathname: router.pathname, query: { ...router.query, tab: id } }, undefined, { shallow: true });
+  }, [router]);
 
   // Auto-refresh every 15 seconds when on overview tab
   useEffect(() => {
@@ -236,7 +259,7 @@ export default function RFIDPage() {
         description: data.message ?? `${data.scansCreated} movement scans created across ${data.tagsProcessed} tags.`,
       });
       await loadAll(true);
-      setActiveTab('movements');
+      goTab('movements');
     } catch (e: any) {
       toast({ title: 'Failed to generate movements', description: e.message, variant: 'destructive' });
     } finally {
@@ -335,14 +358,15 @@ export default function RFIDPage() {
         <div className="space-y-8">
 
           {/* ── Hero ──────────────────────────────────────────────────────── */}
-          <div className="relative rounded-2xl overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-zinc-950" />
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.2),transparent_60%)]" />
-            <div className="absolute -top-12 -right-12 w-60 h-60 rounded-full bg-indigo-500/8 blur-3xl" />
-            <div className="absolute bottom-0 left-1/4 w-72 h-24 rounded-full bg-violet-500/8 blur-2xl" />
+          <div className="relative rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-2xl shadow-indigo-950/40">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-zinc-950" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.22),transparent_55%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(20,184,166,0.08),transparent_45%)]" />
+            <div className="absolute -top-12 -right-12 w-60 h-60 rounded-full bg-indigo-500/10 blur-3xl" />
+            <div className="absolute bottom-0 left-1/4 w-72 h-24 rounded-full bg-violet-500/10 blur-2xl" />
 
             {/* Huawei AP visual */}
-            <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-center gap-2 opacity-15">
+            <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-center gap-2 opacity-20">
               <div className="w-32 h-32 rounded-full border-2 border-white/20 flex items-center justify-center">
                 <div className="w-24 h-24 rounded-full border border-white/15 flex items-center justify-center">
                   <div className="w-16 h-16 rounded-full border border-white/10 flex items-center justify-center">
@@ -355,17 +379,19 @@ export default function RFIDPage() {
               ))}
             </div>
 
-            <div className="relative z-10 px-8 pt-8 pb-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="relative z-10 px-6 sm:px-8 pt-8 pb-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur border border-white/10 flex items-center justify-center flex-shrink-0">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/30 to-violet-600/20 backdrop-blur border border-white/15 flex items-center justify-center flex-shrink-0 shadow-lg">
                   <Radio className="h-7 w-7 text-white" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h1 className="text-3xl font-bold text-white tracking-tight">RFID & BLE Tracking</h1>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-widest">Live</span>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">RFID & BLE command center</h1>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 uppercase tracking-widest">Live</span>
                   </div>
-                  <p className="text-slate-400 text-sm">Huawei AirEngine 6776-58TI · BLE 5.0 · Real-time asset location</p>
+                  <p className="text-slate-400 text-sm max-w-xl">
+                    Tags, zones, movement, alerts, <span className="text-slate-300">seven-site passageways</span>, and <span className="text-slate-300">inspection routes</span> — unified for QRCS-scale operations.
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -422,32 +448,41 @@ export default function RFIDPage() {
           </div>
 
           {/* ── Tabs ──────────────────────────────────────────────────────── */}
-          <div className="flex items-center gap-1 p-1 bg-muted/60 rounded-xl flex-wrap">
-            {([
-              { id: 'overview',   label: 'Live Overview',      icon: Activity },
-              { id: 'movements',  label: 'Movement History',   icon: History },
-              { id: 'tags',       label: 'Tags',               icon: Tag },
-              { id: 'zones',      label: 'Zones / APs',        icon: Building2 },
-              { id: 'room-tags',  label: 'Room Tags',           icon: Radio },
-              { id: 'zone-map',   label: 'Zone Map',           icon: Layers },
-              { id: 'alerts',     label: 'Alerts',             icon: Bell },
-              { id: 'setup',      label: 'Integration',        icon: Settings },
-            ] as const).map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <tab.icon className="h-4 w-4" /> {tab.label}
-                {tab.id === 'alerts' && unresolvedAlerts > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                    {unresolvedAlerts > 9 ? '9+' : unresolvedAlerts}
-                  </span>
-                )}
-              </button>
-            ))}
+          <div className="rounded-2xl border border-border/80 bg-gradient-to-b from-muted/50 to-muted/20 p-1.5 shadow-sm">
+            <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>
+            <div className="flex items-stretch gap-1 overflow-x-auto pb-1">
+              {([
+                { id: 'overview',     label: 'Live overview',      icon: Activity },
+                { id: 'passageways',  label: 'Passageways',        icon: DoorOpen },
+                { id: 'inspections',  label: 'Inspections',        icon: Route },
+                { id: 'movements',    label: 'Movement',           icon: History },
+                { id: 'tags',         label: 'Tags',               icon: Tag },
+                { id: 'zones',        label: 'Zones / APs',        icon: Building2 },
+                { id: 'room-tags',    label: 'Room tags',          icon: Radio },
+                { id: 'zone-map',     label: 'Zone map',           icon: Layers },
+                { id: 'alerts',       label: 'Alerts',             icon: Bell },
+                { id: 'setup',        label: 'Integration',        icon: Settings },
+              ] as const).map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => goTab(tab.id)}
+                  className={`relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
+                    activeTab === tab.id
+                      ? 'bg-background text-foreground shadow-md ring-1 ring-border'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                  }`}
+                >
+                  <tab.icon className={`h-4 w-4 shrink-0 ${activeTab === tab.id ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
+                  {tab.label}
+                  {tab.id === 'alerts' && unresolvedAlerts > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center">
+                      {unresolvedAlerts > 9 ? '9+' : unresolvedAlerts}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* ══ OVERVIEW TAB ══════════════════════════════════════════════ */}
@@ -464,7 +499,7 @@ export default function RFIDPage() {
                   </div>
                   <p className="font-bold text-xl text-muted-foreground">No tagged assets yet</p>
                   <p className="text-muted-foreground text-sm text-center max-w-sm">Register your first RFID / BLE tag and link it to an asset to see live tracking here.</p>
-                  <Button onClick={() => { setActiveTab('tags'); setShowTagForm(true); }} className="rounded-xl gap-2">
+                  <Button onClick={() => { goTab('tags'); setShowTagForm(true); }} className="rounded-xl gap-2">
                     <Plus className="h-4 w-4" /> Register First Tag
                   </Button>
                 </div>
@@ -539,6 +574,22 @@ export default function RFIDPage() {
               )}
             </div>
           )}
+
+          {/* ══ PASSAGEWAYS TAB ═══════════════════════════════════════════ */}
+          {activeTab === 'passageways' && (
+            <RfidPassagewaysPanel
+              zones={zones.map(z => ({
+                id: z.id,
+                name: z.name,
+                apMacAddress: z.apMacAddress,
+                building: z.building,
+                floorNumber: z.floorNumber,
+              }))}
+            />
+          )}
+
+          {/* ══ INSPECTION ROUTES TAB ═══════════════════════════════════════ */}
+          {activeTab === 'inspections' && <RfidInspectionRoutesPanel />}
 
           {/* ══ MOVEMENTS TAB ════════════════════════════════════════════ */}
           {activeTab === 'movements' && (
