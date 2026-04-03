@@ -182,9 +182,10 @@ export function BorrowReturnDialog({ open, onOpenChange, asset, onSuccess }: Bor
     if (mode !== 'sign-borrow' || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d')!;
-    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    const dprB = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = canvas.offsetWidth * dprB;
+    canvas.height = canvas.offsetHeight * dprB;
+    ctx.scale(dprB, dprB);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     setHasSig(false);
@@ -206,7 +207,16 @@ export function BorrowReturnDialog({ open, onOpenChange, asset, onSuccess }: Bor
     if (!hasSig) { toast({ variant: 'destructive', title: 'Signature required', description: 'Please draw your signature to confirm.' }); return; }
     const days = customDays || selectedQuick || 7;
     const expectedReturnAt = new Date(Date.now() + days * 86_400_000).toISOString();
-    const signatureDataUrl = canvasRef.current!.toDataURL('image/png');
+    // Compress borrow signature to a small JPEG regardless of device DPR
+    const rawBorrowCanvas = canvasRef.current!;
+    const borrowSigCanvas = document.createElement('canvas');
+    borrowSigCanvas.width = 400;
+    borrowSigCanvas.height = 130;
+    const borrowSigCtx = borrowSigCanvas.getContext('2d')!;
+    borrowSigCtx.fillStyle = '#ffffff';
+    borrowSigCtx.fillRect(0, 0, 400, 130);
+    borrowSigCtx.drawImage(rawBorrowCanvas, 0, 0, rawBorrowCanvas.width, rawBorrowCanvas.height, 0, 0, 400, 130);
+    const signatureDataUrl = borrowSigCanvas.toDataURL('image/jpeg', 0.85);
     setLoading(true);
     try {
       // Step 1: Generate PDF client-side (stays in browser)

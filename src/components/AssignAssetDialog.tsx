@@ -170,14 +170,15 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
     }
   }, [open, tab]);
 
-  // Init canvas on sign step
+  // Init canvas on sign step — cap DPR at 2 to keep signature JPEG small
   useEffect(() => {
     if (step !== 'sign' || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d')!;
-    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = canvas.offsetWidth * dpr;
+    canvas.height = canvas.offsetHeight * dpr;
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     setHasSig(false);
@@ -263,7 +264,16 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
   const handleSignAndAssign = async () => {
     if (!hasSig) { toast({ variant: 'destructive', title: 'Signature required', description: 'Please draw your signature before completing.' }); return; }
     if (!asset) return;
-    const signatureDataUrl = canvasRef.current!.toDataURL('image/png');
+    // Compress signature to a small JPEG regardless of device DPR
+    const rawCanvas = canvasRef.current!;
+    const sigCanvas = document.createElement('canvas');
+    sigCanvas.width = 400;
+    sigCanvas.height = 130;
+    const sigCtx = sigCanvas.getContext('2d')!;
+    sigCtx.fillStyle = '#ffffff';
+    sigCtx.fillRect(0, 0, 400, 130);
+    sigCtx.drawImage(rawCanvas, 0, 0, rawCanvas.width, rawCanvas.height, 0, 0, 400, 130);
+    const signatureDataUrl = sigCanvas.toDataURL('image/jpeg', 0.85);
     const assignee = tab === 'system'
       ? { name: selectedUser!.name || selectedUser!.email, email: selectedUser!.email, id: selectedUser!.id }
       : { name: manualName, email: manualEmail, id: null };
