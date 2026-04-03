@@ -516,7 +516,7 @@ function TicketsContent() {
   const [tickets, setTickets] = useState<MgmtTicket[]>(() => getFromCache<MgmtTicket[]>(TICKETS_KEY, TICKETS_TTL) ?? []);
   const [isLoading, setIsLoading] = useState(() => !getFromCache(TICKETS_KEY, TICKETS_TTL));
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"all" | "open" | "in-progress" | "resolved" | "portal" | "critical" | "staff" | "ai">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "open" | "in-progress" | "resolved" | "portal" | "critical" | "staff" | "ai" | "dlm">("all");
   const [search, setSearch] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "priority">("newest");
   const [viewMode, setViewMode] = useState<"card" | "list">("list");
@@ -529,6 +529,8 @@ function TicketsContent() {
   const [aiLoading, setAiLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [liveCount, setLiveCount] = useState(0);
+  const [dlmQueue, setDlmQueue] = useState<any[]>([]);
+  const [dlmQueueLoading, setDlmQueueLoading] = useState(false);
 
   const normalize = (data: any[]): MgmtTicket[] => data.map(d => ({
     id: d.id || "", displayId: d.displayId || null, title: d.title || "Untitled", description: d.description || "",
@@ -586,6 +588,18 @@ function TicketsContent() {
 
   useEffect(() => { if (activeTab === "ai") fetchAi(); }, [activeTab]);
 
+  const fetchDlmQueue = useCallback(async () => {
+    setDlmQueueLoading(true);
+    try {
+      const r = await fetch("/api/tickets/dlm-queue");
+      if (!r.ok) return;
+      const d = await r.json();
+      setDlmQueue(d.tickets || []);
+    } catch {} finally { setDlmQueueLoading(false); }
+  }, []);
+
+  useEffect(() => { if (activeTab === "dlm") fetchDlmQueue(); }, [activeTab]);
+
   const handleAssign = async (ticketId: string, uid: string | null) => {
     setUpdatingId(ticketId);
     try {
@@ -641,6 +655,7 @@ function TicketsContent() {
     { key: "portal",      label: "User Requests",  count: stats.portal,     dot: "bg-violet-500" },
     { key: "staff",       label: "Staff",          count: null,             icon: Users },
     { key: "ai",          label: "AI Intel",       count: null,             icon: Brain },
+    { key: "dlm",         label: "DLM Approvals",  count: dlmQueue.filter(t => t.dlmApprovalStatus === "PENDING_DLM").length || null, icon: Shield, urgent: dlmQueue.filter(t => t.dlmApprovalStatus === "PENDING_DLM").length > 0 },
   ];
 
   return (
@@ -726,7 +741,7 @@ function TicketsContent() {
       </div>
 
       {/* ── Filters ── */}
-      {!["staff","ai"].includes(activeTab) && (
+      {!["staff","ai","dlm"].includes(activeTab) && (
         <div className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
@@ -822,8 +837,92 @@ function TicketsContent() {
         </div>
       )}
 
+      {/* DLM APPROVALS */}
+      {activeTab === "dlm" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-bold">DLM Approval Queue</h2>
+              <p className="text-sm text-muted-foreground">IT tickets awaiting DLM approval, approved, or rejected — full audit trail</p>
+            </div>
+            <button onClick={fetchDlmQueue} disabled={dlmQueueLoading} className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50">
+              {dlmQueueLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Refresh
+            </button>
+          </div>
+
+          {/* Status sub-filters */}
+          {!dlmQueueLoading && dlmQueue.length > 0 && (() => {
+            const pending = dlmQueue.filter(t => t.dlmApprovalStatus === "PENDING_DLM");
+            const approved = dlmQueue.filter(t => t.dlmApprovalStatus === "DLM_APPROVED");
+            const rejected = dlmQueue.filter(t => t.dlmApprovalStatus === "DLM_REJECTED");
+            return (
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Pending DLM Approval", value: pending.length, color: "text-amber-700 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-950/50", border: "border-amber-200 dark:border-amber-800", dot: "bg-amber-400 animate-pulse" },
+                  { label: "DLM Approved", value: approved.length, color: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-950/50", border: "border-emerald-200 dark:border-emerald-800", dot: "bg-emerald-500" },
+                  { label: "DLM Rejected", value: rejected.length, color: "text-red-700 dark:text-red-300", bg: "bg-red-50 dark:bg-red-950/50", border: "border-red-200 dark:border-red-800", dot: "bg-red-500" },
+                ].map(s => (
+                  <div key={s.label} className={`rounded-2xl border ${s.border} ${s.bg} p-4`}>
+                    <div className="flex items-center gap-2 mb-1"><div className={`h-2 w-2 rounded-full ${s.dot}`} /><p className="text-xs font-semibold text-muted-foreground">{s.label}</p></div>
+                    <p className={`text-3xl font-black ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {dlmQueueLoading ? (
+            <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />)}</div>
+          ) : dlmQueue.length === 0 ? (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card py-20 text-center">
+              <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center"><Shield className="h-8 w-8 text-muted-foreground/40" /></div>
+              <p className="font-semibold text-muted-foreground">No DLM-gated tickets found</p>
+              <p className="text-sm text-muted-foreground/70">IT-category tickets requiring DLM approval will appear here</p>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <div className="divide-y divide-border">
+                {dlmQueue.map((t: any) => {
+                  const statusCfg: Record<string, { label: string; color: string; bg: string; border: string; dot: string }> = {
+                    PENDING_DLM:  { label: "Pending DLM", color: "text-amber-700 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-950/50", border: "border-amber-200 dark:border-amber-800", dot: "bg-amber-400 animate-pulse" },
+                    DLM_APPROVED: { label: "DLM Approved", color: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-950/50", border: "border-emerald-200 dark:border-emerald-800", dot: "bg-emerald-500" },
+                    DLM_REJECTED: { label: "DLM Rejected", color: "text-red-700 dark:text-red-300", bg: "bg-red-50 dark:bg-red-950/50", border: "border-red-200 dark:border-red-800", dot: "bg-red-500" },
+                  };
+                  const sc = statusCfg[t.dlmApprovalStatus] || statusCfg.PENDING_DLM;
+                  const pc = PRIORITY_CFG[t.priority] || PRIORITY_CFG.MEDIUM;
+                  const timeAgoStr = (() => { const s2 = Math.floor((Date.now() - new Date(t.createdAt).getTime())/1000); if (s2<60) return "Just now"; if (s2<3600) return `${Math.floor(s2/60)}m ago`; if (s2<86400) return `${Math.floor(s2/3600)}h ago`; return `${Math.floor(s2/86400)}d ago`; })();
+                  return (
+                    <div key={t.id} className="flex items-center gap-4 px-5 py-4 hover:bg-muted/30 transition-colors group">
+                      <div className={`flex h-2 w-2 rounded-full shrink-0 ${sc.dot}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                          <span className="font-mono text-[10px] font-bold text-muted-foreground">{t.displayId || "#" + t.id.slice(0,8)}</span>
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${sc.color} ${sc.bg} ${sc.border}`}>{sc.label}</span>
+                          <PBadge p={t.priority} />
+                          {t.category && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{t.category}</span>}
+                        </div>
+                        <p className="text-sm font-semibold truncate">{t.title}</p>
+                        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                          <span>By: {t.user?.displayName || t.user?.email?.split("@")[0] || "Unknown"}</span>
+                          {t.dlm && <span>DLM: {t.dlm?.displayName || t.dlm?.email?.split("@")[0]}</span>}
+                          <span>{timeAgoStr}</span>
+                          {t.dlmComment && <span className="italic">"{t.dlmComment}"</span>}
+                        </div>
+                      </div>
+                      <Link href={`/tickets/${t.id}`} className="opacity-0 group-hover:opacity-100 flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold hover:bg-muted transition-all shrink-0">
+                        <Eye className="h-3.5 w-3.5" /> View
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TICKET LIST / CARD */}
-      {!["portal","staff","ai"].includes(activeTab) && (
+      {!["portal","staff","ai","dlm"].includes(activeTab) && (
         <div>
           {isLoading ? (
             <div className="space-y-3">{[1,2,3,4,5,6].map(i => <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />)}</div>

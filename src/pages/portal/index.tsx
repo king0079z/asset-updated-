@@ -14,6 +14,7 @@ import {
   Wrench, Truck, MapPin, Users, BarChart3, Ticket, Zap,
   Star, TrendingUp, ChevronDown, Upload, Paperclip, Eye,
   MessageSquare, Hash, Calendar, Tag, User, Building, Boxes,
+  XCircle,
 } from "lucide-react";
 import Head from "next/head";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -750,9 +751,14 @@ export default function PortalPage() {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
   const [activeCatTab, setActiveCatTab] = useState<string>(Object.keys(CATEGORIES)[0]);
-  const [view, setView] = useState<"portal" | "my-tickets" | "my-assets">("portal");
+  const [view, setView] = useState<"portal" | "my-tickets" | "my-assets" | "approvals">("portal");
   const [myAssets, setMyAssets] = useState<any[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(false);
+  const [dlmPending, setDlmPending] = useState<any[]>([]);
+  const [dlmLoading, setDlmLoading] = useState(false);
+  const [isDlm, setIsDlm] = useState(false);
+  const [dlmDeciding, setDlmDeciding] = useState<string | null>(null);
+  const [dlmComment, setDlmComment] = useState<Record<string, string>>({});
 
   const unread = notifications.filter(n => !n.readAt).length;
 
@@ -781,6 +787,41 @@ export default function PortalPage() {
   }, [user, router]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const loadDlmPending = useCallback(async () => {
+    if (!user) return;
+    setDlmLoading(true);
+    try {
+      const r = await fetch("/api/dlm/pending", { credentials: "same-origin" });
+      if (r.ok) {
+        const d = await r.json();
+        setDlmPending(d.tickets || []);
+        setIsDlm((d.tickets || []).length >= 0); // DLM tab visible if endpoint accessible
+      }
+    } catch {}
+    finally { setDlmLoading(false); }
+  }, [user]);
+
+  useEffect(() => { loadDlmPending(); }, [loadDlmPending]);
+  useEffect(() => { if (view === "approvals") loadDlmPending(); }, [view]);
+
+  const handleDlmDecide = async (ticketId: string, action: "approve" | "reject") => {
+    setDlmDeciding(ticketId);
+    try {
+      const r = await fetch(`/api/dlm/${ticketId}/decide`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action, comment: dlmComment[ticketId] || "" }),
+      });
+      if (!r.ok) throw new Error();
+      toast({ title: action === "approve" ? "✅ Ticket approved" : "❌ Ticket rejected", description: action === "approve" ? "The ticket is now with the IT support team." : "The ticket has been rejected." });
+      setDlmComment(prev => { const n = { ...prev }; delete n[ticketId]; return n; });
+      loadDlmPending();
+    } catch {
+      toast({ variant: "destructive", title: "Failed to process decision" });
+    } finally { setDlmDeciding(null); }
+  };
 
   const markRead = async () => {
     const ids = notifications.filter(n => !n.readAt).map(n => n.id);
@@ -937,6 +978,7 @@ export default function PortalPage() {
                 { key: "portal",     label: "Service Catalog", icon: Zap },
                 { key: "my-tickets", label: "My Tickets",      icon: Ticket },
                 { key: "my-assets",  label: "My Assets",       icon: Package },
+                { key: "approvals",  label: "Approval Requests", icon: Shield },
               ].map(tab => {
                 const Icon = tab.icon;
                 return (
@@ -949,6 +991,11 @@ export default function PortalPage() {
                     {tab.key === "my-tickets" && myTicketsWithUpdates > 0 && (
                       <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white animate-pulse">
                         {myTicketsWithUpdates}
+                      </span>
+                    )}
+                    {tab.key === "approvals" && dlmPending.length > 0 && (
+                      <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white animate-pulse">
+                        {dlmPending.length}
                       </span>
                     )}
                   </button>
@@ -1242,6 +1289,136 @@ export default function PortalPage() {
                             className="mt-1 w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50 dark:bg-muted/50 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-foreground hover:bg-slate-100 dark:hover:bg-muted hover:border-slate-300 transition-colors">
                             Report Issue with this Asset
                           </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── DLM APPROVAL REQUESTS TAB ── */}
+          {view === "approvals" && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-red-700 p-6 shadow-xl">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_60%)]" />
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20"><Shield className="h-5 w-5 text-white" /></div>
+                      <span className="text-xs font-bold uppercase tracking-widest text-white/70">DLM Approval Queue</span>
+                    </div>
+                    <h1 className="text-2xl font-black text-white">Approval Requests</h1>
+                    <p className="mt-1 text-sm text-white/70">Review and action IT service requests from your direct reports</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-xl bg-white/15 border border-white/20 px-4 py-2.5 text-center">
+                      <p className="text-2xl font-black text-white">{dlmPending.length}</p>
+                      <p className="text-[10px] text-white/70 font-semibold">Pending</p>
+                    </div>
+                    <button onClick={loadDlmPending} disabled={dlmLoading}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 border border-white/20 text-white hover:bg-white/25 transition-colors disabled:opacity-50">
+                      {dlmLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info banner */}
+              <div className="flex items-start gap-3 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-4">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/50">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-amber-800 dark:text-amber-300">You are the Direct Line Manager (DLM) for these requests</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">IT requests from your direct reports require your approval before reaching the IT support team. Review each request carefully before approving or rejecting.</p>
+                </div>
+              </div>
+
+              {/* Ticket cards */}
+              {dlmLoading ? (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {[1,2,3,4].map(i => <div key={i} className="h-56 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />)}
+                </div>
+              ) : dlmPending.length === 0 ? (
+                <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-100 dark:border-border bg-white dark:bg-card py-20 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/40">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+                  </div>
+                  <p className="font-bold text-slate-700 dark:text-foreground">All caught up!</p>
+                  <p className="text-sm text-slate-400 dark:text-muted-foreground">No pending approval requests from your direct reports</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {dlmPending.map((t: any) => {
+                    const pc = { CRITICAL: { color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/50", border: "border-red-200 dark:border-red-800", dot: "bg-red-500" }, HIGH: { color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/50", border: "border-orange-200 dark:border-orange-800", dot: "bg-orange-500" }, MEDIUM: { color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/50", border: "border-amber-200 dark:border-amber-800", dot: "bg-amber-500" }, LOW: { color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/50", border: "border-emerald-200 dark:border-emerald-800", dot: "bg-emerald-500" } }[t.priority] || { color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/50", border: "border-amber-200 dark:border-amber-800", dot: "bg-amber-500" };
+                    const isDeciding = dlmDeciding === t.id;
+                    const requester = t.user;
+                    const timeAgoStr = (() => { const diff = Date.now() - new Date(t.createdAt).getTime(); const m = Math.floor(diff/60000); if (m<1) return "Just now"; if (m<60) return `${m}m ago`; const h=Math.floor(m/60); if (h<24) return `${h}h ago`; return `${Math.floor(h/24)}d ago`; })();
+
+                    return (
+                      <div key={t.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm hover:shadow-lg transition-all">
+                        {/* Priority rail */}
+                        <div className={`h-1 w-full ${pc.dot}`} />
+                        <div className="p-5 space-y-4">
+                          {/* Header row */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                <span className="font-mono text-[10px] font-bold text-muted-foreground">{t.displayId || "#" + t.id.slice(0,8)}</span>
+                                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${pc.color} ${pc.bg} ${pc.border}`}><span className={`h-1.5 w-1.5 rounded-full ${pc.dot}`} />{t.priority}</span>
+                                {t.category && <span className="rounded-full bg-slate-100 dark:bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{t.category.replace(/_/g," ")}</span>}
+                                {t.subcategory && <span className="rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-800 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-300">{t.subcategory}</span>}
+                              </div>
+                              <h3 className="font-bold text-foreground line-clamp-2">{t.title}</h3>
+                            </div>
+                            <span className="text-[11px] text-muted-foreground shrink-0">{timeAgoStr}</span>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground line-clamp-3 bg-muted/40 rounded-xl px-3 py-2">{t.description}</p>
+
+                          {/* Requester info */}
+                          <div className="flex items-center gap-2.5 rounded-xl bg-muted/40 border border-border p-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-800 text-sm font-bold text-white shrink-0">
+                              {(requester?.displayName || requester?.email || "U")[0]?.toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold truncate">{requester?.displayName || requester?.email?.split("@")[0] || "Unknown"}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{requester?.email}</p>
+                              {requester?.jobTitle && <p className="text-[10px] text-muted-foreground truncate">{requester.jobTitle}{requester?.department ? ` · ${requester.department}` : ""}</p>}
+                            </div>
+                            <div className="ml-auto text-right shrink-0">
+                              <p className="text-[10px] text-muted-foreground">Department</p>
+                              <p className="text-xs font-semibold">{requester?.department || "—"}</p>
+                            </div>
+                          </div>
+
+                          {/* Comment box */}
+                          <div>
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">Your comment (optional for approval, required for rejection)</label>
+                            <textarea rows={2}
+                              value={dlmComment[t.id] || ""}
+                              onChange={e => setDlmComment(prev => ({ ...prev, [t.id]: e.target.value }))}
+                              placeholder="Add a note or reason…"
+                              className="w-full resize-none rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400" />
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => handleDlmDecide(t.id, "approve")} disabled={isDeciding}
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition-all hover:shadow-md">
+                              {isDeciding ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                              Approve
+                            </button>
+                            <button onClick={() => handleDlmDecide(t.id, "reject")} disabled={isDeciding || !dlmComment[t.id]?.trim()}
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 py-2.5 text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950 disabled:opacity-40 transition-all">
+                              {isDeciding ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                              Reject
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-center text-muted-foreground">A comment is required to reject a request.</p>
                         </div>
                       </div>
                     );

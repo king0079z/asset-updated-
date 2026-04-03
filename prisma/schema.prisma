@@ -156,6 +156,11 @@ model User {
   approvalRequests         ApprovalRequest[]    @relation("ApprovalRequests")
   approvalSteps            ApprovalStep[]       @relation("ApprovalSteps")
   stocktakingExecutions    StocktakingPlan[]    @relation("StocktakingExecutor")
+  // DLM hierarchy
+  managerId                String?              @db.Uuid
+  manager                  User?                @relation("DirectReports", fields: [managerId], references: [id])
+  directReports            User[]               @relation("DirectReports")
+  dlmApprovalTickets       Ticket[]             @relation("DLMApprovals")
   inspectionRoutes         InspectionRoute[]    @relation("InspectionRoutes")
   inspectionCompletions    InspectionCompletion[] @relation("InspectionCompletions")
   handheldSessions         HandheldSession[]    @relation("HandheldSessions")
@@ -691,10 +696,16 @@ model Ticket {
   location       String?
   contactDetails String?
   attachments    String?                              // JSON array of attachment URLs
+  // DLM approval workflow
+  dlmApprovalStatus String?                          // null | "PENDING_DLM" | "DLM_APPROVED" | "DLM_REJECTED"
+  dlmId          String?         @db.Uuid             // which DLM must approve
+  dlmComment     String?                              // DLM's approval/rejection note
+  dlmDecidedAt   DateTime?                            // when DLM made the decision
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   asset          Asset?          @relation(fields: [assetId], references: [id])
   assignedTo     User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  dlm            User?           @relation("DLMApprovals", fields: [dlmId], references: [id])
   organization   Organization?   @relation(fields: [organizationId], references: [id])
   user           User            @relation(fields: [userId], references: [id])
   history        TicketHistory[]

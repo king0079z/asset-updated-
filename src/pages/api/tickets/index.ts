@@ -8,6 +8,7 @@ import { ensureUserProvisioned } from '@/lib/ensureUserProvisioned';
 import { buildTicketListWhere, computeTicketOrgWideAccess } from '@/lib/ticketScope';
 import { withAuditLog } from '../middleware/audit-middleware';
 import { logUserActivity } from '@/lib/audit';
+import { requiresDlmApproval } from '@/lib/dlmCategories';
 
 // Server-side per-user cache — eliminates redundant DB hits from 30s polling
 const ticketsCache = new Map<string, { data: any[]; ts: number }>();
@@ -99,7 +100,14 @@ async function ticketsHandler(
         const { roleData, orgWideView } = await computeTicketOrgWideAccess(user.id);
         logApiEvent(`User ticket scope: orgWideView=${orgWideView}`);
 
-        const ticketWhere: any = buildTicketListWhere(user.id, roleData, orgWideView);
+        const baseWhere: any = buildTicketListWhere(user.id, roleData, orgWideView);
+        // Exclude tickets awaiting DLM approval or DLM-rejected — they appear in the DLM Approvals tab only
+        const ticketWhere: any = {
+          AND: [
+            baseWhere,
+            { NOT: { dlmApprovalStatus: { in: ['PENDING_DLM', 'DLM_REJECTED'] } } },
+          ],
+        };
 
         let tickets: any[];
         try {
@@ -113,6 +121,7 @@ async function ticketsHandler(
                 missionName: true, resolveBy: true,
                 ticketType: true, category: true, subcategory: true,
                 location: true, contactDetails: true,
+                dlmApprovalStatus: true, dlmId: true,
                 createdAt: true, updatedAt: true,
                 asset: { select: { id: true, name: true, assetId: true } },
                 assignedTo: { select: { id: true, email: true } },
@@ -129,7 +138,12 @@ async function ticketsHandler(
           // Fallback: return only user's own tickets so we never 500
           logApiEvent('Tickets query failed, using fallback', queryError instanceof Error ? queryError.message : queryError);
           tickets = await prisma.ticket.findMany({
-            where: { OR: [{ userId: user.id }, { assignedToId: user.id }] },
+            where: {
+              AND: [
+                { OR: [{ userId: user.id }, { assignedToId: user.id }] },
+                { NOT: { dlmApprovalStatus: { in: ['PENDING_DLM', 'DLM_REJECTED'] } } },
+              ],
+            },
             select: {
               id: true, title: true, description: true, status: true,
               priority: true, userId: true, assetId: true, source: true,
@@ -137,6 +151,7 @@ async function ticketsHandler(
               missionName: true, resolveBy: true,
               ticketType: true, category: true, subcategory: true,
               location: true, contactDetails: true,
+              dlmApprovalStatus: true, dlmId: true,
               createdAt: true, updatedAt: true,
               asset: { select: { id: true, name: true, assetId: true } },
               assignedTo: { select: { id: true, email: true } },
@@ -352,7 +367,27 @@ async function ticketsHandler(
             // @ts-ignore - TypeScript might complain about adding properties
             ticketData.assetId = validatedAssetId;
           }
-          
+
+          // ── DLM Approval Gate ──────────────────────────────────────────────
+          // IT-category tickets (Hardware, Software, Access, Deployments, SAP, Service Desk)
+          // must be approved by the submitter's Direct Line Manager before appearing to IT staff.
+          if (requiresDlmApproval(category)) {
+            try {
+              const submitter = await prisma.user.findUnique({
+                where: { id: user.id },
+                select: { managerId: true },
+              });
+              if (submitter?.managerId) {
+                ticketData.dlmApprovalStatus = 'PENDING_DLM';
+                ticketData.dlmId = submitter.managerId;
+                logApiEvent(`Ticket requires DLM approval. DLM: ${submitter.managerId}`);
+              }
+            } catch (dlmErr) {
+              logApiEvent('DLM lookup failed (non-critical)', dlmErr instanceof Error ? dlmErr.message : dlmErr);
+            }
+          }
+          // ─────────────────────────────────────────────────────────────────
+
           // Add assignedToId if provided
           if (assignedToId && assignedToId !== "none") {
             try {

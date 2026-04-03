@@ -55,6 +55,13 @@ export default async function handler(
                 email: true,
               },
             },
+            dlm: {
+              select: {
+                id: true,
+                email: true,
+                displayName: true,
+              },
+            },
             user: {
               select: {
                 id: true,
@@ -73,7 +80,8 @@ export default async function handler(
         const isManagerUser = roleData?.role === 'MANAGER';
         // For managers: same org OR either side has no org. Admins bypass entirely.
         const orgMatch = !roleData?.organizationId || !ticket.organizationId || roleData.organizationId === ticket.organizationId;
-        const hasAccess = isOwnerOrAssignee || isAdminUser || (isManagerUser && orgMatch);
+        const isDlmForTicket = ticket.dlmId === user.id;
+        const hasAccess = isOwnerOrAssignee || isAdminUser || (isManagerUser && orgMatch) || isDlmForTicket;
         if (!hasAccess) {
           return res.status(404).json({ error: 'Ticket not found or you do not have permission to access it' });
         }

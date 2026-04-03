@@ -14,6 +14,7 @@ import {
   ArrowUp, Minus, ArrowDown, Package, Settings, Brain, Sparkles,
   Target, Shield, TrendingUp, Cpu, Flame, Edit3, Hash,
 } from "lucide-react";
+import { requiresDlmApproval } from "@/lib/dlmCategories";
 import Link from "next/link";
 import TicketBarcodeDisplay from "@/components/TicketBarcodeDisplay";
 import PrintTicketButton from "@/components/PrintTicketButton";
@@ -30,6 +31,12 @@ interface Ticket {
   assignedToId: string | null; requesterName?: string | null;
   ticketType?: string | null; category?: string | null; subcategory?: string | null;
   location?: string | null; contactDetails?: string | null;
+  // DLM approval
+  dlmApprovalStatus?: string | null;
+  dlmId?: string | null;
+  dlmComment?: string | null;
+  dlmDecidedAt?: string | null;
+  dlm?: { id: string; email: string; displayName?: string | null } | null;
   asset: { id: string; name: string; assetId: string } | null;
   assignedTo: { id: string; email: string } | null;
   user?: { id: string; email: string } | null;
@@ -173,6 +180,11 @@ function TicketDetailsContent() {
       ticketType: data.ticketType || null, category: data.category || null, subcategory: data.subcategory || null,
       location: data.location || null, contactDetails: data.contactDetails || null,
       asset: data.asset || null, user: data.user || null,
+      dlmApprovalStatus: data.dlmApprovalStatus || null,
+      dlmId: data.dlmId || null,
+      dlmComment: data.dlmComment || null,
+      dlmDecidedAt: data.dlmDecidedAt || null,
+      dlm: data.dlm || null,
       createdAt: data.createdAt || new Date().toISOString(), updatedAt: data.updatedAt || new Date().toISOString(),
     };
     setTicket(t); setStatus(t.status); setPriority(t.priority); setAssignedToId(t.assignedToId || "");
@@ -279,6 +291,9 @@ function TicketDetailsContent() {
   const pc = PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.MEDIUM;
   const sc = STATUS_CFG[ticket.status] || STATUS_CFG.OPEN;
   const TypeIcon = tc.icon;
+  const hasDlm = !!(ticket as any).dlmApprovalStatus;
+  const dlmStatus = (ticket as any).dlmApprovalStatus as string | null;
+  const dlmData = (ticket as any).dlm as { email?: string; displayName?: string } | null;
   const availableActions = (ACTIONS_BY_TYPE[ticket.ticketType as keyof typeof ACTIONS_BY_TYPE] || ACTIONS_BY_TYPE.ISSUE)
     .filter(a => ticket.status !== TicketStatus.CLOSED && ticket.status !== a.to);
 
@@ -392,6 +407,145 @@ function TicketDetailsContent() {
           })}
         </div>
       </div>
+
+      {/* ── DLM Approval Chain (world-class progress bar) ── */}
+      {hasDlm && (
+        <div className={`relative overflow-hidden rounded-2xl border shadow-sm ${
+          dlmStatus === "PENDING_DLM"  ? "border-amber-200 dark:border-amber-800 bg-gradient-to-br from-amber-50 to-amber-100/40 dark:from-amber-950/40 dark:to-amber-950/20" :
+          dlmStatus === "DLM_APPROVED" ? "border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 to-emerald-100/40 dark:from-emerald-950/40 dark:to-emerald-950/20" :
+          "border-red-200 dark:border-red-800 bg-gradient-to-br from-red-50 to-red-100/40 dark:from-red-950/40 dark:to-red-950/20"
+        }`}>
+          <div className={`absolute inset-x-0 top-0 h-1 ${
+            dlmStatus === "PENDING_DLM" ? "bg-amber-400" :
+            dlmStatus === "DLM_APPROVED" ? "bg-emerald-500" : "bg-red-500"
+          }`} />
+
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                  dlmStatus === "PENDING_DLM" ? "bg-amber-100 dark:bg-amber-900/50" :
+                  dlmStatus === "DLM_APPROVED" ? "bg-emerald-100 dark:bg-emerald-900/50" : "bg-red-100 dark:bg-red-900/50"
+                }`}>
+                  <Shield className={`h-5 w-5 ${
+                    dlmStatus === "PENDING_DLM" ? "text-amber-600 dark:text-amber-400" :
+                    dlmStatus === "DLM_APPROVED" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                  }`} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Approval Chain</p>
+                  <p className="font-bold text-sm">Enterprise DLM Authorization</p>
+                </div>
+              </div>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${
+                dlmStatus === "PENDING_DLM"  ? "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800" :
+                dlmStatus === "DLM_APPROVED" ? "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800" :
+                "text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/60 border-red-200 dark:border-red-800"
+              }`}>
+                <span className={`h-2 w-2 rounded-full ${
+                  dlmStatus === "PENDING_DLM" ? "bg-amber-400 animate-pulse" :
+                  dlmStatus === "DLM_APPROVED" ? "bg-emerald-500" : "bg-red-500"
+                }`} />
+                {dlmStatus === "PENDING_DLM" ? "Awaiting DLM Approval" : dlmStatus === "DLM_APPROVED" ? "DLM Approved" : "DLM Rejected"}
+              </span>
+            </div>
+
+            {/* Approval chain steps */}
+            <div className="flex items-center gap-0">
+              {[
+                {
+                  label: "Submitted",
+                  sublabel: "By requester",
+                  icon: User,
+                  state: "done",
+                  color: "bg-indigo-500",
+                  textColor: "text-indigo-600 dark:text-indigo-400",
+                },
+                {
+                  label: "DLM Review",
+                  sublabel: dlmData?.displayName || dlmData?.email?.split("@")[0] || "Manager",
+                  icon: Shield,
+                  state: dlmStatus === "PENDING_DLM" ? "active" : dlmStatus === "DLM_APPROVED" ? "done" : "rejected",
+                  color: dlmStatus === "PENDING_DLM" ? "bg-amber-400" : dlmStatus === "DLM_APPROVED" ? "bg-emerald-500" : "bg-red-500",
+                  textColor: dlmStatus === "PENDING_DLM" ? "text-amber-600 dark:text-amber-400" : dlmStatus === "DLM_APPROVED" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+                },
+                {
+                  label: "IT Support",
+                  sublabel: "Assigned & actioned",
+                  icon: Activity,
+                  state: dlmStatus === "DLM_APPROVED" ? (ticket.status === "RESOLVED" || ticket.status === "CLOSED" ? "done" : "active") : "pending",
+                  color: dlmStatus === "DLM_APPROVED" ? "bg-blue-500" : "bg-muted-foreground/20",
+                  textColor: dlmStatus === "DLM_APPROVED" ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground/50",
+                },
+                {
+                  label: "Resolved",
+                  sublabel: "Issue closed",
+                  icon: CheckCircle2,
+                  state: ticket.status === "RESOLVED" || ticket.status === "CLOSED" ? "done" : "pending",
+                  color: ticket.status === "RESOLVED" || ticket.status === "CLOSED" ? "bg-emerald-500" : "bg-muted-foreground/20",
+                  textColor: ticket.status === "RESOLVED" || ticket.status === "CLOSED" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/50",
+                },
+              ].map((step, i, arr) => {
+                const Icon = step.icon;
+                const isDone = step.state === "done";
+                const isActive = step.state === "active";
+                const isRejected = step.state === "rejected";
+                const isLast = i === arr.length - 1;
+                return (
+                  <React.Fragment key={step.label}>
+                    <div className="flex flex-col items-center gap-2 shrink-0">
+                      <div className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border-2 transition-all duration-500 ${
+                        isDone ? `${step.color} border-transparent shadow-md` :
+                        isActive ? `${step.color} border-transparent shadow-lg ring-4 ring-current/20` :
+                        isRejected ? "bg-red-500 border-transparent shadow-md" :
+                        "border-border bg-muted"
+                      }`}>
+                        {isRejected ? <XCircle className="h-5 w-5 text-white" /> :
+                         isDone ? <CheckCircle className="h-5 w-5 text-white" /> :
+                         isActive ? <div className="h-3 w-3 rounded-full bg-white animate-pulse" /> :
+                         <Icon className="h-5 w-5 text-muted-foreground/40" />}
+                      </div>
+                      <div className="text-center">
+                        <p className={`text-[10px] font-bold ${isActive || isDone || isRejected ? step.textColor : "text-muted-foreground/40"}`}>{step.label}</p>
+                        <p className="text-[9px] text-muted-foreground/50 max-w-[60px] leading-tight">{step.sublabel}</p>
+                      </div>
+                    </div>
+                    {!isLast && (
+                      <div className="flex-1 mb-7 mx-1">
+                        <div className={`h-0.5 w-full transition-all duration-700 ${
+                          (arr[i].state === "done" || arr[i].state === "active") && arr[i+1]?.state !== "pending" && arr[i].state !== "rejected"
+                            ? step.color : "bg-border"
+                        }`} />
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* DLM comment (if any) */}
+            {(ticket as any).dlmComment && (
+              <div className={`mt-4 flex items-start gap-2.5 rounded-xl border px-4 py-3 ${
+                dlmStatus === "DLM_REJECTED" ? "border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/30" : "border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30"
+              }`}>
+                <MessageSquare className={`h-4 w-4 mt-0.5 shrink-0 ${dlmStatus === "DLM_REJECTED" ? "text-red-500" : "text-emerald-500"}`} />
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">DLM Note ({dlmData?.displayName || dlmData?.email?.split("@")[0] || "Manager"})</p>
+                  <p className="text-sm italic text-foreground">"{(ticket as any).dlmComment}"</p>
+                  {(ticket as any).dlmDecidedAt && <p className="text-[10px] text-muted-foreground mt-1">{safeFormatDate((ticket as any).dlmDecidedAt)}</p>}
+                </div>
+              </div>
+            )}
+
+            {dlmStatus === "PENDING_DLM" && (
+              <div className="mt-4 flex items-center gap-2 rounded-xl bg-amber-100/50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 px-4 py-2.5">
+                <Loader2 className="h-4 w-4 text-amber-600 dark:text-amber-400 animate-spin shrink-0" />
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Waiting for manager approval before this ticket reaches IT support</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Assign & Start Modal ── */}
       {assignStartOpen && (
