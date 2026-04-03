@@ -1,14 +1,21 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import {
   UserCheck, Search, Loader2, X, Check, User, Mail, UserX, Building2,
+  Ticket, ArrowRight, PenLine, FileSignature, Shield, CheckCircle,
+  Sparkles, AlertCircle, Plus, ChevronRight,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 interface SystemUser {
   id: string;
@@ -19,10 +26,96 @@ interface SystemUser {
 }
 
 interface AssignAssetDialogProps {
-  asset: { id: string; name: string; assignedToName?: string | null; assignedToEmail?: string | null } | null;
+  asset: { id: string; name: string; type?: string; assetId?: string; floorNumber?: string; roomNumber?: string; assignedToName?: string | null; assignedToEmail?: string | null } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAssigned: () => void;
+}
+
+const PRIORITY_COLORS: Record<string, string> = {
+  HIGH: 'bg-red-100 text-red-700', MEDIUM: 'bg-amber-100 text-amber-700',
+  LOW: 'bg-green-100 text-green-700', URGENT: 'bg-red-200 text-red-800',
+};
+
+type Step = 'select' | 'sign';
+
+async function generateSignedFormPng(
+  signatureDataUrl: string,
+  asset: any,
+  assignee: { name: string; email: string },
+  ticket: any | null,
+): Promise<string> {
+  const W = 794, H = 900;
+  const dpr = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  const grad = ctx.createLinearGradient(0, 0, W, 0);
+  grad.addColorStop(0, '#4f46e5'); grad.addColorStop(1, '#0284c7');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, 88);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui,sans-serif';
+  ctx.fillText('ASSET ASSIGNMENT AGREEMENT', 40, 34);
+  ctx.font = '12px system-ui,sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText('AssetXAI — Official Signed Document', 40, 56);
+  ctx.fillText(`Generated: ${new Date().toLocaleString()}`, 40, 74);
+
+  const drawDiv = (y: number) => { ctx.fillStyle = '#e2e8f0'; ctx.fillRect(40, y, W - 80, 1); };
+  const drawSec = (t: string, y: number) => {
+    ctx.fillStyle = '#f1f5f9'; ctx.fillRect(40, y, W - 80, 28);
+    ctx.fillStyle = '#1e40af'; ctx.font = 'bold 11px system-ui,sans-serif'; ctx.fillText(t, 52, y + 19); return y + 28;
+  };
+  const drawF = (l: string, v: string, x: number, y: number) => {
+    ctx.fillStyle = '#64748b'; ctx.font = '9px system-ui,sans-serif'; ctx.fillText(l.toUpperCase(), x, y);
+    ctx.fillStyle = '#0f172a'; ctx.font = '12px system-ui,sans-serif'; ctx.fillText((v || '—').slice(0, 50), x, y + 14);
+  };
+
+  let y = 108;
+  y = drawSec('ASSET INFORMATION', y); y += 12;
+  drawF('Name', asset?.name, 52, y); drawF('Type', asset?.type, 320, y);
+  drawF('Asset ID', asset?.assetId, 560, y); y += 40;
+  drawDiv(y); y += 12;
+  y = drawSec('ASSIGNED TO', y); y += 12;
+  drawF('Name', assignee.name || assignee.email, 52, y);
+  drawF('Email', assignee.email, 320, y);
+  drawF('Date', new Date().toLocaleDateString(), 560, y); y += 40;
+  drawDiv(y); y += 12;
+  if (ticket) {
+    y = drawSec('LINKED TICKET', y); y += 12;
+    drawF('Ticket', ticket.displayId || ticket.id?.slice(0, 8), 52, y);
+    drawF('Title', ticket.title, 320, y);
+    drawF('Priority', ticket.priority, 560, y); y += 40; drawDiv(y); y += 12;
+  }
+  y = drawSec('TERMS & CONDITIONS', y); y += 12;
+  const terms = [
+    '1. The assignee acknowledges receipt of the asset in satisfactory condition.',
+    '2. The asset shall be used only for authorized organizational purposes.',
+    '3. Any damage or loss must be reported immediately to the asset manager.',
+    '4. The asset remains organization property and must be returned on request.',
+  ];
+  ctx.fillStyle = '#374151'; ctx.font = '11px system-ui,sans-serif';
+  terms.forEach((t, i) => ctx.fillText(t, 52, y + i * 20));
+  y += terms.length * 20 + 20; drawDiv(y); y += 12;
+  y = drawSec('DIGITAL SIGNATURE', y); y += 12;
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+  ctx.strokeRect(52, y, 300, 120); ctx.setLineDash([]);
+  await new Promise<void>(r => { const i = new Image(); i.onload = () => { ctx.drawImage(i, 52, y, 300, 120); r(); }; i.onerror = r; i.src = signatureDataUrl; });
+  ctx.fillStyle = '#94a3b8'; ctx.font = '9px system-ui,sans-serif';
+  ctx.fillText('Authorized Signature', 52, y + 134); ctx.fillText(assignee.name || assignee.email, 52, y + 148);
+  ctx.fillText(new Date().toISOString(), 52, y + 162);
+  ctx.fillStyle = 'rgba(16,185,129,0.08)'; ctx.strokeStyle = '#10b981'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(420, y + 12); ctx.lineTo(720, y + 12); ctx.quadraticCurveTo(730, y + 12, 730, y + 22);
+  ctx.lineTo(730, y + 102); ctx.quadraticCurveTo(730, y + 112, 720, y + 112); ctx.lineTo(420, y + 112);
+  ctx.quadraticCurveTo(410, y + 112, 410, y + 102); ctx.lineTo(410, y + 22); ctx.quadraticCurveTo(410, y + 12, 420, y + 12);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#065f46'; ctx.font = 'bold 12px system-ui,sans-serif'; ctx.fillText('✓ DIGITALLY SIGNED', 428, y + 36);
+  ctx.fillStyle = '#047857'; ctx.font = '10px system-ui,sans-serif';
+  ctx.fillText(new Date().toISOString(), 428, y + 54); ctx.fillText('Platform: AssetXAI', 428, y + 70);
+  ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, H - 40, W, 40);
+  ctx.fillStyle = '#94a3b8'; ctx.font = '9px system-ui,sans-serif';
+  ctx.fillText('Electronically generated by AssetXAI. Legally binding upon signature.', 40, H - 18);
+  return canvas.toDataURL('image/png', 1.0);
 }
 
 export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: AssignAssetDialogProps) {
@@ -30,86 +123,139 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
   const dialogOpenedAt = useRef<number>(0);
   useEffect(() => { if (open) dialogOpenedAt.current = Date.now(); }, [open]);
   const preventRecentOutsideClose = useCallback((e: Event) => { if (Date.now() - dialogOpenedAt.current < 900) e.preventDefault(); }, []);
-  const [tab, setTab] = useState<"system" | "manual">("system");
-  const [searchQuery, setSearchQuery] = useState("");
+
+  const [tab, setTab] = useState<'system' | 'manual'>('system');
+  const [step, setStep] = useState<Step>('select');
+  const [searchQuery, setSearchQuery] = useState('');
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [unassigning, setUnassigning] = useState(false);
   const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
+  const [manualName, setManualName] = useState('');
+  const [manualEmail, setManualEmail] = useState('');
 
-  // Manual entry state
-  const [manualName, setManualName] = useState("");
-  const [manualEmail, setManualEmail] = useState("");
-  const [manualNote, setManualNote] = useState("");
+  // Signature step state
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawing = useRef(false);
+  const lastPos = useRef<{ x: number; y: number } | null>(null);
+  const [hasSig, setHasSig] = useState(false);
+  const [userTickets, setUserTickets] = useState<any[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [showNewTicket, setShowNewTicket] = useState(false);
+  const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'MEDIUM' });
+  const [creatingTicket, setCreatingTicket] = useState(false);
+  const [createdTicket, setCreatedTicket] = useState<any>(null);
+
+  const activeTicket = createdTicket ?? userTickets.find(t => t.id === selectedTicketId);
 
   useEffect(() => {
     if (!open) {
-      setSearchQuery("");
-      setSelectedUser(null);
-      setManualName("");
-      setManualEmail("");
-      setManualNote("");
-      setTab("system");
+      setStep('select'); setSearchQuery(''); setSelectedUser(null);
+      setManualName(''); setManualEmail(''); setTab('system');
+      setHasSig(false); setSelectedTicketId(null); setCreatedTicket(null);
+      setShowNewTicket(false); setUserTickets([]);
     }
   }, [open]);
 
-  // Load system users
   useEffect(() => {
-    if (open && tab === "system") {
+    if (open && tab === 'system') {
       setLoadingUsers(true);
-      fetch("/api/users?limit=50")
-        .then(r => r.ok ? r.json() : [])
+      fetch('/api/users?limit=50').then(r => r.ok ? r.json() : [])
         .then(data => setSystemUsers(Array.isArray(data) ? data : data.users || []))
-        .catch(() => setSystemUsers([]))
-        .finally(() => setLoadingUsers(false));
+        .catch(() => setSystemUsers([])).finally(() => setLoadingUsers(false));
     }
   }, [open, tab]);
 
+  // Init canvas on sign step
+  useEffect(() => {
+    if (step !== 'sign' || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d')!;
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    setHasSig(false);
+  }, [step]);
+
   const filteredUsers = systemUsers.filter(u => {
     const q = searchQuery.toLowerCase();
-    return !q || (u.email || "").toLowerCase().includes(q) || (u.role || "").toLowerCase().includes(q);
+    return !q || (u.email || '').toLowerCase().includes(q) || (u.role || '').toLowerCase().includes(q);
   });
 
-  const handleAssign = async () => {
-    if (!asset) return;
+  const getPos = (e: any) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    if (e.touches) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  const startDraw = (e: any) => { e.preventDefault(); isDrawing.current = true; const p = getPos(e); const ctx = canvasRef.current!.getContext('2d')!; ctx.beginPath(); ctx.moveTo(p.x, p.y); lastPos.current = p; };
+  const draw = (e: any) => { e.preventDefault(); if (!isDrawing.current) return; const p = getPos(e); const ctx = canvasRef.current!.getContext('2d')!; if (lastPos.current) { const mx = (lastPos.current.x + p.x) / 2, my = (lastPos.current.y + p.y) / 2; ctx.quadraticCurveTo(lastPos.current.x, lastPos.current.y, mx, my); } ctx.lineTo(p.x, p.y); ctx.stroke(); lastPos.current = p; setHasSig(true); };
+  const stopDraw = () => { isDrawing.current = false; lastPos.current = null; };
+  const clearSig = () => { const c = canvasRef.current!; c.getContext('2d')!.clearRect(0, 0, c.width, c.height); setHasSig(false); };
 
-    let payload: any = {};
-    if (tab === "system") {
-      if (!selectedUser) {
-        toast({ title: "Select a person", description: "Please select a system user to assign.", variant: "destructive" });
-        return;
+  const handleContinueToSign = async () => {
+    if (tab === 'system' && !selectedUser) return;
+    if (tab === 'manual' && !manualName.trim()) return;
+    setLoadingTickets(true);
+    try {
+      const r = await fetch('/api/tickets', { credentials: 'include' });
+      if (r.ok) {
+        const data = await r.json();
+        const all = data.tickets || data || [];
+        const uid = selectedUser?.id;
+        setUserTickets(uid ? all.filter((t: any) => t.userId === uid || t.user?.id === uid) : []);
       }
-      payload = {
-        assignedToName: selectedUser.name || selectedUser.email,
-        assignedToEmail: selectedUser.email,
-        assignedToId: selectedUser.id,
-      };
-    } else {
-      if (!manualName.trim()) {
-        toast({ title: "Name required", description: "Please enter the person's name.", variant: "destructive" });
-        return;
-      }
-      payload = {
-        assignedToName: manualName.trim(),
-        assignedToEmail: manualEmail.trim() || null,
-        assignedToId: null,
-      };
-    }
+    } catch {}
+    setLoadingTickets(false);
+    const assigneeName = tab === 'system' ? (selectedUser!.name || selectedUser!.email) : manualName;
+    setNewTicket(p => ({ ...p, title: `Asset Assignment: ${asset?.name || 'Asset'}`, description: `Assignment of ${asset?.name} to ${assigneeName}.` }));
+    setStep('sign');
+  };
+
+  const handleCreateTicket = async () => {
+    if (!newTicket.title.trim()) { toast({ variant: 'destructive', title: 'Title required' }); return; }
+    setCreatingTicket(true);
+    try {
+      const r = await fetch('/api/tickets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newTicket, assignedToId: selectedUser?.id }) });
+      if (r.ok) { const t = await r.json(); setCreatedTicket(t); setShowNewTicket(false); toast({ title: 'Ticket created' }); }
+      else toast({ variant: 'destructive', title: 'Failed to create ticket' });
+    } catch { toast({ variant: 'destructive', title: 'Failed to create ticket' }); }
+    finally { setCreatingTicket(false); }
+  };
+
+  const handleSignAndAssign = async () => {
+    if (!hasSig) { toast({ variant: 'destructive', title: 'Signature required', description: 'Please draw your signature before completing.' }); return; }
+    if (!asset) return;
+    const signatureDataUrl = canvasRef.current!.toDataURL('image/png');
+    const assignee = tab === 'system'
+      ? { name: selectedUser!.name || selectedUser!.email, email: selectedUser!.email, id: selectedUser!.id }
+      : { name: manualName, email: manualEmail, id: null };
+    const pdfDataUrl = await generateSignedFormPng(signatureDataUrl, asset, assignee, activeTicket || null);
 
     setSaving(true);
     try {
-      const res = await fetch(`/api/assets/${asset.id}/assign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const res = await fetch(`/api/assets/${asset.id}/assign-with-signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assignedToName: assignee.name,
+          assignedToEmail: assignee.email,
+          assignedToId: assignee.id,
+          ticketId: createdTicket?.id || selectedTicketId || null,
+          signatureDataUrl,
+          pdfDataUrl,
+          signedAt: new Date().toISOString(),
+        }),
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Failed to assign");
-      toast({ title: "Asset assigned", description: `${asset.name} is now assigned to ${payload.assignedToName}.` });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to assign');
+      toast({ title: '✓ Asset assigned & signed', description: `${asset.name} assigned to ${assignee.name}. Confirmation email sent.` });
       onAssigned();
       onOpenChange(false);
-    } catch (err) {
-      toast({ title: "Assignment failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } catch (err: any) {
+      toast({ title: 'Assignment failed', description: err.message, variant: 'destructive' });
     } finally { setSaving(false); }
   };
 
@@ -117,13 +263,12 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
     if (!asset) return;
     setUnassigning(true);
     try {
-      const res = await fetch(`/api/assets/${asset.id}/assign`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to unassign");
-      toast({ title: "Asset unassigned", description: `${asset.name} is now unassigned.` });
-      onAssigned();
-      onOpenChange(false);
-    } catch (err) {
-      toast({ title: "Failed to unassign", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+      const res = await fetch(`/api/assets/${asset.id}/assign`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to unassign');
+      toast({ title: 'Asset unassigned', description: `${asset.name} is now unassigned.` });
+      onAssigned(); onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: 'Failed to unassign', description: err.message, variant: 'destructive' });
     } finally { setUnassigning(false); }
   };
 
@@ -131,23 +276,44 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg p-0 overflow-hidden border border-slate-700" style={{ background: "#0f172a" }} onPointerDownOutside={preventRecentOutsideClose} onInteractOutside={preventRecentOutsideClose}>
+      <DialogContent className="sm:max-w-lg p-0 overflow-hidden max-h-[92vh] overflow-y-auto" onPointerDownOutside={preventRecentOutsideClose} onInteractOutside={preventRecentOutsideClose}>
+        {/* Gradient top bar */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-sky-500" />
+
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-slate-700/50">
+        <div className="px-6 pt-5 pb-4 border-b bg-gradient-to-br from-slate-900 to-indigo-950">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-white text-lg">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-                <UserCheck className="h-4 w-4 text-white" />
+            <DialogTitle className="flex items-center gap-2.5 text-white text-lg">
+              <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center">
+                {step === 'select' ? <UserCheck className="h-4 w-4 text-white" /> : <FileSignature className="h-4 w-4 text-white" />}
               </div>
-              Assign Asset
+              {step === 'select' ? 'Assign Asset' : 'Sign & Assign'}
             </DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Assign <strong className="text-slate-200">{asset.name}</strong> to a registered user or enter staff details manually.
+            <DialogDescription className="text-slate-400 text-sm">
+              {step === 'select'
+                ? <>Select recipient for <strong className="text-slate-200">{asset.name}</strong></>
+                : <>Review details and provide digital signature</>}
             </DialogDescription>
           </DialogHeader>
 
+          {/* Step indicators */}
+          <div className="flex items-center gap-2 mt-4">
+            {[{ key: 'select', label: 'Select User', icon: User }, { key: 'sign', label: 'Sign Agreement', icon: PenLine }].map((s, i) => {
+              const active = step === s.key;
+              const done = step === 'sign' && i === 0;
+              return (
+                <div key={s.key} className="flex items-center gap-2">
+                  {i > 0 && <div className={`w-8 h-0.5 rounded-full ${done || active ? 'bg-indigo-400' : 'bg-slate-700'}`} />}
+                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${active ? 'bg-indigo-600 text-white' : done ? 'bg-emerald-800/60 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
+                    {done ? <CheckCircle className="w-3 h-3" /> : <s.icon className="w-3 h-3" />}{s.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
           {/* Current assignment banner */}
-          {asset.assignedToName && (
+          {asset.assignedToName && step === 'select' && (
             <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-amber-950/50 border border-amber-700/40 px-4 py-3">
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-amber-400 shrink-0" />
@@ -157,172 +323,196 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
                   {asset.assignedToEmail && <p className="text-xs text-amber-400/70">{asset.assignedToEmail}</p>}
                 </div>
               </div>
-              <button
-                onClick={handleUnassign}
-                disabled={unassigning}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                {unassigning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserX className="h-3.5 w-3.5" />}
-                Unassign
+              <button onClick={handleUnassign} disabled={unassigning}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold transition-colors disabled:opacity-50">
+                {unassigning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserX className="h-3.5 w-3.5" />}Unassign
               </button>
             </div>
           )}
         </div>
 
-        {/* Tab switcher */}
-        <div className="px-6 pt-4 flex gap-1 rounded-none border-b border-slate-700/50 pb-0">
-          <button
-            onClick={() => setTab("system")}
-            className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${tab === "system" ? "border-indigo-500 text-indigo-300 bg-indigo-500/10" : "border-transparent text-slate-400 hover:text-slate-200"}`}
-          >
-            <User className="h-4 w-4 inline mr-1.5" />
-            System Users
-          </button>
-          <button
-            onClick={() => setTab("manual")}
-            className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${tab === "manual" ? "border-indigo-500 text-indigo-300 bg-indigo-500/10" : "border-transparent text-slate-400 hover:text-slate-200"}`}
-          >
-            <Building2 className="h-4 w-4 inline mr-1.5" />
-            Staff / Manual
-          </button>
-        </div>
+        {/* ── STEP 1: SELECT ── */}
+        {step === 'select' && (
+          <>
+            <div className="px-6 pt-4 flex gap-1 border-b border-slate-200 dark:border-slate-700 pb-0 bg-white dark:bg-slate-950">
+              {[{ key: 'system', icon: User, label: 'System Users' }, { key: 'manual', icon: Building2, label: 'Staff / Manual' }].map(t => (
+                <button key={t.key} onClick={() => setTab(t.key as any)}
+                  className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${tab === t.key ? 'border-indigo-500 text-indigo-600 dark:text-indigo-300' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}>
+                  <t.icon className="h-4 w-4 inline mr-1.5" />{t.label}
+                </button>
+              ))}
+            </div>
 
-        <div className="px-6 py-4 space-y-4">
-          {tab === "system" ? (
-            <>
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search by name or email..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* User list */}
-              <ScrollArea className="h-52">
-                {loadingUsers ? (
-                  <div className="flex items-center justify-center h-32 text-slate-400">
-                    <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading users...
+            <div className="px-6 py-4 space-y-4 bg-white dark:bg-slate-950">
+              {tab === 'system' ? (
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input type="text" placeholder="Search by email or role..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 text-sm focus:outline-none focus:border-indigo-400" />
+                    {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X className="h-3.5 w-3.5" /></button>}
                   </div>
-                ) : filteredUsers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-32 text-slate-500">
-                    <User className="h-8 w-8 mb-2 opacity-40" />
-                    <p className="text-sm">No users found</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5 pr-2">
-                    {filteredUsers.filter(u => u && u.id).map(u => {
-                      const initials = (u.email ?? u.id ?? "?").slice(0, 2).toUpperCase();
-                      const roleLabel = u.isAdmin ? "Admin" : (u.role || "Staff");
-                      const roleColor = u.isAdmin
-                        ? "text-rose-400"
-                        : u.role === "MANAGER" ? "text-amber-400"
-                        : "text-indigo-400";
-                      return (
-                        <button
-                          key={u.id}
-                          onClick={() => setSelectedUser(selectedUser?.id === u.id ? null : u)}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${selectedUser?.id === u.id ? "border-indigo-500 bg-indigo-500/15" : "border-slate-700 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-800"}`}
-                        >
-                          <div className="w-9 h-9 rounded-xl bg-indigo-600/40 flex items-center justify-center text-indigo-300 font-bold text-sm shrink-0">
-                            {initials}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-200 text-sm truncate">{u.email}</p>
-                            <span className={`text-[10px] uppercase font-bold tracking-wide ${roleColor}`}>{roleLabel}</span>
-                          </div>
-                          {selectedUser?.id === u.id && (
-                            <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0">
-                              <Check className="h-3 w-3 text-white" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </ScrollArea>
-
-              {selectedUser && (
-                <div className="rounded-xl bg-indigo-950/50 border border-indigo-700/40 px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                    {(selectedUser.email ?? selectedUser.id ?? "?").slice(0, 2).toUpperCase()}
+                  <ScrollArea className="h-52">
+                    {loadingUsers ? (
+                      <div className="flex items-center justify-center h-32 text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" />Loading users...</div>
+                    ) : filteredUsers.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-32 text-slate-500"><User className="h-8 w-8 mb-2 opacity-40" /><p className="text-sm">No users found</p></div>
+                    ) : (
+                      <div className="space-y-1.5 pr-2">
+                        {filteredUsers.filter(u => u?.id).map(u => {
+                          const initials = (u.email ?? '?').slice(0, 2).toUpperCase();
+                          const roleLabel = u.isAdmin ? 'Admin' : (u.role || 'Staff');
+                          return (
+                            <button key={u.id} onClick={() => setSelectedUser(selectedUser?.id === u.id ? null : u)}
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${selectedUser?.id === u.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'}`}>
+                              <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-300 font-bold text-sm shrink-0">{initials}</div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm truncate">{u.email}</p>
+                                <span className={`text-[10px] uppercase font-bold tracking-wide ${u.isAdmin ? 'text-rose-500' : u.role === 'MANAGER' ? 'text-amber-500' : 'text-indigo-500'}`}>{roleLabel}</span>
+                              </div>
+                              {selectedUser?.id === u.id && <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0"><Check className="h-3 w-3 text-white" /></div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  {selectedUser && (
+                    <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-700 px-4 py-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">{(selectedUser.email ?? '?').slice(0, 2).toUpperCase()}</div>
+                      <div><p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold uppercase tracking-widest">Selected</p><p className="text-sm font-bold text-slate-800 dark:text-white truncate">{selectedUser.email}</p></div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase block mb-1">Full Name *</label>
+                    <input type="text" value={manualName} onChange={e => setManualName(e.target.value)} placeholder="e.g. Ahmed Al-Rashid"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:border-indigo-400" />
                   </div>
                   <div>
-                    <p className="text-xs text-indigo-400 font-semibold uppercase tracking-widest">Selected</p>
-                    <p className="text-sm font-bold text-white truncate">{selectedUser.email}</p>
-                    <p className={`text-xs font-semibold ${selectedUser.isAdmin ? "text-rose-400" : selectedUser.role === "MANAGER" ? "text-amber-400" : "text-indigo-400"}`}>
-                      {selectedUser.isAdmin ? "Admin" : (selectedUser.role || "Staff")}
-                    </p>
+                    <label className="text-xs font-semibold text-slate-500 uppercase block mb-1">Email Address</label>
+                    <div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input type="email" value={manualEmail} onChange={e => setManualEmail(e.target.value)} placeholder="e.g. ahmed@company.com"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:border-indigo-400" />
+                    </div>
                   </div>
                 </div>
               )}
-            </>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-blue-500/30 bg-blue-950/30 px-4 py-3 text-sm text-blue-300 flex items-start gap-2">
-                <Building2 className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>Enter staff details manually. Active Directory integration will be available once connected.</span>
+            </div>
+
+            <div className="px-6 pb-6 flex justify-between gap-3 border-t border-slate-200 dark:border-slate-700 pt-4 bg-white dark:bg-slate-950">
+              <button onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
+              <button onClick={handleContinueToSign} disabled={loadingTickets || (tab === 'system' && !selectedUser) || (tab === 'manual' && !manualName.trim())}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-sm font-bold transition-colors disabled:opacity-50">
+                {loadingTickets ? <Loader2 className="h-4 w-4 animate-spin" /> : <><FileSignature className="h-4 w-4" />Continue to Sign <ArrowRight className="h-4 w-4" /></>}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── STEP 2: SIGN ── */}
+        {step === 'sign' && (
+          <div className="px-6 py-5 space-y-5 bg-white dark:bg-slate-950">
+            {/* Summary card */}
+            <div className="rounded-xl border bg-slate-50 dark:bg-slate-900 overflow-hidden">
+              <div className="bg-gradient-to-r from-indigo-600 to-sky-600 px-4 py-3 text-white">
+                <div className="flex items-center gap-2"><FileSignature className="w-4 h-4" /><span className="font-bold text-sm">Asset Assignment Agreement</span></div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest block mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  value={manualName}
-                  onChange={e => setManualName(e.target.value)}
-                  placeholder="e.g. Ahmed Al-Rashid"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest block mb-1">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <input
-                    type="email"
-                    value={manualEmail}
-                    onChange={e => setManualEmail(e.target.value)}
-                    placeholder="e.g. ahmed@company.com"
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                  />
+              <div className="p-4 grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-[10px] uppercase font-semibold text-slate-400">Asset</p><p className="font-semibold text-slate-900 dark:text-white">{asset.name}</p><p className="text-xs text-slate-500">{asset.type}</p></div>
+                <div><p className="text-[10px] uppercase font-semibold text-slate-400">Assigned To</p>
+                  <p className="font-semibold text-slate-900 dark:text-white">
+                    {tab === 'system' ? (selectedUser?.name || selectedUser?.email) : manualName}
+                  </p>
+                  <p className="text-xs text-slate-500">{tab === 'system' ? selectedUser?.email : manualEmail || '—'}</p>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest block mb-1">Department / Note (optional)</label>
-                <input
-                  type="text"
-                  value={manualNote}
-                  onChange={e => setManualNote(e.target.value)}
-                  placeholder="e.g. IT Department, Floor 3"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
-                />
+                {activeTicket && (
+                  <div className="col-span-2"><p className="text-[10px] uppercase font-semibold text-slate-400">Linked Ticket</p>
+                    <div className="flex items-center gap-2 mt-0.5"><Ticket className="w-3.5 h-3.5 text-purple-500" /><span className="text-xs font-mono text-slate-400">{activeTicket.displayId || activeTicket.id?.slice(0, 8)}</span><span className="font-medium text-slate-800 dark:text-slate-200">{activeTicket.title}</span></div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </div>
 
-        <div className="px-6 pb-6 flex justify-between gap-3 border-t border-slate-700/50 pt-4">
-          <button onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm font-semibold hover:bg-slate-700 transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={handleAssign}
-            disabled={saving || (tab === "system" && !selectedUser) || (tab === "manual" && !manualName.trim())}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
-            {saving ? "Assigning..." : "Assign Asset"}
-          </button>
-        </div>
+            {/* Ticket section */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Link to Ticket (optional)</p>
+              {!showNewTicket && !createdTicket && (
+                <div className="space-y-2">
+                  {userTickets.length > 0 && (
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {userTickets.map(t => (
+                        <div key={t.id} onClick={() => setSelectedTicketId(p => p === t.id ? null : t.id)}
+                          className={`flex items-center gap-2 p-2.5 rounded-lg border-2 cursor-pointer transition-all ${selectedTicketId === t.id ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-200'}`}>
+                          <Ticket className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                          <span className="text-xs font-mono text-slate-400">{t.displayId || t.id?.slice(0, 8)}</span>
+                          <Badge className={`text-[9px] px-1 ${PRIORITY_COLORS[t.priority] || 'bg-gray-100 text-gray-600'}`}>{t.priority}</Badge>
+                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate flex-1">{t.title}</span>
+                          {selectedTicketId === t.id && <CheckCircle className="w-3.5 h-3.5 text-indigo-500 shrink-0" />}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={() => setShowNewTicket(true)} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-xs text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
+                    <Plus className="w-3.5 h-3.5" />Create New Ticket
+                  </button>
+                </div>
+              )}
+              {createdTicket && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg border-2 border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{createdTicket.title}</span>
+                  <span className="text-xs text-emerald-500 font-mono ml-auto">{createdTicket.displayId || createdTicket.id?.slice(0, 8)}</span>
+                </div>
+              )}
+              {showNewTicket && !createdTicket && (
+                <div className="p-3 rounded-xl border border-indigo-200 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-950/20 space-y-2">
+                  <div className="flex justify-between items-center"><p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">New Ticket</p><button onClick={() => setShowNewTicket(false)}><X className="w-3.5 h-3.5 text-slate-400" /></button></div>
+                  <Input value={newTicket.title} onChange={e => setNewTicket(p => ({ ...p, title: e.target.value }))} placeholder="Title" className="h-8 text-xs" />
+                  <Select value={newTicket.priority} onValueChange={v => setNewTicket(p => ({ ...p, priority: v }))}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="LOW">Low</SelectItem><SelectItem value="MEDIUM">Medium</SelectItem><SelectItem value="HIGH">High</SelectItem></SelectContent>
+                  </Select>
+                  <button onClick={handleCreateTicket} disabled={creatingTicket} className="w-full py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50">
+                    {creatingTicket ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}{creatingTicket ? 'Creating…' : 'Create Ticket'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Signature canvas */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5"><PenLine className="w-4 h-4 text-indigo-600" /><span className="text-sm font-semibold text-slate-800 dark:text-slate-100">Draw Signature</span></div>
+                <button onClick={clearSig} className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"><X className="w-3 h-3" />Clear</button>
+              </div>
+              <div className={`relative rounded-xl border-2 overflow-hidden transition-colors ${hasSig ? 'border-indigo-400' : 'border-dashed border-slate-300 dark:border-slate-600'} bg-white dark:bg-slate-900`} style={{ height: '130px' }}>
+                {!hasSig && <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-slate-300 dark:text-slate-600"><PenLine className="w-7 h-7 mb-1" /><span className="text-xs">Sign here with mouse or finger</span></div>}
+                <canvas ref={canvasRef} style={{ width: '100%', height: '100%', touchAction: 'none', cursor: 'crosshair' }}
+                  onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+                  onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
+              </div>
+              {!hasSig && <p className="text-xs text-amber-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />Signature is required</p>}
+            </div>
+
+            {/* Shield notice */}
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-300">
+              <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>Signature will be stored in the asset's history with timestamp. A confirmation email will be sent automatically.</span>
+            </div>
+
+            <div className="flex gap-3 border-t border-slate-200 dark:border-slate-700 pt-4">
+              <button onClick={() => setStep('select')} className="flex-1 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">← Back</button>
+              <button onClick={handleSignAndAssign} disabled={saving || !hasSig}
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-bold transition-colors disabled:opacity-50">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {saving ? 'Processing…' : 'Sign & Assign Asset'}
+              </button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

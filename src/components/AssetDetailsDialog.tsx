@@ -155,6 +155,7 @@ const HISTORY_CONFIG: Record<string, { color: string; bg: string; border: string
   UNASSIGNED:     { color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/30", border: "border-orange-200 dark:border-orange-800",icon: RotateCcw },
   STATUS_CHANGED:     { color: "text-teal-600",   bg: "bg-teal-50 dark:bg-teal-950/30",       border: "border-teal-200 dark:border-teal-800",     icon: CheckCircle2 },
   ASSIGNMENT_SIGNED:  { color: "text-violet-700", bg: "bg-violet-50 dark:bg-violet-950/30",   border: "border-violet-200 dark:border-violet-800",  icon: FileSignature },
+  BORROW_SIGNED:      { color: "text-blue-700",   bg: "bg-blue-50 dark:bg-blue-950/30",        border: "border-blue-200 dark:border-blue-800",       icon: FileSignature },
 };
 
 function InfoRow({ icon: Icon, label, value, mono = false }: { icon: any; label: string; value: React.ReactNode; mono?: boolean }) {
@@ -943,6 +944,40 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                       >
                                         <FileSignature className="h-3.5 w-3.5" />
                                         Download Signed Form
+                                      </a>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                              {record.action === "BORROW_SIGNED" && record.details && (() => {
+                                const d = record.details as any;
+                                return (
+                                  <div className="space-y-2 mt-1">
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700">
+                                        <PenLine className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                        <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Borrow Signed</span>
+                                      </div>
+                                      {d.signedAt && <span className="text-xs text-muted-foreground ml-auto">{new Date(d.signedAt).toLocaleString()}</span>}
+                                    </div>
+                                    {d.custodianName && (
+                                      <p className="text-xs text-muted-foreground">Borrower: <span className="font-medium text-foreground">{d.custodianName}</span></p>
+                                    )}
+                                    {d.expectedReturnAt && (
+                                      <p className="text-xs text-muted-foreground">Due: <span className="font-medium text-foreground">{new Date(d.expectedReturnAt).toLocaleDateString()}</span></p>
+                                    )}
+                                    {d.signatureDataUrl && (
+                                      <div className="mt-2">
+                                        <p className="text-[10px] uppercase font-semibold text-muted-foreground mb-1.5">Borrower Signature</p>
+                                        <div className="rounded-xl border-2 border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-900 p-2 inline-block">
+                                          <img src={d.signatureDataUrl} alt="Borrower Signature" className="max-h-20 max-w-[280px] object-contain" />
+                                        </div>
+                                      </div>
+                                    )}
+                                    {d.pdfDataUrl && (
+                                      <a href={d.pdfDataUrl} download={`borrow-agreement-${asset?.assetId || 'asset'}.png`}
+                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2">
+                                        <FileSignature className="h-3.5 w-3.5" />Download Borrow Agreement
                                       </a>
                                     )}
                                   </div>
