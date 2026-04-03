@@ -252,7 +252,7 @@ export default function PrintReportPage() {
       h3{font-size:13px;font-weight:600;color:#1e293b}
 
       /* ─ Hero header ─ */
-      .hero{background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);color:#fff;padding:24px 28px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start}
+      .hero{background:${currentReportType === 'vehicle' ? 'linear-gradient(135deg,#1e40af 0%,#1d4ed8 50%,#0284c7 100%)' : currentReportType === 'food' ? 'linear-gradient(135deg,#047857 0%,#059669 100%)' : currentReportType === 'ai' ? 'linear-gradient(135deg,#6d28d9 0%,#7c3aed 100%)' : 'linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)'};color:#fff;padding:24px 28px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start}
       .hero-left{}
       .hero-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;opacity:.7;margin-bottom:4px}
       .hero-title{font-size:22px;font-weight:800;letter-spacing:-.02em}
@@ -768,24 +768,210 @@ export default function PrintReportPage() {
         </div>`;
 
     } else if (currentReportType === 'vehicle') {
-      const rows = dataArray.map((v: any) => `
-        <tr>
-          <td style="font-weight:600">${v.make || 'N/A'} ${v.model || ''}</td>
-          <td>${v.year || 'N/A'}</td>
-          <td class="mono">${v.plateNumber || 'N/A'}</td>
-          <td>${statusBadge(v.status)}</td>
-          <td>QAR ${v.rentalAmount?.toFixed(2) ?? 'N/A'}</td>
-        </tr>`).join('');
-      bodyHtml = `
-        <div class="card">
-          <div class="card-hdr" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af">Vehicle Fleet</div>
-          <div class="card-body" style="padding:0">
-            <table>
-              <thead><tr><th>Vehicle</th><th>Year</th><th>Plate</th><th>Status</th><th>Rental Amount</th></tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
+      // ── Fleet summary stats ──
+      const total = dataArray.length;
+      const available = dataArray.filter((v: any) => v.status === 'AVAILABLE').length;
+      const rented = dataArray.filter((v: any) => v.status === 'RENTED').length;
+      const maintenance = dataArray.filter((v: any) => v.status === 'MAINTENANCE').length;
+      const retired = dataArray.filter((v: any) => v.status === 'RETIRED').length;
+      const totalRentalRevenue = dataArray.reduce((sum: number, v: any) => {
+        return sum + (v.rentals || []).reduce((s: number, r: any) => s + (r.totalCost || 0), 0);
+      }, 0);
+      const totalMaintenanceCost = dataArray.reduce((sum: number, v: any) => {
+        return sum + (v.maintenances || []).reduce((s: number, m: any) => s + (m.cost || 0), 0);
+      }, 0);
+      const fleetValue = dataArray.reduce((sum: number, v: any) => sum + (v.rentalAmount || 0), 0);
+
+      // Status badge helper
+      const vStatusBadge = (s?: string) => {
+        const colors: Record<string, string> = {
+          AVAILABLE: 'background:#dcfce7;color:#15803d;border:1px solid #bbf7d0',
+          RENTED:    'background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd',
+          MAINTENANCE: 'background:#fef9c3;color:#a16207;border:1px solid #fde047',
+          RETIRED:   'background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0',
+        };
+        const style = colors[s?.toUpperCase() ?? ''] ?? 'background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0';
+        return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;${style}"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6;display:inline-block"></span>${s ?? 'Unknown'}</span>`;
+      };
+
+      // ── Per-vehicle cards ──
+      const vehicleCards = dataArray.map((v: any, i: number) => {
+        const activeRental = (v.rentals || []).find((r: any) => r.status === 'ACTIVE' || !r.endDate);
+        const lastMaint = (v.maintenances || [])[0];
+        const totalTrips = (v.trips || []).length;
+        const totalRentCost = (v.rentals || []).reduce((s: number, r: any) => s + (r.totalCost || 0), 0);
+        const totalMaintCost = (v.maintenances || []).reduce((s: number, m: any) => s + (m.cost || 0), 0);
+
+        const rentalRows = (v.rentals || []).slice(0, 3).map((r: any) => `
+          <tr>
+            <td style="font-size:11px">${r.user?.email ?? '—'}</td>
+            <td style="font-size:11px">${fmtDate(r.startDate)}</td>
+            <td style="font-size:11px">${r.endDate ? fmtDate(r.endDate) : '<span style="color:#15803d;font-weight:700">Active</span>'}</td>
+            <td style="font-size:11px;font-weight:700">${r.totalCost ? `QAR ${r.totalCost.toFixed(0)}` : '—'}</td>
+          </tr>`).join('');
+
+        const maintRows = (v.maintenances || []).slice(0, 3).map((m: any) => `
+          <tr>
+            <td style="font-size:11px">${m.maintenanceType ?? '—'}</td>
+            <td style="font-size:11px">${fmtDate(m.maintenanceDate)}</td>
+            <td style="font-size:11px">${m.vendor?.name ?? '—'}</td>
+            <td style="font-size:11px;font-weight:700;color:#dc2626">QAR ${(m.cost || 0).toFixed(0)}</td>
+          </tr>`).join('');
+
+        return `
+        <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px;page-break-inside:avoid">
+          <!-- Vehicle header bar -->
+          <div style="background:linear-gradient(135deg,#1e40af 0%,#1d4ed8 50%,#0284c7 100%);padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:rgba(255,255,255,.6);margin-bottom:4px">Vehicle ${String(i + 1).padStart(2, '0')}</div>
+              <div style="font-size:18px;font-weight:900;color:#fff;letter-spacing:-.02em">${v.make ?? ''} ${v.model ?? ''}</div>
+              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+                ${vStatusBadge(v.status)}
+                <span style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.25)">${v.type ?? 'Vehicle'}</span>
+                ${v.year ? `<span style="padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(255,255,255,.1);color:rgba(255,255,255,.8)">${v.year}</span>` : ''}
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:22px;font-weight:900;color:#fff">${v.plateNumber ?? '—'}</div>
+              <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:2px">Plate Number</div>
+              ${v.color ? `<div style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);font-size:10px;color:rgba(255,255,255,.8);font-weight:600">${v.color}</div>` : ''}
+            </div>
+          </div>
+
+          <!-- KPI strip -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #e2e8f0">
+            <div style="padding:12px 14px;border-right:1px solid #f1f5f9;text-align:center">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:3px">Daily Rate</div>
+              <div style="font-size:16px;font-weight:900;color:#0f172a">QAR ${(v.rentalAmount || 0).toFixed(0)}</div>
+            </div>
+            <div style="padding:12px 14px;border-right:1px solid #f1f5f9;text-align:center">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:3px">Total Revenue</div>
+              <div style="font-size:16px;font-weight:900;color:#15803d">QAR ${totalRentCost.toFixed(0)}</div>
+            </div>
+            <div style="padding:12px 14px;border-right:1px solid #f1f5f9;text-align:center">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:3px">Maint. Cost</div>
+              <div style="font-size:16px;font-weight:900;color:#dc2626">QAR ${totalMaintCost.toFixed(0)}</div>
+            </div>
+            <div style="padding:12px 14px;text-align:center">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:3px">Total Trips</div>
+              <div style="font-size:16px;font-weight:900;color:#1d4ed8">${totalTrips}</div>
+            </div>
+          </div>
+
+          <!-- Body content -->
+          <div style="padding:16px 20px">
+            <!-- Active rental alert -->
+            ${activeRental ? `
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+              <div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;animation:none"></div>
+              <div>
+                <div style="font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.05em">Currently Rented</div>
+                <div style="font-size:12px;color:#1e40af">Renter: <strong>${activeRental.user?.email ?? 'Unknown'}</strong> · Since ${fmtDate(activeRental.startDate)}</div>
+              </div>
+            </div>` : ''}
+
+            <!-- Vehicle details grid -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+              ${[
+                { label: 'Make', val: v.make ?? '—' },
+                { label: 'Model', val: v.model ?? '—' },
+                { label: 'Year', val: v.year ?? '—' },
+                { label: 'Mileage', val: v.mileage ? `${v.mileage.toLocaleString()} km` : '—' },
+                { label: 'Reg. Expires', val: v.registrationExp ? fmtDate(v.registrationExp) : '—' },
+                { label: 'Insurance', val: v.insuranceInfo ?? '—' },
+              ].map(({ label, val }) => `
+                <div style="background:#f8fafc;border-radius:8px;padding:10px 12px">
+                  <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:3px">${label}</div>
+                  <div style="font-size:13px;font-weight:600;color:#0f172a">${val}</div>
+                </div>`).join('')}
+            </div>
+
+            <!-- Rental history -->
+            ${v.rentals?.length > 0 ? `
+            <div style="margin-bottom:14px">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1d4ed8;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <span style="width:14px;height:14px;border-radius:4px;background:#dbeafe;display:inline-flex;align-items:center;justify-content:center;font-size:9px">🚗</span>
+                Rental History (last ${Math.min(3, v.rentals.length)})
+              </div>
+              <table style="width:100%;border-collapse:collapse;border:1px solid #f1f5f9;border-radius:8px;overflow:hidden">
+                <thead><tr style="background:#eff6ff">
+                  <th style="padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;color:#3b82f6;text-align:left">Renter</th>
+                  <th style="padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;color:#3b82f6;text-align:left">Start</th>
+                  <th style="padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;color:#3b82f6;text-align:left">End</th>
+                  <th style="padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;color:#3b82f6;text-align:left">Cost</th>
+                </tr></thead>
+                <tbody>${rentalRows}</tbody>
+              </table>
+            </div>` : `<div style="background:#f8fafc;border-radius:8px;padding:10px 14px;margin-bottom:14px;text-align:center;color:#94a3b8;font-size:12px">No rental history</div>`}
+
+            <!-- Maintenance history -->
+            ${v.maintenances?.length > 0 ? `
+            <div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#b45309;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <span style="width:14px;height:14px;border-radius:4px;background:#fef3c7;display:inline-flex;align-items:center;justify-content:center;font-size:9px">⚙</span>
+                Maintenance Records (last ${Math.min(3, v.maintenances.length)})
+              </div>
+              <table style="width:100%;border-collapse:collapse;border:1px solid #f1f5f9;border-radius:8px;overflow:hidden">
+                <thead><tr style="background:#fefce8">
+                  <th style="padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;color:#a16207;text-align:left">Type</th>
+                  <th style="padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;color:#a16207;text-align:left">Date</th>
+                  <th style="padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;color:#a16207;text-align:left">Vendor</th>
+                  <th style="padding:7px 10px;font-size:9px;font-weight:700;text-transform:uppercase;color:#a16207;text-align:left">Cost</th>
+                </tr></thead>
+                <tbody>${maintRows}</tbody>
+              </table>
+            </div>` : ''}
           </div>
         </div>`;
+      }).join('');
+
+      bodyHtml = `
+        <!-- Fleet Overview Stats -->
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px">
+          ${[
+            { label: 'Total Vehicles', val: total, color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
+            { label: 'Available', val: available, color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' },
+            { label: 'Rented', val: rented, color: '#0369a1', bg: '#e0f2fe', border: '#7dd3fc' },
+            { label: 'Maintenance', val: maintenance, color: '#b45309', bg: '#fefce8', border: '#fde047' },
+            { label: 'Fleet Revenue', val: `QAR ${totalRentalRevenue.toFixed(0)}`, color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' },
+            { label: 'Maint. Spend', val: `QAR ${totalMaintenanceCost.toFixed(0)}`, color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
+          ].map(({ label, val, color, bg, border }) => `
+            <div style="background:${bg};border:1px solid ${border};border-radius:10px;padding:12px 14px;text-align:center">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${color};opacity:.7;margin-bottom:4px">${label}</div>
+              <div style="font-size:18px;font-weight:900;color:${color}">${val}</div>
+            </div>`).join('')}
+        </div>
+
+        <!-- Fleet utilization bar -->
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin-bottom:20px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#475569;margin-bottom:10px">Fleet Utilization Overview</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+            ${[
+              { label: 'Available', count: available, total, color: '#22c55e' },
+              { label: 'Rented', count: rented, total, color: '#3b82f6' },
+              { label: 'Maintenance', count: maintenance, total, color: '#f59e0b' },
+              { label: 'Retired', count: retired, total, color: '#94a3b8' },
+            ].map(({ label, count, total: t, color }) => {
+              const pct = t > 0 ? Math.round((count / t) * 100) : 0;
+              return `
+              <div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                  <span style="font-size:10px;font-weight:600;color:#64748b">${label}</span>
+                  <span style="font-size:10px;font-weight:800;color:#0f172a">${pct}%</span>
+                </div>
+                <div style="height:6px;background:#e2e8f0;border-radius:999px;overflow:hidden">
+                  <div style="height:6px;width:${pct}%;background:${color};border-radius:999px"></div>
+                </div>
+                <div style="font-size:9px;color:#94a3b8;margin-top:2px">${count} of ${t}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Individual vehicle cards -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#475569;margin-bottom:12px">Vehicle Details</div>
+        ${vehicleCards}
+      `;
 
     } else if (currentReportType === 'ai') {
       const rows = dataArray.map((a: any) => `

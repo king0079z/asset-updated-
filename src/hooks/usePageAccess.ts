@@ -34,15 +34,15 @@ export function usePageAccess() {
           .maybeSingle();
         
         if (error) {
-          const msg = error?.message ?? '';
-          const isNetworkError = typeof msg === 'string' && (msg.includes('fetch') || msg.includes('Failed to fetch'));
+          const msg = (error?.message ?? '').toLowerCase();
+          const isNetworkError = msg.includes('fetch') || msg.includes('network') || msg.includes('connection') || msg.includes('closed') || msg.includes('abort') || msg.includes('timeout');
           if (isNetworkError) {
-            logDebug('[usePageAccess] Network error fetching user access, using defaults', msg);
+            logDebug('[usePageAccess] Network/connection error fetching user access, using defaults', error?.message);
             setIsAdmin(false);
             setRole('STAFF');
             setPageAccess({});
           } else {
-            console.error('Error fetching user access:', error);
+            warnDebug('[usePageAccess] Non-network error:', error?.message);
           }
           setLoading(false);
           return;

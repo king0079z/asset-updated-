@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
@@ -264,13 +264,29 @@ export default async function handler(
         reportData = await prisma.vehicle.findMany({
           where: {
             ...itemFilter,
-            ...dateFilter,
             ...(isPrivilegedUser && currentUser?.organizationId
               ? { organizationId: currentUser.organizationId }
               : { userId: user.id }),
           },
           include: {
-            rentals: true,
+            rentals: {
+              orderBy: { startDate: 'desc' },
+              take: 5,
+              include: {
+                user: { select: { email: true } },
+              },
+            },
+            maintenances: {
+              orderBy: { maintenanceDate: 'desc' },
+              take: 5,
+              include: {
+                vendor: { select: { name: true } },
+              },
+            },
+            trips: {
+              orderBy: { startTime: 'desc' },
+              take: 5,
+            },
           },
         });
         break;
