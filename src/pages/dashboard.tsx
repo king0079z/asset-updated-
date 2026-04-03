@@ -264,7 +264,9 @@ export default function Dashboard() {
           assetStats: {
             byStatus: Array.isArray(dashboardData.assetStats?.byStatus) ? dashboardData.assetStats.byStatus : [],
             totalValue: parseNumber(dashboardData.assetStats?.totalValue),
-            disposedValue: parseNumber(dashboardData.assetStats?.disposedValue)
+            disposedValue: parseNumber(dashboardData.assetStats?.disposedValue),
+            depreciatedValue: parseNumber(dashboardData.assetStats?.depreciatedValue),
+            depreciationPercent: parseNumber(dashboardData.assetStats?.depreciationPercent),
           }
         };
         setStats(prev => ({

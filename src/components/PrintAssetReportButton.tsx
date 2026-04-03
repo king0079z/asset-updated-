@@ -5,6 +5,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTranslation } from "@/contexts/TranslationContext";
+import { calculateDepreciation, USEFUL_LIFE_BY_TYPE, SALVAGE_RATE } from "@/lib/depreciation";
 
 interface Asset {
   id: string;
@@ -134,6 +135,27 @@ const PRINT_CSS = `
 
   /* Asset image */
   .asset-img{width:160px;height:160px;object-fit:cover;border-radius:10px;border:1px solid #e2e8f0;flex-shrink:0}
+
+  /* Depreciation */
+  .dep-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .dep-kpi-item{border-radius:8px;padding:10px 12px;border:1px solid}
+  .dep-kpi-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+  .dep-kpi-val{font-size:14px;font-weight:900;line-height:1.1}
+  .dep-kpi-sub{font-size:9px;margin-top:2px;opacity:.7}
+  .dep-bar-bg{height:14px;background:#f1f5f9;border-radius:999px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:3px}
+  .dep-bar-fill{height:100%;border-radius:999px}
+  .dep-meta{display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-bottom:14px}
+  .dep-cond{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1px solid;margin-bottom:12px}
+  .dep-cond-label{font-size:11px;font-weight:900}
+  .dep-insights{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+  .dep-insight{background:#f8fafc;border-radius:6px;padding:8px 10px;border:1px solid #e2e8f0}
+  .dep-insight-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:2px}
+  .dep-insight-val{font-size:12px;font-weight:700;color:#0f172a}
+  .dep-method-cmp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .dep-method{border-radius:6px;padding:8px 10px;border:1px solid}
+  .dep-method-name{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+  .dep-method-bv{font-size:12px;font-weight:900}
+  .dep-method-acc{font-size:9px;opacity:.7}
 `;
 
 /* ── HTML generator — no React/Tailwind dependency ─────────────────────────── */
@@ -144,8 +166,9 @@ function generateReportHTML(asset: any, opts: {
   rfidTag: any;
   healthScore: number;
   healthFactors: { age: number; maintenance: number; usage: number; condition: number };
+  depreciation: ReturnType<typeof calculateDepreciation> | null;
 }): string {
-  const { history, tickets, rfidMovements, rfidTag, healthScore, healthFactors } = opts;
+  const { history, tickets, rfidMovements, rfidTag, healthScore, healthFactors, depreciation } = opts;
 
   const reportId = `AR-${Date.now().toString(36).toUpperCase().slice(-8)}`;
   const now = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -260,6 +283,143 @@ function generateReportHTML(asset: any, opts: {
           ${factorsHTML}
         </div>
       </div>`;
+  }
+
+  /* ── Depreciation section ─────────────────────────────────────────────── */
+  let depreciationHTML = '';
+  if (depreciation) {
+    const dep = depreciation;
+    const depPct = Math.min(dep.depreciationPercent, 100);
+    const barColor = depPct > 75 ? '#ef4444' : depPct > 50 ? '#f97316' : depPct > 25 ? '#f59e0b' : '#8b5cf6';
+    const condBg    = dep.condition === 'EXCELLENT' ? '#dcfce7' : dep.condition === 'GOOD' ? '#dbeafe' : dep.condition === 'FAIR' ? '#fef3c7' : dep.condition === 'POOR' ? '#ffedd5' : '#fee2e2';
+    const condColor = dep.condition === 'EXCELLENT' ? '#166534' : dep.condition === 'GOOD' ? '#1e40af' : dep.condition === 'FAIR' ? '#92400e' : dep.condition === 'POOR' ? '#9a3412' : '#991b1b';
+    const condBorder = dep.condition === 'EXCELLENT' ? '#86efac' : dep.condition === 'GOOD' ? '#93c5fd' : dep.condition === 'FAIR' ? '#fde047' : dep.condition === 'POOR' ? '#fdba74' : '#fca5a5';
+    const replDate  = dep.recommendedReplacement.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+    const scheduleRows = dep.schedule.map((row: any) => {
+      const isCurrent = row.year === dep.ageYearsInt + 1;
+      const isPast    = row.year <= dep.ageYearsInt;
+      const bg = isCurrent ? 'background:#ede9fe' : isPast ? 'background:#f8fafc' : 'background:#fff';
+      const fontW = isCurrent ? '700' : '400';
+      return `<tr style="${bg}">
+        <td style="font-weight:${fontW};color:${isCurrent ? '#6d28d9' : '#334155'};font-size:11px">${isCurrent ? '▶ ' : ''}Y${row.year} (${row.calendarYear})</td>
+        <td style="font-family:monospace;font-size:11px">QAR ${fmt(row.openingBookValue)}</td>
+        <td style="font-family:monospace;font-size:11px;color:#dc2626;font-weight:600">QAR ${fmt(row.depreciation)}</td>
+        <td style="font-family:monospace;font-size:11px">QAR ${fmt(row.accumulatedDepreciation)}</td>
+        <td style="font-family:monospace;font-size:11px;color:#059669;font-weight:600">QAR ${fmt(row.closingBookValue)}</td>
+        <td style="font-size:11px;font-weight:700">${row.percentDepreciated.toFixed(0)}%</td>
+      </tr>`;
+    }).join('');
+
+    depreciationHTML = `
+    <div class="card" style="break-inside:avoid">
+      <div class="card-hdr" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:#4338ca;padding:10px 16px">
+        ◆ &nbsp;AI Depreciation &amp; Valuation Analysis &nbsp;·&nbsp; IAS 16 / IFRS Compliant &nbsp;·&nbsp; Straight-Line Method
+      </div>
+      <div class="card-body">
+
+        <!-- KPI row -->
+        <div class="dep-kpi">
+          <div class="dep-kpi-item" style="background:#eef2ff;border-color:#c7d2fe">
+            <div class="dep-kpi-lbl" style="color:#6366f1">Purchase Cost</div>
+            <div class="dep-kpi-val" style="color:#312e81">QAR ${fmt(dep.cost)}</div>
+            <div class="dep-kpi-sub" style="color:#818cf8">${fmtDate(dep.purchaseDate)}</div>
+          </div>
+          <div class="dep-kpi-item" style="background:#fdf2f8;border-color:#fbcfe8">
+            <div class="dep-kpi-lbl" style="color:#be185d">Current Book Value</div>
+            <div class="dep-kpi-val" style="color:#831843">QAR ${fmt(dep.currentBookValue)}</div>
+            <div class="dep-kpi-sub" style="color:#f472b6">${depPct.toFixed(1)}% depreciated</div>
+          </div>
+          <div class="dep-kpi-item" style="background:#fff7ed;border-color:#fed7aa">
+            <div class="dep-kpi-lbl" style="color:#c2410c">Depreciation To Date</div>
+            <div class="dep-kpi-val" style="color:#7c2d12">QAR ${fmt(dep.accumulatedDepreciation)}</div>
+            <div class="dep-kpi-sub" style="color:#fb923c">QAR ${fmt(dep.annualDepreciation)}/yr</div>
+          </div>
+          <div class="dep-kpi-item" style="background:#f0fdf4;border-color:#bbf7d0">
+            <div class="dep-kpi-lbl" style="color:#15803d">Remaining Life</div>
+            <div class="dep-kpi-val" style="color:#14532d">${dep.remainingLife.toFixed(1)} yrs</div>
+            <div class="dep-kpi-sub" style="color:#4ade80">Replace by ${replDate}</div>
+          </div>
+        </div>
+
+        <!-- Decay bar -->
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:700;color:#64748b;margin-bottom:4px">
+            <span>Value Decay — ${dep.ageYears.toFixed(1)} of ${dep.usefulLifeYears} years elapsed (${dep.depreciationRate.toFixed(1)}%/yr)</span>
+            <span>${depPct.toFixed(1)}% depreciated</span>
+          </div>
+          <div class="dep-bar-bg"><div class="dep-bar-fill" style="width:${depPct}%;background:${barColor}"></div></div>
+          <div class="dep-meta">
+            <span>Original: QAR ${fmt(dep.cost)}</span>
+            <span>Book Value: QAR ${fmt(dep.currentBookValue)}</span>
+            <span>Salvage: QAR ${fmt(dep.salvageValue)}</span>
+          </div>
+        </div>
+
+        <!-- Condition badge + insights -->
+        <div class="dep-cond" style="background:${condBg};border-color:${condBorder}">
+          <span class="dep-cond-label" style="color:${condColor}">${dep.condition} CONDITION</span>
+          <span style="font-size:9px;color:${condColor};opacity:.7">AI Score: ${dep.conditionScore}/100</span>
+        </div>
+
+        <div class="dep-insights">
+          <div class="dep-insight">
+            <div class="dep-insight-lbl">Annual Depreciation Rate</div>
+            <div class="dep-insight-val">${dep.depreciationRate.toFixed(1)}% per year &nbsp;|&nbsp; QAR ${fmt(dep.annualDepreciation)}/yr</div>
+          </div>
+          <div class="dep-insight">
+            <div class="dep-insight-lbl">Salvage / Residual Value</div>
+            <div class="dep-insight-val">QAR ${fmt(dep.salvageValue)} &nbsp;(${(SALVAGE_RATE * 100).toFixed(0)}% of cost)</div>
+          </div>
+          <div class="dep-insight">
+            <div class="dep-insight-lbl">Replacement Budget (est.)</div>
+            <div class="dep-insight-val">QAR ${fmt(dep.replacementBudget)} &nbsp;<span style="font-size:9px;font-weight:400;color:#64748b">3% p.a. inflation</span></div>
+          </div>
+          <div class="dep-insight">
+            <div class="dep-insight-lbl">Useful Life Configured</div>
+            <div class="dep-insight-val">${dep.usefulLifeYears} years &nbsp;·&nbsp; ${dep.ageYearsInt} years elapsed</div>
+          </div>
+        </div>
+
+        <!-- Annual schedule table -->
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#6d28d9;margin-bottom:6px">Annual Depreciation Schedule</div>
+        <table>
+          <thead><tr style="background:#ede9fe">
+            <th style="color:#5b21b6">Year</th>
+            <th style="color:#5b21b6">Opening Value</th>
+            <th style="color:#5b21b6">Annual Dep.</th>
+            <th style="color:#5b21b6">Accumulated</th>
+            <th style="color:#5b21b6">Closing Value</th>
+            <th style="color:#5b21b6">Dep. %</th>
+          </tr></thead>
+          <tbody>${scheduleRows}</tbody>
+        </table>
+
+        <!-- 3-method comparison -->
+        <div style="margin-top:12px">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#475569;margin-bottom:6px">Multi-Method Comparison (Current Book Value)</div>
+          <div class="dep-method-cmp">
+            <div class="dep-method" style="background:#eef2ff;border-color:#c7d2fe">
+              <div class="dep-method-name" style="color:#6366f1">Straight-Line (SL)</div>
+              <div class="dep-method-bv" style="color:#312e81">QAR ${fmt(dep.comparison.sl.bookValue)}</div>
+              <div class="dep-method-acc" style="color:#6366f1">Accum.: QAR ${fmt(dep.comparison.sl.accumulatedDepreciation)}</div>
+            </div>
+            <div class="dep-method" style="background:#fff1f2;border-color:#fecdd3">
+              <div class="dep-method-name" style="color:#e11d48">Double Declining (DDB)</div>
+              <div class="dep-method-bv" style="color:#881337">QAR ${fmt(dep.comparison.ddb.bookValue)}</div>
+              <div class="dep-method-acc" style="color:#e11d48">Accum.: QAR ${fmt(dep.comparison.ddb.accumulatedDepreciation)}</div>
+            </div>
+            <div class="dep-method" style="background:#fffbeb;border-color:#fde68a">
+              <div class="dep-method-name" style="color:#d97706">Sum-of-Years' Digits (SYD)</div>
+              <div class="dep-method-bv" style="color:#78350f">QAR ${fmt(dep.comparison.syd.bookValue)}</div>
+              <div class="dep-method-acc" style="color:#d97706">Accum.: QAR ${fmt(dep.comparison.syd.accumulatedDepreciation)}</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>`;
   }
 
   /* ── History timeline ─────────────────────────────────────────────────── */
@@ -433,6 +593,9 @@ function generateReportHTML(asset: any, opts: {
   <!-- Assignment -->
   ${assignHTML}
 
+  <!-- Depreciation & Valuation -->
+  ${depreciationHTML}
+
   <!-- Health -->
   ${healthHTML}
 
@@ -546,11 +709,28 @@ export function PrintAssetReportButton({
           }
         }
       } catch {}
-      setProgress(80);
+      setProgress(75);
+
+      // Calculate depreciation (client-side, no API needed)
+      let depreciation: ReturnType<typeof calculateDepreciation> | null = null;
+      try {
+        const cost = asset.purchaseAmount;
+        if (cost && cost > 0) {
+          const type = asset.type ?? 'OTHER';
+          const usefulLife = USEFUL_LIFE_BY_TYPE[type] ?? 7;
+          const purchaseDate = asset.purchaseDate
+            ? new Date(asset.purchaseDate)
+            : asset.createdAt ? new Date(asset.createdAt) : null;
+          if (purchaseDate && !isNaN(purchaseDate.getTime())) {
+            depreciation = calculateDepreciation({ cost, purchaseDate, usefulLifeYears: usefulLife });
+          }
+        }
+      } catch {}
+      setProgress(85);
 
       // Generate self-contained HTML (no Tailwind dependency)
       const html = generateReportHTML(asset, {
-        history, tickets, rfidMovements, rfidTag, healthScore, healthFactors,
+        history, tickets, rfidMovements, rfidTag, healthScore, healthFactors, depreciation,
       });
       setProgress(90);
 
