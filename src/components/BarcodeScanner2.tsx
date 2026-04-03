@@ -16,8 +16,10 @@ import {
   CheckCircle2, MapPin, Building2, Tag, Package, Loader2, RefreshCcw,
   Trash2, ArrowRightLeft, Eye, PlusCircle, Keyboard, Zap,
   ShieldAlert, Navigation, Activity, FileText, Printer, UserCheck, UserX,
+  Clock,
 } from 'lucide-react';
 import { AssignAssetDialog } from '@/components/AssignAssetDialog';
+import { BorrowReturnDialog } from '@/components/BorrowReturnDialog';
 
 /* ──────────────────────────────── Scan cache ── */
 const scanCache = new Map<string, { asset: any; ts: number }>();
@@ -105,6 +107,7 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
   const [pickedStatus, setPickedStatus] = useState('');
   const [statusComment, setStatusComment] = useState('');
   const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showBorrowDialog, setShowBorrowDialog] = useState(false);
 
   const [camLoading, setCamLoading]     = useState(false);
   const [camError, setCamError]         = useState<string | null>(null);
@@ -1061,6 +1064,19 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                       sub="Retire asset"
                       glow="0 8px 32px rgba(239,68,68,0.15)"
                     />
+                    {/* Borrow / Return — full width */}
+                    <div className="col-span-2">
+                      <button
+                        onClick={() => setShowBorrowDialog(true)}
+                        className={`w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 transition-all font-bold text-sm ${
+                          asset.status === 'BORROWED'
+                            ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
+                            : 'border-blue-500/40 bg-blue-500/15 text-blue-200 hover:bg-blue-500/25'
+                        }`}>
+                        <Clock className="h-5 w-5" />
+                        {asset.status === 'BORROWED' ? '↩  Return Asset — End Borrowing' : '↗  Borrow Asset — Set Return Date'}
+                      </button>
+                    </div>
             </div>
 
                   {/* Print Report — full-width */}
@@ -1332,6 +1348,19 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
           onAssigned={() => {
             setShowAssignDialog(false);
             // Re-fetch asset so the assignment strip refreshes immediately
+            const code = asset.barcode || asset.assetId || asset.id;
+            if (code) findAsset(code);
+          }}
+        />
+      )}
+
+      {/* Borrow / Return dialog */}
+      {asset && (
+        <BorrowReturnDialog
+          open={showBorrowDialog}
+          onOpenChange={setShowBorrowDialog}
+          asset={asset}
+          onSuccess={() => {
             const code = asset.barcode || asset.assetId || asset.id;
             if (code) findAsset(code);
           }}

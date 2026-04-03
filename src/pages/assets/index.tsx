@@ -114,10 +114,11 @@ import { ArrowLeftRight, Wrench } from "lucide-react";
 const assetFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
-  type: z.enum(["FURNITURE", "EQUIPMENT", "ELECTRONICS"]),
+  type: z.enum(["FURNITURE", "EQUIPMENT", "ELECTRONICS", "SPARE_PART", "IT", "MEDICAL_EQUIPMENT", "TOOL", "OTHER"]),
   vendorId: z.string().optional(),
-  floorNumber: z.string().min(1, "Floor number is required"),
-  roomNumber: z.string().min(1, "Room number is required"),
+  departmentId: z.string().optional(),
+  floorNumber: z.string().optional(),
+  roomNumber: z.string().optional(),
   imageUrl: z.string().optional(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
@@ -182,6 +183,7 @@ export default function AssetsPage() {
 
   // Initialize from module-level cache → no loading flash when navigating back
   const [vendors, setVendors] = useState<Vendor[]>(() => getFromCache<Vendor[]>(VENDORS_KEY, VENDORS_TTL) ?? []);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [assets, setAssets] = useState<Asset[]>(() => getFromCache<Asset[]>(ASSETS_KEY, ASSETS_TTL) ?? []);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [showBarcodeDialog, setShowBarcodeDialog] = useState(false);
@@ -199,6 +201,7 @@ export default function AssetsPage() {
       description: "",
       type: "FURNITURE",
       vendorId: "",
+      departmentId: "",
       floorNumber: "",
       roomNumber: "",
       imageUrl: "",
@@ -206,6 +209,11 @@ export default function AssetsPage() {
       longitude: null,
     },
   });
+
+  // Load departments for spare parts (on mount)
+  useEffect(() => {
+    fetch('/api/departments', { credentials: 'include' }).then(r => r.json()).then(d => setDepartments(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
 
   const loadVendors = async (background = false) => {
     try {
@@ -470,14 +478,20 @@ export default function AssetsPage() {
       }
 
       // Prepare the asset data
+      const isSparePart = values.type === 'SPARE_PART';
       const assetData = {
         ...values,
         imageUrl: imageUrl || null,
         latitude: latitude || null,
         longitude: longitude || null,
-        assignedToId: assignToUserId || null,
-        assignedToEmail: assignToUserEmail || null,
-        assignedToName: assignToUserName || null,
+        isSparePart,
+        departmentId: values.departmentId || null,
+        // Spare parts: no person assignment, use SPARE/PARTS as placeholder location
+        assignedToId: isSparePart ? null : (assignToUserId || null),
+        assignedToEmail: isSparePart ? null : (assignToUserEmail || null),
+        assignedToName: isSparePart ? null : (assignToUserName || null),
+        floorNumber: values.floorNumber || (isSparePart ? 'SPARE' : ''),
+        roomNumber: values.roomNumber || (isSparePart ? 'PARTS' : ''),
         linkedTicketId: linkedTicketId || null,
       };
 
@@ -860,12 +874,54 @@ export default function AssetsPage() {
                               <SelectItem value="FURNITURE">{t('furniture')}</SelectItem>
                               <SelectItem value="EQUIPMENT">{t('equipment')}</SelectItem>
                               <SelectItem value="ELECTRONICS">{t('electronics')}</SelectItem>
+                              <SelectItem value="IT">IT / Technology</SelectItem>
+                              <SelectItem value="MEDICAL_EQUIPMENT">Medical Equipment</SelectItem>
+                              <SelectItem value="TOOL">Tool</SelectItem>
+                              <SelectItem value="OTHER">Other</SelectItem>
+                              <SelectItem value="SPARE_PART">🔧 Spare Part</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+
+                    {/* Department selector — shown ONLY when Spare Part is selected */}
+                    {form.watch('type') === 'SPARE_PART' && (
+                      <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Wrench className="h-4 w-4 text-amber-600" />
+                          <span className="text-sm font-bold text-amber-800">Spare Part — Department Assignment</span>
+                          <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-semibold ml-auto">No person assignment</span>
+                        </div>
+                        <p className="text-xs text-amber-700">Spare parts are stored in inventory and assigned to a department, not to an individual user.</p>
+                        <FormField
+                          control={form.control}
+                          name="departmentId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-amber-800 font-semibold">Department *</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="border-amber-300 bg-white">
+                                    <SelectValue placeholder="Select department…" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {departments.length === 0 ? (
+                                    <SelectItem value="__none" disabled>No departments — add in Settings → Departments</SelectItem>
+                                  ) : departments.map((d: any) => (
+                                    <SelectItem key={d.id} value={d.id}>{d.name}{d.code ? ` (${d.code})` : ''}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
+
                     <FormField
                       control={form.control}
                       name="vendorId"
@@ -1034,7 +1090,8 @@ export default function AssetsPage() {
                         </div>
                       )}
                     </FormItem>
-                    {/* ── Assign to User + Link to Ticket ── */}
+                    {/* ── Assign to User + Link to Ticket (hidden for Spare Parts) ── */}
+                    {form.watch('type') !== 'SPARE_PART' && (
                     <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
                       <div className="flex items-center gap-2 mb-1">
                         <UserCheck className="h-4 w-4 text-indigo-600 shrink-0" />
@@ -1097,6 +1154,7 @@ export default function AssetsPage() {
                         </div>
                       )}
                     </div>
+                    )} {/* end Spare Part conditional */}
 
                     <Button type="submit" className="w-full" disabled={isSubmitting}>
                       {isSubmitting ? (
