@@ -27,10 +27,6 @@ import {
   FileCheck,
   Smartphone,
   FileText,
-  Database,
-  Sliders,
-  Mail,
-  Upload,
   CheckSquare,
 } from "lucide-react";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -292,36 +288,7 @@ function Sidebar({ className }: SidebarProps) {
         icon: LineChart,
         href: "/settings/compliance",
       },
-      {
-        title: "Azure AD SSO",
-        icon: Shield,
-        href: "/settings/sso",
-      },
-      {
-        title: "ERP — Dynamics 365",
-        icon: Database,
-        href: "/settings/erp-integration",
-      },
-      {
-        title: "ITSM & Email Integration",
-        icon: Mail,
-        href: "/settings/itsm-integration",
-      },
-      {
-        title: "System Parameters",
-        icon: Sliders,
-        href: "/settings/system-parameters",
-      },
-      {
-        title: "Departments",
-        icon: Building2,
-        href: "/settings/departments",
-      },
-      {
-        title: "Data Migration",
-        icon: Upload,
-        href: "/admin/data-migration",
-      },
+
     ],
   };
 
