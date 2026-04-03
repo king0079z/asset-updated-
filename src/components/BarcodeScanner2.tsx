@@ -936,177 +936,224 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
               </div>
             )}
 
-            {/* ══ ASSET FOUND ══ */}
+            {/* ══ ASSET FOUND — World-Class UI ══ */}
             {view === 'found' && asset && (
-              <div className="absolute inset-0 overflow-y-auto">
-                <div className="min-h-full flex flex-col pt-16 pb-5 px-4">
+              <div className="absolute inset-0 overflow-y-auto bg-background">
+                {/* ── Gradient hero header ── */}
+                <div className="relative overflow-hidden">
+                  {/* Background gradient layers */}
+                  <div className={`absolute inset-0 ${
+                    asset.status === 'BORROWED'
+                      ? 'bg-gradient-to-br from-blue-600 via-indigo-700 to-violet-800'
+                      : asset.status === 'DISPOSED'
+                      ? 'bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900'
+                      : 'bg-gradient-to-br from-emerald-600 via-teal-700 to-cyan-800'
+                  }`} />
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.12),transparent_60%)]" />
+                  <div className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full bg-white/5 blur-2xl" />
+                  <div className="absolute top-4 right-4 w-24 h-24 rounded-full bg-white/8 blur-xl" />
 
-                  {/* ── Hero ── */}
-                  <div className="mb-4">
-                    {/* success pill */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-emerald-400 text-[11px] font-bold tracking-widest">LOCATED</span>
+                  <div className="relative z-10 px-5 pt-16 pb-5">
+                    {/* Located badge */}
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 border border-white/25 backdrop-blur-sm">
+                        <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        <span className="text-white text-[11px] font-black tracking-widest uppercase">Asset Located</span>
                       </div>
+                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-bold ${
+                        asset.status === 'BORROWED' ? 'bg-blue-400/20 border-blue-300/40 text-blue-100'
+                        : asset.status === 'ACTIVE' ? 'bg-emerald-400/20 border-emerald-300/40 text-emerald-100'
+                        : asset.status === 'DISPOSED' ? 'bg-red-400/20 border-red-300/40 text-red-100'
+                        : 'bg-amber-400/20 border-amber-300/40 text-amber-100'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          asset.status === 'BORROWED' ? 'bg-blue-300 animate-pulse'
+                          : asset.status === 'ACTIVE' ? 'bg-emerald-300 animate-pulse'
+                          : 'bg-amber-300'
+                        }`} />
+                        {asset.status}
                       </div>
-
-                    {/* asset card */}
-                    <div className="rounded-2xl overflow-hidden border border-white/8"
-                      style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%)' }}>
-
-                      <div className="flex items-center gap-3.5 p-4">
-                        {/* image */}
-                        <div className="w-[56px] h-[56px] rounded-xl bg-white/5 border border-white/10 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                          {asset.imageUrl
-                            ? <Image src={asset.imageUrl} alt={asset.name} width={56} height={56} className="object-cover w-full h-full" unoptimized />
-                            : <Package className="h-6 w-6 text-white/15" />}
                     </div>
-                        {/* text */}
-                        <div className="flex-1 min-w-0">
-                          <h2 className="text-white font-bold text-[16px] leading-tight truncate">{asset.name}</h2>
-                          {asset.type && <p className="text-white/35 text-xs mt-0.5">{asset.type}</p>}
-                          <div className="mt-1.5">
-                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getStatus(asset.status).badge}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${getStatus(asset.status).dot}`} />
-                              {asset.status}
-                            </span>
-                  </div>
-                </div>
-                      </div>
 
-                      {/* location strip */}
-                      <div className="grid grid-cols-3 border-t border-white/6">
-                        {[
-                          { icon: MapPin, label: 'Floor', val: asset.floorNumber || '—' },
-                          { icon: Building2, label: 'Room', val: asset.roomNumber || '—' },
-                          { icon: Tag, label: 'Code', val: asset.barcode || asset.assetId || '—', mono: true },
-                        ].map(({ icon: Icon, label, val, mono }) => (
-                          <div key={label} className="flex flex-col items-center py-2.5 px-2">
-                            <Icon className="h-3 w-3 text-white/20 mb-0.5" />
-                            <p className="text-white/20 text-[9px] uppercase tracking-wider">{label}</p>
-                            <p className={`text-white/75 text-[11px] font-semibold truncate max-w-full mt-0.5 ${mono ? 'font-mono' : ''}`}>{val}</p>
+                    {/* Asset identity */}
+                    <div className="flex items-start gap-4">
+                      {/* Image / icon */}
+                      <div className="w-[72px] h-[72px] rounded-2xl bg-white/15 border-2 border-white/25 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-xl">
+                        {asset.imageUrl
+                          ? <Image src={asset.imageUrl} alt={asset.name} width={72} height={72} className="object-cover w-full h-full" unoptimized />
+                          : <Package className="h-8 w-8 text-white/70" />}
+                      </div>
+                      <div className="flex-1 min-w-0 pt-1">
+                        <h2 className="text-white font-black text-[20px] leading-tight line-clamp-2 tracking-tight">{asset.name}</h2>
+                        <p className="text-white/60 text-xs font-semibold uppercase tracking-wider mt-1">{asset.type?.replace(/_/g, ' ')}</p>
+                        {asset.barcode && <p className="text-white/40 text-[10px] font-mono mt-1 truncate">{asset.barcode}</p>}
+                      </div>
+                    </div>
+
+                    {/* Location pills */}
+                    <div className="flex gap-2 mt-4 flex-wrap">
+                      {asset.floorNumber && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/10 border border-white/20 backdrop-blur-sm">
+                          <MapPin className="h-3 w-3 text-white/60" />
+                          <span className="text-white/90 text-[11px] font-semibold">Floor {asset.floorNumber}</span>
                         </div>
-                        ))}
-                </div>
+                      )}
+                      {asset.roomNumber && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/10 border border-white/20 backdrop-blur-sm">
+                          <Building2 className="h-3 w-3 text-white/60" />
+                          <span className="text-white/90 text-[11px] font-semibold">Room {asset.roomNumber}</span>
+                        </div>
+                      )}
+                      {(asset.barcode || asset.assetId) && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/10 border border-white/20 backdrop-blur-sm">
+                          <Tag className="h-3 w-3 text-white/60" />
+                          <span className="text-white/90 text-[11px] font-mono">{(asset.barcode || asset.assetId || '').slice(0, 12)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
+                </div>
 
-                  {/* ── Assignment status strip ── */}
-                  {asset.assignedToName || asset.assignedToEmail ? (
-                    <div className="mb-4 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                      <UserCheck className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-emerald-300 text-[11px] font-bold uppercase tracking-wider">Assigned</p>
-                        <p className="text-white/80 text-[12px] font-medium truncate">
-                          {asset.assignedToName || asset.assignedToEmail}
-                        </p>
-                        {asset.assignedToName && asset.assignedToEmail && (
-                          <p className="text-white/35 text-[10px] truncate">{asset.assignedToEmail}</p>
-                        )}
+                {/* ── Body (light/dark adaptive) ── */}
+                <div className="px-4 pt-4 pb-6 space-y-3">
+
+                  {/* Assignment card */}
+                  <div className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border ${
+                    asset.assignedToName || asset.assignedToEmail
+                      ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
+                      : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800'
+                  }`}>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      asset.assignedToName || asset.assignedToEmail
+                        ? 'bg-emerald-100 dark:bg-emerald-900/50'
+                        : 'bg-slate-100 dark:bg-slate-800'
+                    }`}>
+                      {asset.assignedToName || asset.assignedToEmail
+                        ? <UserCheck className="h-4.5 w-4.5 text-emerald-600 dark:text-emerald-400 h-[18px] w-[18px]" />
+                        : <UserX className="h-4.5 w-4.5 text-slate-400 h-[18px] w-[18px]" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {asset.assignedToName || asset.assignedToEmail ? (
+                        <>
+                          <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Assigned</p>
+                          <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{asset.assignedToName || asset.assignedToEmail}</p>
+                          {asset.assignedToName && asset.assignedToEmail && <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{asset.assignedToEmail}</p>}
+                        </>
+                      ) : (
+                        <p className="text-sm text-slate-400 dark:text-slate-500">Not assigned to anyone</p>
+                      )}
+                    </div>
+                    {asset.assignedToName && (
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-white text-sm font-black flex-shrink-0 shadow-md">
+                        {asset.assignedToName[0]?.toUpperCase()}
                       </div>
-                    </div>
-                  ) : (
-                    <div className="mb-4 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-white/4 border border-white/8">
-                      <UserX className="h-4 w-4 text-white/25 flex-shrink-0" />
-                      <p className="text-white/30 text-[12px]">Not assigned to anyone</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 mb-3">
-                    <ActionCard
-                      onClick={() => setView('p-details')}
-                      gradient="from-sky-600/20 to-sky-500/10"
-                      border="border-sky-500/20"
-                      iconBg="bg-sky-500/20"
-                      icon={<Eye className="h-5 w-5 text-sky-300" />}
-                      label="View Details"
-                      sub="Full information"
-                      glow="0 8px 32px rgba(14,165,233,0.15)"
-                    />
-                    <ActionCard
-                      onClick={() => setShowAssignDialog(true)}
-                      gradient="from-teal-600/20 to-teal-500/10"
-                      border="border-teal-500/20"
-                      iconBg="bg-teal-500/20"
-                      icon={<UserCheck className="h-5 w-5 text-teal-300" />}
-                      label="Assign To"
-                      sub={asset.assignedToName ? `Assigned: ${asset.assignedToName.split(' ')[0]}` : "Assign to user"}
-                      glow="0 8px 32px rgba(20,184,166,0.15)"
-                    />
-                    <ActionCard
-                      onClick={() => { transferForm.reset({ floorNumber: asset.floorNumber || '', roomNumber: asset.roomNumber || '' }); setView('p-transfer'); }}
-                      gradient="from-violet-600/20 to-violet-500/10"
-                      border="border-violet-500/20"
-                      iconBg="bg-violet-500/20"
-                      icon={<ArrowRightLeft className="h-5 w-5 text-violet-300" />}
-                      label="Transfer"
-                      sub="Move location"
-                      glow="0 8px 32px rgba(139,92,246,0.15)"
-                    />
-                    <ActionCard
-                      onClick={() => { setPickedStatus(asset.status); setStatusComment(''); setView('p-status'); }}
-                      gradient="from-amber-600/20 to-amber-500/10"
-                      border="border-amber-500/20"
-                      iconBg="bg-amber-500/20"
-                      icon={<Activity className="h-5 w-5 text-amber-300" />}
-                      label="Change Status"
-                      sub="Update condition"
-                      glow="0 8px 32px rgba(245,158,11,0.15)"
-                    />
-                    <ActionCard
-                      onClick={() => setView('p-dispose')}
-                      gradient="from-red-600/20 to-red-500/10"
-                      border="border-red-500/20"
-                      iconBg="bg-red-500/20"
-                      icon={<Trash2 className="h-5 w-5 text-red-300" />}
-                      label="Dispose"
-                      sub="Retire asset"
-                      glow="0 8px 32px rgba(239,68,68,0.15)"
-                    />
-                    {/* Borrow / Return — full width */}
-                    <div className="col-span-2">
-                      <button
-                        onClick={() => setShowBorrowDialog(true)}
-                        className={`w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 transition-all font-bold text-sm ${
-                          asset.status === 'BORROWED'
-                            ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
-                            : 'border-blue-500/40 bg-blue-500/15 text-blue-200 hover:bg-blue-500/25'
-                        }`}>
-                        <Clock className="h-5 w-5" />
-                        {asset.status === 'BORROWED' ? '↩  Return Asset — End Borrowing' : '↗  Borrow Asset — Set Return Date'}
-                      </button>
-                    </div>
-            </div>
-
-                  {/* Print Report — full-width */}
+                  {/* Borrow / Return — PRIMARY CTA, always visible */}
                   <button
-                    onClick={printAssetReport}
-                    disabled={printingReport}
-                    className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl border border-white/8 bg-gradient-to-r from-slate-700/30 to-slate-600/20 hover:from-slate-700/50 hover:to-slate-600/35 active:scale-[0.98] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed mb-1"
-                    style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-white/8 flex items-center justify-center flex-shrink-0">
-                      {printingReport
-                        ? <Loader2 className="h-5 w-5 text-white/60 animate-spin" />
-                        : <Printer className="h-5 w-5 text-white/60" />}
-                      </div>
-                    <div className="text-left">
-                      <p className="text-white/80 text-[13px] font-bold leading-tight">
-                        {printingReport ? 'Generating Report…' : 'Print Asset Report'}
+                    onClick={() => setShowBorrowDialog(true)}
+                    className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] ${
+                      asset.status === 'BORROWED'
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 border-emerald-400/50 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40'
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-500/50 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40'
+                    }`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${asset.status === 'BORROWED' ? 'bg-white/20' : 'bg-white/20'}`}>
+                      <Clock className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-white font-black text-[14px] leading-tight">
+                        {asset.status === 'BORROWED' ? 'Return Asset' : 'Borrow Asset'}
                       </p>
-                      <p className="text-white/30 text-[11px] mt-0.5">Full history, tickets & details</p>
-                      </div>
-                    {!printingReport && <FileText className="h-4 w-4 text-white/20 ml-auto" />}
+                      <p className="text-white/70 text-[11px] mt-0.5">
+                        {asset.status === 'BORROWED' ? 'End borrowing period · mark as returned' : 'Set borrower & return deadline'}
+                      </p>
+                    </div>
+                    <div className="text-white/60 text-lg">{asset.status === 'BORROWED' ? '↩' : '↗'}</div>
                   </button>
 
-                  <button onClick={scanAgain}
-                    className="w-full flex items-center justify-center gap-2 text-white/25 hover:text-white/55 text-[13px] py-2.5 transition-colors">
-                    <RotateCcw className="h-3.5 w-3.5" /> Scan another asset
+                  {/* Action grid */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* View Details */}
+                    <button onClick={() => setView('p-details')}
+                      className="group flex items-center gap-3 px-3.5 py-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/60 hover:bg-sky-100 dark:hover:bg-sky-900/40 active:scale-[0.97] transition-all">
+                      <div className="w-9 h-9 rounded-xl bg-sky-500/15 dark:bg-sky-500/20 flex items-center justify-center flex-shrink-0">
+                        <Eye className="h-4.5 w-4.5 text-sky-600 dark:text-sky-400 h-[18px] w-[18px]" />
+                      </div>
+                      <div className="text-left min-w-0">
+                        <p className="text-slate-900 dark:text-white text-[13px] font-bold truncate">View Details</p>
+                        <p className="text-slate-500 dark:text-slate-400 text-[10px]">Full info</p>
+                      </div>
+                    </button>
+
+                    {/* Assign To */}
+                    <button onClick={() => setShowAssignDialog(true)}
+                      className="group flex items-center gap-3 px-3.5 py-3.5 rounded-2xl bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/60 hover:bg-teal-100 dark:hover:bg-teal-900/40 active:scale-[0.97] transition-all">
+                      <div className="w-9 h-9 rounded-xl bg-teal-500/15 dark:bg-teal-500/20 flex items-center justify-center flex-shrink-0">
+                        <UserCheck className="h-[18px] w-[18px] text-teal-600 dark:text-teal-400" />
+                      </div>
+                      <div className="text-left min-w-0">
+                        <p className="text-slate-900 dark:text-white text-[13px] font-bold truncate">Assign</p>
+                        <p className="text-slate-500 dark:text-slate-400 text-[10px] truncate">{asset.assignedToName ? `→ ${asset.assignedToName.split(' ')[0]}` : 'To user'}</p>
+                      </div>
+                    </button>
+
+                    {/* Transfer */}
+                    <button onClick={() => { transferForm.reset({ floorNumber: asset.floorNumber || '', roomNumber: asset.roomNumber || '' }); setView('p-transfer'); }}
+                      className="group flex items-center gap-3 px-3.5 py-3.5 rounded-2xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/60 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-[0.97] transition-all">
+                      <div className="w-9 h-9 rounded-xl bg-violet-500/15 dark:bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                        <ArrowRightLeft className="h-[18px] w-[18px] text-violet-600 dark:text-violet-400" />
+                      </div>
+                      <div className="text-left min-w-0">
+                        <p className="text-slate-900 dark:text-white text-[13px] font-bold">Transfer</p>
+                        <p className="text-slate-500 dark:text-slate-400 text-[10px]">Move location</p>
+                      </div>
+                    </button>
+
+                    {/* Change Status */}
+                    <button onClick={() => { setPickedStatus(asset.status); setStatusComment(''); setView('p-status'); }}
+                      className="group flex items-center gap-3 px-3.5 py-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/40 active:scale-[0.97] transition-all">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/15 dark:bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                        <Activity className="h-[18px] w-[18px] text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <div className="text-left min-w-0">
+                        <p className="text-slate-900 dark:text-white text-[13px] font-bold">Status</p>
+                        <p className="text-slate-500 dark:text-slate-400 text-[10px]">Update condition</p>
+                      </div>
+                    </button>
+
+                    {/* Dispose — full width, subtle */}
+                    <button onClick={() => setView('p-dispose')}
+                      className="col-span-2 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 hover:bg-red-100 dark:hover:bg-red-900/30 active:scale-[0.98] transition-all">
+                      <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                      <span className="text-red-600 dark:text-red-400 text-[13px] font-bold">Dispose Asset</span>
+                      <span className="text-red-400/60 text-[11px] ml-1">— Retire permanently</span>
+                    </button>
+                  </div>
+
+                  {/* Print Report */}
+                  <button onClick={printAssetReport} disabled={printingReport}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-[0.98] transition-all disabled:opacity-50">
+                    <div className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                      {printingReport ? <Loader2 className="h-4 w-4 text-slate-500 dark:text-slate-400 animate-spin" /> : <Printer className="h-4 w-4 text-slate-500 dark:text-slate-400" />}
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="text-slate-700 dark:text-slate-200 text-[13px] font-bold">{printingReport ? 'Generating…' : 'Print Asset Report'}</p>
+                      <p className="text-slate-400 dark:text-slate-500 text-[10px]">Full history, tickets & details</p>
+                    </div>
+                    <FileText className="h-4 w-4 text-slate-300 dark:text-slate-600" />
                   </button>
-                      </div>
-                      </div>
+
+                  {/* Scan next */}
+                  <button onClick={() => { setAsset(null); setNotFound(null); setView('camera'); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:scale-[0.98] transition-all">
+                    <Scan className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                    <span className="text-slate-500 dark:text-slate-400 text-[13px] font-medium">Scan Another Asset</span>
+                  </button>
+                </div>
+              </div>
             )}
+            </div>
 
             {/* ══ NOT FOUND ══ */}
             {view === 'notFound' && (
@@ -1317,7 +1364,6 @@ export default function BarcodeScanner({ onScan, open: extOpen, onOpenChange }: 
                 </div>
           </div>
             )}
-          </div>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
