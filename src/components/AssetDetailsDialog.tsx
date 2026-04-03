@@ -158,6 +158,33 @@ const HISTORY_CONFIG: Record<string, { color: string; bg: string; border: string
   BORROW_SIGNED:      { color: "text-blue-700",   bg: "bg-blue-50 dark:bg-blue-950/30",        border: "border-blue-200 dark:border-blue-800",       icon: FileSignature },
 };
 
+/** Fetches a document by ID and triggers a PNG download. */
+function DownloadSignedDoc({ documentId, assetId, label, colorClass }: { documentId: string; assetId: string; label: string; colorClass?: string }) {
+  const [fetching, setFetching] = useState(false);
+  const handleDownload = async () => {
+    setFetching(true);
+    try {
+      const res = await fetch(`/api/assets/documents/${documentId}`);
+      if (!res.ok) throw new Error('Failed to fetch document');
+      const data = await res.json();
+      const fileUrl = data.document?.fileUrl || data.fileUrl;
+      if (!fileUrl) throw new Error('No file URL');
+      const a = document.createElement('a');
+      a.href = fileUrl;
+      a.download = `Signed-Form-${assetId}.png`;
+      a.click();
+    } catch (e) {
+      console.error('[DownloadSignedDoc]', e);
+    } finally { setFetching(false); }
+  };
+  return (
+    <button onClick={handleDownload} disabled={fetching}
+      className={`inline-flex items-center gap-1.5 text-xs font-semibold underline underline-offset-2 disabled:opacity-50 ${colorClass || 'text-blue-600 hover:text-blue-700'}`}>
+      <FileSignature className="h-3.5 w-3.5" />{fetching ? 'Fetching…' : label}
+    </button>
+  );
+}
+
 function InfoRow({ icon: Icon, label, value, mono = false }: { icon: any; label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0">
@@ -936,15 +963,13 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                         </div>
                                       </div>
                                     )}
-                                    {d.pdfDataUrl && (
-                                      <a
-                                        href={d.pdfDataUrl}
-                                        download={`assignment-signed-form-${asset?.assetId || 'asset'}.png`}
-                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 underline underline-offset-2"
-                                      >
-                                        <FileSignature className="h-3.5 w-3.5" />
-                                        Download Signed Form
-                                      </a>
+                                    {d.documentId && (
+                                      <DownloadSignedDoc
+                                        documentId={d.documentId}
+                                        assetId={asset?.assetId || 'asset'}
+                                        label="Download Signed Form"
+                                        colorClass="text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+                                      />
                                     )}
                                   </div>
                                 );
@@ -974,11 +999,13 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                         </div>
                                       </div>
                                     )}
-                                    {d.pdfDataUrl && (
-                                      <a href={d.pdfDataUrl} download={`borrow-agreement-${asset?.assetId || 'asset'}.png`}
-                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2">
-                                        <FileSignature className="h-3.5 w-3.5" />Download Borrow Agreement
-                                      </a>
+                                    {d.documentId && (
+                                      <DownloadSignedDoc
+                                        documentId={d.documentId}
+                                        assetId={asset?.assetId || 'asset'}
+                                        label="Download Borrow Agreement"
+                                        colorClass="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                      />
                                     )}
                                   </div>
                                 );

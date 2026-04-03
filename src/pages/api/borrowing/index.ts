@@ -5,6 +5,10 @@ import prisma from '@/lib/prisma';
 import { getUserRoleData } from '@/util/roleCheck';
 import { sendEmail } from '@/lib/email/sendEmail';
 
+export const config = {
+  api: { bodyParser: { sizeLimit: '10mb' } },
+};
+
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || '';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -63,6 +67,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Log BORROW_SIGNED history (with signature) if signature provided
     if (signatureDataUrl) {
+      let docId: string | null = null;
+      // Store full PDF as AssetDocument
+      if (pdfDataUrl) {
+        const doc = await prisma.assetDocument.create({
+          data: {
+            assetId,
+            fileName: `Borrow-Agreement-${asset.assetId || assetId}-${Date.now()}.png`,
+            fileUrl: pdfDataUrl,
+            fileType: 'image/png',
+            fileSize: Math.round((pdfDataUrl.length * 3) / 4),
+            uploadedById: user.id,
+          },
+        }).catch(() => null);
+        docId = doc?.id || null;
+      }
       await prisma.assetHistory.create({
         data: {
           assetId,
@@ -72,8 +91,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             borrowedById,
             custodianName: custodianName || null,
             expectedReturnAt,
-            signatureDataUrl,
-            pdfDataUrl: pdfDataUrl || null,
+            signatureDataUrl,   // small — canvas only
+            documentId: docId,  // reference to AssetDocument
             signedAt: signedAt || new Date().toISOString(),
             signedBy: user.email,
           },

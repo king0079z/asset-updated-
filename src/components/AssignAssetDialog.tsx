@@ -233,6 +233,13 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
     const assignee = tab === 'system'
       ? { name: selectedUser!.name || selectedUser!.email, email: selectedUser!.email, id: selectedUser!.id }
       : { name: manualName, email: manualEmail, id: null };
+    const linkedTicketId = createdTicket?.id || selectedTicketId || null;
+    if (!linkedTicketId) {
+      toast({ variant: 'destructive', title: 'Ticket required', description: 'Please select an existing ticket or create a new one before signing.' });
+      setSaving(false);
+      return;
+    }
+
     const pdfDataUrl = await generateSignedFormPng(signatureDataUrl, asset, assignee, activeTicket || null);
 
     setSaving(true);
@@ -244,7 +251,7 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
           assignedToName: assignee.name,
           assignedToEmail: assignee.email,
           assignedToId: assignee.id,
-          ticketId: createdTicket?.id || selectedTicketId || null,
+          ticketId: linkedTicketId,
           signatureDataUrl,
           pdfDataUrl,
           signedAt: new Date().toISOString(),
@@ -436,9 +443,18 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
               </div>
             </div>
 
-            {/* Ticket section */}
+            {/* Ticket section — MANDATORY */}
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Link to Ticket (optional)</p>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase">Link to Ticket</p>
+                <span className="text-[10px] bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 px-1.5 py-0.5 rounded font-bold uppercase">Required</span>
+              </div>
+              {!activeTicket && (
+                <div className="flex items-center gap-1.5 mb-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-300">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  A ticket must be selected or created before you can sign. If the user has no tickets, create one below.
+                </div>
+              )}
               {!showNewTicket && !createdTicket && (
                 <div className="space-y-2">
                   {userTickets.length > 0 && (
@@ -505,10 +521,11 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
 
             <div className="flex gap-3 border-t border-slate-200 dark:border-slate-700 pt-4">
               <button onClick={() => setStep('select')} className="flex-1 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">← Back</button>
-              <button onClick={handleSignAndAssign} disabled={saving || !hasSig}
-                className="flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-bold transition-colors disabled:opacity-50">
+              <button onClick={handleSignAndAssign} disabled={saving || !hasSig || (!createdTicket && !selectedTicketId)}
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-bold transition-colors disabled:opacity-50"
+                title={!createdTicket && !selectedTicketId ? 'Select or create a ticket first' : !hasSig ? 'Draw your signature first' : ''}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {saving ? 'Processing…' : 'Sign & Assign Asset'}
+                {saving ? 'Processing…' : (!createdTicket && !selectedTicketId) ? 'Select a Ticket First' : !hasSig ? 'Draw Signature First' : 'Sign & Assign Asset'}
               </button>
             </div>
           </div>
