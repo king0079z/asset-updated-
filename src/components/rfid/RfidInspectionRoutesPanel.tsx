@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Route, Plus, CheckCircle2, Clock, User, Calendar, Play, RefreshCw,
-  TrendingUp, BarChart2, AlertTriangle, Search, ClipboardCheck, Sparkles,
+  TrendingUp, BarChart2, AlertTriangle, Search, ClipboardCheck, Sparkles, Database,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +55,35 @@ export function RfidInspectionRoutesPanel() {
     fetchRoutes();
     fetchUsersAndAssets();
   }, [fetchRoutes, fetchUsersAndAssets]);
+
+  useEffect(() => {
+    const onSeeded = () => fetchRoutes();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('rfid-site-ops-seeded', onSeeded);
+      return () => window.removeEventListener('rfid-site-ops-seeded', onSeeded);
+    }
+  }, [fetchRoutes]);
+
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const loadDemoData = async () => {
+    setSeedingDemo(true);
+    try {
+      const res = await fetch('/api/rfid/seed-site-operations?replace=true', { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || j.details || 'Request failed');
+      if (j.skipped) {
+        toast({ title: 'Demo already present', description: j.message || '' });
+      } else {
+        toast({ title: 'Demo passageways & inspections loaded', description: j.message || '7 sites + 3 routes.' });
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('rfid-site-ops-seeded'));
+      }
+      fetchRoutes();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Could not load demo', description: e?.message || 'Try again.' });
+    } finally {
+      setSeedingDemo(false);
+    }
+  };
 
   const filteredAssets = useMemo(() => {
     const q = assetSearch.toLowerCase();
@@ -170,6 +199,16 @@ export function RfidInspectionRoutesPanel() {
             <Button size="sm" className="bg-teal-500 hover:bg-teal-400 text-white shadow-lg" onClick={() => setShowNew((p) => !p)}>
               <Plus className="h-4 w-4 mr-2" />
               New route
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-white/30 bg-white/5 text-white hover:bg-white/15"
+              disabled={seedingDemo}
+              onClick={loadDemoData}
+            >
+              <Database className={`h-4 w-4 mr-2 ${seedingDemo ? 'animate-pulse' : ''}`} />
+              {seedingDemo ? 'Loading…' : 'Load demo data'}
             </Button>
           </div>
         </div>

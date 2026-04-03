@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   DoorOpen, Plus, Wifi, Shield, AlertTriangle, CheckCircle2, MapPin, RefreshCw,
-  Cpu, Radio, Lock, ChevronDown, ChevronUp, Sparkles, Building2, ArrowRight,
+  Cpu, Radio, Lock, ChevronDown, ChevronUp, Sparkles, Building2, ArrowRight, Database,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,6 +65,38 @@ export function RfidPassagewaysPanel({ zones = [] }: { zones?: ZoneLite[] }) {
     fetchPassageways();
     fetchTamper();
   }, [fetchPassageways, fetchTamper]);
+
+  useEffect(() => {
+    const onSeeded = () => {
+      fetchPassageways();
+      fetchTamper();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('rfid-site-ops-seeded', onSeeded);
+      return () => window.removeEventListener('rfid-site-ops-seeded', onSeeded);
+    }
+  }, [fetchPassageways, fetchTamper]);
+
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const loadDemoData = async () => {
+    setSeedingDemo(true);
+    try {
+      const res = await fetch('/api/rfid/seed-site-operations?replace=true', { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || j.details || 'Request failed');
+      if (j.skipped) {
+        toast({ title: 'Demo already present', description: j.message || 'Use refresh to see data.' });
+      } else {
+        toast({ title: 'Demo passageways & inspections loaded', description: j.message || '7 sites + 3 routes.' });
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('rfid-site-ops-seeded'));
+      }
+      fetchPassageways();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Could not load demo', description: e?.message || 'Try again.' });
+    } finally {
+      setSeedingDemo(false);
+    }
+  };
 
   const create = async () => {
     const res = await fetch('/api/rfid/passageways', {
@@ -161,6 +193,16 @@ export function RfidPassagewaysPanel({ zones = [] }: { zones?: ZoneLite[] }) {
             <Button size="sm" className="bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-900/40" onClick={() => setShowNew((p) => !p)}>
               <Plus className="h-4 w-4 mr-2" />
               Add passageway
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-white/30 bg-white/5 text-white hover:bg-white/15"
+              disabled={seedingDemo}
+              onClick={loadDemoData}
+            >
+              <Database className={`h-4 w-4 mr-2 ${seedingDemo ? 'animate-pulse' : ''}`} />
+              {seedingDemo ? 'Loading…' : 'Load demo data'}
             </Button>
           </div>
         </div>

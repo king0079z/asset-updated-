@@ -12,6 +12,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { createClient } from '@/util/supabase/api';
 import { getUserRoleData } from '@/util/roleCheck';
+import {
+  deleteAllSiteOperationsForOrg,
+  seedSiteOperationsDemoContent,
+} from '@/lib/rfid/seed-site-operations-demo';
 
 // ── ID generation (matches create.ts format) ──────────────────────────────────
 // Produces IDs like EL672401001, EQ672401002, ME672401003 — identical to how
@@ -175,6 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       await prisma.rFIDTag.updateMany({ where: { organizationId: orgId ?? undefined }, data: { assetId: null } });
       await prisma.rFIDTag.deleteMany({ where: { organizationId: orgId ?? undefined } });
+      await deleteAllSiteOperationsForOrg(prisma, orgId);
       await prisma.rFIDZone.deleteMany({ where: { organizationId: orgId ?? undefined } });
       await prisma.floorPlan.deleteMany({ where: { organizationId: orgId ?? undefined } });
 
@@ -224,6 +229,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ── 3. Assets + RFID tags ────────────────────────────────────────────────
     const scanBatch: any[] = [];
+    const seededAssetIds: string[] = [];
 
     for (const a of ASSETS_DEF) {
       // Generate IDs that match the application's standard format
@@ -247,6 +253,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           organizationId: orgId,
         },
       });
+      seededAssetIds.push(asset.id);
 
       const zoneId   = zoneMap[a.zoneKey] ?? null;
       const apMac    = zoneApMap[a.zoneKey] ?? null;
@@ -378,7 +385,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // ── 7. Summary ───────────────────────────────────────────────────────────
+    // ── 7. Passageways & inspection routes (demo) ─────────────────────────────
+    const siteOps = await seedSiteOperationsDemoContent(prisma, {
+      organizationId: orgId,
+      userId,
+      zoneMap,
+      assetIds: seededAssetIds,
+    });
+
+    // ── 8. Summary ───────────────────────────────────────────────────────────
     const summary = {
       success: true,
       created: {
@@ -389,6 +404,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         scans:       scanBatch.length,
         alertRules:  ruleDefs.length,
         alerts:      missingTags.length + lowBatTags.length + 2, // +resolved +restricted
+        passageways: siteOps.passageways,
+        inspectionRoutes: siteOps.routes,
+        inspectionCompletions: siteOps.completions,
       },
       company: 'Apex Medical Center (AMC)',
       building: 'AMC Main Building',
