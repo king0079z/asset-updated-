@@ -207,9 +207,12 @@ export function BorrowReturnDialog({ open, onOpenChange, asset, onSuccess }: Bor
     const days = customDays || selectedQuick || 7;
     const expectedReturnAt = new Date(Date.now() + days * 86_400_000).toISOString();
     const signatureDataUrl = canvasRef.current!.toDataURL('image/png');
-    const pdfDataUrl = await generateBorrowFormPng(signatureDataUrl, asset, { name: selectedUser.name || selectedUser.email, email: selectedUser.email }, days, notes);
     setLoading(true);
     try {
+      // Step 1: Generate PDF client-side (stays in browser)
+      const pdfDataUrl = await generateBorrowFormPng(signatureDataUrl, asset, { name: selectedUser.name || selectedUser.email, email: selectedUser.email }, days, notes);
+
+      // Step 2: Submit borrow — send only small fields, NO pdf blob
       const res = await fetch('/api/borrowing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -220,14 +223,36 @@ export function BorrowReturnDialog({ open, onOpenChange, asset, onSuccess }: Bor
           notes,
           borrowLocation: 'Field',
           custodianName: selectedUser.email,
-          signatureDataUrl,
-          pdfDataUrl,
+          signatureDataUrl,              // small canvas PNG
           signedAt: new Date().toISOString(),
+          // pdfDataUrl NOT sent — uploaded separately below
         }),
         credentials: 'include',
       });
-      if (!res.ok) throw new Error(await res.text());
-      toast({ title: '✓ Asset borrowed & signed', description: `${asset.name} borrowed to ${selectedUser.email} for ${days} day${days !== 1 ? 's' : ''}. Signed agreement recorded.` });
+      if (!res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        const errMsg = ct.includes('json') ? (await res.json().catch(() => ({}))).error || `Error ${res.status}` : `Server error (${res.status})`;
+        throw new Error(errMsg);
+      }
+
+      // Step 3: Client-side PDF download
+      try {
+        const a = document.createElement('a');
+        a.href = pdfDataUrl;
+        a.download = `Borrow-Agreement-${asset.name?.replace(/\s+/g, '-') || 'Asset'}.jpg`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      } catch { /* non-critical */ }
+
+      // Step 4: Upload PDF to asset documents (background)
+      try {
+        const blob = await (await fetch(pdfDataUrl)).blob();
+        const fd = new FormData();
+        fd.append('document', blob, `Borrow-Agreement-${asset.assetId || asset.id}.jpg`);
+        fd.append('assetId', asset.id);
+        await fetch('/api/assets/documents/upload', { method: 'POST', body: fd, credentials: 'include' });
+      } catch (e) { console.warn('[BorrowReturnDialog] PDF upload failed (non-critical):', e); }
+
+      toast({ title: '✓ Asset borrowed & signed', description: `${asset.name} borrowed to ${selectedUser.email} for ${days} day${days !== 1 ? 's' : ''}. Agreement downloaded & stored.` });
       onOpenChange(false);
       onSuccess?.();
     } catch (e: any) {

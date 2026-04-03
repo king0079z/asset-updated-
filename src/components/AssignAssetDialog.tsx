@@ -274,25 +274,64 @@ export function AssignAssetDialog({ asset, open, onOpenChange, onAssigned }: Ass
       return;
     }
 
-    const pdfDataUrl = await generateSignedFormPng(signatureDataUrl, asset, assignee, activeTicket || null);
-
     setSaving(true);
     try {
+      // ── Step 1: Generate signed form (client-side, stays in browser) ──────
+      const pdfDataUrl = await generateSignedFormPng(signatureDataUrl, asset, assignee, activeTicket || null);
+
+      // ── Step 2: Core assignment API — send only small fields, NO blobs ────
       const res = await fetch(`/api/assets/${asset.id}/assign-with-signature`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          assignedToName: assignee.name,
+          assignedToName:  assignee.name,
           assignedToEmail: assignee.email,
-          assignedToId: assignee.id,
-          ticketId: linkedTicketId,
-          signatureDataUrl,
-          pdfDataUrl,
-          signedAt: new Date().toISOString(),
+          assignedToId:    assignee.id,
+          ticketId:        linkedTicketId,
+          signatureDataUrl,                  // small canvas PNG only
+          signedAt:        new Date().toISOString(),
+          // pdfDataUrl intentionally NOT sent here — uploaded separately below
         }),
+        credentials: 'include',
       });
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to assign');
-      toast({ title: '✓ Asset assigned & signed', description: `${asset.name} assigned to ${assignee.name}. Confirmation email sent.` });
+
+      if (!res.ok) {
+        // Safe error parsing — server might return HTML on fatal crash
+        let errMsg = `Server error (${res.status})`;
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const errData = await res.json().catch(() => ({}));
+          errMsg = errData.error || errData.detail || errMsg;
+        }
+        throw new Error(errMsg);
+      }
+
+      // ── Step 3: Offer immediate client-side download of the signed form ───
+      try {
+        const a = document.createElement('a');
+        a.href = pdfDataUrl;
+        a.download = `Assignment-Agreement-${asset.name?.replace(/\s+/g, '-') || 'Asset'}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch { /* non-critical */ }
+
+      // ── Step 4: Upload PDF to asset documents (background, non-critical) ──
+      try {
+        const blob = await (await fetch(pdfDataUrl)).blob();
+        const fd = new FormData();
+        fd.append('document', blob, `Assignment-Agreement-${asset.assetId || asset.id}.jpg`);
+        fd.append('assetId', asset.id);
+        await fetch('/api/assets/documents/upload', {
+          method: 'POST',
+          body: fd,
+          credentials: 'include',
+        });
+      } catch (uploadErr) {
+        console.warn('[AssignAssetDialog] PDF upload to documents failed (non-critical):', uploadErr);
+      }
+
+      toast({ title: '✓ Asset assigned & signed', description: `${asset.name} has been assigned to ${assignee.name}. Signed agreement downloaded and stored.` });
       onAssigned();
       onOpenChange(false);
     } catch (err: any) {

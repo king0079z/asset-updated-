@@ -39,7 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'POST') {
     const { assetId, borrowedById, expectedReturnAt, borrowLocation, custodianName, notes,
-            signatureDataUrl, pdfDataUrl, signedAt } = req.body;
+            signatureDataUrl, signedAt } = req.body;
+    const pdfDataUrl = null; // PDF is now uploaded separately via /api/assets/documents/upload
     if (!assetId || !borrowedById || !expectedReturnAt) {
       return res.status(400).json({ error: 'assetId, borrowedById, and expectedReturnAt are required' });
     }
