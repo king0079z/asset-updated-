@@ -109,7 +109,8 @@ import { PrintAssetReportButton } from "@/components/PrintAssetReportButton";
 import AssetDuplicateButton from "@/components/AssetDuplicateButton";
 import HandheldAssetScanner from "@/components/HandheldAssetScanner";
 import { BorrowReturnDialog } from "@/components/BorrowReturnDialog";
-import { ArrowLeftRight, Wrench } from "lucide-react";
+import { AssetAssignmentWorkflowDialog } from "@/components/AssetAssignmentWorkflowDialog";
+import { ArrowLeftRight, Wrench, FileSignature } from "lucide-react";
 
 const assetFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -191,6 +192,11 @@ export default function AssetsPage() {
   const [showBorrowDialog, setShowBorrowDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [handheldMode, setHandheldMode] = useState(false);
+
+  // ── Assignment workflow state ──────────────────────────────────────────────
+  const [showWorkflowDialog, setShowWorkflowDialog] = useState(false);
+  const [pendingAssetData, setPendingAssetData] = useState<any>(null);
+  const [isSubmittingWorkflow, setIsSubmittingWorkflow] = useState(false);
 
   const { toast } = useToast();
   const { latitude, longitude } = useGeolocation();
@@ -487,62 +493,92 @@ export default function AssetsPage() {
         longitude: longitude || null,
         isSparePart,
         departmentId: values.departmentId || null,
-        // Spare parts: no person assignment, use SPARE/PARTS as placeholder location
         assignedToId: isSparePart ? null : (assignToUserId || null),
         assignedToEmail: isSparePart ? null : (assignToUserEmail || null),
         assignedToName: isSparePart ? null : (assignToUserName || null),
         floorNumber: values.floorNumber || (isSparePart ? 'SPARE' : ''),
         roomNumber: values.roomNumber || (isSparePart ? 'PARTS' : ''),
-        linkedTicketId: linkedTicketId || null,
       };
 
-      // Create the asset
-      const response = await fetch("/api/assets/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        },
-        body: JSON.stringify(assetData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Create asset API error response:', errorData);
-        throw new Error(
-          errorData?.message || 
-          errorData?.error || 
-          `Failed to create asset: ${response.status} ${response.statusText}`
-        );
+      // If assigning to a user (non-spare), trigger the signature workflow
+      if (!isSparePart && assignToUserId) {
+        setPendingAssetData(assetData);
+        setIsSubmitting(false);
+        setShowWorkflowDialog(true);
+        return;
       }
 
+      // No user assignment → create asset directly
+      await createAssetDirectly(assetData);
+    } catch (error) {
+      console.error('Asset creation error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create asset. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Direct asset creation (no workflow)
+  const createAssetDirectly = async (assetData: any) => {
+    const response = await fetch("/api/assets/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", 'Cache-Control': 'no-cache' },
+      body: JSON.stringify(assetData),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData?.message || errorData?.error || `Failed to create asset: ${response.status}`);
+    }
+    const newAsset = await response.json();
+    setSelectedAsset(newAsset);
+    setShowBarcodeDialog(true);
+    setIsOpen(false);
+    form.reset();
+    setPreviewImage(null);
+    resetAssignFields();
+    loadAssets(true);
+    toast({ title: "Success", description: "Asset has been created successfully." });
+  };
+
+  // Called when workflow dialog completes (ticket + signature collected)
+  const handleWorkflowComplete = async (result: { ticketId: string | null; signatureDataUrl: string; pdfDataUrl: string }) => {
+    setShowWorkflowDialog(false);
+    setIsSubmittingWorkflow(true);
+    try {
+      const payload = {
+        ...pendingAssetData,
+        ticketId: result.ticketId || null,
+        signatureDataUrl: result.signatureDataUrl,
+        pdfDataUrl: result.pdfDataUrl,
+        signedAt: new Date().toISOString(),
+      };
+      const response = await fetch("/api/assets/create-with-workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", 'Cache-Control': 'no-cache' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.message || `Failed to create asset: ${response.status}`);
+      }
       const newAsset = await response.json();
-      
-      // Reset form and update UI
       setSelectedAsset(newAsset);
       setShowBarcodeDialog(true);
       setIsOpen(false);
       form.reset();
       setPreviewImage(null);
       resetAssignFields();
-      loadAssets(true); // bypass cache so new asset appears immediately
-
-      toast({
-        title: "Success",
-        description: "Asset has been created successfully.",
-      });
-    } catch (error) {
-      console.error('Asset creation error:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error 
-          ? error.message 
-          : "Failed to create asset. Please try again.",
-        variant: "destructive",
-      });
+      setPendingAssetData(null);
+      loadAssets(true);
+      toast({ title: "Asset assigned & signed ✓", description: "The asset has been created, signed, and assigned successfully. A confirmation email has been sent." });
+    } catch (error: any) {
+      toast({ title: "Error", description: error?.message || "Failed to complete asset assignment.", variant: "destructive" });
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingWorkflow(false);
     }
   };
 
@@ -1118,48 +1154,28 @@ export default function AssetsPage() {
                         </SelectContent>
                       </Select>
 
-                      {/* Ticket selector — only shown when a user is selected */}
+                      {/* Workflow notice — shown when a user is selected */}
                       {assignToUserId && (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                            <Link2 className="h-3.5 w-3.5 text-indigo-500" />
-                            Link to one of their tickets
-                            <span className="font-normal text-slate-400">(optional — triggers notification)</span>
+                        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gradient-to-r from-indigo-50 to-sky-50 dark:from-indigo-950/30 dark:to-sky-950/20 border border-indigo-200 dark:border-indigo-700">
+                          <FileSignature className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-semibold text-indigo-800 dark:text-indigo-200">Signature Workflow Required</p>
+                            <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-0.5">Clicking "Continue" will open the assignment workflow — you'll link a ticket and collect a digital signature before the asset is created.</p>
                           </div>
-                          <Select value={linkedTicketId || "__none__"} onValueChange={(v) => setLinkedTicketId(v === "__none__" ? "" : v)} disabled={loadingUserTickets}>
-                            <SelectTrigger className="bg-white">
-                              {loadingUserTickets
-                                ? <span className="flex items-center gap-2 text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading tickets…</span>
-                                : <SelectValue placeholder={userTickets.length === 0 ? "No open tickets found for this user" : "Select a ticket to link (optional)"} />
-                              }
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">— No ticket link —</SelectItem>
-                              {userTickets.map((t: any) => (
-                                <SelectItem key={t.id} value={t.id}>
-                                  <span className="flex items-center gap-2">
-                                    <Ticket className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <span className="font-mono text-xs text-slate-500">{t.displayId || t.id.slice(0, 8)}</span>
-                                    <span className="truncate max-w-[200px]">{t.title}</span>
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {linkedTicketId && (
-                            <p className="text-[11px] text-indigo-600 flex items-center gap-1">
-                              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse inline-block" />
-                              A notification will be sent to the user when the asset is created.
-                            </p>
-                          )}
                         </div>
                       )}
                     </div>
                     )} {/* end Spare Part conditional */}
 
-                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                    <Button
+                      type="submit"
+                      className={`w-full ${assignToUserId && form.watch('type') !== 'SPARE_PART' ? 'bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700' : ''}`}
+                      disabled={isSubmitting}
+                    >
                       {isSubmitting ? (
-                        <><svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>{t('registering')}</>
+                        <><svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Preparing…</>
+                      ) : assignToUserId && form.watch('type') !== 'SPARE_PART' ? (
+                        <><FileSignature className="w-4 h-4 mr-2" />Continue to Assignment Workflow</>
                       ) : t('register_asset')}
                     </Button>
                   </form>
@@ -1728,6 +1744,36 @@ export default function AssetsPage() {
         asset={borrowAsset}
         onSuccess={() => loadAssets(true)}
       />
+
+      {/* Assignment Workflow Dialog */}
+      {pendingAssetData && (
+        <AssetAssignmentWorkflowDialog
+          open={showWorkflowDialog}
+          onOpenChange={(v) => { setShowWorkflowDialog(v); if (!v) setPendingAssetData(null); }}
+          assetFormData={pendingAssetData}
+          assignee={{ id: assignToUserId, email: assignToUserEmail, name: assignToUserName }}
+          userTickets={userTickets}
+          onComplete={handleWorkflowComplete}
+        />
+      )}
+
+      {/* Workflow processing overlay */}
+      {isSubmittingWorkflow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-4 max-w-sm mx-4">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center animate-pulse">
+              <FileSignature className="w-8 h-8 text-white" />
+            </div>
+            <div className="text-center">
+              <p className="font-bold text-gray-900 dark:text-white text-lg">Finalizing Assignment</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Creating asset, linking ticket, and sending confirmation email…</p>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-sky-500 rounded-full animate-pulse" style={{ width: '70%' }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <AssetDetailsDialog
         asset={selectedAsset}

@@ -45,6 +45,8 @@ import {
   Wrench,
   ArrowLeftRight,
   RotateCcw,
+  FileSignature,
+  PenLine,
 } from "lucide-react";
 import { BorrowReturnDialog } from "./BorrowReturnDialog";
 import { EditAssetDialog } from "./EditAssetDialog";
@@ -151,7 +153,8 @@ const HISTORY_CONFIG: Record<string, { color: string; bg: string; border: string
   AUDIT_COMMENT:  { color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950/30", border: "border-indigo-200 dark:border-indigo-800",icon: MessageSquare },
   ASSIGNED:       { color: "text-blue-700",   bg: "bg-blue-50 dark:bg-blue-950/30",     border: "border-blue-200 dark:border-blue-800",   icon: ArrowLeftRight },
   UNASSIGNED:     { color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/30", border: "border-orange-200 dark:border-orange-800",icon: RotateCcw },
-  STATUS_CHANGED: { color: "text-teal-600",   bg: "bg-teal-50 dark:bg-teal-950/30",     border: "border-teal-200 dark:border-teal-800",   icon: CheckCircle2 },
+  STATUS_CHANGED:     { color: "text-teal-600",   bg: "bg-teal-50 dark:bg-teal-950/30",       border: "border-teal-200 dark:border-teal-800",     icon: CheckCircle2 },
+  ASSIGNMENT_SIGNED:  { color: "text-violet-700", bg: "bg-violet-50 dark:bg-violet-950/30",   border: "border-violet-200 dark:border-violet-800",  icon: FileSignature },
 };
 
 function InfoRow({ icon: Icon, label, value, mono = false }: { icon: any; label: string; value: React.ReactNode; mono?: boolean }) {
@@ -901,6 +904,50 @@ export function AssetDetailsDialog({ asset, open, onOpenChange, onAssetUpdated }
                                   )}
                                 </div>
                               )}
+                              {record.action === "ASSIGNMENT_SIGNED" && record.details && (() => {
+                                const d = record.details as any;
+                                return (
+                                  <div className="space-y-2 mt-1">
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/40 border border-violet-200 dark:border-violet-700">
+                                        <PenLine className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                                        <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">Digitally Signed</span>
+                                      </div>
+                                      {d.signedByEmail && (
+                                        <span className="text-xs text-muted-foreground">by <span className="font-medium text-foreground">{d.signedByName || d.signedByEmail}</span></span>
+                                      )}
+                                      {d.signedAt && (
+                                        <span className="text-xs text-muted-foreground ml-auto">{new Date(d.signedAt).toLocaleString()}</span>
+                                      )}
+                                    </div>
+                                    {d.ticketId && (
+                                      <p className="text-xs text-muted-foreground">Linked ticket closed: <span className="font-mono text-violet-600">{d.ticketId.slice(0, 8)}…</span></p>
+                                    )}
+                                    {d.signatureDataUrl && (
+                                      <div className="mt-2">
+                                        <p className="text-[10px] uppercase font-semibold text-muted-foreground mb-1.5">Captured Signature</p>
+                                        <div className="rounded-xl border-2 border-violet-200 dark:border-violet-700 bg-white dark:bg-gray-900 p-2 inline-block">
+                                          <img
+                                            src={d.signatureDataUrl}
+                                            alt="Digital Signature"
+                                            className="max-h-20 max-w-[280px] object-contain"
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                    {d.pdfDataUrl && (
+                                      <a
+                                        href={d.pdfDataUrl}
+                                        download={`assignment-signed-form-${asset?.assetId || 'asset'}.png`}
+                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 underline underline-offset-2"
+                                      >
+                                        <FileSignature className="h-3.5 w-3.5" />
+                                        Download Signed Form
+                                      </a>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                               {record.action === "UPDATED" && record.details && (() => {
                                 /* Clearance-type UPDATED records have a `type` field starting with CLEARANCE_ */
                                 const d = record.details as any;
