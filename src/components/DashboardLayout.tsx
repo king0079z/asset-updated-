@@ -28,11 +28,8 @@ import {
   Smartphone,
   FileText,
   Database,
-  Clock,
-  GitBranch,
   Sliders,
   Mail,
-  TrendingUp,
   Upload,
   CheckSquare,
 } from "lucide-react";
@@ -279,11 +276,6 @@ function Sidebar({ className }: SidebarProps) {
         href: "/audit",
       },
       {
-        title: "SLA Compliance",
-        icon: TrendingUp,
-        href: "/settings/sla-compliance",
-      },
-      {
         title: "Approval Requests",
         icon: CheckSquare,
         href: "/settings/approval",
@@ -299,21 +291,6 @@ function Sidebar({ className }: SidebarProps) {
         title: t("compliance_audit"),
         icon: LineChart,
         href: "/settings/compliance",
-      },
-      {
-        title: "SLA & Escalation",
-        icon: Clock,
-        href: "/settings/sla",
-      },
-      {
-        title: "Ticket Workflows",
-        icon: GitBranch,
-        href: "/settings/workflow",
-      },
-      {
-        title: "Policies (Admin)",
-        icon: Shield,
-        href: "/policies",
       },
       {
         title: "Azure AD SSO",
