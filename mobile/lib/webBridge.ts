@@ -82,11 +82,20 @@ export function buildBridgeScript(sessionJson: string, supabaseUrl: string): str
     },
 
     /**
-     * Sign out — clears web session AND notifies native to sign out.
-     * The native app will then redirect to the login screen.
+     * Sign out — immediately blanks the page then notifies native.
+     * Blanking happens synchronously so the taskpane login form NEVER flashes
+     * before the native login screen appears.
      */
     signOut: function() {
-      // Clear web-side auth storage
+      // ── Step 1: Hide page instantly (before React can re-render login form) ──
+      try {
+        document.documentElement.style.cssText =
+          'visibility:hidden!important;opacity:0!important;pointer-events:none!important;';
+        document.body.style.cssText =
+          'visibility:hidden!important;opacity:0!important;';
+      } catch(e) {}
+
+      // ── Step 2: Clear all web-side auth storage ──
       try {
         sessionStorage.removeItem('outlook_addin_access_token');
         Object.keys(localStorage).forEach(function(k) {
@@ -95,7 +104,8 @@ export function buildBridgeScript(sessionJson: string, supabaseUrl: string): str
           }
         });
       } catch(e) {}
-      // Notify native
+
+      // ── Step 3: Tell native to navigate to login screen ──
       window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
         JSON.stringify({ type: 'signout' })
       );

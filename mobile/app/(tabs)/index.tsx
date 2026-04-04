@@ -247,6 +247,8 @@ export default function AppScreen() {
   const [scanCallback, setScanCallback] = useState<string | null>(null);
   const [pushToken,    setPushToken]    = useState('');
   const [unreadCount,  setUnreadCount]  = useState(0);
+  // When true: WebView is instantly unmounted to prevent taskpane login from rendering
+  const [webviewKilled, setWebviewKilled] = useState(false);
   const webKeyRef    = useRef(0);
   const [webKey,     setWebKey]         = useState(0);
   const prevUserIdRef = useRef<string | null>(null);
@@ -265,10 +267,12 @@ export default function AppScreen() {
       setSession(s);
 
       if (!s) {
-        // Signed out — AuthGuard in _layout.tsx handles the redirect
-        // (nothing extra needed here)
+        // Signed out → kill WebView instantly so taskpane login never shows
+        setWebviewKilled(true);
+        router.replace('/(auth)/login' as any);
       } else if (prevId !== nextId) {
-        // New session (login or user switch) → reload WebView with fresh token
+        // New session (login or user switch) → reset and reload WebView with fresh token
+        setWebviewKilled(false);
         setBridgeReady(false);
         setTimeout(() => {
           setBridgeReady(true);
@@ -371,10 +375,11 @@ export default function AppScreen() {
         break;
 
       case 'signout':
-        // ⚡ Navigate to native login IMMEDIATELY — before Supabase finishes
-        // This prevents the WebView's own login page from flashing
+        // ⚡ Step 1: Kill the WebView instantly (prevents taskpane login from rendering)
+        setWebviewKilled(true);
+        // ⚡ Step 2: Navigate to native login immediately
         router.replace('/(auth)/login' as any);
-        // Then clear the native session in background
+        // Step 3: Clear Supabase session in background (triggers onAuthStateChange too)
         supabase.auth.signOut().catch(() => {});
         break;
     }
@@ -478,7 +483,11 @@ export default function AppScreen() {
       )}
 
       {/* ── WebView / Error ───────────────────────────────────────────────── */}
-      {networkError ? (
+      {webviewKilled ? (
+        /* Blank holding view — shown while router navigates to native login.
+           Prevents taskpane login page from ever being visible. */
+        <View style={{ flex: 1, backgroundColor: '#1e1b4b' }} />
+      ) : networkError ? (
         <NetworkError onRetry={retry} />
       ) : (
         <WebView

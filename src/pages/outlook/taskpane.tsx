@@ -228,16 +228,34 @@ export default function OutlookTaskPane() {
   };
 
   const signOut = () => {
+    // When running inside the native mobile app:
+    // call AssetXAI.signOut() FIRST — it immediately hides the page and
+    // posts the signout message so the native login screen appears before
+    // React re-renders and shows this page's own login form.
+    const isInNativeApp =
+      typeof window !== 'undefined' &&
+      ((window as any).AssetXAI || (window as any).ReactNativeWebView);
+
+    if (isInNativeApp) {
+      if ((window as any).AssetXAI?.signOut) {
+        (window as any).AssetXAI.signOut();
+      } else {
+        // Immediately hide page to prevent login form flash
+        try {
+          document.documentElement.style.cssText =
+            'visibility:hidden!important;opacity:0!important;pointer-events:none!important;';
+        } catch (_) {}
+        (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'signout' }));
+      }
+      // Don't update React state — native app will unmount this WebView
+      return;
+    }
+
+    // Web-only (non-native) path: update local state normally
     sessionStorage.removeItem(STORAGE_KEY);
     setAuthenticated(false);
     setScreen('home');
     resetAll();
-    // Notify native app (if running inside the mobile WebView) to sign out too
-    if (typeof window !== 'undefined' && (window as any).AssetXAI?.signOut) {
-      (window as any).AssetXAI.signOut();
-    } else if (typeof window !== 'undefined' && (window as any).ReactNativeWebView) {
-      (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'signout' }));
-    }
   };
 
   const resetAll = () => {
