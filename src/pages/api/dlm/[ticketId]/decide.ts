@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
  * POST /api/dlm/[ticketId]/decide
+ * DLM approves or rejects a ticket.
  * Body: { action: "approve" | "reject", comment?: string }
  *
- * The authenticated user must be the DLM for this ticket.
- * - approve: dlmApprovalStatus → "DLM_APPROVED", ticket status stays OPEN (appears in main ticket page)
- * - reject:  dlmApprovalStatus → "DLM_REJECTED", ticket remains hidden from main ticket page
+ * On approve  → dlmApprovalStatus = "DLM_APPROVED", adds timeline entry, notifies requester.
+ * On reject   → dlmApprovalStatus = "DLM_REJECTED", adds timeline entry, notifies requester.
  */
 import { NextApiRequest, NextApiResponse } from "next";
 import { requireAuth } from "@/util/supabase/require-auth";
@@ -18,66 +18,104 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!auth) return;
   const { user } = auth;
 
-  const { ticketId } = req.query;
-  if (!ticketId || typeof ticketId !== "string") return res.status(400).json({ error: "Invalid ticket ID" });
+  const ticketId = req.query.ticketId as string;
+  const { action, comment } = req.body as { action: "approve" | "reject"; comment?: string };
 
-  const { action, comment } = req.body ?? {};
+  if (!ticketId) return res.status(400).json({ error: "ticketId required" });
   if (!["approve", "reject"].includes(action)) return res.status(400).json({ error: "action must be 'approve' or 'reject'" });
 
   try {
+    // Fetch the ticket with requester info
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
-      select: { id: true, dlmId: true, dlmApprovalStatus: true, title: true, userId: true },
+      include: {
+        user: { select: { id: true, email: true, displayName: true } },
+        dlm: { select: { id: true, email: true, displayName: true } },
+      },
     });
 
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
     if (ticket.dlmId !== user.id) return res.status(403).json({ error: "You are not the DLM for this ticket" });
-    if (ticket.dlmApprovalStatus !== "PENDING_DLM") return res.status(400).json({ error: "Ticket is not awaiting DLM approval" });
+    if (ticket.dlmApprovalStatus !== "PENDING_DLM") {
+      return res.status(409).json({ error: "Ticket is not pending DLM approval" });
+    }
 
-    const newStatus = action === "approve" ? "DLM_APPROVED" : "DLM_REJECTED";
+    const isApprove = action === "approve";
+    const newStatus = isApprove ? "DLM_APPROVED" : "DLM_REJECTED";
+    const dlmName = ticket.dlm?.displayName || ticket.dlm?.email || "Your manager";
 
-    const updated = await prisma.ticket.update({
-      where: { id: ticketId },
-      data: {
-        dlmApprovalStatus: newStatus,
-        dlmComment: comment?.trim() || null,
-        dlmDecidedAt: new Date(),
-        // Add a history entry
-        history: {
-          create: {
-            userId: user.id,
-            comment: action === "approve"
-              ? `✅ Approved by DLM${comment ? `: ${comment}` : ""}. Ticket is now live for IT support.`
-              : `❌ Rejected by DLM${comment ? `: ${comment}` : ""}. Ticket will not be processed.`,
-            status: null,
-            priority: null,
-          },
-        },
-      },
-      include: {
-        user: { select: { id: true, email: true, displayName: true } },
-        asset: { select: { id: true, name: true, assetId: true } },
-      },
-    });
-
-    // Notify the ticket submitter
-    try {
-      await prisma.notification.create({
+    // Update ticket + add TicketHistory in one transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.ticket.update({
+        where: { id: ticketId },
         data: {
-          userId: ticket.userId,
-          ticketId: ticket.id,
-          type: action === "approve" ? "DLM_APPROVED" : "DLM_REJECTED",
-          title: action === "approve" ? "Your ticket has been approved" : "Your ticket has been rejected",
-          message: action === "approve"
-            ? `Your ticket "${ticket.title}" has been approved by your manager and is now with the IT support team.`
-            : `Your ticket "${ticket.title}" has been rejected by your manager.${comment ? ` Reason: ${comment}` : ""}`,
+          dlmApprovalStatus: newStatus,
+          dlmComment: comment || null,
+          dlmDecidedAt: new Date(),
         },
       });
-    } catch (_) {}
 
-    return res.status(200).json({ ticket: updated, action: newStatus });
-  } catch (error) {
-    console.error("[DLM decide]", error);
-    return res.status(500).json({ error: "Failed to process approval decision" });
+      // Timeline entry visible to the requester on the ticket detail page
+      const historyComment = isApprove
+        ? `✅ Approved by DLM — ${dlmName} has approved your request. Your ticket is now open for the IT support team to process.${comment ? ` Manager's note: "${comment}"` : ''}`
+        : `❌ Rejected by DLM — ${dlmName} has rejected your request.${comment ? ` Reason: "${comment}"` : ''} Please contact your manager for more information.`;
+
+      await tx.ticketHistory.create({
+        data: {
+          ticketId,
+          status: "OPEN",
+          priority: ticket.priority,
+          userId: user.id,
+          comment: historyComment,
+        },
+      });
+
+      // In-app notification to the requester
+      if (ticket.userId) {
+        await tx.notification.create({
+          data: {
+            userId: ticket.userId,
+            ticketId,
+            type: isApprove ? "TICKET_APPROVED_BY_DLM" : "TICKET_REJECTED_BY_DLM",
+            title: isApprove ? "Your ticket was approved by your manager" : "Your ticket was rejected by your manager",
+            message: isApprove
+              ? `Your ticket "${ticket.title}" has been approved by ${dlmName} and is now with the IT support team.`
+              : `Your ticket "${ticket.title}" was rejected by ${dlmName}. ${comment ? `Reason: ${comment}` : "Please contact your manager for more information."}`,
+          },
+        });
+      }
+    });
+
+    // Send email to requester (non-blocking)
+    try {
+      const { sendEmail } = await import("@/lib/email/sendEmail");
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://assetxai.live";
+      if (ticket.user?.email) {
+        await sendEmail({
+          to: ticket.user.email,
+          template: "ticket-update",
+          data: {
+            ticketId: ticket.displayId || ticketId,
+            ticketTitle: ticket.title,
+            status: isApprove ? "DLM Approved — Now with IT Team" : "Rejected by Manager",
+            comment: isApprove
+              ? `Your request has been approved by ${dlmName} and routed to the IT support team for action.${comment ? ` Manager's note: "${comment}"` : ""}`
+              : `Your request was rejected by ${dlmName}.${comment ? ` Reason: "${comment}"` : ""}`,
+            portalUrl: `${baseUrl}/portal`,
+          },
+        });
+      }
+    } catch (emailErr) {
+      console.error("[DLM decide] email failed (non-critical)", emailErr);
+    }
+
+    return res.status(200).json({
+      success: true,
+      newStatus,
+      message: isApprove ? "Ticket approved and routed to IT team" : "Ticket rejected",
+    });
+  } catch (err) {
+    console.error("[DLM decide]", err);
+    return res.status(500).json({ error: "Failed to process decision", detail: String(err) });
   }
 }

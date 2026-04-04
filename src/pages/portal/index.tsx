@@ -26,6 +26,9 @@ interface PortalTicket {
   subcategory?: string; location?: string; contactDetails?: string;
   userId?: string; assignedToId?: string | null;
   assignedTo?: { email: string } | null;
+  dlmApprovalStatus?: string | null;
+  dlmId?: string | null;
+  dlm?: { email: string; displayName?: string | null } | null;
   createdAt: string; updatedAt: string; source?: string | null;
 }
 interface HistoryEntry {
@@ -687,48 +690,95 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
 }
 
 /* ── Ticket row ──────────────────────────────────────────────────────────── */
+function DlmStatusBanner({ dlmApprovalStatus, dlm }: { dlmApprovalStatus?: string | null; dlm?: { email: string; displayName?: string | null } | null }) {
+  if (!dlmApprovalStatus || dlmApprovalStatus === 'DLM_APPROVED') return null;
+  const dlmName = dlm?.displayName || dlm?.email || 'your manager';
+  if (dlmApprovalStatus === 'PENDING_DLM') {
+    return (
+      <div className="mx-4 mb-0 -mt-1 flex items-center gap-2 rounded-b-xl border border-t-0 border-amber-200 dark:border-amber-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/60 dark:to-orange-950/60 px-3 py-2">
+        <Clock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 animate-pulse" />
+        <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">Awaiting approval from {dlmName}</span>
+        <span className="ml-auto text-[10px] text-amber-500 dark:text-amber-500 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded-full font-semibold">DLM REVIEW</span>
+      </div>
+    );
+  }
+  if (dlmApprovalStatus === 'DLM_REJECTED') {
+    return (
+      <div className="mx-4 mb-0 -mt-1 flex items-center gap-2 rounded-b-xl border border-t-0 border-red-200 dark:border-red-800 bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/60 dark:to-rose-950/60 px-3 py-2">
+        <XCircle className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+        <span className="text-[11px] font-bold text-red-700 dark:text-red-400">Rejected by {dlmName}</span>
+        <span className="ml-auto text-[10px] text-red-500 dark:text-red-400 bg-red-100 dark:bg-red-900/50 px-1.5 py-0.5 rounded-full font-semibold">REJECTED</span>
+      </div>
+    );
+  }
+  return null;
+}
+
 function TicketRow({ t, onClick, assigned, unreadCount = 0 }: { t: PortalTicket; onClick: () => void; assigned?: boolean; unreadCount?: number }) {
   const sc = STATUS_CFG[t.status] || STATUS_CFG.OPEN;
   const tc = TICKET_TYPES[t.ticketType as keyof typeof TICKET_TYPES];
   const TypeIcon = tc?.icon || Ticket;
   const hasUpdate = unreadCount > 0;
+  const isPendingDlm = t.dlmApprovalStatus === 'PENDING_DLM';
+  const isRejectedDlm = t.dlmApprovalStatus === 'DLM_REJECTED';
   return (
-    <button type="button" onClick={onClick}
-      className={`group w-full text-left rounded-2xl border transition-all hover:shadow-md ${hasUpdate ? "border-blue-300 dark:border-blue-700 bg-gradient-to-r from-blue-50/60 to-white dark:from-blue-950/40 dark:to-card hover:border-blue-400 shadow-sm" : assigned ? "border-violet-200 dark:border-violet-800 bg-gradient-to-r from-violet-50 to-white dark:from-violet-950/30 dark:to-card hover:border-violet-300" : "border-slate-100 dark:border-border bg-white dark:bg-card hover:border-slate-200 dark:hover:border-border"}`}>
-      <div className="flex items-center gap-3.5 p-4">
-        <div className="relative shrink-0">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${sc.bg} border ${sc.border}`}>
-            {t.status === "RESOLVED" || t.status === "CLOSED" ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              : t.status === "IN_PROGRESS" ? <Clock className="h-5 w-5 text-amber-600" />
-              : <Circle className="h-5 w-5 text-blue-500" />}
+    <div className="flex flex-col">
+      <button type="button" onClick={onClick}
+        className={`group w-full text-left rounded-2xl border transition-all hover:shadow-md ${
+          isPendingDlm ? "border-amber-300 dark:border-amber-700 bg-gradient-to-r from-amber-50/80 to-white dark:from-amber-950/40 dark:to-card hover:border-amber-400 shadow-sm rounded-b-none border-b-0" :
+          isRejectedDlm ? "border-red-200 dark:border-red-800 bg-gradient-to-r from-red-50/60 to-white dark:from-red-950/30 dark:to-card hover:border-red-300 rounded-b-none border-b-0" :
+          hasUpdate ? "border-blue-300 dark:border-blue-700 bg-gradient-to-r from-blue-50/60 to-white dark:from-blue-950/40 dark:to-card hover:border-blue-400 shadow-sm" :
+          assigned ? "border-violet-200 dark:border-violet-800 bg-gradient-to-r from-violet-50 to-white dark:from-violet-950/30 dark:to-card hover:border-violet-300" :
+          "border-slate-100 dark:border-border bg-white dark:bg-card hover:border-slate-200 dark:hover:border-border"
+        }`}>
+        <div className="flex items-center gap-3.5 p-4">
+          <div className="relative shrink-0">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isPendingDlm ? 'bg-amber-50 border-amber-200' : isRejectedDlm ? 'bg-red-50 border-red-200' : `${sc.bg} border ${sc.border}`} border`}>
+              {isPendingDlm ? <Clock className="h-5 w-5 text-amber-500 animate-pulse" /> :
+               isRejectedDlm ? <XCircle className="h-5 w-5 text-red-500" /> :
+               t.status === "RESOLVED" || t.status === "CLOSED" ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> :
+               t.status === "IN_PROGRESS" ? <Clock className="h-5 w-5 text-amber-600" /> :
+               <Circle className="h-5 w-5 text-blue-500" />}
+            </div>
+            {hasUpdate && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-bold text-white shadow-sm animate-pulse">
+                {unreadCount}
+              </span>
+            )}
           </div>
-          {hasUpdate && (
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-bold text-white shadow-sm animate-pulse">
-              {unreadCount}
-            </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[11px] font-bold text-slate-400 dark:text-slate-500">{t.displayId || "#" + t.id.slice(0, 8)}</span>
-            <SBadge s={t.status} />
-            <PBadge p={t.priority} />
-            {t.subcategory && <span className="rounded-md bg-slate-100 dark:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:text-muted-foreground">{t.subcategory}</span>}
-            {hasUpdate && <span className="rounded-md bg-blue-100 dark:bg-blue-950/50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:text-blue-300">New update</span>}
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-1.5">
+              <span className="font-mono text-[11px] font-bold text-slate-400 dark:text-slate-500">{t.displayId || "#" + t.id.slice(0, 8)}</span>
+              {isPendingDlm ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                  <Clock className="h-2.5 w-2.5" /> Pending DLM Approval
+                </span>
+              ) : isRejectedDlm ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 px-1.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-400">
+                  <XCircle className="h-2.5 w-2.5" /> Rejected by DLM
+                </span>
+              ) : (
+                <SBadge s={t.status} />
+              )}
+              <PBadge p={t.priority} />
+              {t.subcategory && <span className="rounded-md bg-slate-100 dark:bg-muted px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:text-muted-foreground">{t.subcategory}</span>}
+              {hasUpdate && <span className="rounded-md bg-blue-100 dark:bg-blue-950/50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:text-blue-300">New update</span>}
+            </div>
+            <h3 className="font-semibold leading-snug text-slate-900 dark:text-foreground line-clamp-1">{t.title}</h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-muted-foreground line-clamp-1">{t.description}</p>
+            <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
+              <span>{timeAgo(t.updatedAt)}</span>
+              {t.assignedTo?.email && <span className="flex items-center gap-1"><User className="h-3 w-3" />{t.assignedTo.email.split("@")[0]}</span>}
+            </div>
           </div>
-          <h3 className="font-semibold leading-snug text-slate-900 dark:text-foreground line-clamp-1">{t.title}</h3>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-muted-foreground line-clamp-1">{t.description}</p>
-          <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
-            <span>{timeAgo(t.updatedAt)}</span>
-            {t.assignedTo?.email && <span className="flex items-center gap-1"><User className="h-3 w-3" />{t.assignedTo.email.split("@")[0]}</span>}
+          <div className="flex shrink-0 items-center gap-2">
+            {assigned && <span className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs font-bold text-white">Action →</span>}
+            <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors" />
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {assigned && <span className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs font-bold text-white">Action →</span>}
-          <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors" />
-        </div>
-      </div>
-    </button>
+      </button>
+      <DlmStatusBanner dlmApprovalStatus={t.dlmApprovalStatus} dlm={t.dlm} />
+    </div>
   );
 }
 
@@ -759,6 +809,7 @@ export default function PortalPage() {
   const [isDlm, setIsDlm] = useState(false);
   const [dlmDeciding, setDlmDeciding] = useState<string | null>(null);
   const [dlmComment, setDlmComment] = useState<Record<string, string>>({});
+  const [sendingReminders, setSendingReminders] = useState(false);
 
   const unread = notifications.filter(n => !n.readAt).length;
 
@@ -804,6 +855,27 @@ export default function PortalPage() {
 
   useEffect(() => { loadDlmPending(); }, [loadDlmPending]);
   useEffect(() => { if (view === "approvals") loadDlmPending(); }, [view]);
+
+  const sendDlmReminder = async (ticketId: string) => {
+    setSendingReminders(true);
+    try {
+      const r = await fetch("/api/dlm/remind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ ticketId }),
+      });
+      if (r.ok) {
+        toast({ title: "⏰ Reminder sent", description: "A reminder email has been sent to your manager." });
+      } else {
+        toast({ variant: "destructive", title: "Failed to send reminder" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Failed to send reminder" });
+    } finally {
+      setSendingReminders(false);
+    }
+  };
 
   const handleDlmDecide = async (ticketId: string, action: "approve" | "reject") => {
     setDlmDeciding(ticketId);
@@ -1181,9 +1253,39 @@ export default function PortalPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {filteredMyTickets.map(t => (
-                    <TicketRow key={t.id} t={t} onClick={() => { setSelectedTicket(t); markTicketRead(t.id); }} assigned={t.assignedToId === user?.id && t.userId !== user?.id} unreadCount={ticketUnreads[t.id] || 0} />
-                  ))}
+                  {/* DLM-pending tickets — shown prominently at the top with reminder option */}
+                  {(() => {
+                    const dlmPendingOwned = filteredMyTickets.filter(t => t.dlmApprovalStatus === 'PENDING_DLM' && t.userId === user?.id);
+                    const rest = filteredMyTickets.filter(t => !(t.dlmApprovalStatus === 'PENDING_DLM' && t.userId === user?.id));
+                    return (
+                      <>
+                        {dlmPendingOwned.length > 0 && (
+                          <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/30 p-3 space-y-2">
+                            <div className="flex items-center gap-2 px-1">
+                              <Clock className="h-4 w-4 text-amber-500 animate-pulse" />
+                              <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Pending Manager Approval ({dlmPendingOwned.length})</span>
+                            </div>
+                            {dlmPendingOwned.map(t => (
+                              <div key={t.id} className="space-y-1.5">
+                                <TicketRow t={t} onClick={() => { setSelectedTicket(t); markTicketRead(t.id); }} unreadCount={ticketUnreads[t.id] || 0} />
+                                <button
+                                  onClick={() => sendDlmReminder(t.id)}
+                                  disabled={sendingReminders}
+                                  className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-card px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50 transition-colors disabled:opacity-50"
+                                >
+                                  {sendingReminders ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bell className="h-3 w-3" />}
+                                  Send reminder to manager
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {rest.map(t => (
+                          <TicketRow key={t.id} t={t} onClick={() => { setSelectedTicket(t); markTicketRead(t.id); }} assigned={t.assignedToId === user?.id && t.userId !== user?.id} unreadCount={ticketUnreads[t.id] || 0} />
+                        ))}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>

@@ -54,8 +54,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } else if (isAdminOrManager) {
     ticketWhere = { OR: [{ organizationId: null }, { userId: user.id }, { assignedToId: user.id }] };
   } else {
+    // Regular users: see own tickets AND tickets pending DLM approval (so they can track status)
     ticketWhere = { OR: [{ userId: user.id }, { assignedToId: user.id }] };
   }
+  // Always include the user's own DLM-pending tickets so they can track approval status
+  // (these are excluded from the main staff ticket list but the submitter should always see them)
 
   const [rawTickets, rawNotifications] = await Promise.all([
     prisma.ticket.findMany({
@@ -65,8 +68,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status: true, priority: true, userId: true, assignedToId: true,
         source: true, ticketType: true, category: true, subcategory: true,
         location: true, contactDetails: true,
+        dlmApprovalStatus: true, dlmId: true,
         createdAt: true, updatedAt: true,
         assignedTo: { select: { id: true, email: true } },
+        dlm: { select: { id: true, email: true, displayName: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,

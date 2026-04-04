@@ -378,15 +378,23 @@ async function ticketsHandler(
           // ── DLM Approval Gate ──────────────────────────────────────────────
           // IT-category tickets (Hardware, Software, Access, Deployments, SAP, Service Desk)
           // must be approved by the submitter's Direct Line Manager before appearing to IT staff.
+          let dlmManagerData: { id: string; email: string; displayName: string | null; jobTitle: string | null; department: string | null } | null = null;
           if (requiresDlmApproval(category)) {
             try {
               const submitter = await prisma.user.findUnique({
                 where: { id: user.id },
-                select: { managerId: true },
+                select: {
+                  managerId: true,
+                  displayName: true,
+                  department: true,
+                  jobTitle: true,
+                  manager: { select: { id: true, email: true, displayName: true, jobTitle: true, department: true } },
+                },
               });
-              if (submitter?.managerId) {
+              if (submitter?.managerId && submitter.manager) {
                 ticketData.dlmApprovalStatus = 'PENDING_DLM';
                 ticketData.dlmId = submitter.managerId;
+                dlmManagerData = submitter.manager;
                 logApiEvent(`Ticket requires DLM approval. DLM: ${submitter.managerId}`);
               }
             } catch (dlmErr) {
@@ -455,6 +463,19 @@ async function ticketsHandler(
                   comment: `Ticket created with priority ${validPriority}${validatedAssetId ? ' and linked to an asset' : ''}${ticketData.assignedToId ? ' and assigned to staff' : ''}${requesterName ? ` by requester: ${requesterName}` : ''}`
                 }
               });
+
+              // If DLM approval is required, add a timeline entry so requester can see the gate
+              if (ticketData.dlmApprovalStatus === 'PENDING_DLM' && ticketData.dlmId) {
+                await tx.ticketHistory.create({
+                  data: {
+                    ticketId: newTicket.id,
+                    status: TicketStatus.OPEN,
+                    priority: validPriority,
+                    userId: user.id,
+                    comment: `⏳ Awaiting DLM Approval — this ticket requires approval from your Direct Line Manager before it reaches the IT support team.`,
+                  }
+                });
+              }
               
               logApiEvent(`Created ticket history entry for new ticket ${newTicket.id}`);
               
@@ -492,6 +513,40 @@ async function ticketsHandler(
           };
           
           logApiEvent(`Ticket created successfully`, { ticketId: ticket.id });
+
+          // ── DLM email notification (non-blocking) ─────────────────────────
+          if (dlmManagerData?.email && ticket.dlmApprovalStatus === 'PENDING_DLM') {
+            try {
+              const { sendEmail } = await import('@/lib/email/sendEmail');
+              const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://assetxai.live';
+              const submitterInfo = await prisma.user.findUnique({
+                where: { id: user.id },
+                select: { displayName: true, email: true, department: true, jobTitle: true },
+              }).catch(() => null);
+              await sendEmail({
+                to: dlmManagerData.email,
+                template: 'dlm-approval-request',
+                data: {
+                  dlmName: dlmManagerData.displayName || dlmManagerData.email,
+                  requesterName: submitterInfo?.displayName || submitterInfo?.email || user.email,
+                  requesterEmail: submitterInfo?.email || user.email,
+                  requesterDepartment: submitterInfo?.department,
+                  requesterJobTitle: submitterInfo?.jobTitle,
+                  ticketTitle: ticket.title,
+                  ticketDescription: ticket.description,
+                  ticketCategory: ticket.category,
+                  ticketPriority: ticket.priority,
+                  ticketDisplayId: ticket.displayId,
+                  portalUrl: `${baseUrl}/portal?tab=approvals`,
+                  isReminder: false,
+                },
+              });
+              logApiEvent(`DLM approval email sent to ${dlmManagerData.email}`);
+            } catch (emailErr) {
+              logApiEvent('DLM email send failed (non-critical)', String(emailErr));
+            }
+          }
+          // ─────────────────────────────────────────────────────────────────
 
           // Auto-assign SLA policy based on category + priority (non-blocking)
           try {

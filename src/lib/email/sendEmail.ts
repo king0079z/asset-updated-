@@ -7,12 +7,14 @@ import { renderOverdueAsset } from './templates/OverdueAsset';
 import { renderBorrowOverdue } from './templates/BorrowOverdue';
 import { renderWarrantyExpiry } from './templates/WarrantyExpiry';
 import { renderWelcomeUser } from './templates/WelcomeUser';
+import { renderDlmApprovalRequest } from './templates/DlmApprovalRequest';
 
 export type EmailTemplate =
   | 'ticket-update'
   | 'sla-breach'
   | 'escalation-alert'
   | 'approval-request'
+  | 'dlm-approval-request'
   | 'overdue-asset'
   | 'borrow-overdue'
   | 'warranty-expiry'
@@ -27,15 +29,16 @@ interface SendEmailOptions {
 
 function getRendered(template: EmailTemplate, data: Record<string, any>): { html: string; subject: string } {
   switch (template) {
-    case 'ticket-update':     return renderTicketUpdate(data);
-    case 'sla-breach':        return renderSLABreach(data);
-    case 'escalation-alert':  return renderEscalationAlert(data);
-    case 'approval-request':  return renderApprovalRequest(data);
-    case 'overdue-asset':     return renderOverdueAsset(data);
-    case 'borrow-overdue':    return renderBorrowOverdue(data);
-    case 'warranty-expiry':   return renderWarrantyExpiry(data);
-    case 'welcome-user':      return renderWelcomeUser(data);
-    default:                  return { html: '<p>Notification</p>', subject: 'Notification from Asset AI' };
+    case 'ticket-update':          return renderTicketUpdate(data);
+    case 'sla-breach':             return renderSLABreach(data);
+    case 'escalation-alert':       return renderEscalationAlert(data);
+    case 'approval-request':       return renderApprovalRequest(data);
+    case 'dlm-approval-request':   return renderDlmApprovalRequest(data);
+    case 'overdue-asset':          return renderOverdueAsset(data);
+    case 'borrow-overdue':         return renderBorrowOverdue(data);
+    case 'warranty-expiry':        return renderWarrantyExpiry(data);
+    case 'welcome-user':           return renderWelcomeUser(data);
+    default:                       return { html: '<p>Notification</p>', subject: 'Notification from Asset AI' };
   }
 }
 
