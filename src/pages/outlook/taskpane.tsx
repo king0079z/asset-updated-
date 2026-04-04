@@ -3,7 +3,7 @@
  * Outlook Add-in Task Pane — full-featured hub.
  * Screens: Home → Submit Ticket | Request Clearance | My Tickets | My Assets
  */
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Head from 'next/head';
 import Script from 'next/script';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -122,12 +122,33 @@ function useOfficeReady() {
   return { mailContext };
 }
 
+/* ── Native app detection helper ─────────────────────────────────────────────── */
+function inNativeApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !!(window as any).ReactNativeWebView;
+}
+
+/** Tell native to show its login screen immediately (hides web page first). */
+function triggerNativeLogin() {
+  if (typeof window === 'undefined') return;
+  try {
+    document.documentElement.style.cssText =
+      'visibility:hidden!important;opacity:0!important;pointer-events:none!important;';
+  } catch (_) {}
+  if ((window as any).AssetXAI?.signOut) {
+    (window as any).AssetXAI.signOut();
+  } else if ((window as any).ReactNativeWebView) {
+    (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'signout' }));
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════════════════════════ */
 export default function OutlookTaskPane() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [screen, setScreen] = useState<Screen>('home');
+  const nativeSignoutSentRef = React.useRef(false);
 
   /* ── ticket form ── */
   const [ticketStep, setTicketStep] = useState<TicketStep>('mode');
@@ -180,6 +201,21 @@ export default function OutlookTaskPane() {
   }, []);
 
   useEffect(() => { checkAuth(); }, [checkAuth]);
+
+  /**
+   * When running inside the native mobile app AND the page reaches
+   * authenticated=false (no token / expired token), immediately redirect
+   * to the native login screen instead of showing the web login form.
+   * This prevents the Outlook Office.js auth popup from ever being triggered
+   * (which causes "Could not communicate with the task pane" in a WebView).
+   */
+  useEffect(() => {
+    if (authenticated !== false) return;   // null = still loading, true = logged in
+    if (!inNativeApp()) return;            // only for native WebView
+    if (nativeSignoutSentRef.current) return; // send once
+    nativeSignoutSentRef.current = true;
+    triggerNativeLogin();
+  }, [authenticated]);
 
   /* ── postMessage listener (web opener) ──────────────────────────────────── */
   useEffect(() => {
@@ -452,8 +488,39 @@ export default function OutlookTaskPane() {
     );
   }
 
-  /* ══ RENDER: Sign In ══════════════════════════════════════════════════════ */
+  /* ══ RENDER: Sign In / Loading ══════════════════════════════════════════ */
+
+  /* authenticated === null means the initial auth check is still running */
+  if (authenticated === null) {
+    return (
+      <>
+        <Head><title>Asset AI</title></Head>
+        {officeScript}
+        <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col items-center justify-center p-6">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center shadow-lg mb-4 animate-pulse">
+            <Ticket className="h-7 w-7 text-white" />
+          </div>
+          <p className="text-sm text-slate-400 dark:text-muted-foreground">Loading AssetXAI…</p>
+        </div>
+      </>
+    );
+  }
+
   if (!authenticated) {
+    /* ── Inside native mobile WebView: never show the Outlook popup auth.
+       The effect above already called triggerNativeLogin() which hid the
+       page and posted signout to native. Show a blank screen here. ── */
+    if (inNativeApp()) {
+      return (
+        <>
+          <Head><title>AssetXAI</title></Head>
+          {officeScript}
+          <div style={{ minHeight: '100vh', background: '#1e1b4b' }} />
+        </>
+      );
+    }
+
+    /* ── Outlook / web browser: show the normal sign-in form ── */
     return (
       <>
         <Head><title>Sign In — Asset AI</title></Head>
@@ -463,9 +530,13 @@ export default function OutlookTaskPane() {
             <Ticket className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-xl font-black text-slate-900 dark:text-foreground mb-1">Asset AI</h1>
-          <p className="text-slate-500 dark:text-muted-foreground text-sm mb-7 max-w-[260px]">Sign in to submit tickets, request clearance, and manage your assets.</p>
-          <button onClick={openLoginDialog}
-            className="inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-sm hover:from-indigo-700 hover:to-violet-700 transition-all">
+          <p className="text-slate-500 dark:text-muted-foreground text-sm mb-7 max-w-[260px]">
+            Sign in to submit tickets, request clearance, and manage your assets.
+          </p>
+          <button
+            onClick={openLoginDialog}
+            className="inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-bold text-white shadow-sm hover:from-indigo-700 hover:to-violet-700 transition-all"
+          >
             <LogIn className="h-4 w-4" /> Sign In
           </button>
         </div>

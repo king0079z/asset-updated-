@@ -255,10 +255,16 @@ export default function AppScreen() {
 
   // ── Auth state ──────────────────────────────────────────────────────────
   useEffect(() => {
+    // Get initial session and load WebView with it injected
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      setBridgeReady(true);
       prevUserIdRef.current = s?.user?.id ?? null;
+      setBridgeReady(true);
+      if (s) {
+        // Reload WebView now that we have the real session token
+        webKeyRef.current += 1;
+        setWebKey(webKeyRef.current);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
@@ -271,7 +277,7 @@ export default function AppScreen() {
         setWebviewKilled(true);
         router.replace('/(auth)/login' as any);
       } else if (prevId !== nextId) {
-        // New session (login or user switch) → reset and reload WebView with fresh token
+        // New session (login or user switch) → reload WebView with fresh injected token
         setWebviewKilled(false);
         setBridgeReady(false);
         setTimeout(() => {
