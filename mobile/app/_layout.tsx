@@ -4,7 +4,6 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
-import { registerForPushNotificationsAsync } from '@/lib/push';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -15,12 +14,13 @@ function RootLayoutNav() {
     if (!initializing) SplashScreen.hideAsync();
   }, [initializing]);
 
-  // Register for push notifications once the user is signed in
+  // Push notifications registered lazily after first login
+  // to avoid requiring google-services.json at build time.
   useEffect(() => {
     if (!user) return;
-    registerForPushNotificationsAsync().catch(() => {
-      // Non-fatal — user may have denied permission
-    });
+    import('@/lib/push').then(({ registerForPushNotificationsAsync }) => {
+      registerForPushNotificationsAsync().catch(() => {});
+    }).catch(() => {});
   }, [user?.id]);
 
   return (

@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "assetxai",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -22,10 +21,7 @@
       },
       "infoPlist": {
         "NSCameraUsageDescription": "AssetXAI uses the camera to scan barcodes and QR codes for asset tracking.",
-        "NSPhotoLibraryUsageDescription": "AssetXAI can attach photos to audit comments and assets.",
-        "UIBackgroundModes": [
-          "remote-notification"
-        ]
+        "NSPhotoLibraryUsageDescription": "AssetXAI can attach photos to audit comments and assets."
       }
     },
     "android": {
@@ -34,23 +30,18 @@
         "backgroundColor": "#4f46e5"
       },
       "package": "com.assetxai.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
-        "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
-        "android.permission.POST_NOTIFICATIONS",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "extra": {
       "privacyPolicyUrl": "https://assetxai.live/privacy",
       "eas": {
         "projectId": "f7c4e00d-e7e1-4be3-a0d6-1eb3190a49ac"
-      },
-      "router": {
-        "origin": false
       }
     },
     "web": {
@@ -65,21 +56,6 @@
         "expo-camera",
         {
           "cameraPermission": "Allow AssetXAI to access your camera to scan barcodes and QR codes."
-        }
-      ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/icon.png",
-          "color": "#4f46e5",
-          "defaultChannel": "default"
-        }
-      ],
-      [
-        "expo-sqlite",
-        {
-          "enableFTS": true,
-          "useSQLCipher": false
         }
       ],
       "expo-asset",
