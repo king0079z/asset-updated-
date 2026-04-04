@@ -1,174 +1,289 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Linking, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Alert, Platform, StatusBar,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
-import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
 import { API_URL } from '@/constants/config';
 
-interface MenuRow {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+const WEB = API_URL; // e.g. https://assetxai.live
+
+type NavItem = {
   label: string;
-  sublabel?: string;
-  href?: string;
-  onPress?: () => void;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  bg: string;
+  route?: string;
+  webPath?: string;
   badge?: string;
-  danger?: boolean;
-}
+};
+
+type Section = {
+  title: string;
+  items: NavItem[];
+};
+
+const NAV_SECTIONS: Section[] = [
+  {
+    title: 'Dashboard & Analytics',
+    items: [
+      { label: 'Dashboard', icon: 'grid-outline', color: '#4f46e5', bg: '#eef2ff', route: '/(tabs)/index' },
+      { label: 'AI Analysis', icon: 'sparkles-outline', color: '#7c3aed', bg: '#f5f3ff', webPath: '/ai-analysis' },
+      { label: 'Print Reports', icon: 'print-outline', color: '#0ea5e9', bg: '#e0f2fe', webPath: '/reports' },
+      { label: 'Planner', icon: 'calendar-outline', color: '#059669', bg: '#ecfdf5', webPath: '/planner' },
+      { label: 'Staff Activity', icon: 'people-outline', color: '#d97706', bg: '#fef3c7', webPath: '/staff-activity' },
+    ],
+  },
+  {
+    title: 'Asset Management',
+    items: [
+      { label: 'All Assets', icon: 'cube-outline', color: '#4f46e5', bg: '#eef2ff', route: '/(tabs)/assets' },
+      { label: 'Handheld Audit', icon: 'scan-outline', color: '#16a34a', bg: '#dcfce7', route: '/(tabs)/inventory' },
+      { label: 'Service Contracts', icon: 'document-text-outline', color: '#0ea5e9', bg: '#e0f2fe', webPath: '/service-contracts' },
+      { label: 'Compliance & Audit', icon: 'shield-checkmark-outline', color: '#7c3aed', bg: '#f5f3ff', webPath: '/compliance' },
+    ],
+  },
+  {
+    title: 'Tracking',
+    items: [
+      { label: 'Asset Location', icon: 'location-outline', color: '#ef4444', bg: '#fee2e2', webPath: '/asset-tracking' },
+      { label: 'RFID & BLE Tracking', icon: 'bluetooth-outline', color: '#8b5cf6', bg: '#ede9fe', webPath: '/rfid-tracking' },
+      { label: 'Vehicle Tracking', icon: 'navigate-outline', color: '#0d9488', bg: '#f0fdfa', webPath: '/vehicle-tracking' },
+      { label: 'My Vehicle', icon: 'car-sport-outline', color: '#f59e0b', bg: '#fffbeb', webPath: '/my-vehicle' },
+    ],
+  },
+  {
+    title: 'Fleet & Operations',
+    items: [
+      { label: 'Vehicle Assignments', icon: 'car-outline', color: '#0ea5e9', bg: '#e0f2fe', webPath: '/vehicle-assignments' },
+      { label: 'Vehicle Rentals', icon: 'key-outline', color: '#d97706', bg: '#fef3c7', webPath: '/vehicle-rentals' },
+      { label: 'Drivers', icon: 'person-circle-outline', color: '#7c3aed', bg: '#f5f3ff', webPath: '/drivers' },
+    ],
+  },
+  {
+    title: 'Food & Facilities',
+    items: [
+      { label: 'Food Supply', icon: 'nutrition-outline', color: '#16a34a', bg: '#dcfce7', webPath: '/food-supply' },
+      { label: 'Kitchens', icon: 'flame-outline', color: '#ef4444', bg: '#fee2e2', webPath: '/kitchens' },
+    ],
+  },
+  {
+    title: 'IT Support',
+    items: [
+      { label: 'IT Tickets', icon: 'ticket-outline', color: '#4f46e5', bg: '#eef2ff', route: '/(tabs)/portal' },
+      { label: 'My Work Queue', icon: 'briefcase-outline', color: '#d97706', bg: '#fef3c7', route: '/(tabs)/work' },
+      { label: 'Approval Requests', icon: 'checkmark-circle-outline', color: '#16a34a', bg: '#dcfce7', route: '/(tabs)/work' },
+      { label: 'Approval Management', icon: 'people-circle-outline', color: '#7c3aed', bg: '#f5f3ff', webPath: '/settings/approval' },
+    ],
+  },
+  {
+    title: 'System',
+    items: [
+      { label: 'Settings', icon: 'settings-outline', color: '#64748b', bg: '#f1f5f9', webPath: '/settings' },
+      { label: 'System Config', icon: 'construct-outline', color: '#475569', bg: '#f8fafc', webPath: '/system' },
+    ],
+  },
+];
 
 export default function MoreScreen() {
-  const { user, signOut } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  const handleSignOut = async () => {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+  const handleSignOut = useCallback(() => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Sign out', style: 'destructive',
+        text: 'Sign Out',
+        style: 'destructive',
         onPress: async () => {
-          await signOut();
-          router.replace('/(auth)/login');
+          await supabase.auth.signOut();
+          router.replace('/(auth)/login' as any);
         },
       },
     ]);
-  };
+  }, [router]);
 
-  const openExternal = (url: string) => Linking.openURL(url);
-
-  const sections: { title: string; rows: MenuRow[] }[] = [
-    {
-      title: 'Asset Management',
-      rows: [
-        { icon: 'cube-outline',     label: 'All Assets',              onPress: () => router.push('/(tabs)/assets') },
-        { icon: 'layers-outline',   label: 'Inventory / Audit',       sublabel: 'Count & audit assets by scan', onPress: () => router.push('/(tabs)/inventory' as any) },
-        { icon: 'add-circle-outline', label: 'Add New Asset',         href: `${API_URL}/assets/new` },
-      ],
-    },
-    {
-      title: 'IT Service Portal',
-      rows: [
-        { icon: 'ticket-outline',      label: 'My Requests',          sublabel: 'View your submitted tickets',  onPress: () => router.push('/(tabs)/portal') },
-        { icon: 'add-outline',         label: 'New IT Request',       sublabel: 'Submit a new ticket',          onPress: () => router.push('/(tabs)/portal') },
-        { icon: 'shield-checkmark-outline', label: 'DLM Approvals',  sublabel: 'Pending approvals from your team', onPress: () => router.push('/(tabs)/work') },
-      ],
-    },
-    {
-      title: 'Web App',
-      rows: [
-        { icon: 'open-outline',        label: 'Open Full Web App',    href: API_URL },
-        { icon: 'settings-outline',    label: 'Settings',             href: `${API_URL}/settings` },
-        { icon: 'people-outline',      label: 'Approval Management',  href: `${API_URL}/settings/approval` },
-        { icon: 'analytics-outline',   label: 'Reports & Analytics',  href: `${API_URL}/reports` },
-      ],
-    },
-  ];
-
-  const initials = (user?.email?.[0] ?? '?').toUpperCase();
-  const displayName = (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || '') as string;
+  const openItem = useCallback((item: NavItem) => {
+    if (item.route) {
+      router.push(item.route as any);
+    } else if (item.webPath) {
+      router.push({
+        pathname: '/webview',
+        params: { url: `${WEB}${item.webPath}`, title: item.label },
+      } as any);
+    }
+  }, [router]);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Profile Card */}
-      <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials}</Text>
-        </View>
-        <View style={styles.profileInfo}>
-          {displayName ? (
-            <Text style={styles.displayName} numberOfLines={1}>{displayName}</Text>
-          ) : null}
-          <Text style={styles.email} numberOfLines={1}>{user?.email}</Text>
-        </View>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Menu Sections */}
-      {sections.map(section => (
-        <View key={section.title} style={styles.section}>
-          <Text style={styles.sectionTitle}>{section.title}</Text>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={['#3730a3', '#4f46e5', '#7c3aed']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 36 : 16) }]}
+      >
+        <View style={styles.headerCircle} />
+        <Text style={styles.headerTitle}>Navigation</Text>
+        <Text style={styles.headerSubtitle}>All AssetXAI modules</Text>
+      </LinearGradient>
+
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {NAV_SECTIONS.map(section => (
+          <View key={section.title} style={styles.section}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <View style={styles.sectionCard}>
+              {section.items.map((item, idx) => (
+                <TouchableOpacity
+                  key={item.label}
+                  style={[
+                    styles.navItem,
+                    idx < section.items.length - 1 && styles.navItemBorder,
+                  ]}
+                  onPress={() => openItem(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.navIconBox, { backgroundColor: item.bg }]}>
+                    <Ionicons name={item.icon} size={20} color={item.color} />
+                  </View>
+                  <Text style={styles.navLabel}>{item.label}</Text>
+                  <View style={styles.navRight}>
+                    {item.webPath && (
+                      <View style={styles.webBadge}>
+                        <Ionicons name="globe-outline" size={11} color={theme.colors.textMuted} />
+                        <Text style={styles.webBadgeText}>Web</Text>
+                      </View>
+                    )}
+                    <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ))}
+
+        {/* Sign Out */}
+        <View style={styles.section}>
           <View style={styles.sectionCard}>
-            {section.rows.map((row, idx) => (
-              <TouchableOpacity
-                key={row.label}
-                style={[styles.row, idx === 0 && styles.rowFirst]}
-                onPress={() => {
-                  if (row.href) openExternal(row.href);
-                  else if (row.onPress) row.onPress();
-                }}
-              >
-                <View style={styles.rowIconWrap}>
-                  <Ionicons name={row.icon} size={20} color={theme.colors.primary} />
-                </View>
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowLabel}>{row.label}</Text>
-                  {row.sublabel && <Text style={styles.rowSublabel}>{row.sublabel}</Text>}
-                </View>
-                {row.href
-                  ? <Ionicons name="open-outline"      size={16} color={theme.colors.textMuted} />
-                  : <Ionicons name="chevron-forward"   size={16} color={theme.colors.textMuted} />
-                }
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity style={styles.navItem} onPress={handleSignOut} activeOpacity={0.7}>
+              <View style={[styles.navIconBox, { backgroundColor: theme.colors.errorBg }]}>
+                <Ionicons name="log-out-outline" size={20} color={theme.colors.error} />
+              </View>
+              <Text style={[styles.navLabel, { color: theme.colors.error }]}>Sign Out</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.error} />
+            </TouchableOpacity>
           </View>
         </View>
-      ))}
 
-      {/* Sign out */}
-      <TouchableOpacity style={styles.signOut} onPress={handleSignOut}>
-        <Ionicons name="log-out-outline" size={22} color={theme.colors.error} />
-        <Text style={styles.signOutText}>Sign out</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.version}>AssetXAI · {API_URL.replace('https://', '')}</Text>
-    </ScrollView>
+        <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 8 }}>
+          <Text style={styles.versionText}>AssetXAI Mobile · v2.0</Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: theme.colors.background },
-  content:      { padding: theme.spacing.lg, paddingBottom: 48 },
-
-  profileCard: {
-    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
-    backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl,
-    padding: theme.spacing.lg, marginBottom: theme.spacing.xl,
-    ...theme.shadows.md,
+  header: {
+    paddingHorizontal: theme.spacing.xl,
+    paddingBottom: theme.spacing.xxl,
+    overflow: 'hidden',
   },
-  avatar: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center', justifyContent: 'center',
+  headerCircle: {
+    position: 'absolute',
+    top: -30, right: -30,
+    width: 160, height: 160, borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  avatarText:   { fontSize: 22, fontWeight: '800', color: '#fff' },
-  profileInfo:  { flex: 1 },
-  displayName:  { ...theme.typography.bodyMedium, color: theme.colors.text },
-  email:        { ...theme.typography.caption, color: theme.colors.textSecondary, marginTop: 2 },
-
-  section:      { marginBottom: theme.spacing.xl },
-  sectionTitle: { ...theme.typography.overline, color: theme.colors.textMuted, marginBottom: theme.spacing.sm },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.65)',
+    marginTop: 4,
+  },
+  content: {
+    padding: theme.spacing.lg,
+  },
+  section: {
+    marginBottom: theme.spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    color: theme.colors.textMuted,
+    marginBottom: theme.spacing.sm,
+    marginLeft: 4,
+  },
   sectionCard: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.xl, overflow: 'hidden', ...theme.shadows.sm,
+    borderRadius: theme.radius.xl,
+    overflow: 'hidden',
+    ...theme.shadows.md,
   },
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md,
-    paddingVertical: theme.spacing.md, paddingHorizontal: theme.spacing.lg,
-    borderTopWidth: 1, borderTopColor: theme.colors.borderLight,
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 14,
+    gap: theme.spacing.md,
+    minHeight: 52,
   },
-  rowFirst:     { borderTopWidth: 0 },
-  rowIconWrap: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: theme.colors.primary + '15',
-    alignItems: 'center', justifyContent: 'center',
+  navItemBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.borderLight,
   },
-  rowBody:      { flex: 1 },
-  rowLabel:     { ...theme.typography.body, color: theme.colors.text },
-  rowSublabel:  { fontSize: 12, color: theme.colors.textMuted, marginTop: 1 },
-
-  signOut: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: theme.spacing.sm, marginTop: theme.spacing.md,
-    paddingVertical: theme.spacing.lg,
+  navIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  signOutText:  { ...theme.typography.bodyMedium, color: theme.colors.error },
-
-  version:      { textAlign: 'center', fontSize: 11, color: theme.colors.textMuted, marginTop: 8 },
+  navLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  navRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  webBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: theme.colors.borderLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  webBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: theme.colors.textMuted,
+  },
+  versionText: {
+    fontSize: 12,
+    color: theme.colors.textMuted,
+    fontWeight: '500',
+  },
 });

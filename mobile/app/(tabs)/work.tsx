@@ -12,9 +12,12 @@ import {
   Modal,
   Platform,
   ScrollView,
+  StatusBar,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getAssignedTickets, getAssignedTasks, getDlmPending, decideDlm } from '@/lib/api';
@@ -239,36 +242,51 @@ export default function WorkScreen() {
     }
   };
 
-  const isManager = approvals.length > 0; // show tab if there are pending items
+  const insets = useSafeAreaInsets();
+  const isManager = approvals.length > 0;
 
   return (
     <View style={styles.container}>
-      {/* Tab selector */}
-      <View style={styles.toggle}>
-        <TouchableOpacity
-          style={[styles.toggleBtn, tab === 'tickets' && styles.toggleBtnActive]}
-          onPress={() => setTab('tickets')}
-        >
-          <Ionicons name="ticket" size={16} color={tab === 'tickets' ? '#fff' : theme.colors.textSecondary} />
-          <Text style={[styles.toggleText, tab === 'tickets' && styles.toggleTextActive]}>Tickets</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleBtn, tab === 'tasks' && styles.toggleBtnActive]}
-          onPress={() => setTab('tasks')}
-        >
-          <Ionicons name="checkbox" size={16} color={tab === 'tasks' ? '#fff' : theme.colors.textSecondary} />
-          <Text style={[styles.toggleText, tab === 'tasks' && styles.toggleTextActive]}>Tasks</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleBtn, tab === 'approvals' && styles.toggleBtnActive]}
-          onPress={() => setTab('approvals')}
-        >
-          <Ionicons name="shield-checkmark" size={16} color={tab === 'approvals' ? '#fff' : theme.colors.textSecondary} />
-          <Text style={[styles.toggleText, tab === 'approvals' && styles.toggleTextActive]}>
-            Approvals{approvals.length > 0 ? ` (${approvals.length})` : ''}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={['#78350f', '#d97706', '#f59e0b']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.headerGrad, { paddingTop: insets.top + (Platform.OS === 'android' ? 36 : 16) }]}
+      >
+        <View style={styles.headerCircleDecor} />
+        <Text style={styles.headerGradTitle}>Work & Approvals</Text>
+        <Text style={styles.headerGradSub}>Tickets, tasks and DLM approvals</Text>
+
+        {/* Tab selector */}
+        <View style={styles.toggle}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, tab === 'tickets' && styles.toggleBtnActive]}
+            onPress={() => setTab('tickets')}
+          >
+            <Ionicons name="ticket" size={15} color={tab === 'tickets' ? '#d97706' : 'rgba(255,255,255,0.8)'} />
+            <Text style={[styles.toggleText, tab === 'tickets' && styles.toggleTextActive]}>Tickets</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, tab === 'tasks' && styles.toggleBtnActive]}
+            onPress={() => setTab('tasks')}
+          >
+            <Ionicons name="checkbox" size={15} color={tab === 'tasks' ? '#d97706' : 'rgba(255,255,255,0.8)'} />
+            <Text style={[styles.toggleText, tab === 'tasks' && styles.toggleTextActive]}>Tasks</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, tab === 'approvals' && styles.toggleBtnActive]}
+            onPress={() => setTab('approvals')}
+          >
+            <Ionicons name="shield-checkmark" size={15} color={tab === 'approvals' ? '#d97706' : 'rgba(255,255,255,0.8)'} />
+            <Text style={[styles.toggleText, tab === 'approvals' && styles.toggleTextActive]}>
+              Approvals{approvals.length > 0 ? ` (${approvals.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       {/* ── Tickets ── */}
       {tab === 'tickets' && (
@@ -409,16 +427,35 @@ const styles = StyleSheet.create({
   emptyList:  { flexGrow: 1, paddingBottom: theme.spacing.xxxl },
   approvalList: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxxl },
 
+  // ── Gradient Header
+  headerGrad: {
+    paddingHorizontal: theme.spacing.xl,
+    paddingBottom: theme.spacing.xl,
+    overflow: 'hidden',
+  },
+  headerCircleDecor: {
+    position: 'absolute', top: -30, right: -30,
+    width: 140, height: 140, borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  headerGradTitle: { fontSize: 24, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  headerGradSub:   { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: theme.spacing.lg },
+
   // ── Tab toggle
-  toggle:         { flexDirection: 'row', padding: theme.spacing.lg, gap: theme.spacing.sm },
+  toggle:         {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: theme.radius.xl,
+    padding: 3,
+    gap: 3,
+  },
   toggleBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    paddingVertical: theme.spacing.md, borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surface, ...theme.shadows.sm,
+    paddingVertical: 9, borderRadius: theme.radius.lg,
   },
-  toggleBtnActive: { backgroundColor: theme.colors.primary },
-  toggleText:      { ...theme.typography.captionMedium, color: theme.colors.textSecondary },
-  toggleTextActive:{ color: '#fff' },
+  toggleBtnActive: { backgroundColor: '#fff' },
+  toggleText:      { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
+  toggleTextActive:{ color: '#d97706' },
 
   // ── Ticket/Task card
   card: {

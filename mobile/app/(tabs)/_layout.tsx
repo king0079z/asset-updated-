@@ -1,7 +1,23 @@
 import { Tabs } from 'expo-router';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '@/constants/theme';
-import { Platform } from 'react-native';
+
+function TabIcon({
+  name,
+  color,
+  focused,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  color: string;
+  focused: boolean;
+}) {
+  return (
+    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+      <Ionicons name={name} size={22} color={color} />
+    </View>
+  );
+}
 
 export default function TabLayout() {
   return (
@@ -11,63 +27,90 @@ export default function TabLayout() {
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarStyle: {
           backgroundColor:  theme.colors.surface,
-          borderTopColor:   theme.colors.border,
-          height:           Platform.OS === 'ios' ? 84 : 60,
-          paddingBottom:    Platform.OS === 'ios' ? 24 : 6,
-          paddingTop:       6,
+          borderTopColor:   theme.colors.borderLight,
+          borderTopWidth:   1,
+          height:           Platform.OS === 'ios' ? 88 : 64,
+          paddingBottom:    Platform.OS === 'ios' ? 28 : 8,
+          paddingTop:       8,
+          elevation:        8,
+          shadowColor:      '#000',
+          shadowOffset:     { width: 0, height: -2 },
+          shadowOpacity:    0.06,
+          shadowRadius:     8,
         },
-        tabBarLabelStyle:    { fontSize: 10, fontWeight: '600' },
-        headerStyle:         { backgroundColor: theme.colors.primary },
-        headerTintColor:     '#fff',
-        headerTitleStyle:    { fontWeight: '700', fontSize: 18 },
+        tabBarLabelStyle: {
+          fontSize:   10,
+          fontWeight: '700',
+          letterSpacing: 0.2,
+          marginTop: 2,
+        },
+        headerShown: false, // we use custom gradient headers in each screen
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="assets"
         options={{
           title: 'Assets',
-          tabBarIcon: ({ color, size }) => <Ionicons name="cube" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'cube' : 'cube-outline'} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="portal"
         options={{
-          title: 'Portal',
-          tabBarIcon: ({ color, size }) => <Ionicons name="ticket" size={size} color={color} />,
-          headerTitle: 'IT Service Portal',
+          title: 'IT Portal',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'ticket' : 'ticket-outline'} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="work"
         options={{
           title: 'Work',
-          tabBarIcon: ({ color, size }) => <Ionicons name="briefcase" size={size} color={color} />,
-          headerTitle: 'Work & Approvals',
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'briefcase' : 'briefcase-outline'} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="more"
         options={{
           title: 'More',
-          tabBarIcon: ({ color, size }) => <Ionicons name="menu" size={size} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'grid' : 'grid-outline'} color={color} focused={focused} />
+          ),
         }}
       />
-      {/* Inventory tab hidden from bottom bar — accessible via Assets or More */}
+      {/* Hidden tabs accessible by navigation */}
       <Tabs.Screen
         name="inventory"
-        options={{
-          title: 'Inventory',
-          href: null,
-          tabBarIcon: ({ color, size }) => <Ionicons name="layers" size={size} color={color} />,
-        }}
+        options={{ title: 'Audit', href: null }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrap: {
+    width: 36,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+  },
+  iconWrapActive: {
+    backgroundColor: theme.colors.primaryXLight,
+    width: 44,
+  },
+});
