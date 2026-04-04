@@ -24,6 +24,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { API_URL, SUPABASE_URL } from '@/constants/config';
+
+// The mobile app shows the same interface as the Outlook add-in taskpane.
+// All 4 features (Submit Ticket, Request Clearance, My Tickets, My Assets)
+// are available here with the same design, DLM approval flow, etc.
+const TASKPANE_URL = `${API_URL}/outlook/taskpane`;
 import { supabase } from '@/lib/supabase';
 import { buildBridgeScript } from '@/lib/webBridge';
 
@@ -307,12 +312,12 @@ export default function AppWebViewScreen() {
 
       {/* ── WebView / Error ────────────────────────────────────────────────── */}
       {networkError ? (
-        <NetworkError url={API_URL} onRetry={retry} />
+        <NetworkError url={TASKPANE_URL} onRetry={retry} />
       ) : (
         <WebView
           key={webKey}
           ref={webRef}
-          source={{ uri: API_URL }}
+          source={{ uri: TASKPANE_URL }}
           style={{ flex: 1, backgroundColor: '#f1f5f9' }}
 
           // Auth + bridge injection
@@ -341,6 +346,7 @@ export default function AppWebViewScreen() {
           onNavigationStateChange={state => setCanGoBack(state.canGoBack)}
           onError={() => setNetworkError(true)}
           onHttpError={({ nativeEvent }) => {
+            // Only treat server errors as fatal — 4xx are handled by the page
             if (nativeEvent.statusCode >= 500) setNetworkError(true);
           }}
           onMessage={handleMessage}

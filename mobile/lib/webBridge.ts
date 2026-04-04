@@ -6,24 +6,33 @@
 export function buildBridgeScript(sessionJson: string, supabaseUrl: string): string {
   return `
 (function() {
-  // ── 1. Supabase session injection ─────────────────────────────────────────
+  // ── 1. Auth token injection ───────────────────────────────────────────────
+  // The Outlook taskpane reads its token from sessionStorage key:
+  //   'outlook_addin_access_token'
+  // We inject the native Supabase access_token there so the user is
+  // automatically signed in without seeing the login screen.
   try {
     var session = ${sessionJson};
     var sbUrl   = ${JSON.stringify(supabaseUrl)};
-    if (session && session.access_token && sbUrl) {
-      var ref = sbUrl.replace('https://', '').split('.')[0];
-      var key = 'sb-' + ref + '-auth-token';
-      var payload = JSON.stringify({
-        access_token:  session.access_token,
-        refresh_token: session.refresh_token,
-        expires_at:    session.expires_at,
-        expires_in:    session.expires_in || 3600,
-        token_type:    'bearer',
-        user:          session.user,
-      });
-      localStorage.setItem(key, payload);
-      // Also try legacy key
-      localStorage.setItem('supabase.auth.token', payload);
+    if (session && session.access_token) {
+      // ── Outlook taskpane auth (primary) ────────────────────────────────
+      sessionStorage.setItem('outlook_addin_access_token', session.access_token);
+
+      // ── Supabase localStorage auth (fallback for full web app pages) ──
+      if (sbUrl) {
+        var ref = sbUrl.replace('https://', '').split('.')[0];
+        var key = 'sb-' + ref + '-auth-token';
+        var payload = JSON.stringify({
+          access_token:  session.access_token,
+          refresh_token: session.refresh_token,
+          expires_at:    session.expires_at,
+          expires_in:    session.expires_in || 3600,
+          token_type:    'bearer',
+          user:          session.user,
+        });
+        localStorage.setItem(key, payload);
+        localStorage.setItem('supabase.auth.token', payload);
+      }
     }
   } catch(e) { console.warn('[AssetXAI] Session injection failed:', e); }
 
