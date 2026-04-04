@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Animated, Easing, Platform,
+  View, Text, StyleSheet, Animated, Easing, Platform, Image,
 } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -221,24 +221,25 @@ function AppSplash({ onDone }: { onDone: () => void }) {
           ]}
         >
           <LinearGradient
-            colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.07)']}
+            colors={['rgba(99,102,241,0.6)', 'rgba(45,36,112,0.9)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={sp.logoBox}
           >
             <View style={sp.logoInnerGlow} />
-            <Ionicons
-              name="cube"
-              size={60}
-              color="#ffffff"
-              allowFontScaling={false}
+            {/* Use Image asset — renders before any font is loaded */}
+            <Image
+              source={require('../assets/icon.png')}
+              style={sp.logoImage}
+              resizeMode="contain"
             />
-            {/* Shine */}
+            {/* Shine overlay */}
             <LinearGradient
-              colors={['rgba(255,255,255,0.28)', 'transparent']}
+              colors={['rgba(255,255,255,0.22)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={[StyleSheet.absoluteFill, { borderRadius: 34 }]}
+              pointerEvents="none"
             />
           </LinearGradient>
         </Animated.View>
@@ -416,6 +417,11 @@ const sp = StyleSheet.create({
     top: -20, left: -20, right: -20, bottom: -20,
     backgroundColor: 'rgba(165,180,252,0.12)',
     borderRadius: 55,
+  },
+  logoImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 18,
   },
   brandName: {
     fontSize: 46,
