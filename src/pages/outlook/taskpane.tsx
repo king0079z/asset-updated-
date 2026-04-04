@@ -563,9 +563,12 @@ export default function OutlookTaskPane() {
         <div className="rounded-md border border-slate-200/80 dark:border-border bg-slate-50/80 dark:bg-muted/50 p-0.5">
           <ThemeToggle />
         </div>
-        <button onClick={signOut} title="Sign out" className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-foreground hover:bg-slate-100 dark:hover:bg-muted transition-colors">
-          <LogOut className="h-3.5 w-3.5" />
-        </button>
+        {/* Sign-out hidden in native app — native top bar owns this action */}
+        {!inNativeApp() && (
+          <button onClick={signOut} title="Sign out" className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-foreground hover:bg-slate-100 dark:hover:bg-muted transition-colors">
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     </header>
   );
@@ -996,9 +999,11 @@ export default function OutlookTaskPane() {
                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.text}`} style={{ background: 'transparent' }}>
                   <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />{sc.label}
                 </span>
-                <button onClick={signOut} className="rounded-lg p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
-                  <LogOut className="h-3.5 w-3.5" />
-                </button>
+                {!inNativeApp() && (
+                  <button onClick={signOut} className="rounded-lg p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </header>
 

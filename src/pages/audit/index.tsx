@@ -267,7 +267,7 @@ function StaffPerformanceDialog({ open, onClose, userId, staffName, staffEmail }
                 <AvatarFallback className="bg-gradient-to-br from-indigo-300 to-purple-500 text-white text-xl font-bold">{initials(staffName, staffEmail)}</AvatarFallback>
               </Avatar>
               <div>
-                <DialogTitle className="text-xl font-bold text-white">{staffName||staffEmail||'Staff Member'}</DialogTitle>
+                  <DialogTitle className="text-xl font-bold text-white">{staffName||staffEmail||'Staff Member'}</DialogTitle>
                 <p className="text-indigo-200 text-sm">{staffEmail}</p>
               </div>
             </div>
@@ -276,7 +276,7 @@ function StaffPerformanceDialog({ open, onClose, userId, staffName, staffEmail }
             </Button>
           </div>
           {perf && (<div className="grid grid-cols-5 gap-2 mt-5">{[{label:'Total Scans',value:perf.totalScans,icon:ScanLine},{label:'Total Missing',value:perf.totalMissing,icon:AlertTriangle},{label:'Avg Coverage',value:`${perf.avgCoverage}%`,icon:Target},{label:'Avg Missing/Scan',value:perf.avgMissingPerScan,icon:TrendingDown},{label:'Alert Sessions',value:perf.alertCount,icon:ShieldAlert}].map(k=>{const Icon=k.icon;return(<div key={k.label} className="bg-white/15 rounded-xl p-3 text-center"><Icon className="h-4 w-4 mx-auto mb-1 text-indigo-200"/><p className="text-xl font-extrabold text-white">{k.value}</p><p className="text-xs text-indigo-300 leading-tight">{k.label}</p></div>);})}</div>)}
-        </div>
+                </div>
         <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
           {loading ? (<div className="flex flex-col items-center justify-center py-20 text-slate-400"><div className="w-12 h-12 rounded-full border-4 border-indigo-100 border-t-indigo-500 animate-spin mb-4"/><p className="font-medium">Analysing performance data…</p></div>) : !perf ? null : (
             <div className="p-5 space-y-6">
@@ -289,9 +289,9 @@ function StaffPerformanceDialog({ open, onClose, userId, staffName, staffEmail }
                 <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><motion.div initial={{width:0}} animate={{width:`${Math.min(100,perf.avgCoverage)}%`}} transition={{duration:1.2,ease:'easeOut'}} className={cn('h-full rounded-full', coverageBarColor(perf.avgCoverage))}/></div>
               </section>
               {perf.timeline.length > 0 && (<section><h3 className="font-bold mb-3 flex items-center gap-2"><Activity className="h-4 w-4 text-indigo-500"/> Recent Scan History</h3><div className="space-y-2">{perf.timeline.map((t, i) => (<div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm"><div className="text-xs text-slate-400 w-24 flex-shrink-0">{t.date}</div><div className="flex-1"><div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className={cn('h-full rounded-full',coverageBarColor(t.coverage))} style={{width:`${Math.min(100,t.coverage)}%`}}/></div></div><div className="flex items-center gap-3 text-xs flex-shrink-0"><span className="text-indigo-600 font-medium">{t.scanned} scanned</span>{t.missing>0?<span className="text-red-600 font-medium">{t.missing} missing</span>:<span className="text-emerald-600 font-medium">Clear</span>}<span className={cn('font-bold',coverageColor(t.coverage))}>{t.coverage}%</span></div></div>))}</div></section>)}
-            </div>
+                          </div>
           )}
-        </div>
+                              </div>
         <DialogFooter className="px-5 py-3.5 bg-background border-t border-slate-100 flex-shrink-0"><Button variant="outline" onClick={onClose} size="sm">Close</Button></DialogFooter>
       </DialogContent>
     </Dialog>
@@ -327,7 +327,7 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onViewStaff, onCompl
               <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-sm font-bold">{initials(report.submitter?.name, staffEmail)}</AvatarFallback>
             </Avatar>
             <span className={cn('absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white', isCompleted ? 'bg-emerald-400' : sev.dot)}/>
-          </div>
+            </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <button onClick={()=>onViewStaff(report)} className="font-bold hover:text-indigo-600 transition-colors text-left hover:underline">{staffName}</button>
@@ -355,7 +355,7 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onViewStaff, onCompl
             { label:'Missing', value:d.missingCount, Icon:AlertTriangle, col:d.missingCount>0?'text-red-600':'text-slate-400', bg:d.missingCount>0?'bg-red-50':'bg-slate-50' },
             { label:'Wrong Loc.', value:d.wrongLocationCount, Icon:MapPin, col:d.wrongLocationCount>0?'text-amber-600':'text-slate-400', bg:d.wrongLocationCount>0?'bg-amber-50':'bg-slate-50' },
           ].map(s => { const Icon=s.Icon; return (<div key={s.label} className={cn('rounded-xl p-3 flex items-center gap-2.5', s.bg)}><Icon className={cn('h-4 w-4 flex-shrink-0', s.col)}/><div><p className={cn('text-xl font-extrabold leading-none', s.col)}>{s.value}</p><p className="text-xs text-slate-500 mt-0.5">{s.label}</p></div></div>); })}
-        </div>
+            </div>
         {d.totalInSystem > 0 && (
           <div className="mt-3 space-y-1">
             <div className="flex justify-between text-xs text-slate-400"><span>Scan coverage</span><span className={cn('font-bold', coverageColor(covPct))}>{covPct}%</span></div>
@@ -368,7 +368,7 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onViewStaff, onCompl
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
                 {(d.reasonCode||d.note) && (<div className="rounded-xl bg-amber-50 border border-amber-100 p-3.5 space-y-2">{d.reasonCode && <div className="flex items-center gap-2"><Hash className="h-4 w-4 text-amber-500"/><span className="text-xs font-semibold text-amber-700">Reason:</span><Badge variant="outline" className="text-xs border-amber-200 text-amber-700">{d.reasonCode}</Badge></div>}{d.note && <p className="text-sm text-slate-700 italic bg-white rounded-lg px-3 py-2 border border-amber-100">"{d.note}"</p>}</div>)}
                 {report.linkedTickets.length > 0 && (<div><p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2"><TicketIcon className="h-3.5 w-3.5"/> Linked tickets ({report.linkedTickets.length})</p><div className="space-y-1.5">{report.linkedTickets.map(t => (<a key={t.id} href={`/tickets/${t.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 bg-card hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group"><TicketIcon className="h-3.5 w-3.5 text-indigo-400 flex-shrink-0"/><div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{t.title}</p><p className="text-xs text-slate-400">{t.displayId||t.id.slice(0,8)}</p></div><Badge variant="outline" className={cn('text-xs border', statusCls(t.status))}>{t.status.replace('_',' ')}</Badge><ArrowRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-indigo-500"/></a>))}</div></div>)}
-              </div>
+                  </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -378,7 +378,7 @@ function ReportCard({ report, onViewAssets, onCreateTicket, onViewStaff, onCompl
           <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => { setPdfLoading(true); downloadPdf(`/api/audit/report-pdf?id=${report.id}`); setTimeout(()=>setPdfLoading(false),2000); }} disabled={pdfLoading}>{pdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <Download className="h-3.5 w-3.5"/>} PDF</Button>
           {!isCompleted && onComplete && (<Button size="sm" className="gap-1.5 text-xs bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm ml-auto" onClick={()=>onComplete(report)}><CheckCheck className="h-3.5 w-3.5"/> Mark Complete</Button>)}
           {isCompleted && onReopen && (<Button size="sm" variant="outline" className="gap-1.5 text-xs border-amber-200 text-amber-600 hover:bg-amber-50 ml-auto" onClick={()=>onReopen(report)}><Archive className="h-3.5 w-3.5"/> Reopen</Button>)}
-        </div>
+                  </div>
       </div>
     </motion.div>
   );
@@ -389,14 +389,14 @@ function BatteryBar({ level, className }: { level: number | null; className?: st
   if (level == null) return <span className="text-xs text-slate-400">—</span>;
   const color = level > 50 ? 'bg-green-500' : level > 20 ? 'bg-amber-400' : 'bg-red-500';
   const BIcon = level <= 10 ? BatteryWarning : level <= 30 ? BatteryLow : Battery;
-  return (
+                        return (
     <div className={cn('flex items-center gap-1.5', className)}>
       <BIcon className={cn('h-3.5 w-3.5', level > 50 ? 'text-green-500' : level > 20 ? 'text-amber-500' : 'text-red-500')}/>
       <div className="relative w-12 h-2 bg-slate-200 rounded-full overflow-hidden">
         <div className={cn('h-full rounded-full transition-all', color)} style={{width:`${Math.min(100,level)}%`}}/>
-      </div>
+                          </div>
       <span className={cn('text-xs font-bold', level > 50 ? 'text-green-600' : level > 20 ? 'text-amber-600' : 'text-red-600')}>{level}%</span>
-    </div>
+                            </div>
   );
 }
 
@@ -437,9 +437,9 @@ function SessionTimelineCard({ session, idx }: { session: any; idx: number }) {
             </Badge>
             {session.platform && <Badge className="text-xs bg-indigo-100 text-indigo-700 capitalize">{session.platform}</Badge>}
             {session.deviceName && <span className="text-xs text-slate-400 truncate max-w-[120px]">{session.deviceName.slice(0,40)}</span>}
-          </div>
+                    </div>
           <span className={cn('text-sm font-bold', isActive ? 'text-teal-600' : 'text-slate-600')}>{fmtMs(session.durationMs)}</span>
-        </div>
+                  </div>
 
         {/* Time range */}
         <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
@@ -447,7 +447,7 @@ function SessionTimelineCard({ session, idx }: { session: any; idx: number }) {
             <div className="w-1.5 h-1.5 rounded-full bg-green-400"/>
             <span className="font-medium">Login:</span>
             <span>{new Date(session.startedAt).toLocaleString(undefined, {dateStyle:'short',timeStyle:'short'})}</span>
-          </div>
+              </div>
           {session.endedAt ? (
             <>
               <span className="text-slate-300">→</span>
@@ -471,17 +471,17 @@ function SessionTimelineCard({ session, idx }: { session: any; idx: number }) {
             <Scan className="h-3.5 w-3.5 text-blue-500 mx-auto mb-1"/>
             <p className="text-lg font-black text-blue-600">{session.scanCount || 0}</p>
             <p className="text-[10px] text-blue-400">Scans</p>
-          </div>
+        </div>
           <div className="rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900 p-2.5 text-center">
             <Ticket className="h-3.5 w-3.5 text-purple-500 mx-auto mb-1"/>
             <p className="text-lg font-black text-purple-600">{session.ticketsCreated || 0}</p>
             <p className="text-[10px] text-purple-400">Tickets</p>
-          </div>
+      </div>
           <div className="rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-2.5 text-center">
             <Clock className="h-3.5 w-3.5 text-slate-500 mx-auto mb-1"/>
             <p className="text-lg font-black text-slate-600">{fmtMs(session.durationMs)}</p>
             <p className="text-[10px] text-slate-400">Duration</p>
-          </div>
+            </div>
           <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900 p-2.5 text-center">
             <Gauge className="h-3.5 w-3.5 text-amber-500 mx-auto mb-1"/>
             <p className="text-lg font-black text-amber-600">{scanVelocity ?? '—'}{scanVelocity ? '/h' : ''}</p>
@@ -509,8 +509,8 @@ function SessionTimelineCard({ session, idx }: { session: any; idx: number }) {
                   </Badge>
                 )}
               </>
-            )}
-          </div>
+          )}
+        </div>
         )}
       </div>
     </motion.div>
@@ -553,7 +553,7 @@ function UserCard({ userData, onClick, isExpanded }: { userData: any; onClick: (
               )}
               <div className={cn('text-xs font-bold px-2 py-0.5 rounded-full border ml-auto', scoreBg, scoreColor)}>
                 AI Score: {score}
-              </div>
+            </div>
             </div>
 
             {/* Stat chips */}
@@ -566,17 +566,17 @@ function UserCard({ userData, onClick, isExpanded }: { userData: any; onClick: (
               ].map(({ icon: Icon, val, color }) => (
                 <div key={val} className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold', color)}>
                   <Icon className="h-3 w-3"/>{val}
-                </div>
+          </div>
               ))}
               {userData.avgBatteryDrain != null && (
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-amber-600 bg-amber-50">
                   <BatteryLow className="h-3 w-3"/>-{userData.avgBatteryDrain}% avg drain
-                </div>
+          </div>
               )}
               {userData.scansPerHour != null && (
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-teal-600 bg-teal-50">
                   <Gauge className="h-3 w-3"/>{userData.scansPerHour}/h rate
-                </div>
+        </div>
               )}
             </div>
 
@@ -584,14 +584,14 @@ function UserCard({ userData, onClick, isExpanded }: { userData: any; onClick: (
             <p className="text-xs text-slate-400 mt-2">
               Last active: {userData.lastActiveAt ? new Date(userData.lastActiveAt).toLocaleString(undefined, {dateStyle:'medium',timeStyle:'short'}) : '—'}
             </p>
-          </div>
+        </div>
 
           {/* Expand chevron */}
           <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center transition-all flex-shrink-0',
             isExpanded ? 'bg-indigo-100 text-indigo-600 rotate-180' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500')}>
             <ChevronDown className="h-4 w-4"/>
-          </div>
-        </div>
+      </div>
+      </div>
 
         {/* AI insight preview */}
         {userData.sessionCount > 0 && !isExpanded && (
@@ -606,7 +606,7 @@ function UserCard({ userData, onClick, isExpanded }: { userData: any; onClick: (
             </div>
           </div>
         )}
-      </div>
+        </div>
     </motion.div>
   );
 }
@@ -621,19 +621,19 @@ function BatteryTagRow({ tag }: { tag: any }) {
       <div className={cn('flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold border min-w-[72px] justify-center flex-shrink-0', getBatteryColor(level))}>
         <BIcon className="h-4 w-4"/>
         {level}%
-      </div>
+            </div>
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-sm">{tag.asset?.name || 'Unassigned Tag'}</p>
         <div className="flex items-center gap-3 mt-0.5 flex-wrap text-xs text-slate-400">
           <span className="font-mono">{tag.tagId}</span>
           {tag.asset?.assetId && <span>{tag.asset.assetId}</span>}
           {tag.lastZone?.name && <span className="flex items-center gap-1"><MapPin className="h-3 w-3"/>{tag.lastZone.name}</span>}
-        </div>
-      </div>
+          </div>
+          </div>
       <div className="text-right flex-shrink-0">
         <p className="text-xs text-slate-400">{tag.lastSeenAt ? new Date(tag.lastSeenAt).toLocaleString() : 'Never seen'}</p>
         <Badge className="text-xs mt-1 bg-red-100 text-red-700 border-red-200 cursor-pointer hover:bg-red-200">Schedule Replacement</Badge>
-      </div>
+        </div>
     </motion.div>
   );
 }
@@ -884,25 +884,25 @@ function HandheldAuditPage() {
 
         {/* Search/filter bar — only for audit tabs */}
         {(activeTab === 'active' || activeTab === 'completed') && (
-          <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3 flex-wrap border-t border-slate-100 dark:border-slate-800">
-            <div className="relative flex-1 min-w-[200px]">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3 flex-wrap border-t border-slate-100 dark:border-slate-800">
+          <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"/>
               <Input placeholder="Search staff, location, note…" value={search} onChange={e=>setSearch(e.target.value)} className="pl-9 h-9 text-sm bg-slate-50 dark:bg-slate-900 border-slate-200"/>
-            </div>
-            <Select value={severityFilter} onValueChange={handleSevChange}>
+          </div>
+          <Select value={severityFilter} onValueChange={handleSevChange}>
               <SelectTrigger className="w-44 h-9 text-sm bg-slate-50 dark:bg-slate-900 border-slate-200">
-                <Filter className="h-3.5 w-3.5 mr-1.5 text-slate-400"/><SelectValue/>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Reports</SelectItem>
-                <SelectItem value="WARNING">⚠ With Alerts</SelectItem>
-                <SelectItem value="INFO">✓ All Clear</SelectItem>
-              </SelectContent>
-            </Select>
+              <Filter className="h-3.5 w-3.5 mr-1.5 text-slate-400"/><SelectValue/>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Reports</SelectItem>
+              <SelectItem value="WARNING">⚠ With Alerts</SelectItem>
+              <SelectItem value="INFO">✓ All Clear</SelectItem>
+            </SelectContent>
+          </Select>
             <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-full px-3 py-1.5 text-xs text-slate-500 font-medium">
               <Activity className="h-3.5 w-3.5"/>{filtered.length} of {total} reports
-            </div>
           </div>
+        </div>
         )}
 
         {/* Battery threshold bar */}
@@ -925,47 +925,47 @@ function HandheldAuditPage() {
         {/* ── Audit Reports Tabs ── */}
         {(activeTab === 'active' || activeTab === 'completed') && (
           <>
-            {loading ? (
+        {loading ? (
               <div className="flex flex-col items-center justify-center py-32 text-slate-400">
-                <div className="relative w-16 h-16 mb-4">
+            <div className="relative w-16 h-16 mb-4">
                   <div className="w-16 h-16 rounded-full border-4 border-indigo-100 border-t-indigo-500 animate-spin"/>
-                  <ClipboardList className="absolute inset-0 m-auto h-6 w-6 text-indigo-400"/>
-                </div>
+              <ClipboardList className="absolute inset-0 m-auto h-6 w-6 text-indigo-400"/>
+            </div>
                 <p className="font-semibold text-slate-500">Loading audit reports…</p>
-              </div>
-            ) : filtered.length === 0 ? (
+          </div>
+        ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32 text-slate-400">
                 <div className={cn('p-6 rounded-3xl mb-4', activeTab==='completed' ? 'bg-emerald-50' : 'bg-slate-100')}>
                   {activeTab==='completed' ? <CheckCheck className="h-14 w-14 text-emerald-300"/> : <ClipboardList className="h-14 w-14 text-slate-300"/>}
-                </div>
+            </div>
                 <p className="text-xl font-bold text-slate-500">{activeTab==='completed' ? 'No completed reports yet' : 'No active reports found'}</p>
-                <p className="text-sm mt-1">{search ? 'Try a different search term.' : activeTab==='completed' ? 'Mark reports as complete to see them here.' : 'No inventory reconciliation reports submitted yet.'}</p>
-                {search && <Button variant="ghost" size="sm" className="mt-3 gap-2" onClick={()=>setSearch('')}><X className="h-4 w-4"/> Clear search</Button>}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filtered.map(r => (
-                  <ReportCard key={r.id} report={r}
-                    onViewAssets={()=>setAssetModal(r)}
-                    onCreateTicket={()=>setTicketModal(r)}
-                    onViewStaff={()=>setStaffDialog({report:r})}
-                    onComplete={activeTab==='active' ? (rep)=>setCompleteTarget(rep) : undefined}
-                    onReopen={activeTab==='completed' ? (rep)=>handleReopen(rep) : undefined}
-                  />
-                ))}
-              </div>
-            )}
-            {totalPages > 1 && !loading && (
-              <div className="flex items-center justify-center gap-2 mt-8">
+            <p className="text-sm mt-1">{search ? 'Try a different search term.' : activeTab==='completed' ? 'Mark reports as complete to see them here.' : 'No inventory reconciliation reports submitted yet.'}</p>
+            {search && <Button variant="ghost" size="sm" className="mt-3 gap-2" onClick={()=>setSearch('')}><X className="h-4 w-4"/> Clear search</Button>}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filtered.map(r => (
+              <ReportCard key={r.id} report={r}
+                onViewAssets={()=>setAssetModal(r)}
+                onCreateTicket={()=>setTicketModal(r)}
+                onViewStaff={()=>setStaffDialog({report:r})}
+                onComplete={activeTab==='active' ? (rep)=>setCompleteTarget(rep) : undefined}
+                onReopen={activeTab==='completed' ? (rep)=>handleReopen(rep) : undefined}
+              />
+            ))}
+          </div>
+        )}
+        {totalPages > 1 && !loading && (
+          <div className="flex items-center justify-center gap-2 mt-8">
                 <Button variant="outline" size="sm" disabled={page<=1} onClick={()=>fetchReports(page-1,severityFilter,activeTab)}>← Prev</Button>
-                <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1">
                   {Array.from({length:Math.min(7,totalPages)},(_,i)=>i+1).map(p => (
-                    <button key={p} onClick={()=>fetchReports(p,severityFilter,activeTab)}
+                <button key={p} onClick={()=>fetchReports(p,severityFilter,activeTab)}
                       className={cn('w-8 h-8 rounded-lg text-sm font-medium transition-all', p===page ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>{p}</button>
                   ))}
-                </div>
-                <Button variant="outline" size="sm" disabled={page>=totalPages} onClick={()=>fetchReports(page+1,severityFilter,activeTab)}>Next →</Button>
-              </div>
+            </div>
+            <Button variant="outline" size="sm" disabled={page>=totalPages} onClick={()=>fetchReports(page+1,severityFilter,activeTab)}>Next →</Button>
+          </div>
             )}
           </>
         )}

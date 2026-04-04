@@ -126,45 +126,45 @@ function VendorsTab() {
     <div className="space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: "Total Vendors", value: vendors.length, icon: Building2, color: "text-blue-400" },
-          { label: "Avg Score", value: avgScore || "—", icon: TrendingUp, color: "text-violet-400" },
-          { label: "Excellent", value: excellentCount, icon: Award, color: "text-emerald-400" },
+            {[
+              { label: "Total Vendors", value: vendors.length, icon: Building2, color: "text-blue-400" },
+              { label: "Avg Score", value: avgScore || "—", icon: TrendingUp, color: "text-violet-400" },
+              { label: "Excellent", value: excellentCount, icon: Award, color: "text-emerald-400" },
           { label: "Needs Improvement", value: poorCount, icon: AlertTriangle, color: "text-amber-400" },
-        ].map(stat => (
+            ].map(stat => (
           <div key={stat.label} className="bg-muted/40 border border-border rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-muted-foreground font-medium">{stat.label}</span>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </div>
+                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                </div>
             <p className="text-2xl font-bold">{stat.value}</p>
-          </div>
-        ))}
-      </div>
+              </div>
+            ))}
+        </div>
 
       {/* Quick nav */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {quickNav.map(item => (
-          <Link key={item.href} href={item.href}>
+            <Link key={item.href} href={item.href}>
             <div className={`group relative rounded-2xl border border-border ${item.bg} p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all`}>
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-                <item.icon className="h-5 w-5 text-white" />
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                  <item.icon className="h-5 w-5 text-white" />
+                </div>
+                <p className={`font-semibold text-sm ${item.text}`}>{item.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
               </div>
-              <p className={`font-semibold text-sm ${item.text}`}>{item.label}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
-              <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
-            </div>
-          </Link>
-        ))}
-      </div>
+            </Link>
+          ))}
+        </div>
 
       {/* Table */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
-        <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border">
-          <div>
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border">
+            <div>
             <h2 className="text-lg font-bold">{t("vendors")}</h2>
             <p className="text-sm text-muted-foreground">{t("manage_your_vendors")}</p>
-          </div>
+            </div>
           <div className="flex items-center gap-3">
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -177,83 +177,83 @@ function VendorsTab() {
           </div>
         </div>
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-10 w-10 border-2 border-indigo-500 border-t-transparent" />
-              <p className="text-sm text-muted-foreground">Loading vendors...</p>
+            <div className="flex items-center justify-center py-20">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-10 w-10 border-2 border-indigo-500 border-t-transparent" />
+                <p className="text-sm text-muted-foreground">Loading vendors...</p>
+              </div>
             </div>
-          </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-              <Building2 className="h-8 w-8 text-muted-foreground/50" />
-            </div>
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                <Building2 className="h-8 w-8 text-muted-foreground/50" />
+              </div>
             <p className="font-semibold text-muted-foreground">{search ? "No vendors match your search" : "No vendors found"}</p>
             {!search && (
               <Button className="mt-4 gap-2" onClick={() => { setSelected(undefined); setDialogOpen(true); }}>
-                <PlusCircle className="h-4 w-4" /> Add your first vendor
-              </Button>
-            )}
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                <TableHead className="font-semibold">Vendor</TableHead>
-                <TableHead className="font-semibold">Type</TableHead>
-                <TableHead className="font-semibold">Reliability</TableHead>
-                <TableHead className="font-semibold">Quality</TableHead>
-                <TableHead className="font-semibold">Response</TableHead>
-                <TableHead className="font-semibold">Overall</TableHead>
-                <TableHead className="w-16" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+                  <PlusCircle className="h-4 w-4" /> Add your first vendor
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="font-semibold">Vendor</TableHead>
+                  <TableHead className="font-semibold">Type</TableHead>
+                  <TableHead className="font-semibold">Reliability</TableHead>
+                  <TableHead className="font-semibold">Quality</TableHead>
+                  <TableHead className="font-semibold">Response</TableHead>
+                  <TableHead className="font-semibold">Overall</TableHead>
+                  <TableHead className="w-16" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
               {filtered.map(vendor => {
                 const overall = calcScore(vendor);
-                return (
-                  <TableRow key={vendor.id} className="hover:bg-muted/30 transition-colors group">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                          {vendor.name[0]?.toUpperCase()}
+                  return (
+                    <TableRow key={vendor.id} className="hover:bg-muted/30 transition-colors group">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                            {vendor.name[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm">{vendor.name}</p>
+                            <p className="text-xs text-muted-foreground">{vendor.email ?? vendor.phone ?? "—"}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-sm">{vendor.name}</p>
-                          <p className="text-xs text-muted-foreground">{vendor.email ?? vendor.phone ?? "—"}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 flex-wrap">
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 flex-wrap">
                         {vendor.type?.map(t => <Badge key={t} variant="secondary" className="text-[10px] px-2 py-0">{t.replace("_", " ")}</Badge>)}
-                      </div>
-                    </TableCell>
-                    <TableCell><ScoreBar value={vendor.reliabilityScore} /></TableCell>
-                    <TableCell><ScoreBar value={vendor.qualityScore} /></TableCell>
-                    <TableCell><ScoreBar value={vendor.responseTimeScore} /></TableCell>
-                    <TableCell>
-                      {overall !== null ? (
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${getScoreBg(overall)}`}>
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getScoreColor(overall) }} />
+                        </div>
+                      </TableCell>
+                      <TableCell><ScoreBar value={vendor.reliabilityScore} /></TableCell>
+                      <TableCell><ScoreBar value={vendor.qualityScore} /></TableCell>
+                      <TableCell><ScoreBar value={vendor.responseTimeScore} /></TableCell>
+                      <TableCell>
+                        {overall !== null ? (
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${getScoreBg(overall)}`}>
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getScoreColor(overall) }} />
                           {getStatus(overall)} · {overall}
-                        </span>
+                          </span>
                       ) : <span className="text-xs text-muted-foreground">Not Rated</span>}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={() => { setSelected(vendor); setDialogOpen(true); }}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         {!loading && filtered.length > 0 && (
-          <div className="px-6 py-3 border-t border-border text-xs text-muted-foreground">
+            <div className="px-6 py-3 border-t border-border text-xs text-muted-foreground">
             Showing {filtered.length} of {vendors.length} vendors
           </div>
         )}
