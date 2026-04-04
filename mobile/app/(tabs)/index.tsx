@@ -303,7 +303,7 @@ export default function AppScreen() {
 
           {/* Logo: Image asset — guaranteed to render regardless of font state */}
           <Image
-            source={require('../../../assets/icon.png')}
+            source={require('../../assets/icon.png')}
             style={styles.logoImg}
             resizeMode="cover"
           />
