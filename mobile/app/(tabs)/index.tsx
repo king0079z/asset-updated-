@@ -25,7 +25,11 @@ import { supabase } from '@/lib/supabase';
 import { buildBridgeScript } from '@/lib/webBridge';
 import { getMyProfile } from '@/lib/api';
 
-const TASKPANE_URL = `${API_URL}/outlook/taskpane`;
+// URL each role sees inside the WebView
+const URLS = {
+  staff:   `${API_URL}/outlook/taskpane`,  // STAFF → employee portal
+  admin:   `${API_URL}`,                   // ADMIN/MANAGER → full main app dashboard
+} as const;
 
 // ─── View-drawn icons (zero font / zero asset dependency) ──────────────────
 
@@ -277,8 +281,9 @@ export default function AppScreen() {
   const [webviewKilled, setWebviewKilled] = useState(false);
   const [showSignOut,   setShowSignOut]  = useState(false);
   const [signingOut,    setSigningOut]   = useState(false);
-  // Role gate: 'checking' → loading screen; 'handheld' → redirect; 'user' → WebView
-  const [roleStatus,    setRoleStatus]   = useState<'checking' | 'user'>('checking');
+  // Role gate — 'checking' → loading; 'staff' → taskpane; 'admin' → full app
+  const [roleStatus,  setRoleStatus]  = useState<'checking' | 'staff' | 'admin'>('checking');
+  const [webViewUrl,  setWebViewUrl]  = useState(URLS.staff);
   const webKeyRef    = useRef(0);
   const [webKey,     setWebKey]         = useState(0);
   const prevUserIdRef = useRef<string | null>(null);
@@ -304,10 +309,11 @@ export default function AppScreen() {
         setWebviewKilled(true);
         router.replace('/(auth)/login' as any);
       } else if (prevId !== nextId) {
-        // New user logged in — reset everything and re-check role
+        // Different user logged in — reset everything and re-check role
         setWebviewKilled(false);
         setSigningOut(false);
-        setRoleStatus('checking');  // show loading until role is confirmed
+        setRoleStatus('checking');
+        setWebViewUrl(URLS.staff); // safe default until role is confirmed
         setBridgeReady(false);
         setTimeout(() => {
           setBridgeReady(true);
@@ -320,36 +326,43 @@ export default function AppScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── Role gate: check profile BEFORE showing any content ─────────────────
-  // Shows a loading screen until we know whether the user is HANDHELD or not.
-  // HANDHELD  → redirect to native inventory (and never show WebView)
-  // All other → set roleStatus='user' → WebView loads taskpane
+  // ── Role gate: check profile BEFORE showing any content ──────────────────
+  //
+  //  HANDHELD         → native inventory screen (no WebView)
+  //  ADMIN / MANAGER  → full main app dashboard (assetxai.live)
+  //  STAFF            → employee taskpane  (assetxai.live/outlook/taskpane)
+  //
   useEffect(() => {
     if (!session?.user?.id) return;
 
     let cancelled = false;
-    setRoleStatus('checking');  // show loading screen
+    setRoleStatus('checking');
 
     const checkRole = async (attempt = 0) => {
       try {
         const profile = await getMyProfile();
         if (cancelled) return;
 
-        if (profile?.role === 'HANDHELD') {
-          // Redirect to native handheld screen — no WebView shown
+        const role = profile?.role as string | undefined;
+
+        if (role === 'HANDHELD') {
           router.replace('/(tabs)/inventory' as any);
+        } else if (role === 'ADMIN' || role === 'MANAGER') {
+          setWebViewUrl(URLS.admin);
+          setRoleStatus('admin');
         } else {
-          // All staff / admins / users → show taskpane WebView
-          setRoleStatus('user');
+          // STAFF or unknown → employee taskpane
+          setWebViewUrl(URLS.staff);
+          setRoleStatus('staff');
         }
       } catch {
         if (cancelled) return;
         if (attempt < 3) {
-          // Retry up to 3 times (network may not be ready right after login)
           setTimeout(() => checkRole(attempt + 1), 800 * (attempt + 1));
         } else {
-          // Fail open — better to show the app than stay stuck on loading
-          setRoleStatus('user');
+          // Fail-open: default to staff view
+          setWebViewUrl(URLS.staff);
+          setRoleStatus('staff');
         }
       }
     };
@@ -553,16 +566,23 @@ export default function AppScreen() {
         /* Blank while navigating to login */
         <View style={{ flex: 1, backgroundColor: '#1e1b4b' }} />
       ) : roleStatus === 'checking' ? (
-        /* Role check in progress — show loading so nothing flashes */
+        /* Checking role — nothing renders until we know where to send the user */
         <View style={styles.roleGate}>
           <LinearGradient
-            colors={['#1e1b4b', '#2d2470']}
+            colors={['#060413', '#1e1b4b', '#2d2470']}
             style={StyleSheet.absoluteFill}
           />
+          {/* Decorative glow */}
+          <View style={styles.roleGateGlow} />
           <View style={styles.roleGateCard}>
-            <ActivityIndicator size="large" color="#818cf8" />
-            <Text style={styles.roleGateTitle}>Setting up your workspace…</Text>
-            <Text style={styles.roleGateSubtitle}>Checking account permissions</Text>
+            <View style={styles.roleGateIconWrap}>
+              <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.roleGateIconGrad}>
+                <Image source={require('../../assets/icon.png')} style={{ width: 40, height: 40, borderRadius: 10 }} resizeMode="contain" />
+              </LinearGradient>
+            </View>
+            <ActivityIndicator size="large" color="#818cf8" style={{ marginTop: 4 }} />
+            <Text style={styles.roleGateTitle}>Setting up your workspace</Text>
+            <Text style={styles.roleGateSubtitle}>Checking account permissions…</Text>
           </View>
         </View>
       ) : networkError ? (
@@ -571,7 +591,7 @@ export default function AppScreen() {
         <WebView
           key={webKey}
           ref={webRef}
-          source={{ uri: TASKPANE_URL }}
+          source={{ uri: webViewUrl }}
           style={{ flex: 1, backgroundColor: '#f8fafc' }}
           injectedJavaScriptBeforeContentLoaded={injectedScript}
           javaScriptEnabled domStorageEnabled
@@ -659,20 +679,37 @@ const styles = StyleSheet.create({
   roleGate: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
   },
+  roleGateGlow: {
+    position: 'absolute', alignSelf: 'center', top: '30%',
+    width: 260, height: 260, borderRadius: 130,
+    backgroundColor: 'rgba(99,102,241,0.12)',
+    shadowColor: '#6366f1', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8, shadowRadius: 60,
+  },
   roleGateCard: {
-    alignItems: 'center', gap: 14, padding: 40,
+    alignItems: 'center', gap: 16, padding: 40,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 28,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 32,
+    borderWidth: 1, borderColor: 'rgba(165,180,252,0.15)',
     marginHorizontal: 32,
+    shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3, shadowRadius: 20,
+  },
+  roleGateIconWrap: {
+    shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5, shadowRadius: 14, elevation: 10,
+  },
+  roleGateIconGrad: {
+    width: 80, height: 80, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center',
   },
   roleGateTitle: {
-    fontSize: 16, fontWeight: '700', color: '#e0e7ff',
-    textAlign: 'center', marginTop: 4,
+    fontSize: 17, fontWeight: '800', color: '#e0e7ff',
+    textAlign: 'center', letterSpacing: -0.3,
   },
   roleGateSubtitle: {
-    fontSize: 13, color: 'rgba(165,180,252,0.65)',
-    textAlign: 'center',
+    fontSize: 13, color: 'rgba(165,180,252,0.6)',
+    textAlign: 'center', marginTop: -6,
   },
 });
 
