@@ -1,11 +1,16 @@
 /**
- * Main screen — full-screen WebView (Outlook taskpane interface)
+ * Main screen — role-aware WebView
  *
- * Auth is 100% owned by the native layer:
- *  • Native top bar contains: logo · title · [scan] [bell] [sign-out]
- *  • Sign-out shows a world-class confirmation bottom sheet
- *  • WebView never shows its own login/logout controls
- *  • On sign-out → native login screen appears immediately
+ * Routing (decided BEFORE any WebView renders):
+ *   HANDHELD         → /(tabs)/inventory   (native)
+ *   ADMIN / MANAGER  → assetxai.live        (full main dashboard)
+ *   STAFF            → assetxai.live/outlook/taskpane  (employee portal)
+ *
+ * Top-bar right side is role-specific:
+ *   ADMIN/MANAGER  → Dashboard icon  (navigates WebView to /dashboard)
+ *   STAFF          → Scan icon       (native camera scanner)
+ *
+ * Sign-out is native-only — the WebView NEVER shows a sign-out button.
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
 import {
@@ -23,19 +28,20 @@ import { useRouter } from 'expo-router';
 import { API_URL, SUPABASE_URL } from '@/constants/config';
 import { supabase } from '@/lib/supabase';
 import { buildBridgeScript } from '@/lib/webBridge';
-import { getMyProfile } from '@/lib/api';
 
-// URL each role sees inside the WebView
+// URLs per role
 const URLS = {
-  staff:   `${API_URL}/outlook/taskpane`,  // STAFF → employee portal
-  admin:   `${API_URL}`,                   // ADMIN/MANAGER → full main app dashboard
-} as const;
+  staff: `${API_URL}/outlook/taskpane`,
+  admin: `${API_URL}`,
+};
 
-// ─── View-drawn icons (zero font / zero asset dependency) ──────────────────
+type RoleStatus = 'checking' | 'staff' | 'admin';
 
+// ─── View-drawn icons (no font dependency) ────────────────────────────────
+
+/** Scanner / QR corner-bracket icon */
 function ScanIcon({ color = '#fff', size = 20 }: { color?: string; size?: number }) {
-  const t = Math.round(size * 0.12);
-  const l = Math.round(size * 0.36);
+  const t = Math.round(size * 0.12), l = Math.round(size * 0.36);
   const bars: object[] = [
     { top: 0, left: 0, width: l, height: t },
     { top: 0, left: 0, width: t, height: l },
@@ -49,53 +55,75 @@ function ScanIcon({ color = '#fff', size = 20 }: { color?: string; size?: number
   ];
   return (
     <View style={{ width: size, height: size }}>
-      {bars.map((s, i) => (
-        <View key={i} style={[{ position: 'absolute', backgroundColor: color }, s as any]} />
+      {bars.map((s, i) => <View key={i} style={[{ position: 'absolute', backgroundColor: color }, s as any]} />)}
+    </View>
+  );
+}
+
+/** 3×3 grid — Dashboard icon */
+function DashboardIcon({ color = '#fff', size = 20 }: { color?: string; size?: number }) {
+  const cell = Math.round(size * 0.28), gap = Math.round(size * 0.08);
+  const positions = [0, 1, 2].flatMap(row =>
+    [0, 1, 2].map(col => ({
+      top:  row * (cell + gap),
+      left: col * (cell + gap),
+      width: cell, height: cell, borderRadius: Math.round(cell * 0.25),
+    }))
+  );
+  return (
+    <View style={{ width: size, height: size }}>
+      {positions.map((p, i) => (
+        <View key={i} style={[{ position: 'absolute', backgroundColor: color }, p]} />
       ))}
     </View>
   );
 }
 
+/** Bell icon */
 function BellIcon({ color = '#fff', size = 20 }: { color?: string; size?: number }) {
   return (
     <View style={{ width: size, height: size, alignItems: 'center' }}>
-      <View style={{ position: 'absolute', top: size * 0.14, left: size * 0.12, right: size * 0.12, height: size * 0.62, backgroundColor: color, borderRadius: size * 0.24 }} />
-      <View style={{ position: 'absolute', top: 0, width: size * 0.14, height: size * 0.2, backgroundColor: color, borderRadius: 2, alignSelf: 'center' }} />
-      <View style={{ position: 'absolute', bottom: size * 0.04, width: size * 0.3, height: size * 0.16, backgroundColor: color, borderRadius: size * 0.08, alignSelf: 'center' }} />
+      <View style={{ position: 'absolute', top: size * 0.14, left: size * 0.1, right: size * 0.1, height: size * 0.62, backgroundColor: color, borderRadius: size * 0.24 }} />
+      <View style={{ position: 'absolute', top: 0, width: size * 0.14, height: size * 0.22, backgroundColor: color, borderRadius: 2, alignSelf: 'center' }} />
+      <View style={{ position: 'absolute', bottom: size * 0.02, width: size * 0.32, height: size * 0.16, backgroundColor: color, borderRadius: size * 0.08, alignSelf: 'center' }} />
     </View>
   );
 }
 
-/** Sign-out icon: rectangle with arrow pointing right */
+/** Exit / sign-out icon */
 function SignOutIcon({ color = '#fff', size = 18 }: { color?: string; size?: number }) {
-  const t = Math.round(size * 0.13); // thickness
+  const t = Math.round(size * 0.13);
   return (
     <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      {/* Door frame — left + top + bottom */}
       <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: t, backgroundColor: color, borderRadius: 1 }} />
       <View style={{ position: 'absolute', left: 0, right: size * 0.3, top: 0, height: t, backgroundColor: color, borderRadius: 1 }} />
       <View style={{ position: 'absolute', left: 0, right: size * 0.3, bottom: 0, height: t, backgroundColor: color, borderRadius: 1 }} />
-      {/* Arrow shaft → */}
       <View style={{ position: 'absolute', right: 0, top: size / 2 - t / 2, left: size * 0.35, height: t, backgroundColor: color, borderRadius: 1 }} />
-      {/* Arrow head > */}
       <View style={{ position: 'absolute', right: 0, top: size * 0.28, width: t, height: size * 0.25, backgroundColor: color, transform: [{ rotate: '45deg' }] }} />
       <View style={{ position: 'absolute', right: 0, bottom: size * 0.28, width: t, height: size * 0.25, backgroundColor: color, transform: [{ rotate: '-45deg' }] }} />
     </View>
   );
 }
 
+// ── Unread badge ──────────────────────────────────────────────────────────
+function Badge({ count }: { count: number }) {
+  if (count < 1) return null;
+  return (
+    <View style={styles.badge}>
+      <Text style={styles.badgeText}>{count > 9 ? '9+' : count}</Text>
+    </View>
+  );
+}
+
 // ── Scanner modal ─────────────────────────────────────────────────────────
-function ScannerModal({
-  visible, onScanned, onClose,
-}: {
+function ScannerModal({ visible, onScanned, onClose }: {
   visible: boolean; onScanned: (v: string) => void; onClose: () => void;
 }) {
   const [perm, requestPerm] = useCameraPermissions();
   const scannedRef = useRef(false);
-  useEffect(() => {
-    if (visible) { scannedRef.current = false; if (!perm?.granted) requestPerm(); }
-  }, [visible]);
+  useEffect(() => { if (visible) { scannedRef.current = false; if (!perm?.granted) requestPerm(); } }, [visible]);
   if (!visible) return null;
+
   if (!perm?.granted) {
     return (
       <Modal visible transparent animationType="slide">
@@ -111,18 +139,18 @@ function ScannerModal({
       </Modal>
     );
   }
+
   return (
     <Modal visible transparent animationType="fade">
       <View style={scan.overlay}>
         <StatusBar barStyle="light-content" />
-        <CameraView
-          style={StyleSheet.absoluteFill} facing="back"
+        <CameraView style={StyleSheet.absoluteFill} facing="back"
           barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8', 'datamatrix', 'pdf417'] }}
-          onBarcodeScanned={result => {
+          onBarcodeScanned={r => {
             if (scannedRef.current) return;
             scannedRef.current = true;
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            onScanned(result.data);
+            onScanned(r.data);
           }}
         />
         <View style={scan.vignette} pointerEvents="none" />
@@ -146,98 +174,57 @@ function ScannerModal({
   );
 }
 
-// ── World-class Sign-Out Confirmation Sheet ───────────────────────────────
-function SignOutSheet({
-  visible, userEmail, onConfirm, onCancel,
-}: {
+// ── Sign-out confirmation sheet ────────────────────────────────────────────
+function SignOutSheet({ visible, userEmail, onConfirm, onCancel }: {
   visible: boolean; userEmail: string; onConfirm: () => void; onCancel: () => void;
 }) {
-  const slideY  = useRef(new Animated.Value(400)).current;
+  const slideY    = useRef(new Animated.Value(400)).current;
   const overlayOp = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(overlayOp, { toValue: 1, duration: 220, useNativeDriver: true }),
-        Animated.spring(slideY, { toValue: 0, tension: 70, friction: 11, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(overlayOp, { toValue: 0, duration: 180, useNativeDriver: true }),
-        Animated.timing(slideY,    { toValue: 400, duration: 200, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      ]).start();
-    }
+    Animated.parallel([
+      Animated.timing(overlayOp, { toValue: visible ? 1 : 0, duration: visible ? 220 : 180, useNativeDriver: true }),
+      visible
+        ? Animated.spring(slideY, { toValue: 0, tension: 70, friction: 11, useNativeDriver: true })
+        : Animated.timing(slideY, { toValue: 400, duration: 200, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+    ]).start();
   }, [visible]);
-
   if (!visible) return null;
 
   const initial = userEmail ? userEmail[0].toUpperCase() : 'U';
-
   return (
     <Modal visible transparent animationType="none" onRequestClose={onCancel}>
-      {/* Overlay */}
       <Animated.View style={[so.overlay, { opacity: overlayOp }]}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onCancel} />
       </Animated.View>
-
-      {/* Sheet */}
       <Animated.View style={[so.sheet, { transform: [{ translateY: slideY }] }]}>
-        {/* Handle */}
         <View style={so.handle} />
-
-        {/* User avatar */}
         <View style={so.avatarWrap}>
-          <LinearGradient colors={['#4f46e5', '#7c3aed']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={so.avatarGrad}>
+          <LinearGradient colors={['#4f46e5', '#7c3aed']} style={so.avatarGrad}>
             <Text style={so.avatarInitial}>{initial}</Text>
           </LinearGradient>
-          <View style={so.avatarBadge}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' }} />
-          </View>
+          <View style={so.avatarBadge}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' }} /></View>
         </View>
-
         <Text style={so.greeting}>Signed in as</Text>
         <Text style={so.email} numberOfLines={1}>{userEmail || 'Your account'}</Text>
-
-        {/* Divider */}
         <View style={so.divider} />
-
         <Text style={so.confirmTitle}>Sign out of AssetXAI?</Text>
-        <Text style={so.confirmBody}>
-          You'll need to enter your credentials again to access the app.
-        </Text>
-
-        {/* Sign out button */}
-        <TouchableOpacity
-          style={so.signOutBtn}
-          onPress={() => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            onConfirm();
-          }}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={['#ef4444', '#dc2626']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={so.signOutGrad}
-          >
+        <Text style={so.confirmBody}>You'll need to enter your credentials again to access the app.</Text>
+        <TouchableOpacity style={so.signOutBtn} onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); onConfirm(); }} activeOpacity={0.85}>
+          <LinearGradient colors={['#ef4444', '#dc2626']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={so.signOutGrad}>
             <SignOutIcon color="#fff" size={18} />
             <Text style={so.signOutText}>Sign Out</Text>
           </LinearGradient>
         </TouchableOpacity>
-
-        {/* Cancel button */}
         <TouchableOpacity style={so.cancelBtn} onPress={onCancel} activeOpacity={0.7}>
           <Text style={so.cancelText}>Cancel</Text>
         </TouchableOpacity>
-
-        {/* Safe area spacer */}
         <View style={{ height: Platform.OS === 'ios' ? 20 : 8 }} />
       </Animated.View>
     </Modal>
   );
 }
 
-// ── Network error ─────────────────────────────────────────────────────────
+// ── Network error ──────────────────────────────────────────────────────────
 function NetworkError({ onRetry }: { onRetry: () => void }) {
   return (
     <View style={err.wrap}>
@@ -249,16 +236,6 @@ function NetworkError({ onRetry }: { onRetry: () => void }) {
           <Text style={err.btnText}>↻  Retry</Text>
         </LinearGradient>
       </TouchableOpacity>
-    </View>
-  );
-}
-
-// ── Unread badge ──────────────────────────────────────────────────────────
-function Badge({ count }: { count: number }) {
-  if (count < 1) return null;
-  return (
-    <View style={styles.badge}>
-      <Text style={styles.badgeText}>{count > 9 ? '9+' : count}</Text>
     </View>
   );
 }
@@ -281,11 +258,10 @@ export default function AppScreen() {
   const [webviewKilled, setWebviewKilled] = useState(false);
   const [showSignOut,   setShowSignOut]  = useState(false);
   const [signingOut,    setSigningOut]   = useState(false);
-  // Role gate — 'checking' → loading; 'staff' → taskpane; 'admin' → full app
-  const [roleStatus,  setRoleStatus]  = useState<'checking' | 'staff' | 'admin'>('checking');
-  const [webViewUrl,  setWebViewUrl]  = useState(URLS.staff);
+  const [roleStatus,    setRoleStatus]   = useState<RoleStatus>('checking');
+  const [webViewUrl,    setWebViewUrl]   = useState(URLS.staff);
   const webKeyRef    = useRef(0);
-  const [webKey,     setWebKey]         = useState(0);
+  const [webKey,     setWebKey]   = useState(0);
   const prevUserIdRef = useRef<string | null>(null);
 
   // ── Auth state ──────────────────────────────────────────────────────────
@@ -294,26 +270,21 @@ export default function AppScreen() {
       setSession(s);
       prevUserIdRef.current = s?.user?.id ?? null;
       setBridgeReady(true);
-      if (s) {
-        webKeyRef.current += 1;
-        setWebKey(webKeyRef.current);
-      }
+      if (s) { webKeyRef.current += 1; setWebKey(webKeyRef.current); }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       const prevId = prevUserIdRef.current;
       const nextId = s?.user?.id ?? null;
       setSession(s);
-
       if (!s) {
         setWebviewKilled(true);
         router.replace('/(auth)/login' as any);
       } else if (prevId !== nextId) {
-        // Different user logged in — reset everything and re-check role
         setWebviewKilled(false);
         setSigningOut(false);
         setRoleStatus('checking');
-        setWebViewUrl(URLS.staff); // safe default until role is confirmed
+        setWebViewUrl(URLS.staff);
         setBridgeReady(false);
         setTimeout(() => {
           setBridgeReady(true);
@@ -326,50 +297,61 @@ export default function AppScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── Role gate: check profile BEFORE showing any content ──────────────────
-  //
-  //  HANDHELD         → native inventory screen (no WebView)
-  //  ADMIN / MANAGER  → full main app dashboard (assetxai.live)
-  //  STAFF            → employee taskpane  (assetxai.live/outlook/taskpane)
-  //
+  // ── Role gate ────────────────────────────────────────────────────────────
+  // Uses the access_token directly from the session state to avoid any
+  // Supabase-client internal race conditions on mobile.
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || !session?.access_token) return;
 
     let cancelled = false;
     setRoleStatus('checking');
 
+    const applyRole = (role: string) => {
+      if (cancelled) return;
+      if (role === 'HANDHELD') {
+        router.replace('/(tabs)/inventory' as any);
+      } else if (role === 'ADMIN' || role === 'MANAGER') {
+        setWebViewUrl(URLS.admin);
+        setRoleStatus('admin');
+      } else {
+        setWebViewUrl(URLS.staff);
+        setRoleStatus('staff');
+      }
+    };
+
     const checkRole = async (attempt = 0) => {
+      // First try: read role from JWT app_metadata (instant, no API call)
+      const appMeta = (session.user as any)?.app_metadata;
+      const metaRole: string | undefined = appMeta?.role ?? appMeta?.user_role;
+      if (metaRole) { applyRole(metaRole.toUpperCase()); return; }
+
+      // Second: call the profile API directly with our token
       try {
-        const profile = await getMyProfile();
+        const res = await fetch(`${API_URL}/api/users/me`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const profile = await res.json();
         if (cancelled) return;
-
-        const role = profile?.role as string | undefined;
-
-        if (role === 'HANDHELD') {
-          router.replace('/(tabs)/inventory' as any);
-        } else if (role === 'ADMIN' || role === 'MANAGER') {
-          setWebViewUrl(URLS.admin);
-          setRoleStatus('admin');
-        } else {
-          // STAFF or unknown → employee taskpane
-          setWebViewUrl(URLS.staff);
-          setRoleStatus('staff');
-        }
-      } catch {
+        applyRole((profile?.role ?? 'STAFF').toUpperCase());
+      } catch (e) {
         if (cancelled) return;
-        if (attempt < 3) {
-          setTimeout(() => checkRole(attempt + 1), 800 * (attempt + 1));
+        if (attempt < 4) {
+          // Exponential back-off: 600ms, 1.2s, 2.4s, 4.8s
+          setTimeout(() => checkRole(attempt + 1), 600 * Math.pow(2, attempt));
         } else {
-          // Fail-open: default to staff view
-          setWebViewUrl(URLS.staff);
-          setRoleStatus('staff');
+          // Fail-open: default to staff portal
+          applyRole('STAFF');
         }
       }
     };
 
     checkRole();
     return () => { cancelled = true; };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, session?.access_token]);
 
   // ── Push token + unread ─────────────────────────────────────────────────
   useEffect(() => {
@@ -380,8 +362,7 @@ export default function AppScreen() {
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(() => {
-      setUnreadCount(0);
-      router.push('/(tabs)/alerts' as any);
+      setUnreadCount(0); router.push('/(tabs)/alerts' as any);
     });
     return () => Notifications.removeNotificationSubscription(sub);
   }, []);
@@ -392,9 +373,7 @@ export default function AppScreen() {
         type: 'notification_received',
         value: { title: n.request.content.title, body: n.request.content.body, data: n.request.content.data },
       });
-      webRef.current?.injectJavaScript(
-        `window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(payload)}}));true;`
-      );
+      webRef.current?.injectJavaScript(`window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(payload)}}));true;`);
     });
     return () => Notifications.removeNotificationSubscription(sub);
   }, []);
@@ -408,25 +387,16 @@ export default function AppScreen() {
   const handleMessage = useCallback(async (event: WebViewMessageEvent) => {
     let msg: any;
     try { msg = JSON.parse(event.nativeEvent.data); } catch { return; }
-
     switch (msg.type) {
       case 'scan':
-        setScanCallback(msg.callbackId ?? null);
-        setScanVisible(true);
-        break;
-
+        setScanCallback(msg.callbackId ?? null); setScanVisible(true); break;
       case 'notification':
         await Notifications.scheduleNotificationAsync({
-          content: {
-            title: msg.title || 'AssetXAI', body: msg.body || '',
-            data: msg.data || {}, sound: true,
-            ...(Platform.OS === 'android' ? { channelId: 'assetxai' } : {}),
-          },
+          content: { title: msg.title || 'AssetXAI', body: msg.body || '', data: msg.data || {}, sound: true,
+            ...(Platform.OS === 'android' ? { channelId: 'assetxai' } : {}) },
           trigger: null,
         });
-        setUnreadCount(n => n + 1);
-        break;
-
+        setUnreadCount(n => n + 1); break;
       case 'haptic':
         switch (msg.style) {
           case 'success': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); break;
@@ -434,69 +404,46 @@ export default function AppScreen() {
           case 'warning': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); break;
           case 'heavy':   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);              break;
           default:        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-        break;
-
+        } break;
       case 'navigate':
-        if (msg.route === 'handheld') router.push('/(tabs)/inventory' as any);
-        if (msg.route === 'alerts')   { setUnreadCount(0); router.push('/(tabs)/alerts' as any); }
-        break;
-
+        if (msg.route === 'alerts') { setUnreadCount(0); router.push('/(tabs)/alerts' as any); } break;
       case 'getPushToken':
-        webRef.current?.injectJavaScript(
-          `window.AssetXAI._resolve(${JSON.stringify(msg.callbackId)},${JSON.stringify(pushToken)});true;`
-        );
-        break;
-
+        webRef.current?.injectJavaScript(`window.AssetXAI._resolve(${JSON.stringify(msg.callbackId)},${JSON.stringify(pushToken)});true;`); break;
       case 'signout':
-        // WebView bridge signout (fallback — normally the native button handles this)
         setWebviewKilled(true);
         router.replace('/(auth)/login' as any);
-        supabase.auth.signOut().catch(() => {});
-        break;
+        supabase.auth.signOut().catch(() => {}); break;
     }
   }, [pushToken]);
 
   const handleScanResult = useCallback((value: string) => {
     setScanVisible(false);
     if (scanCallback && webRef.current) {
-      webRef.current.injectJavaScript(
-        `window.AssetXAI._resolve(${JSON.stringify(scanCallback)},${JSON.stringify(value)});true;`
-      );
+      webRef.current.injectJavaScript(`window.AssetXAI._resolve(${JSON.stringify(scanCallback)},${JSON.stringify(value)});true;`);
     }
     setScanCallback(null);
   }, [scanCallback]);
 
-  // ── Native sign-out handler ──────────────────────────────────────────────
   const handleNativeSignOut = useCallback(async () => {
-    setShowSignOut(false);
-    setSigningOut(true);
-    // Immediately kill WebView so nothing web-side renders
-    setWebviewKilled(true);
+    setShowSignOut(false); setSigningOut(true); setWebviewKilled(true);
     await supabase.auth.signOut();
-    // onAuthStateChange will fire → router.replace('/(auth)/login')
   }, []);
 
-  const retry = () => {
-    setNetworkError(false);
-    webKeyRef.current += 1;
-    setWebKey(webKeyRef.current);
-  };
-
+  const retry = () => { setNetworkError(false); webKeyRef.current += 1; setWebKey(webKeyRef.current); };
   const topPad = insets.top + (Platform.OS === 'android' ? 28 : 0);
   const userEmail = session?.user?.email || '';
+  const isAdmin = roleStatus === 'admin';
 
   return (
     <View style={{ flex: 1, backgroundColor: '#1e1b4b' }}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* ── Native top bar ────────────────────────────────────────────── */}
+      {/* ── Native top bar ─────────────────────────────────────────────── */}
       <LinearGradient
         colors={['#1e1b4b', '#3730a3']}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
         style={[styles.bar, { paddingTop: topPad, paddingBottom: 10 }]}
       >
-        {/* Left: back + logo + title */}
         <View style={styles.barLeft}>
           {canGoBack && (
             <TouchableOpacity style={styles.iconBtn} onPress={() => webRef.current?.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -506,23 +453,46 @@ export default function AppScreen() {
             </TouchableOpacity>
           )}
           <Image source={require('../../assets/icon.png')} style={styles.logoImg} resizeMode="contain" />
-          <Text style={styles.barTitle}>AssetXAI</Text>
+          <View>
+            <Text style={styles.barTitle}>AssetXAI</Text>
+            {roleStatus !== 'checking' && (
+              <Text style={styles.barRoleChip}>
+                {isAdmin ? (roleStatus === 'admin' ? '● Admin' : '● Manager') : '● Staff'}
+              </Text>
+            )}
+          </View>
         </View>
 
-        {/* Right: scan · bell · sign-out */}
         <View style={styles.barRight}>
+          {/* Role-specific action button */}
+          {roleStatus !== 'checking' && (
+            isAdmin ? (
+              /* ADMIN/MANAGER → Dashboard icon → navigate WebView to /dashboard */
+              <TouchableOpacity
+                style={[styles.iconBtn, styles.iconBtnIndigo]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  webRef.current?.injectJavaScript(`window.location.href='${API_URL}/dashboard';true;`);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <DashboardIcon color="#a5b4fc" size={20} />
+              </TouchableOpacity>
+            ) : (
+              /* STAFF → Scan icon → native camera */
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => { setScanCallback(null); setScanVisible(true); }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <ScanIcon color="#fff" size={20} />
+              </TouchableOpacity>
+            )
+          )}
 
-          {/* Scan */}
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => { setScanCallback(null); setScanVisible(true); }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            activeOpacity={0.7}
-          >
-            <ScanIcon color="#fff" size={20} />
-          </TouchableOpacity>
-
-          {/* Bell */}
+          {/* Notifications bell */}
           <TouchableOpacity
             style={[styles.iconBtn, unreadCount > 0 && styles.iconBtnAmber]}
             onPress={() => { setUnreadCount(0); router.push('/(tabs)/alerts' as any); }}
@@ -533,51 +503,38 @@ export default function AppScreen() {
             <Badge count={unreadCount} />
           </TouchableOpacity>
 
-          {/* ── Sign-out (native — the ONLY place to log out) ── */}
+          {/* Sign-out */}
           <TouchableOpacity
             style={[styles.iconBtn, styles.iconBtnRed]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowSignOut(true);
-            }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowSignOut(true); }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             activeOpacity={0.7}
             disabled={signingOut}
           >
             <SignOutIcon color={signingOut ? 'rgba(255,255,255,0.4)' : '#fff'} size={18} />
           </TouchableOpacity>
-
         </View>
       </LinearGradient>
 
-      {/* ── Progress bar ─────────────────────────────────────────────── */}
+      {/* ── Load progress ─────────────────────────────────────────────── */}
       {loadProgress > 0 && loadProgress < 1 && (
         <View style={styles.progressTrack}>
-          <LinearGradient
-            colors={['#818cf8', '#4f46e5']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={[styles.progressBar, { width: `${loadProgress * 100}%` as any }]}
-          />
+          <LinearGradient colors={['#818cf8', '#4f46e5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={[styles.progressBar, { width: `${loadProgress * 100}%` as any }]} />
         </View>
       )}
 
-      {/* ── Content ──────────────────────────────────────────────────── */}
+      {/* ── Content ───────────────────────────────────────────────────── */}
       {webviewKilled ? (
-        /* Blank while navigating to login */
         <View style={{ flex: 1, backgroundColor: '#1e1b4b' }} />
       ) : roleStatus === 'checking' ? (
-        /* Checking role — nothing renders until we know where to send the user */
         <View style={styles.roleGate}>
-          <LinearGradient
-            colors={['#060413', '#1e1b4b', '#2d2470']}
-            style={StyleSheet.absoluteFill}
-          />
-          {/* Decorative glow */}
+          <LinearGradient colors={['#060413', '#1e1b4b', '#2d2470']} style={StyleSheet.absoluteFill} />
           <View style={styles.roleGateGlow} />
           <View style={styles.roleGateCard}>
             <View style={styles.roleGateIconWrap}>
               <LinearGradient colors={['#4f46e5', '#7c3aed']} style={styles.roleGateIconGrad}>
-                <Image source={require('../../assets/icon.png')} style={{ width: 40, height: 40, borderRadius: 10 }} resizeMode="contain" />
+                <Image source={require('../../assets/icon.png')} style={{ width: 42, height: 42, borderRadius: 10 }} resizeMode="contain" />
               </LinearGradient>
             </View>
             <ActivityIndicator size="large" color="#818cf8" style={{ marginTop: 4 }} />
@@ -612,141 +569,45 @@ export default function AppScreen() {
         />
       )}
 
-      {/* ── Scanner modal ─────────────────────────────────────────── */}
-      <ScannerModal
-        visible={scanVisible}
-        onScanned={handleScanResult}
-        onClose={() => { setScanVisible(false); setScanCallback(null); }}
-      />
-
-      {/* ── World-class sign-out confirmation sheet ────────────────── */}
-      <SignOutSheet
-        visible={showSignOut}
-        userEmail={userEmail}
-        onConfirm={handleNativeSignOut}
-        onCancel={() => setShowSignOut(false)}
-      />
+      <ScannerModal visible={scanVisible} onScanned={handleScanResult} onClose={() => { setScanVisible(false); setScanCallback(null); }} />
+      <SignOutSheet visible={showSignOut} userEmail={userEmail} onConfirm={handleNativeSignOut} onCancel={() => setShowSignOut(false)} />
     </View>
   );
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14, zIndex: 10,
-  },
+  bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, zIndex: 10 },
   barLeft:  { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   barRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-
-  logoImg: {
-    width: 32, height: 32, borderRadius: 9,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  barTitle: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
-
-  iconBtn: {
-    width: 38, height: 38, borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
-    position: 'relative',
-  },
-  iconBtnAmber: {
-    backgroundColor: 'rgba(251,191,36,0.2)',
-    borderColor: 'rgba(251,191,36,0.45)',
-  },
-  iconBtnRed: {
-    backgroundColor: 'rgba(239,68,68,0.18)',
-    borderColor: 'rgba(239,68,68,0.4)',
-  },
-
-  badge: {
-    position: 'absolute', top: -5, right: -5,
-    minWidth: 18, height: 18, borderRadius: 9,
-    backgroundColor: '#ef4444',
-    alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 3,
-    borderWidth: 2, borderColor: '#1e1b4b', zIndex: 2,
-  },
+  logoImg:  { width: 32, height: 32, borderRadius: 9, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)', backgroundColor: 'rgba(255,255,255,0.1)' },
+  barTitle: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  barRoleChip: { fontSize: 10, color: 'rgba(165,180,252,0.8)', fontWeight: '600', marginTop: 1 },
+  iconBtn: { width: 38, height: 38, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', position: 'relative' },
+  iconBtnAmber:  { backgroundColor: 'rgba(251,191,36,0.2)',  borderColor: 'rgba(251,191,36,0.45)' },
+  iconBtnRed:    { backgroundColor: 'rgba(239,68,68,0.18)',  borderColor: 'rgba(239,68,68,0.4)' },
+  iconBtnIndigo: { backgroundColor: 'rgba(99,102,241,0.25)', borderColor: 'rgba(165,180,252,0.5)' },
+  badge: { position: 'absolute', top: -5, right: -5, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: '#1e1b4b', zIndex: 2 },
   badgeText: { fontSize: 9, fontWeight: '900', color: '#fff' },
-
   progressTrack: { height: 2, backgroundColor: 'rgba(99,102,241,0.15)' },
   progressBar:   { height: 2 },
-
-  roleGate: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-  },
-  roleGateGlow: {
-    position: 'absolute', alignSelf: 'center', top: '30%',
-    width: 260, height: 260, borderRadius: 130,
-    backgroundColor: 'rgba(99,102,241,0.12)',
-    shadowColor: '#6366f1', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8, shadowRadius: 60,
-  },
-  roleGateCard: {
-    alignItems: 'center', gap: 16, padding: 40,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 32,
-    borderWidth: 1, borderColor: 'rgba(165,180,252,0.15)',
-    marginHorizontal: 32,
-    shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3, shadowRadius: 20,
-  },
-  roleGateIconWrap: {
-    shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5, shadowRadius: 14, elevation: 10,
-  },
-  roleGateIconGrad: {
-    width: 80, height: 80, borderRadius: 24,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  roleGateTitle: {
-    fontSize: 17, fontWeight: '800', color: '#e0e7ff',
-    textAlign: 'center', letterSpacing: -0.3,
-  },
-  roleGateSubtitle: {
-    fontSize: 13, color: 'rgba(165,180,252,0.6)',
-    textAlign: 'center', marginTop: -6,
-  },
+  roleGate: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  roleGateGlow: { position: 'absolute', alignSelf: 'center', top: '30%', width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(99,102,241,0.12)', shadowColor: '#6366f1', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 60 },
+  roleGateCard: { alignItems: 'center', gap: 16, padding: 40, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 32, borderWidth: 1, borderColor: 'rgba(165,180,252,0.15)', marginHorizontal: 32 },
+  roleGateIconWrap: { shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 14, elevation: 10 },
+  roleGateIconGrad: { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  roleGateTitle:    { fontSize: 17, fontWeight: '800', color: '#e0e7ff', textAlign: 'center', letterSpacing: -0.3 },
+  roleGateSubtitle: { fontSize: 13, color: 'rgba(165,180,252,0.6)', textAlign: 'center', marginTop: -6 },
 });
 
-// Sign-out sheet styles
 const so = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  sheet: {
-    position: 'absolute', left: 0, right: 0, bottom: 0,
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    paddingHorizontal: 24, paddingTop: 12,
-    alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.18, shadowRadius: 24, elevation: 30,
-  },
-  handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#e2e8f0', marginBottom: 24,
-  },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)' },
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 30 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#e2e8f0', marginBottom: 24 },
   avatarWrap: { marginBottom: 12, position: 'relative' },
-  avatarGrad: {
-    width: 72, height: 72, borderRadius: 36,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35, shadowRadius: 10, elevation: 8,
-  },
+  avatarGrad: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { fontSize: 30, fontWeight: '800', color: '#fff' },
-  avatarBadge: {
-    position: 'absolute', bottom: 2, right: 2,
-    width: 18, height: 18, borderRadius: 9,
-    backgroundColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#fff',
-  },
+  avatarBadge: { position: 'absolute', bottom: 2, right: 2, width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   greeting: { fontSize: 12, color: '#94a3b8', fontWeight: '500', marginBottom: 2 },
   email:    { fontSize: 15, color: '#0f172a', fontWeight: '700', marginBottom: 20, maxWidth: 280 },
   divider:  { width: '100%', height: 1, backgroundColor: '#f1f5f9', marginBottom: 20 },
@@ -759,15 +620,14 @@ const so = StyleSheet.create({
   cancelText:  { fontSize: 15, fontWeight: '600', color: '#64748b' },
 });
 
-// Scanner styles
 const scan = StyleSheet.create({
-  overlay:  { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
   vignette: { ...StyleSheet.absoluteFillObject },
   finder: { position: 'absolute', width: 250, height: 250, top: '50%', left: '50%', marginTop: -125, marginLeft: -125 },
   corner: { position: 'absolute', width: 32, height: 32, borderColor: '#818cf8' },
-  cTL: { top: 0, left: 0,   borderTopWidth: 3, borderLeftWidth: 3,   borderTopLeftRadius: 4 },
-  cTR: { top: 0, right: 0,  borderTopWidth: 3, borderRightWidth: 3,  borderTopRightRadius: 4 },
-  cBL: { bottom: 0, left: 0,  borderBottomWidth: 3, borderLeftWidth: 3,  borderBottomLeftRadius: 4 },
+  cTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 4 },
+  cTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 4 },
+  cBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 4 },
   cBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 4 },
   scanLine: { position: 'absolute', top: '50%', left: 8, right: 8, height: 2, backgroundColor: 'rgba(129,140,248,0.8)', borderRadius: 1 },
   headerRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20 },
@@ -777,19 +637,19 @@ const scan = StyleSheet.create({
   footerText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '500' },
   permBox: { backgroundColor: '#1e1b4b', borderRadius: 28, padding: 32, margin: 24, alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   permIcon: { width: 72, height: 72, borderRadius: 22, backgroundColor: '#4f46e5', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  permTitle:   { fontSize: 20, fontWeight: '800', color: '#fff', textAlign: 'center' },
-  permBody:    { fontSize: 14, color: 'rgba(255,255,255,0.65)', textAlign: 'center', lineHeight: 20 },
-  permBtn:     { backgroundColor: '#4f46e5', paddingVertical: 14, paddingHorizontal: 32, borderRadius: 16, marginTop: 4, width: '100%', alignItems: 'center' },
+  permTitle: { fontSize: 20, fontWeight: '800', color: '#fff', textAlign: 'center' },
+  permBody:  { fontSize: 14, color: 'rgba(255,255,255,0.65)', textAlign: 'center', lineHeight: 20 },
+  permBtn:   { backgroundColor: '#4f46e5', paddingVertical: 14, paddingHorizontal: 32, borderRadius: 16, marginTop: 4, width: '100%', alignItems: 'center' },
   permBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   cancelText:  { color: 'rgba(255,255,255,0.45)', fontSize: 14 },
 });
 
 const err = StyleSheet.create({
-  wrap:     { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, backgroundColor: '#f8fafc', gap: 12 },
-  iconBox:  { width: 80, height: 80, borderRadius: 24, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  title:    { fontSize: 22, fontWeight: '800', color: '#0f172a' },
-  body:     { fontSize: 15, color: '#64748b', textAlign: 'center', lineHeight: 22 },
-  btn:      { borderRadius: 16, overflow: 'hidden', marginTop: 8 },
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, backgroundColor: '#f8fafc', gap: 12 },
+  iconBox: { width: 80, height: 80, borderRadius: 24, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  title: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
+  body:  { fontSize: 15, color: '#64748b', textAlign: 'center', lineHeight: 22 },
+  btn:   { borderRadius: 16, overflow: 'hidden', marginTop: 8 },
   btnInner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 28 },
   btnText:  { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
