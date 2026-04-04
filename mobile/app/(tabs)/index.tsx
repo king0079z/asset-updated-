@@ -10,7 +10,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform,
-  StatusBar, Modal, Animated, Easing, Image,
+  StatusBar, Modal, Animated, Easing, Image, ActivityIndicator,
 } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -277,6 +277,8 @@ export default function AppScreen() {
   const [webviewKilled, setWebviewKilled] = useState(false);
   const [showSignOut,   setShowSignOut]  = useState(false);
   const [signingOut,    setSigningOut]   = useState(false);
+  // Role gate: 'checking' → loading screen; 'handheld' → redirect; 'user' → WebView
+  const [roleStatus,    setRoleStatus]   = useState<'checking' | 'user'>('checking');
   const webKeyRef    = useRef(0);
   const [webKey,     setWebKey]         = useState(0);
   const prevUserIdRef = useRef<string | null>(null);
@@ -302,8 +304,10 @@ export default function AppScreen() {
         setWebviewKilled(true);
         router.replace('/(auth)/login' as any);
       } else if (prevId !== nextId) {
+        // New user logged in — reset everything and re-check role
         setWebviewKilled(false);
         setSigningOut(false);
+        setRoleStatus('checking');  // show loading until role is confirmed
         setBridgeReady(false);
         setTimeout(() => {
           setBridgeReady(true);
@@ -316,12 +320,42 @@ export default function AppScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── HANDHELD role gate ──────────────────────────────────────────────────
+  // ── Role gate: check profile BEFORE showing any content ─────────────────
+  // Shows a loading screen until we know whether the user is HANDHELD or not.
+  // HANDHELD  → redirect to native inventory (and never show WebView)
+  // All other → set roleStatus='user' → WebView loads taskpane
   useEffect(() => {
-    if (!session) return;
-    getMyProfile()
-      .then(p => { if (p?.role === 'HANDHELD') router.replace('/(tabs)/inventory' as any); })
-      .catch(() => {});
+    if (!session?.user?.id) return;
+
+    let cancelled = false;
+    setRoleStatus('checking');  // show loading screen
+
+    const checkRole = async (attempt = 0) => {
+      try {
+        const profile = await getMyProfile();
+        if (cancelled) return;
+
+        if (profile?.role === 'HANDHELD') {
+          // Redirect to native handheld screen — no WebView shown
+          router.replace('/(tabs)/inventory' as any);
+        } else {
+          // All staff / admins / users → show taskpane WebView
+          setRoleStatus('user');
+        }
+      } catch {
+        if (cancelled) return;
+        if (attempt < 3) {
+          // Retry up to 3 times (network may not be ready right after login)
+          setTimeout(() => checkRole(attempt + 1), 800 * (attempt + 1));
+        } else {
+          // Fail open — better to show the app than stay stuck on loading
+          setRoleStatus('user');
+        }
+      }
+    };
+
+    checkRole();
+    return () => { cancelled = true; };
   }, [session?.user?.id]);
 
   // ── Push token + unread ─────────────────────────────────────────────────
@@ -516,7 +550,21 @@ export default function AppScreen() {
 
       {/* ── Content ──────────────────────────────────────────────────── */}
       {webviewKilled ? (
+        /* Blank while navigating to login */
         <View style={{ flex: 1, backgroundColor: '#1e1b4b' }} />
+      ) : roleStatus === 'checking' ? (
+        /* Role check in progress — show loading so nothing flashes */
+        <View style={styles.roleGate}>
+          <LinearGradient
+            colors={['#1e1b4b', '#2d2470']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.roleGateCard}>
+            <ActivityIndicator size="large" color="#818cf8" />
+            <Text style={styles.roleGateTitle}>Setting up your workspace…</Text>
+            <Text style={styles.roleGateSubtitle}>Checking account permissions</Text>
+          </View>
+        </View>
       ) : networkError ? (
         <NetworkError onRetry={retry} />
       ) : (
@@ -607,6 +655,25 @@ const styles = StyleSheet.create({
 
   progressTrack: { height: 2, backgroundColor: 'rgba(99,102,241,0.15)' },
   progressBar:   { height: 2 },
+
+  roleGate: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+  },
+  roleGateCard: {
+    alignItems: 'center', gap: 14, padding: 40,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 28,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    marginHorizontal: 32,
+  },
+  roleGateTitle: {
+    fontSize: 16, fontWeight: '700', color: '#e0e7ff',
+    textAlign: 'center', marginTop: 4,
+  },
+  roleGateSubtitle: {
+    fontSize: 13, color: 'rgba(165,180,252,0.65)',
+    textAlign: 'center',
+  },
 });
 
 // Sign-out sheet styles
