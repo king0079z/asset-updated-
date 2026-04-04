@@ -1,542 +1,427 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+/**
+ * Main App tab — full-screen PWA WebView
+ * Loads assetxai.live with:
+ *  • Supabase session auto-injection (SSO — user logs in once)
+ *  • Native scan bridge (barcode / QR / RFID via camera)
+ *  • Native push notification bridge
+ *  • Native haptic feedback bridge
+ *  • Network error + retry screen
+ *  • Pull-to-refresh
+ *  • Loading progress bar
+ */
+import { useRef, useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, RefreshControl, ActivityIndicator, Platform,
-  StatusBar, Animated,
+  View, Text, StyleSheet, TouchableOpacity, Platform,
+  StatusBar, ActivityIndicator, Modal, Alert as RNAlert,
 } from 'react-native';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { theme } from '@/constants/theme';
-import { StatCard } from '@/components/ui/StatCard';
-import { QuickAction } from '@/components/ui/QuickAction';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { getDashboardStats, scanAsset, getMyTickets } from '@/lib/api';
-import type { DashboardStats } from '@/lib/api';
+import { useRouter } from 'expo-router';
 
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
+import { API_URL, SUPABASE_URL } from '@/constants/config';
+import { supabase } from '@/lib/supabase';
+import { buildBridgeScript } from '@/lib/webBridge';
 
-export default function HomeScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentTickets, setRecentTickets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [scanQuery, setScanQuery] = useState('');
-  const [scanResult, setScanResult] = useState<any>(null);
-  const [scanning, setScanning] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+// ── Scanner modal ──────────────────────────────────────────────────────────
+function ScannerModal({
+  visible,
+  onScanned,
+  onClose,
+}: {
+  visible: boolean;
+  onScanned: (value: string) => void;
+  onClose: () => void;
+}) {
+  const [perm, requestPerm] = useCameraPermissions();
+  const scannedRef = useRef(false);
 
-  const load = useCallback(async () => {
-    try {
-      const [data, tickets] = await Promise.all([
-        getDashboardStats(),
-        getMyTickets().catch(() => []),
-      ]);
-      setStats(data);
-      setRecentTickets(Array.isArray(tickets) ? tickets.slice(0, 5) : []);
-    } catch {
-      setStats(null);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  useEffect(() => {
+    if (visible) {
+      scannedRef.current = false;
+      if (!perm?.granted) requestPerm();
     }
-  }, []);
+  }, [visible]);
 
-  useEffect(() => { load(); }, [load]);
+  if (!visible) return null;
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setScanResult(null);
-    load();
-  }, [load]);
-
-  const handleScan = async () => {
-    if (!scanQuery.trim()) return;
-    setScanning(true);
-    setScanResult(null);
-    try {
-      const asset = await scanAsset(scanQuery.trim());
-      setScanResult(asset);
-      if (asset?.id) setTimeout(() => router.push(`/asset/${asset.id}` as any), 800);
-    } catch (e: any) {
-      setScanResult({ error: e?.message || 'Asset not found' });
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const formatCurrency = (v: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
-
-  const ticketStatusColor = (s: string) => {
-    if (s === 'OPEN') return theme.colors.info;
-    if (s === 'IN_PROGRESS') return theme.colors.warning;
-    if (s === 'RESOLVED' || s === 'CLOSED') return theme.colors.success;
-    if (s === 'PENDING_DLM') return theme.colors.amber;
-    return theme.colors.textMuted;
-  };
-
-  const ticketStatusLabel = (s: string) => {
-    const map: Record<string, string> = {
-      OPEN: 'Open', IN_PROGRESS: 'In Progress', RESOLVED: 'Resolved',
-      CLOSED: 'Closed', PENDING_DLM: 'Awaiting Approval', DLM_APPROVED: 'Approved', DLM_REJECTED: 'Rejected',
-    };
-    return map[s] ?? s;
-  };
+  if (!perm?.granted) {
+    return (
+      <Modal visible transparent animationType="slide">
+        <View style={scan.overlay}>
+          <View style={scan.permBox}>
+            <Ionicons name="camera-outline" size={48} color="#fff" allowFontScaling={false} />
+            <Text style={scan.permTitle}>Camera Access Required</Text>
+            <Text style={scan.permBody}>
+              AssetXAI needs camera access to scan barcodes, QR codes, and RFID tags.
+            </Text>
+            <TouchableOpacity style={scan.permBtn} onPress={requestPerm}>
+              <Text style={scan.permBtnText}>Grant Access</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={scan.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-
-      {/* Gradient Header */}
-      <LinearGradient
-        colors={['#3730a3', '#4f46e5', '#7c3aed']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 36 : 16) }]}
-      >
-        {/* Background decoration */}
-        <View style={styles.headerCircle1} />
-        <View style={styles.headerCircle2} />
-
-        <View style={styles.headerContent}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>{getGreeting()} 👋</Text>
-            <Text style={styles.appName}>AssetXAI</Text>
-            <Text style={styles.appSubtitle}>Enterprise Asset Management</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.notifBtn}
-            onPress={() => router.push('/(tabs)/portal' as any)}
-          >
-            <Ionicons name="notifications-outline" size={22} color="#fff" />
-            {recentTickets.some(t => t.dlmApprovalStatus === 'PENDING_DLM') && (
-              <View style={styles.notifDot} />
-            )}
+    <Modal visible transparent animationType="slide">
+      <View style={scan.overlay}>
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'code39', 'ean13', 'ean8', 'datamatrix', 'pdf417'] }}
+          onBarcodeScanned={result => {
+            if (scannedRef.current) return;
+            scannedRef.current = true;
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            onScanned(result.data);
+          }}
+        />
+        {/* Viewfinder overlay */}
+        <View style={scan.frame} pointerEvents="none">
+          <View style={scan.corner} />
+          <View style={[scan.corner, scan.cornerTR]} />
+          <View style={[scan.corner, scan.cornerBL]} />
+          <View style={[scan.corner, scan.cornerBR]} />
+        </View>
+        <View style={scan.headerRow}>
+          <TouchableOpacity style={scan.closeBtn} onPress={onClose}>
+            <Ionicons name="close" size={24} color="#fff" allowFontScaling={false} />
           </TouchableOpacity>
         </View>
-
-        {/* Scan bar */}
-        <View style={styles.scanBar}>
-          <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Scan barcode or enter asset ID…"
-            placeholderTextColor={theme.colors.textMuted}
-            value={scanQuery}
-            onChangeText={t => { setScanQuery(t); setScanResult(null); }}
-            onSubmitEditing={handleScan}
-            returnKeyType="search"
-          />
-          <TouchableOpacity style={styles.scanBtn} onPress={handleScan} disabled={scanning}>
-            {scanning
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Ionicons name="scan-outline" size={18} color="#fff" />}
-          </TouchableOpacity>
+        <View style={scan.footer}>
+          <Text style={scan.footerText}>Point at a barcode, QR code or RFID tag</Text>
         </View>
+      </View>
+    </Modal>
+  );
+}
 
-        {scanResult && (
-          <View style={[styles.scanResult, scanResult.error ? styles.scanError : styles.scanSuccess]}>
-            <Ionicons
-              name={scanResult.error ? 'close-circle' : 'checkmark-circle'}
-              size={16}
-              color={scanResult.error ? theme.colors.error : theme.colors.success}
-            />
-            <Text style={[styles.scanResultText, { color: scanResult.error ? theme.colors.error : theme.colors.success }]}>
-              {scanResult.error ? scanResult.error : `Found: ${scanResult.name || scanResult.assetId}`}
-            </Text>
-          </View>
-        )}
-      </LinearGradient>
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={[styles.content]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View style={{ opacity: fadeAnim }}>
-
-          {/* Quick Actions */}
-          <View style={styles.section}>
-            <SectionHeader title="Quick Actions" />
-            <View style={styles.quickActions}>
-              <QuickAction
-                icon="camera-outline"
-                label="Scan Asset"
-                color="#4f46e5"
-                bgColor="#eef2ff"
-                onPress={() => router.push('/(tabs)/inventory' as any)}
-              />
-              <QuickAction
-                icon="ticket-outline"
-                label="IT Ticket"
-                color="#0ea5e9"
-                bgColor="#e0f2fe"
-                onPress={() => router.push('/(tabs)/portal' as any)}
-              />
-              <QuickAction
-                icon="clipboard-outline"
-                label="Audit"
-                color="#16a34a"
-                bgColor="#dcfce7"
-                onPress={() => router.push('/(tabs)/inventory' as any)}
-              />
-              <QuickAction
-                icon="briefcase-outline"
-                label="Work Queue"
-                color="#d97706"
-                bgColor="#fef3c7"
-                onPress={() => router.push('/(tabs)/work' as any)}
-              />
-              <QuickAction
-                icon="ellipsis-horizontal"
-                label="All Apps"
-                color="#7c3aed"
-                bgColor="#f5f3ff"
-                onPress={() => router.push('/(tabs)/more' as any)}
-              />
-            </View>
-          </View>
-
-          {/* KPI Stats */}
-          <View style={styles.section}>
-            <SectionHeader
-              title="Dashboard Overview"
-              actionLabel="All Assets"
-              onAction={() => router.push('/(tabs)/assets' as any)}
-            />
-            {loading ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={styles.loadingText}>Loading dashboard…</Text>
-              </View>
-            ) : stats ? (
-              <>
-                <View style={styles.statsRow}>
-                  <StatCard
-                    label="Total Assets"
-                    value={stats.totalAssets ?? 0}
-                    icon="cube-outline"
-                    gradient={['#4f46e5', '#7c3aed']}
-                    onPress={() => router.push('/(tabs)/assets' as any)}
-                  />
-                  <StatCard
-                    label="Active Rentals"
-                    value={stats.activeVehicleRentals ?? 0}
-                    icon="car-outline"
-                    gradient={['#0ea5e9', '#0284c7']}
-                    onPress={() => router.push('/(tabs)/more' as any)}
-                  />
-                </View>
-                <View style={styles.statsRow}>
-                  <StatCard
-                    label="Food Items"
-                    value={stats.totalFoodItems ?? 0}
-                    icon="restaurant-outline"
-                    gradient={['#f59e0b', '#d97706']}
-                    onPress={() => router.push('/(tabs)/more' as any)}
-                  />
-                  <StatCard
-                    label="Low Stock"
-                    value={stats.lowStockItems ?? 0}
-                    icon="warning-outline"
-                    gradient={stats.lowStockItems > 0 ? ['#ef4444', '#dc2626'] : ['#16a34a', '#15803d']}
-                    onPress={() => router.push('/(tabs)/assets' as any)}
-                  />
-                </View>
-
-                {/* Asset value banner */}
-                {stats.assetStats?.totalValue != null && stats.assetStats.totalValue > 0 && (
-                  <LinearGradient
-                    colors={['#1e293b', '#0f172a']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.valueBanner}
-                  >
-                    <View>
-                      <Text style={styles.valueBannerLabel}>Total Portfolio Value</Text>
-                      <Text style={styles.valueBannerValue}>
-                        {formatCurrency(Number(stats.assetStats.totalValue))}
-                      </Text>
-                    </View>
-                    <View style={styles.valueBannerIcon}>
-                      <Ionicons name="trending-up" size={28} color="#818cf8" />
-                    </View>
-                  </LinearGradient>
-                )}
-              </>
-            ) : (
-              <View style={styles.emptyCard}>
-                <Ionicons name="cloud-offline-outline" size={40} color={theme.colors.textMuted} />
-                <Text style={styles.emptyText}>Unable to load dashboard</Text>
-                <Text style={styles.emptySubtext}>Pull down to refresh</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Recent Tickets */}
-          {recentTickets.length > 0 && (
-            <View style={styles.section}>
-              <SectionHeader
-                title="Recent IT Tickets"
-                icon="ticket-outline"
-                actionLabel="View All"
-                onAction={() => router.push('/(tabs)/portal' as any)}
-              />
-              <View style={styles.ticketList}>
-                {recentTickets.map(ticket => (
-                  <TouchableOpacity
-                    key={ticket.id}
-                    style={[
-                      styles.ticketRow,
-                      ticket.dlmApprovalStatus === 'PENDING_DLM' && styles.ticketRowPending,
-                    ]}
-                    onPress={() => router.push(`/ticket/${ticket.id}` as any)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={[
-                      styles.ticketStatusBar,
-                      { backgroundColor: ticketStatusColor(ticket.dlmApprovalStatus ?? ticket.status) }
-                    ]} />
-                    <View style={{ flex: 1, paddingLeft: 12 }}>
-                      <Text style={styles.ticketTitle} numberOfLines={1}>{ticket.title}</Text>
-                      <View style={styles.ticketMeta}>
-                        <Text style={styles.ticketCategory}>{ticket.category}</Text>
-                        <Text style={styles.ticketDot}>·</Text>
-                        <Text style={[styles.ticketStatus, { color: ticketStatusColor(ticket.dlmApprovalStatus ?? ticket.status) }]}>
-                          {ticketStatusLabel(ticket.dlmApprovalStatus ?? ticket.status)}
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Bottom spacer */}
-          <View style={{ height: 32 }} />
-        </Animated.View>
-      </ScrollView>
+// ── Network error screen ──────────────────────────────────────────────────
+function NetworkError({ url, onRetry }: { url: string; onRetry: () => void }) {
+  return (
+    <View style={err.wrap}>
+      <Ionicons name="cloud-offline-outline" size={64} color="#94a3b8" allowFontScaling={false} />
+      <Text style={err.title}>Connection Failed</Text>
+      <Text style={err.body}>Make sure you have an internet connection and try again.</Text>
+      <TouchableOpacity style={err.btn} onPress={onRetry} activeOpacity={0.85}>
+        <LinearGradient colors={['#4f46e5', '#7c3aed']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={err.btnInner}>
+          <Ionicons name="refresh-outline" size={18} color="#fff" allowFontScaling={false} />
+          <Text style={err.btnText}>Retry</Text>
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: theme.spacing.xl,
-    paddingBottom: theme.spacing.xl,
-    overflow: 'hidden',
-  },
-  headerCircle1: {
-    position: 'absolute', top: -40, right: -40,
-    width: 180, height: 180, borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  headerCircle2: {
-    position: 'absolute', top: 40, right: 60,
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: theme.spacing.xl,
-  },
-  greeting: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.75)',
-    marginBottom: 2,
-  },
-  appName: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: -0.5,
-  },
-  appSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 2,
-  },
-  notifBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  notifDot: {
-    position: 'absolute', top: 8, right: 8,
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: '#ef4444',
-    borderWidth: 1.5, borderColor: '#4f46e5',
-  },
-  scanBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: theme.radius.xl,
-    paddingLeft: theme.spacing.md,
-    height: 48,
-    ...theme.shadows.sm,
-  },
-  searchIcon: { marginRight: 6 },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: theme.colors.text,
-    height: 48,
-  },
-  scanBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: theme.radius.xl,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scanResult: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: theme.spacing.sm,
-    backgroundColor: '#fff',
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-  },
-  scanSuccess: { backgroundColor: theme.colors.successLight },
-  scanError:   { backgroundColor: theme.colors.errorLight },
-  scanResultText: { fontSize: 13, fontWeight: '600', flex: 1 },
+// ── Main screen ─────────────────────────────────────────────────────────────
+export default function AppWebViewScreen() {
+  const insets  = useSafeAreaInsets();
+  const router  = useRouter();
+  const webRef  = useRef<WebView>(null);
+  const [session,     setSession]     = useState<any>(null);
+  const [bridgeReady, setBridgeReady] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [networkError, setNetworkError] = useState(false);
+  const [canGoBack,   setCanGoBack]   = useState(false);
+  const [scanVisible, setScanVisible] = useState(false);
+  const [scanCallback, setScanCallback] = useState<string | null>(null);
+  const [pushToken, setPushToken] = useState<string>('');
+  const keyCounter = useRef(0);
+  const [webKey, setWebKey] = useState(0);
 
-  content: {
-    padding: theme.spacing.xl,
-    paddingBottom: 120,
+  // ── Fetch Supabase session ────────────────────────────────────────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setBridgeReady(true);
+    });
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+  }, []);
+
+  // ── Get push token ────────────────────────────────────────────────────────
+  useEffect(() => {
+    Notifications.getExpoPushTokenAsync()
+      .then(t => setPushToken(t.data))
+      .catch(() => {});
+  }, []);
+
+  // ── Inject bridge script ──────────────────────────────────────────────────
+  const injectedScript = bridgeReady
+    ? buildBridgeScript(
+        session ? JSON.stringify(session) : 'null',
+        SUPABASE_URL
+      )
+    : '';
+
+  // ── Handle messages from WebView ──────────────────────────────────────────
+  const handleMessage = useCallback(async (event: WebViewMessageEvent) => {
+    let msg: any;
+    try { msg = JSON.parse(event.nativeEvent.data); } catch { return; }
+
+    switch (msg.type) {
+      // ── Scan (barcode / QR / RFID) ────────────────────────────────────────
+      case 'scan': {
+        setScanCallback(msg.callbackId);
+        setScanVisible(true);
+        break;
+      }
+
+      // ── Native push notification ──────────────────────────────────────────
+      case 'notification': {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: msg.title || 'AssetXAI',
+            body:  msg.body  || '',
+            data:  msg.data  || {},
+            sound: true,
+          },
+          trigger: null, // immediate
+        });
+        break;
+      }
+
+      // ── Haptic feedback ───────────────────────────────────────────────────
+      case 'haptic': {
+        switch (msg.style) {
+          case 'success': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); break;
+          case 'error':   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);   break;
+          case 'warning': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); break;
+          case 'heavy':   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);              break;
+          case 'medium':  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);             break;
+          default:        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        break;
+      }
+
+      // ── Navigate to native screen ──────────────────────────────────────────
+      case 'navigate': {
+        if (msg.route === 'handheld') router.push('/(tabs)/inventory' as any);
+        break;
+      }
+
+      // ── Get push token ─────────────────────────────────────────────────────
+      case 'getPushToken': {
+        webRef.current?.injectJavaScript(
+          `window.AssetXAI._resolve(${JSON.stringify(msg.callbackId)}, ${JSON.stringify(pushToken)}); true;`
+        );
+        break;
+      }
+    }
+  }, [pushToken]);
+
+  // ── Called when native scan completes ─────────────────────────────────────
+  const handleScanResult = useCallback((value: string) => {
+    setScanVisible(false);
+    if (scanCallback && webRef.current) {
+      webRef.current.injectJavaScript(
+        `window.AssetXAI._resolve(${JSON.stringify(scanCallback)}, ${JSON.stringify(value)}); true;`
+      );
+    }
+    setScanCallback(null);
+  }, [scanCallback]);
+
+  // ── Forward incoming push notifications to WebView ────────────────────────
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener(notification => {
+      const payload = JSON.stringify({
+        type: 'notification_received',
+        callbackId: null,
+        value: {
+          title: notification.request.content.title,
+          body:  notification.request.content.body,
+          data:  notification.request.content.data,
+        },
+      });
+      webRef.current?.injectJavaScript(`
+        window.dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(payload)} }));
+        true;
+      `);
+    });
+    return () => Notifications.removeNotificationSubscription(sub);
+  }, []);
+
+  const retry = () => {
+    setNetworkError(false);
+    keyCounter.current += 1;
+    setWebKey(keyCounter.current);
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#1e1b4b' }}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      {/* ── Slim top bar ──────────────────────────────────────────────────── */}
+      <LinearGradient
+        colors={['#1e1b4b', '#3730a3']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[styles.bar, { paddingTop: insets.top + (Platform.OS === 'android' ? 28 : 0) }]}
+      >
+        <View style={styles.barLeft}>
+          {canGoBack && (
+            <TouchableOpacity
+              style={styles.barBtn}
+              onPress={() => webRef.current?.goBack()}
+            >
+              <Ionicons name="arrow-back" size={20} color="#fff" allowFontScaling={false} />
+            </TouchableOpacity>
+          )}
+          <Ionicons name="cube" size={18} color="#a5b4fc" allowFontScaling={false} />
+          <Text style={styles.barTitle}>AssetXAI</Text>
+        </View>
+        <View style={styles.barRight}>
+          <TouchableOpacity
+            style={styles.barBtn}
+            onPress={() => { setScanCallback(null); setScanVisible(true); }}
+          >
+            <Ionicons name="scan-outline" size={20} color="#fff" allowFontScaling={false} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.barBtn} onPress={() => webRef.current?.reload()}>
+            <Ionicons name="refresh-outline" size={20} color="#fff" allowFontScaling={false} />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      {/* ── Progress bar ──────────────────────────────────────────────────── */}
+      {loadProgress > 0 && loadProgress < 1 && (
+        <View style={styles.progressTrack}>
+          <LinearGradient
+            colors={['#818cf8', '#4f46e5']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[styles.progressBar, { width: `${loadProgress * 100}%` }]}
+          />
+        </View>
+      )}
+
+      {/* ── WebView / Error ────────────────────────────────────────────────── */}
+      {networkError ? (
+        <NetworkError url={API_URL} onRetry={retry} />
+      ) : (
+        <WebView
+          key={webKey}
+          ref={webRef}
+          source={{ uri: API_URL }}
+          style={{ flex: 1, backgroundColor: '#f1f5f9' }}
+
+          // Auth + bridge injection
+          injectedJavaScriptBeforeContentLoaded={injectedScript}
+          javaScriptEnabled
+          domStorageEnabled
+          allowsBackForwardNavigationGestures
+          sharedCookiesEnabled
+
+          // Performance
+          cacheEnabled
+          cacheMode="LOAD_CACHE_ELSE_NETWORK"
+
+          // Media / content
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          allowsFullscreenVideo
+
+          // Security
+          mixedContentMode="compatibility"
+          originWhitelist={['https://*', 'http://*']}
+
+          // Events
+          onLoadProgress={({ nativeEvent }) => setLoadProgress(nativeEvent.progress)}
+          onLoadEnd={() => setLoadProgress(0)}
+          onNavigationStateChange={state => setCanGoBack(state.canGoBack)}
+          onError={() => setNetworkError(true)}
+          onHttpError={({ nativeEvent }) => {
+            if (nativeEvent.statusCode >= 500) setNetworkError(true);
+          }}
+          onMessage={handleMessage}
+
+          // User agent — identifies as mobile
+          applicationNameForUserAgent="AssetXAI-Native/2.1"
+
+          // iOS
+          decelerationRate="normal"
+          scrollEnabled
+          bounces
+
+          // Pull-to-refresh is handled by the webview itself on mobile web
+          pullToRefreshEnabled={Platform.OS === 'ios'}
+          refreshControl={undefined}
+        />
+      )}
+
+      {/* ── Native scanner modal ──────────────────────────────────────────── */}
+      <ScannerModal
+        visible={scanVisible}
+        onScanned={handleScanResult}
+        onClose={() => { setScanVisible(false); setScanCallback(null); }}
+      />
+    </View>
+  );
+}
+
+// ── Styles ─────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  bar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingBottom: 10,
+    zIndex: 10,
   },
-  section: {
-    marginBottom: theme.spacing.xxl,
+  barLeft:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  barRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  barTitle: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: -0.2 },
+  barBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  quickActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.xl,
-    ...theme.shadows.md,
+  progressTrack: { height: 2, backgroundColor: 'rgba(99,102,241,0.15)' },
+  progressBar:   { height: 2 },
+});
+
+// Scanner styles
+const scan = StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  frame: {
+    position: 'absolute', width: 260, height: 260,
+    top: '50%', left: '50%',
+    marginTop: -130, marginLeft: -130,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+  corner: {
+    position: 'absolute', width: 30, height: 30,
+    borderColor: '#4f46e5', borderTopWidth: 3, borderLeftWidth: 3,
+    top: 0, left: 0,
   },
-  loadingBox: {
-    alignItems: 'center',
-    paddingVertical: theme.spacing.xxxl,
-    gap: theme.spacing.md,
-  },
-  loadingText: {
-    ...theme.typography.caption,
-    color: theme.colors.textMuted,
-  },
-  valueBanner: {
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...theme.shadows.lg,
-  },
-  valueBannerLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  valueBannerValue: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: -0.5,
-  },
-  valueBannerIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.xxxl,
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    ...theme.shadows.sm,
-  },
-  emptyText: { ...theme.typography.bodyMedium, color: theme.colors.text },
-  emptySubtext: { ...theme.typography.caption, color: theme.colors.textMuted },
-  ticketList: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.xl,
-    overflow: 'hidden',
-    ...theme.shadows.md,
-  },
-  ticketRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: theme.spacing.md,
-    paddingRight: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderLight,
-  },
-  ticketRowPending: {
-    backgroundColor: theme.colors.amberBg,
-  },
-  ticketStatusBar: {
-    width: 4,
-    height: '80%',
-    borderRadius: 2,
-    marginLeft: theme.spacing.lg,
-  },
-  ticketTitle: {
-    ...theme.typography.bodyMedium,
-    color: theme.colors.text,
-    marginBottom: 2,
-  },
-  ticketMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ticketCategory: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-  },
-  ticketDot: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-  },
-  ticketStatus: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  cornerTR: { left: undefined, right: 0, borderLeftWidth: 0, borderRightWidth: 3 },
+  cornerBL: { top: undefined, bottom: 0, borderTopWidth: 0, borderBottomWidth: 3 },
+  cornerBR: { top: undefined, bottom: 0, left: undefined, right: 0, borderTopWidth: 0, borderLeftWidth: 0, borderRightWidth: 3, borderBottomWidth: 3 },
+  headerRow: { position: 'absolute', top: 60, left: 0, right: 0, flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20 },
+  closeBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  footer: { position: 'absolute', bottom: 100, left: 0, right: 0, alignItems: 'center' },
+  footerText: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '500' },
+  permBox: { backgroundColor: '#1e1b4b', borderRadius: 24, padding: 32, margin: 24, alignItems: 'center', gap: 12 },
+  permTitle: { fontSize: 20, fontWeight: '800', color: '#fff', textAlign: 'center' },
+  permBody:  { fontSize: 14, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 20 },
+  permBtn:   { backgroundColor: '#4f46e5', paddingVertical: 14, paddingHorizontal: 28, borderRadius: 16, marginTop: 8 },
+  permBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  cancelText:  { color: 'rgba(255,255,255,0.5)', fontSize: 14, marginTop: 4 },
+});
+
+// Error styles
+const err = StyleSheet.create({
+  wrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, backgroundColor: '#f1f5f9', gap: 12 },
+  title: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
+  body:  { fontSize: 15, color: '#64748b', textAlign: 'center', lineHeight: 22 },
+  btn:   { borderRadius: 16, overflow: 'hidden', marginTop: 8 },
+  btnInner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 28 },
+  btnText:  { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

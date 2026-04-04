@@ -91,6 +91,55 @@ const chunkRecoveryScript = `
 })();
 `.trim();
 
+/**
+ * Native bridge adapter — runs in the web app when loaded inside the AssetXAI native app.
+ * Detects window.AssetXAI (injected by the WebView bridge), then:
+ *  • Registers the Expo push token with the server
+ *  • Adds a floating "Scan" button that calls window.AssetXAI.scan()
+ *  • Listens for notification_received events from native
+ */
+const nativeBridgeAdapter = `
+(function(){
+  function init() {
+    if (!window.AssetXAI || !window.AssetXAI.ready) return;
+    // Register push token
+    window.AssetXAI.getPushToken().then(function(token) {
+      if (!token) return;
+      fetch('/api/notifications/register-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ token: token }),
+      }).catch(function(){});
+    }).catch(function(){});
+    // Add floating scan button if not already present
+    if (document.getElementById('assetxai-scan-fab')) return;
+    var fab = document.createElement('button');
+    fab.id = 'assetxai-scan-fab';
+    fab.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
+    fab.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:9999;width:52px;height:52px;border-radius:26px;background:linear-gradient(135deg,#4f46e5,#7c3aed);border:none;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(79,70,229,0.45);';
+    fab.onclick = function() {
+      window.AssetXAI.scan('barcode').then(function(value) {
+        // Dispatch a custom event so the web app can respond
+        document.dispatchEvent(new CustomEvent('assetxai-scan', { detail: { value: value } }));
+        // Also try to fill any focused barcode input
+        var focused = document.activeElement;
+        if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA')) {
+          var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          nativeInputValueSetter.call(focused, value);
+          focused.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }).catch(function(){});
+    };
+    document.body.appendChild(fab);
+  }
+  // Wait for bridge to be ready
+  document.addEventListener('assetxai-bridge-ready', init);
+  // Also try immediately in case bridge was injected before this runs
+  if (document.readyState === 'complete') { init(); } else { window.addEventListener('load', init); }
+})();
+`.trim();
+
 export default function Document() {
   return (
     <Html lang="en">
@@ -100,6 +149,8 @@ export default function Document() {
         <script dangerouslySetInnerHTML={{ __html: chunkRecoveryScript }} />
         {/* Patch window.history before Next.js router initialises on Outlook pages */}
         <script dangerouslySetInnerHTML={{ __html: outlookHistoryPatch }} />
+        {/* Native bridge adapter — activates when loaded inside AssetXAI native app */}
+        <script dangerouslySetInnerHTML={{ __html: nativeBridgeAdapter }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="icon" href="/app-favicon.svg" type="image/svg+xml" />

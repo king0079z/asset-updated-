@@ -126,6 +126,7 @@ model User {
   canDeleteDocuments       Boolean              @default(false)
   buttonVisibility         Json?
   mustChangePassword       Boolean              @default(false)
+  expoPushToken            String?
   organizationId           String?
   assets                   Asset[]
   assetHistory             AssetHistory[]

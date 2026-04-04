@@ -2,7 +2,7 @@
   "expo": {
     "name": "AssetXAI",
     "slug": "assetxai",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "assetxai",
@@ -21,7 +21,13 @@
       },
       "infoPlist": {
         "NSCameraUsageDescription": "AssetXAI uses the camera to scan barcodes and QR codes for asset tracking.",
-        "NSPhotoLibraryUsageDescription": "AssetXAI can attach photos to audit comments and assets."
+        "NSPhotoLibraryUsageDescription": "AssetXAI can attach photos to audit comments and assets.",
+        "NSBluetoothAlwaysUsageDescription": "AssetXAI uses Bluetooth to connect to RFID readers and handheld scanners.",
+        "NSBluetoothPeripheralUsageDescription": "AssetXAI uses Bluetooth to connect to RFID readers.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsArbitraryLoadsInWebContent": true
+        }
       }
     },
     "android": {
@@ -30,12 +36,16 @@
         "backgroundColor": "#4f46e5"
       },
       "package": "com.assetxai.app",
-      "versionCode": 4,
+      "versionCode": 6,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
         "android.permission.VIBRATE",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "extra": {
