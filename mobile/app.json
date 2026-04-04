@@ -81,7 +81,9 @@
           "enableFTS": true,
           "useSQLCipher": false
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
