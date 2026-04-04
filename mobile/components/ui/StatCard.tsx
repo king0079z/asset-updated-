@@ -14,35 +14,44 @@ interface StatCardProps {
 }
 
 export function StatCard({ label, value, icon, gradient, onPress, subtitle, trend }: StatCardProps) {
-  const Wrapper = onPress ? TouchableOpacity : View;
-  return (
-    <Wrapper
-      style={styles.wrapper}
-      onPress={onPress}
-      activeOpacity={0.85}
-    >
-      <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
-        <View style={styles.iconWrap}>
-          <Ionicons name={icon} size={22} color="rgba(255,255,255,0.9)" />
+  const Inner = (
+    <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
+      {/* Icon box with solid white background so icon is always visible */}
+      <View style={styles.iconWrap}>
+        <Ionicons
+          name={icon}
+          size={20}
+          color={gradient[0]}
+          allowFontScaling={false}
+        />
+      </View>
+      <Text style={styles.value}>{value}</Text>
+      <Text style={styles.label}>{label}</Text>
+      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      {trend && (
+        <View style={styles.trendRow}>
+          <Ionicons
+            name={trend.positive ? 'trending-up' : 'trending-down'}
+            size={12}
+            color={trend.positive ? '#86efac' : '#fca5a5'}
+            allowFontScaling={false}
+          />
+          <Text style={[styles.trendText, { color: trend.positive ? '#86efac' : '#fca5a5' }]}>
+            {trend.value}%
+          </Text>
         </View>
-        <Text style={styles.value}>{value}</Text>
-        <Text style={styles.label}>{label}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-        {trend && (
-          <View style={styles.trendRow}>
-            <Ionicons
-              name={trend.positive ? 'trending-up' : 'trending-down'}
-              size={12}
-              color={trend.positive ? '#86efac' : '#fca5a5'}
-            />
-            <Text style={[styles.trendText, { color: trend.positive ? '#86efac' : '#fca5a5' }]}>
-              {trend.value}%
-            </Text>
-          </View>
-        )}
-      </LinearGradient>
-    </Wrapper>
+      )}
+    </LinearGradient>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity style={styles.wrapper} onPress={onPress} activeOpacity={0.85}>
+        {Inner}
+      </TouchableOpacity>
+    );
+  }
+  return <View style={styles.wrapper}>{Inner}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -57,27 +66,28 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   iconWrap: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.md,
+    ...theme.shadows.sm,
   },
   value: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800',
     color: '#fff',
     letterSpacing: -0.5,
     marginBottom: 2,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.85)',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   subtitle: {
     fontSize: 11,

@@ -13,16 +13,21 @@ interface QuickActionProps {
 
 export function QuickAction({ icon, label, color, bgColor, onPress, badge }: QuickActionProps) {
   return (
-    <TouchableOpacity style={styles.wrapper} onPress={onPress} activeOpacity={0.75}>
-      <View style={[styles.iconBox, { backgroundColor: bgColor }]}>
-        <Ionicons name={icon} size={24} color={color} />
+    <TouchableOpacity style={styles.wrapper} onPress={onPress} activeOpacity={0.72}>
+      <View style={[styles.iconBox, { backgroundColor: bgColor, borderColor: color + '33' }]}>
+        <Ionicons
+          name={icon}
+          size={24}
+          color={color}
+          allowFontScaling={false}
+        />
         {badge != null && badge > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
           </View>
         )}
       </View>
-      <Text style={styles.label} numberOfLines={1}>{label}</Text>
+      <Text style={styles.label} numberOfLines={2}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -32,26 +37,28 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: theme.spacing.sm,
+    minWidth: 56,
   },
   iconBox: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: theme.radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
+    borderWidth: 1.5,
     ...theme.shadows.sm,
   },
   label: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
     color: theme.colors.textSecondary,
     textAlign: 'center',
+    lineHeight: 13,
   },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: -5,
+    right: -5,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -59,12 +66,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#fff',
   },
   badgeText: {
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#fff',
   },
 });
