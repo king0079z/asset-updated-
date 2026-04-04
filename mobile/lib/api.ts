@@ -113,3 +113,45 @@ export async function getTask(id: string) {
 export async function updateTaskStatus(id: string, status: string) {
   return api(`/api/planner/${id}`, { method: 'PATCH', body: { status } });
 }
+
+// ─── My Tickets (Service Portal — tickets I submitted) ────────────────────
+export async function getMyTickets(): Promise<any[]> {
+  const d = await api<any>('/api/tickets');
+  if (Array.isArray(d)) return d;
+  return d?.tickets ?? [];
+}
+
+export interface SubmitTicketPayload {
+  title: string;
+  category: string;
+  priority: string;
+  description?: string;
+  assetId?: string;
+}
+
+export async function submitTicket(data: SubmitTicketPayload): Promise<any> {
+  return api<any>('/api/tickets', { method: 'POST', body: data });
+}
+
+// ─── DLM Approval APIs (for managers) ────────────────────────────────────
+export async function getDlmPending(): Promise<any[]> {
+  const d = await api<any>('/api/dlm/pending');
+  if (Array.isArray(d)) return d;
+  return d?.tickets ?? [];
+}
+
+export async function decideDlm(
+  ticketId: string,
+  action: 'approve' | 'reject',
+  comment?: string
+): Promise<any> {
+  return api<any>(`/api/dlm/${ticketId}/decide`, {
+    method: 'POST',
+    body: { action, comment },
+  });
+}
+
+// ─── User Profile ─────────────────────────────────────────────────────────
+export async function getMyProfile(): Promise<any> {
+  return api<any>('/api/users/me');
+}
