@@ -51,11 +51,8 @@
     },
     "extra": {
       "privacyPolicyUrl": "https://assetxai.live/privacy",
-      "router": {
-        "origin": false
-      },
       "eas": {
-        "projectId": "56beb2f3-c5ac-4365-822b-3021548bf8fe"
+        "projectId": "f7c4e00d-e7e1-4be3-a0d6-1eb3190a49ac"
       }
     },
     "web": {
@@ -102,9 +99,12 @@
     "experiments": {
       "typedRoutes": true
     },
+    "owner": "king0079z",
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "owner": "therock23"
+    "updates": {
+      "url": "https://u.expo.dev/f7c4e00d-e7e1-4be3-a0d6-1eb3190a49ac"
+    }
   }
 }
