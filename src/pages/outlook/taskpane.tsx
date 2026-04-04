@@ -353,12 +353,13 @@ export default function OutlookTaskPane() {
   useEffect(() => { if (screen === 'myassets' && authenticated) fetchMyAssets(); }, [screen, authenticated]);
 
   /* ── Submit ticket ───────────────────────────────────────────────────────── */
+  const [ticketNeedsDlm, setTicketNeedsDlm] = useState(false);
   const submitTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     if (ticketMode === 'normal' && !ticketForm.ticketType) { setTicketResult('error'); setTicketError('Please select a ticket type.'); return; }
     if (!ticketForm.title.trim()) { setTicketResult('error'); setTicketError('Please enter a summary.'); return; }
     if (ticketForm.description.trim().length < 10) { setTicketResult('error'); setTicketError('Description must be at least 10 characters.'); return; }
-    setTicketSubmitting(true); setTicketResult('idle'); setTicketError('');
+    setTicketSubmitting(true); setTicketResult('idle'); setTicketError(''); setTicketNeedsDlm(false);
     try {
       const body: any = {
         title: ticketForm.title.trim(), description: ticketForm.description.trim(),
@@ -368,6 +369,10 @@ export default function OutlookTaskPane() {
       if (ticketMode === 'hwsw')   { body.ticketType = 'REQUEST'; body.category = hwCategory; body.subcategory = hwSubcategory; }
       const res = await fetch('/api/tickets', { method: 'POST', credentials: 'include', headers: getAuthHeaders(), body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.error || d?.message || `Error ${res.status}`); }
+      // Check if DLM approval is required from the API response
+      const responseData = await res.json().catch(() => ({}));
+      const needsDlm = responseData?.dlmApprovalStatus === 'PENDING_DLM';
+      setTicketNeedsDlm(needsDlm);
       setTicketResult('success');
       setTicketForm({ title: '', description: '', priority: 'MEDIUM', ticketType: '' });
       setHwCategory(''); setHwSubcategory('');
@@ -543,10 +548,22 @@ export default function OutlookTaskPane() {
           </div>
         )}
         {ticketResult === 'success' && (
-          <div className="flex items-start gap-2.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-3 text-sm text-emerald-800">
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
-            <div><p className="font-bold">Ticket submitted!</p><p className="text-xs text-emerald-600 mt-0.5">Our team will review it shortly.</p></div>
-          </div>
+          ticketNeedsDlm ? (
+            <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-300 px-3 py-3 text-sm text-amber-900 shadow-sm shadow-amber-100">
+              <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                <Clock className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+              </div>
+              <div>
+                <p className="font-bold text-amber-800">Sent to your manager for approval</p>
+                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">Your IT request has been submitted and is now <strong>awaiting approval from your Direct Line Manager</strong> before it reaches the IT team. You'll be notified once reviewed.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-3 text-sm text-emerald-800">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
+              <div><p className="font-bold">Ticket submitted!</p><p className="text-xs text-emerald-600 mt-0.5">Our team will review it shortly.</p></div>
+            </div>
+          )
         )}
         {ticketResult === 'error' && ticketError && (
           <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
@@ -629,10 +646,26 @@ export default function OutlookTaskPane() {
                 </button>
 
                 {ticketResult === 'success' && (
-                  <div className="mt-2 flex items-start gap-2.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-3 text-sm text-emerald-800">
-                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
-                    <div><p className="font-bold">Ticket submitted!</p><p className="text-xs text-emerald-600 mt-0.5">Our team will review it shortly.</p></div>
-                  </div>
+                  ticketNeedsDlm ? (
+                    <div className="mt-2 flex items-start gap-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 px-4 py-4 shadow-md shadow-amber-100">
+                      <div className="h-9 w-9 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
+                        <Clock className="h-5 w-5 text-amber-600 animate-pulse" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <p className="font-black text-amber-900 text-sm">Pending Manager Approval</p>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-800">DLM REVIEW</span>
+                        </div>
+                        <p className="text-xs text-amber-700 leading-relaxed">Your HW/SW request has been submitted and is awaiting your <strong>Direct Line Manager's approval</strong> before the IT team can process it. A notification email has been sent to your manager.</p>
+                        <p className="text-[10px] text-amber-600 mt-2 font-semibold">✓ Request logged  ·  ✓ Manager notified  ·  ⏳ Awaiting DLM decision</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex items-start gap-2.5 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-3 text-sm text-emerald-800">
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
+                      <div><p className="font-bold">Ticket submitted!</p><p className="text-xs text-emerald-600 mt-0.5">Our team will review it shortly.</p></div>
+                    </div>
+                  )
                 )}
               </div>
             )}
@@ -1070,39 +1103,85 @@ export default function OutlookTaskPane() {
                   const pc = PRI_CFG[t.priority] ?? PRI_CFG.MEDIUM;
                   const hasAssignee = !!t.assignedTo?.email;
                   const unread = ticketUnreads[t.id] || 0;
+                  const isPendingDlm = t.dlmApprovalStatus === 'PENDING_DLM';
+                  const isRejectedDlm = t.dlmApprovalStatus === 'DLM_REJECTED';
+                  const isApprovedDlm = t.dlmApprovalStatus === 'DLM_APPROVED';
+
                   return (
-                    <button key={t.id} type="button" onClick={() => openTicketDetail(t)}
-                      className={`relative w-full text-left rounded-2xl border px-4 py-3.5 shadow-sm hover:shadow-md transition-all group ${unread > 0 ? 'border-blue-300 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/30 hover:border-blue-400' : 'border-slate-100 dark:border-border bg-white dark:bg-card hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20'}`}>
-                      {unread > 0 && (
-                        <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse z-10">
-                          {unread}
-                        </span>
-                      )}
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-mono text-[10px] font-bold text-slate-400">{t.displayId || '#' + t.id.slice(0, 8)}</span>
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.text}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />{sc.label}
-                          </span>
-                          <span className={`text-[10px] font-bold ${pc.color}`}>{pc.label}</span>
-                          {unread > 0 && (
-                            <span className="inline-flex items-center rounded-md bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">New update</span>
-                          )}
-                        </div>
-                        <ChevronRight className={`h-4 w-4 shrink-0 transition-colors ${unread > 0 ? 'text-blue-400' : 'text-slate-300 group-hover:text-indigo-400'}`} />
-                      </div>
-                      <p className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">{t.title}</p>
-                      {t.description && <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{t.description}</p>}
-                      <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400">
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(t.createdAt)}</span>
-                        {hasAssignee && (
-                          <span className="flex items-center gap-1 text-violet-600 font-semibold">
-                            <Users className="h-3 w-3" />{t.assignedTo.email.split('@')[0]}
+                    <div key={t.id} className="flex flex-col">
+                      <button type="button" onClick={() => openTicketDetail(t)}
+                        className={`relative w-full text-left shadow-sm hover:shadow-md transition-all group ${
+                          isPendingDlm
+                            ? 'rounded-t-2xl rounded-b-none border-2 border-b-0 border-amber-400 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30 hover:border-amber-500'
+                            : isRejectedDlm
+                            ? 'rounded-t-2xl rounded-b-none border-2 border-b-0 border-red-300 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30 hover:border-red-400'
+                            : unread > 0
+                            ? 'rounded-2xl border border-blue-300 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/30 hover:border-blue-400'
+                            : 'rounded-2xl border border-slate-100 dark:border-border bg-white dark:bg-card hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20'
+                        } px-4 py-3.5`}>
+                        {unread > 0 && (
+                          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse z-10">
+                            {unread}
                           </span>
                         )}
-                        {t.category && <span className="truncate">{t.category}</span>}
-                      </div>
-                    </button>
+                        {isPendingDlm && (
+                          <div className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 shadow-sm z-10">
+                            <Clock className="h-3 w-3 text-white animate-pulse" />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`font-mono text-[10px] font-bold ${isPendingDlm ? 'text-amber-600' : isRejectedDlm ? 'text-red-500' : 'text-slate-400'}`}>{t.displayId || '#' + t.id.slice(0, 8)}</span>
+                            {isPendingDlm ? (
+                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-amber-100 border border-amber-300 text-amber-800">
+                                <Clock className="h-2.5 w-2.5 animate-pulse" /> Pending DLM
+                              </span>
+                            ) : isRejectedDlm ? (
+                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-red-100 border border-red-300 text-red-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Rejected by DLM
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${sc.text}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />{sc.label}
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-bold ${pc.color}`}>{pc.label}</span>
+                            {unread > 0 && (
+                              <span className="inline-flex items-center rounded-md bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">New update</span>
+                            )}
+                            {isApprovedDlm && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">✓ DLM Approved</span>
+                            )}
+                          </div>
+                          <ChevronRight className={`h-4 w-4 shrink-0 transition-colors ${isPendingDlm ? 'text-amber-400 group-hover:text-amber-600' : isRejectedDlm ? 'text-red-300 group-hover:text-red-500' : unread > 0 ? 'text-blue-400' : 'text-slate-300 group-hover:text-indigo-400'}`} />
+                        </div>
+                        <p className={`text-sm font-bold line-clamp-2 leading-snug ${isPendingDlm ? 'text-amber-900' : isRejectedDlm ? 'text-red-900' : 'text-slate-800 dark:text-foreground'}`}>{t.title}</p>
+                        {t.description && <p className={`text-xs mt-0.5 line-clamp-1 ${isPendingDlm ? 'text-amber-700' : isRejectedDlm ? 'text-red-600' : 'text-slate-400'}`}>{t.description}</p>}
+                        <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400">
+                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(t.createdAt)}</span>
+                          {hasAssignee && (
+                            <span className="flex items-center gap-1 text-violet-600 font-semibold">
+                              <Users className="h-3 w-3" />{t.assignedTo.email.split('@')[0]}
+                            </span>
+                          )}
+                          {t.category && <span className="truncate">{t.category}</span>}
+                        </div>
+                      </button>
+
+                      {/* DLM status footer strip */}
+                      {isPendingDlm && (
+                        <div className="flex items-center gap-2 rounded-b-2xl border-2 border-t-0 border-amber-400 bg-amber-100 px-4 py-2">
+                          <Clock className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 animate-pulse" />
+                          <span className="text-[11px] font-bold text-amber-800 flex-1">Awaiting your manager's approval</span>
+                          <span className="text-[10px] text-amber-600 bg-amber-200 px-1.5 py-0.5 rounded-full font-semibold">DLM REVIEW</span>
+                        </div>
+                      )}
+                      {isRejectedDlm && (
+                        <div className="flex items-center gap-2 rounded-b-2xl border-2 border-t-0 border-red-300 bg-red-100 px-4 py-2">
+                          <span className="text-[11px] font-bold text-red-700 flex-1">❌ Rejected by manager — contact your DLM for details</span>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>

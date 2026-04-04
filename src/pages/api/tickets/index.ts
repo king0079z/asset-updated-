@@ -101,16 +101,17 @@ async function ticketsHandler(
         logApiEvent(`User ticket scope: orgWideView=${orgWideView}`);
 
         const baseWhere: any = buildTicketListWhere(user.id, roleData, orgWideView);
-        // Exclude tickets awaiting DLM approval or DLM-rejected from the main list.
-        // IMPORTANT: NULL dlmApprovalStatus means "no DLM gate" (normal tickets) — must be included.
-        // SQL NOT IN excludes NULLs, so we must explicitly OR in the null case.
+        // DLM gate: hide PENDING_DLM / DLM_REJECTED from the general staff list.
+        // EXCEPTION: the submitter (userId === me) always sees their own tickets so they
+        // can track the approval status. NULL means normal (no DLM gate) → always include.
         const ticketWhere: any = {
           AND: [
             baseWhere,
             {
               OR: [
-                { dlmApprovalStatus: null },
-                { dlmApprovalStatus: 'DLM_APPROVED' },
+                { dlmApprovalStatus: null },       // normal tickets — no DLM gate
+                { dlmApprovalStatus: 'DLM_APPROVED' }, // approved → visible to IT staff
+                { userId: user.id },               // submitter always sees their own tickets
               ],
             },
           ],
@@ -148,7 +149,7 @@ async function ticketsHandler(
             where: {
               AND: [
                 { OR: [{ userId: user.id }, { assignedToId: user.id }] },
-                { OR: [{ dlmApprovalStatus: null }, { dlmApprovalStatus: 'DLM_APPROVED' }] },
+                { OR: [{ dlmApprovalStatus: null }, { dlmApprovalStatus: 'DLM_APPROVED' }, { userId: user.id }] },
               ],
             },
             select: {
