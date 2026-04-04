@@ -23,7 +23,9 @@
       "infoPlist": {
         "NSCameraUsageDescription": "AssetXAI uses the camera to scan barcodes and QR codes for asset tracking.",
         "NSPhotoLibraryUsageDescription": "AssetXAI can attach photos to audit comments and assets.",
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -38,13 +40,17 @@
         "android.permission.INTERNET",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
-        "android.permission.POST_NOTIFICATIONS"
-      ],
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "extra": {
       "privacyPolicyUrl": "https://assetxai.live/privacy",
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "f7c4e00d-e7e1-4be3-a0d6-1eb3190a49ac"
+      },
+      "router": {
+        "origin": false
       }
     },
     "web": {
@@ -79,6 +85,7 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "owner": "king0079z"
   }
 }
