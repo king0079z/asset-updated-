@@ -29,13 +29,32 @@ import { API_URL, SUPABASE_URL } from '@/constants/config';
 import { supabase } from '@/lib/supabase';
 import { buildBridgeScript } from '@/lib/webBridge';
 
-// URLs per role
-const URLS = {
-  staff: `${API_URL}/outlook/taskpane`,
-  admin: `${API_URL}`,
-};
+// Destination paths per role (after SSO handshake)
+const PATHS = {
+  handheld: '/outlook/taskpane',   // handheld: taskpane web interface
+  staff:    '/outlook/taskpane',   // staff: employee taskpane
+  admin:    '/dashboard',          // admin/manager: full main dashboard
+} as const;
 
-type RoleStatus = 'checking' | 'staff' | 'admin';
+/**
+ * Build the mobile-SSO handshake URL.
+ * The server validates the token, sets a proper cookie, and redirects
+ * to `next` — so the web page opens already authenticated (no 2nd login).
+ */
+function buildSSOUrl(
+  accessToken: string,
+  refreshToken: string,
+  next: string,
+): string {
+  return (
+    `${API_URL}/api/auth/mobile-sso` +
+    `?at=${encodeURIComponent(accessToken)}` +
+    `&rt=${encodeURIComponent(refreshToken)}` +
+    `&next=${encodeURIComponent(next)}`
+  );
+}
+
+type RoleStatus = 'checking' | 'resolved';
 
 // ─── View-drawn icons (no font dependency) ────────────────────────────────
 
@@ -259,7 +278,8 @@ export default function AppScreen() {
   const [showSignOut,   setShowSignOut]  = useState(false);
   const [signingOut,    setSigningOut]   = useState(false);
   const [roleStatus,    setRoleStatus]   = useState<RoleStatus>('checking');
-  const [webViewUrl,    setWebViewUrl]   = useState(URLS.staff);
+  const [resolvedRole,  setResolvedRole] = useState<string>('STAFF');
+  const [webViewUrl,    setWebViewUrl]   = useState('');
   const webKeyRef    = useRef(0);
   const [webKey,     setWebKey]   = useState(0);
   const prevUserIdRef = useRef<string | null>(null);
@@ -284,7 +304,8 @@ export default function AppScreen() {
         setWebviewKilled(false);
         setSigningOut(false);
         setRoleStatus('checking');
-        setWebViewUrl(URLS.staff);
+        setResolvedRole('STAFF');
+        setWebViewUrl('');
         setBridgeReady(false);
         setTimeout(() => {
           setBridgeReady(true);
@@ -298,34 +319,43 @@ export default function AppScreen() {
   }, []);
 
   // ── Role gate ────────────────────────────────────────────────────────────
-  // Uses the access_token directly from the session state to avoid any
-  // Supabase-client internal race conditions on mobile.
+  // Resolves the user role → builds SSO WebView URL → shows correct UI.
+  // All roles land in the WebView (no native-only routing for HANDHELD).
+  // The SSO endpoint sets a server-side cookie so the web app opens
+  // already authenticated — the user NEVER sees a second login screen.
   useEffect(() => {
-    if (!session?.user?.id || !session?.access_token) return;
+    if (!session?.user?.id || !session?.access_token || !session?.refresh_token) return;
 
     let cancelled = false;
     setRoleStatus('checking');
 
     const applyRole = (role: string) => {
       if (cancelled) return;
+      const at = session.access_token as string;
+      const rt = session.refresh_token as string;
+
+      let path: string;
+
       if (role === 'HANDHELD') {
-        router.replace('/(tabs)/inventory' as any);
+        path = PATHS.handheld;
       } else if (role === 'ADMIN' || role === 'MANAGER') {
-        setWebViewUrl(URLS.admin);
-        setRoleStatus('admin');
+        path = PATHS.admin;
       } else {
-        setWebViewUrl(URLS.staff);
-        setRoleStatus('staff');
+        path = PATHS.staff;
       }
+
+      setResolvedRole(role);
+      setWebViewUrl(buildSSOUrl(at, rt, path));
+      setRoleStatus('resolved');
     };
 
     const checkRole = async (attempt = 0) => {
-      // First try: read role from JWT app_metadata (instant, no API call)
+      // 1st try: read role from JWT app_metadata (instant, no API call)
       const appMeta = (session.user as any)?.app_metadata;
       const metaRole: string | undefined = appMeta?.role ?? appMeta?.user_role;
       if (metaRole) { applyRole(metaRole.toUpperCase()); return; }
 
-      // Second: call the profile API directly with our token
+      // 2nd: call profile API with Bearer token
       try {
         const res = await fetch(`${API_URL}/api/users/me`, {
           headers: {
@@ -337,14 +367,12 @@ export default function AppScreen() {
         const profile = await res.json();
         if (cancelled) return;
         applyRole((profile?.role ?? 'STAFF').toUpperCase());
-      } catch (e) {
+      } catch {
         if (cancelled) return;
         if (attempt < 4) {
-          // Exponential back-off: 600ms, 1.2s, 2.4s, 4.8s
           setTimeout(() => checkRole(attempt + 1), 600 * Math.pow(2, attempt));
         } else {
-          // Fail-open: default to staff portal
-          applyRole('STAFF');
+          applyRole('STAFF'); // fail-open
         }
       }
     };
@@ -432,7 +460,8 @@ export default function AppScreen() {
   const retry = () => { setNetworkError(false); webKeyRef.current += 1; setWebKey(webKeyRef.current); };
   const topPad = insets.top + (Platform.OS === 'android' ? 28 : 0);
   const userEmail = session?.user?.email || '';
-  const isAdmin = roleStatus === 'admin';
+  const isAdmin = resolvedRole === 'ADMIN' || resolvedRole === 'MANAGER';
+  const isHandheld = resolvedRole === 'HANDHELD';
 
   return (
     <View style={{ flex: 1, backgroundColor: '#1e1b4b' }}>
@@ -457,7 +486,9 @@ export default function AppScreen() {
             <Text style={styles.barTitle}>AssetXAI</Text>
             {roleStatus !== 'checking' && (
               <Text style={styles.barRoleChip}>
-                {isAdmin ? (roleStatus === 'admin' ? '● Admin' : '● Manager') : '● Staff'}
+                {isAdmin
+                  ? (resolvedRole === 'MANAGER' ? '● Manager' : '● Admin')
+                  : isHandheld ? '● Handheld' : '● Staff'}
               </Text>
             )}
           </View>
@@ -478,6 +509,16 @@ export default function AppScreen() {
                 activeOpacity={0.7}
               >
                 <DashboardIcon color="#a5b4fc" size={20} />
+              </TouchableOpacity>
+            ) : isHandheld ? (
+              /* HANDHELD → Scan icon → native camera scanner */
+              <TouchableOpacity
+                style={[styles.iconBtn, styles.iconBtnIndigo]}
+                onPress={() => { setScanCallback(null); setScanVisible(true); }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <ScanIcon color="#a5b4fc" size={20} />
               </TouchableOpacity>
             ) : (
               /* STAFF → Scan icon → native camera */
@@ -527,7 +568,7 @@ export default function AppScreen() {
       {/* ── Content ───────────────────────────────────────────────────── */}
       {webviewKilled ? (
         <View style={{ flex: 1, backgroundColor: '#1e1b4b' }} />
-      ) : roleStatus === 'checking' ? (
+      ) : (roleStatus === 'checking' || !webViewUrl) ? (
         <View style={styles.roleGate}>
           <LinearGradient colors={['#060413', '#1e1b4b', '#2d2470']} style={StyleSheet.absoluteFill} />
           <View style={styles.roleGateGlow} />
