@@ -14,14 +14,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { user } = auth;
 
   const roleData = await getUserRoleData(user.id);
-  if (!roleData?.isAdmin && roleData?.role !== "MANAGER") {
+
+  // Allow any admin (isAdmin=true) OR any user with role ADMIN or MANAGER
+  const hasAccess =
+    roleData?.isAdmin === true ||
+    roleData?.role === "ADMIN" ||
+    roleData?.role === "MANAGER";
+
+  if (!hasAccess) {
     return res.status(403).json({ error: "Forbidden: Admin or Manager access required" });
   }
 
   if (req.method === "GET") {
     try {
+      // UserStatus enum only has PENDING, APPROVED, REJECTED — no DELETED value.
+      // Fetch all users (no status filter needed for DLM assignment purposes).
       const users = await prisma.user.findMany({
-        where: { status: { not: "DELETED" } },
         select: {
           id: true,
           email: true,
@@ -30,6 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           jobTitle: true,
           role: true,
           status: true,
+          isAdmin: true,
           azureAdId: true,
           organizationId: true,
           managerId: true,
@@ -45,7 +54,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           directReports: {
             select: { id: true, email: true, displayName: true, jobTitle: true },
           },
-          // DLM ticket stats
           dlmApprovalTickets: {
             select: {
               id: true,
@@ -59,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ users });
     } catch (err) {
       console.error("[DLM users GET]", err);
-      return res.status(500).json({ error: "Failed to fetch users" });
+      return res.status(500).json({ error: "Failed to fetch users", detail: String(err) });
     }
   }
 
@@ -88,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ user: updated });
     } catch (err) {
       console.error("[DLM users POST]", err);
-      return res.status(500).json({ error: "Failed to assign DLM" });
+      return res.status(500).json({ error: "Failed to assign DLM", detail: String(err) });
     }
   }
 

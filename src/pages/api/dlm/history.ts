@@ -17,7 +17,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { user } = auth;
 
   const roleData = await getUserRoleData(user.id);
-  const isAdminOrManager = roleData?.isAdmin || roleData?.role === "MANAGER";
+  const isAdminOrManager =
+    roleData?.isAdmin === true ||
+    roleData?.role === "ADMIN" ||
+    roleData?.role === "MANAGER";
 
   try {
     const where: any = {

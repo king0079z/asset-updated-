@@ -123,21 +123,43 @@ export default function ApprovalManagementPage() {
   const [form,     setForm]     = useState({ name: '', description: '', entityType: 'TICKET', steps: [] as any[] });
   const [stepRole, setStepRole] = useState('MANAGER');
 
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   /* ─── fetch ─── */
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
+      const safeJson = async (res: Response, label: string) => {
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          console.error(`[Approval] ${label} → HTTP ${res.status}`, txt);
+          return null;
+        }
+        return res.json().catch(() => null);
+      };
+
       const [c, r, u, h] = await Promise.all([
-        fetch('/api/approval/chains').then(x => x.json()).catch(() => []),
-        fetch('/api/approval/requests?pendingFor=me').then(x => x.json()).catch(() => []),
-        fetch('/api/dlm/users').then(x => x.json()).catch(() => ({ users: [] })),
-        fetch('/api/dlm/history').then(x => x.json()).catch(() => ({ tickets: [], stats: {} })),
+        fetch('/api/approval/chains').then(x => safeJson(x, 'chains')).catch(() => null),
+        fetch('/api/approval/requests?pendingFor=me').then(x => safeJson(x, 'requests')).catch(() => null),
+        fetch('/api/dlm/users').then(x => safeJson(x, 'dlm/users')).catch(() => null),
+        fetch('/api/dlm/history').then(x => safeJson(x, 'dlm/history')).catch(() => null),
       ]);
+
       setChains(Array.isArray(c) ? c : []);
       setRequests(Array.isArray(r) ? r : []);
-      setDlmUsers(Array.isArray(u?.users) ? u.users : []);
+
+      if (u === null) {
+        setFetchError('Could not load user list. You may need Admin or Manager access.');
+      } else {
+        setDlmUsers(Array.isArray(u?.users) ? u.users : []);
+      }
+
       setHistory(Array.isArray(h?.tickets) ? h.tickets : []);
       setHistoryStats(h?.stats || { total: 0, pending: 0, approved: 0, rejected: 0 });
+    } catch (err) {
+      console.error('[Approval] fetchAll error', err);
+      setFetchError('Failed to load approval data. Please refresh.');
     } finally {
       setLoading(false);
     }
@@ -290,6 +312,15 @@ export default function ApprovalManagementPage() {
             </div>
           </div>
         </div>
+
+        {/* error bar */}
+        {fetchError && (
+          <div className="bg-red-50 border-b border-red-200 px-6 py-2.5 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <p className="text-sm text-red-700">{fetchError}</p>
+            <button onClick={fetchAll} className="ml-auto text-xs underline text-red-600 hover:text-red-800">Retry</button>
+          </div>
+        )}
 
         {/* pending alert bar */}
         {requests.length > 0 && (
