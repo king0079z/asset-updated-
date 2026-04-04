@@ -40,7 +40,6 @@
         "android.permission.VIBRATE",
         "android.permission.POST_NOTIFICATIONS"
       ],
-      "googleServicesFile": "./google-services.json"
     },
     "extra": {
       "privacyPolicyUrl": "https://assetxai.live/privacy",
@@ -67,8 +66,7 @@
         {
           "icon": "./assets/icon.png",
           "color": "#4f46e5",
-          "defaultChannel": "default",
-          "sounds": ["./assets/notification-sound.wav"]
+          "defaultChannel": "default"
         }
       ],
       [
