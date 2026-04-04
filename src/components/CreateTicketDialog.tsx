@@ -321,9 +321,13 @@ export function CreateTicketDialog({ open, onOpenChange, onTicketCreated, assetI
           // Continue anyway since the request was successful
         }
 
+        const needsDlm = responseData?.dlmApprovalStatus === "PENDING_DLM";
         toast({
-          title: t("success"),
-          description: t("ticket_created_successfully"),
+          title: needsDlm ? "✅ Request Submitted — Pending Manager Approval" : t("success"),
+          description: needsDlm
+            ? "Your ticket requires approval from your Direct Line Manager (DLM) before it reaches the IT team. You'll be notified once your manager reviews it. Track progress in My Tickets."
+            : t("ticket_created_successfully"),
+          duration: needsDlm ? 9000 : 5000,
         });
         
         // Reset form fields

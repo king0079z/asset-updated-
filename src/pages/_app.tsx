@@ -155,15 +155,11 @@ export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     const handleRouteChangeError = (err: any) => {
       if (err?.cancelled) return; // normal user cancellation, ignore
-      // A chunk failed to load (e.g. 404 after new deployment) — hard-reload to get fresh assets.
-      if (
-        typeof err?.message === 'string' &&
-        (err.message.includes('Loading chunk') ||
-          err.message.includes('Failed to fetch') ||
-          err.message.includes('Abort fetching component'))
-      ) {
-        window.location.reload();
-      }
+      // Any route error that isn't a deliberate cancellation indicates a stale chunk.
+      // Force a hard reload to fetch fresh HTML + assets from the latest deployment.
+      setTimeout(() => {
+        if (!document.hidden) window.location.reload();
+      }, 300);
     };
     router.events.on('routeChangeError', handleRouteChangeError);
     return () => router.events.off('routeChangeError', handleRouteChangeError);

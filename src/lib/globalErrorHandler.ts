@@ -168,8 +168,13 @@ export function setupGlobalErrorHandler() {
         typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
       ).join(' ');
 
-      // Don't log or show expected Next.js route-abort noise (user navigated before chunk loaded).
+      // "Abort fetching component" means a JS chunk 404'd after a new deployment.
+      // Force a hard reload so the browser fetches fresh HTML + new chunks.
       if (errorMessage.includes('Abort fetching component for route')) {
+        if (!chunkReloadScheduled) {
+          chunkReloadScheduled = true;
+          setTimeout(() => window.location.reload(), 300);
+        }
         return;
       }
       // Chrome extension message channel noise (extension closed before async response).
@@ -228,7 +233,13 @@ export function setupGlobalErrorHandler() {
           ? error
           : error?.message || 'Unhandled Promise Rejection';
 
+      // Chunk 404 after new deployment — reload to get fresh assets
       if (message.includes('Abort fetching component for route')) {
+        event.preventDefault();
+        if (!chunkReloadScheduled) {
+          chunkReloadScheduled = true;
+          setTimeout(() => window.location.reload(), 300);
+        }
         return;
       }
       if (message.includes('message channel closed before a response was received') || message.includes('asynchronous response by returning true')) {

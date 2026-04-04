@@ -398,7 +398,24 @@ function CreateTicketDialog({ prefill, onClose, onSuccess }: {
         }),
       });
       if (!r.ok) throw new Error();
-      toast({ title: "Ticket submitted successfully!", description: "Our team will review your request shortly." });
+
+      // Read response to check if DLM approval is required
+      let responseData: any = null;
+      try { responseData = await r.clone().json(); } catch { /* non-critical */ }
+      const needsDlm = responseData?.dlmApprovalStatus === "PENDING_DLM";
+
+      if (needsDlm) {
+        toast({
+          title: "✅ Request submitted — Pending Manager Approval",
+          description: "Your ticket has been sent to your Direct Line Manager (DLM) for approval. You'll receive a notification once it's reviewed. You can track the status in My Tickets.",
+          duration: 8000,
+        });
+      } else {
+        toast({
+          title: "✅ Ticket submitted successfully!",
+          description: "Your request has been received and is now with the IT support team.",
+        });
+      }
       onSuccess(); onClose();
     } catch { toast({ variant: "destructive", title: "Failed to submit ticket. Please try again." }); }
     finally { setSubmitting(false); }
