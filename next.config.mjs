@@ -23,6 +23,17 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // HTML pages: always re-validate so stale cached HTML never references missing chunks
+        // (static JS/CSS chunks keep their own immutable cache from Vercel CDN)
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+        ],
+      },
+      {
         // Outlook add-in pages must be frameable by Microsoft Office / Outlook origins
         source: '/outlook/:path*',
         headers: [

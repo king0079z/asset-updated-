@@ -132,6 +132,7 @@ const PerformanceMonitor = () => {
 export default function App({ Component, pageProps }: AppProps) {
   const [mounted, setMounted] = useState(false);
   const [isRTL, setIsRTL] = useState(false);
+  const router = useRouter();
 
   // Throttled re-render function to prevent excessive re-renders (throttle deps intentional)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,6 +149,25 @@ export default function App({ Component, pageProps }: AppProps) {
       setMounted(true);
     }, 50);
   }, 300), []);
+
+  // Auto-recover from chunk-load failures caused by stale cached HTML after a new deployment.
+  // routeChangeError fires when Next.js can't fetch the component bundle for a route.
+  useEffect(() => {
+    const handleRouteChangeError = (err: any) => {
+      if (err?.cancelled) return; // normal user cancellation, ignore
+      // A chunk failed to load (e.g. 404 after new deployment) — hard-reload to get fresh assets.
+      if (
+        typeof err?.message === 'string' &&
+        (err.message.includes('Loading chunk') ||
+          err.message.includes('Failed to fetch') ||
+          err.message.includes('Abort fetching component'))
+      ) {
+        window.location.reload();
+      }
+    };
+    router.events.on('routeChangeError', handleRouteChangeError);
+    return () => router.events.off('routeChangeError', handleRouteChangeError);
+  }, [router.events]);
 
   useEffect(() => {
     // Set up global error handler

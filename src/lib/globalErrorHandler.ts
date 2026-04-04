@@ -35,7 +35,32 @@ export function setupGlobalErrorHandler() {
       visitedUrls.push(window.location.href);
     };
     window.addEventListener('popstate', popstateHandler);
-    
+
+    // ── Chunk-load auto-recovery ──────────────────────────────────────────────
+    // When a new deployment happens, old chunk hashes no longer exist on the CDN.
+    // Any cached HTML that references those old hashes will 404.
+    // Intercept resource errors on <script> tags in _next/static/chunks/ and
+    // force a hard reload so the browser fetches fresh HTML + new chunks.
+    let chunkReloadScheduled = false;
+    const chunkErrorHandler = (event: Event) => {
+      const target = event.target as HTMLScriptElement | null;
+      if (
+        target?.tagName === 'SCRIPT' &&
+        typeof target.src === 'string' &&
+        target.src.includes('/_next/static/chunks/')
+      ) {
+        event.stopPropagation();
+        if (!chunkReloadScheduled) {
+          chunkReloadScheduled = true;
+          // Small delay so multiple simultaneous 404s don't trigger multiple reloads
+          setTimeout(() => window.location.reload(), 200);
+        }
+      }
+    };
+    // Must be a capturing listener — resource errors don't bubble
+    window.addEventListener('error', chunkErrorHandler, true);
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Monitor user clicks to track actions
     const clickHandler = (event: Event) => {
       try {
@@ -268,6 +293,7 @@ export function setupGlobalErrorHandler() {
       document.removeEventListener('click', clickHandler);
       window.removeEventListener('unhandledrejection', unhandledRejectionHandler);
       window.removeEventListener('error', errorHandler);
+      window.removeEventListener('error', chunkErrorHandler, true);
       console.error = originalConsoleError;
       window.__globalErrorHandlerInitialized = false;
     };
