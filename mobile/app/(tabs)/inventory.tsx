@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   FlatList, ActivityIndicator, Image, Alert, Platform, StatusBar,
@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
+import { getMyProfile } from '@/lib/api';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { scanAsset, postAuditComment } from '@/lib/api';
@@ -27,6 +28,21 @@ const STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'error' | 
 export default function InventoryScreen() {
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
+  const [roleChecked, setRoleChecked] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
+
+  // ── HANDHELD-only gate ───────────────────────────────────────────────────
+  useEffect(() => {
+    getMyProfile()
+      .then(profile => {
+        if (profile?.role !== 'HANDHELD') setAccessDenied(true);
+        setRoleChecked(true);
+      })
+      .catch(() => {
+        // On error allow access — avoid locking out if API is down
+        setRoleChecked(true);
+      });
+  }, []);
   const [mode,    setMode]    = useState<Mode>('count');
   const [query,   setQuery]   = useState('');
   const [countList, setCountList] = useState<CountItem[]>([]);
@@ -125,6 +141,51 @@ export default function InventoryScreen() {
       </View>
     </TouchableOpacity>
   );
+
+  // ── Loading while role check runs ──────────────────────────────────────
+  if (!roleChecked) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  // ── Access denied (non-HANDHELD users) ─────────────────────────────────
+  if (accessDenied) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <LinearGradient
+          colors={['#1e1b4b', '#3730a3']}
+          style={[{ paddingTop: insets.top + (Platform.OS === 'android' ? 36 : 16), paddingHorizontal: 20, paddingBottom: 24 }]}
+        >
+          <TouchableOpacity onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <Ionicons name="arrow-back" size={20} color="#fff" allowFontScaling={false} />
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Back</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: '#fff' }}>Handheld Audit</Text>
+        </LinearGradient>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 16 }}>
+          <View style={{ width: 88, height: 88, borderRadius: 28, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="lock-closed-outline" size={40} color="#dc2626" allowFontScaling={false} />
+          </View>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: theme.colors.text, textAlign: 'center' }}>
+            Access Restricted
+          </Text>
+          <Text style={{ fontSize: 15, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 22 }}>
+            The Handheld Audit screen is only accessible to users with a Handheld account. Please contact your administrator.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: theme.colors.primary, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 16, marginTop: 8 }}
+            onPress={() => router.back()}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
