@@ -82,6 +82,26 @@ export function buildBridgeScript(sessionJson: string, supabaseUrl: string): str
     },
 
     /**
+     * Sign out — clears web session AND notifies native to sign out.
+     * The native app will then redirect to the login screen.
+     */
+    signOut: function() {
+      // Clear web-side auth storage
+      try {
+        sessionStorage.removeItem('outlook_addin_access_token');
+        Object.keys(localStorage).forEach(function(k) {
+          if (k.startsWith('sb-') || k === 'supabase.auth.token') {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch(e) {}
+      // Notify native
+      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(
+        JSON.stringify({ type: 'signout' })
+      );
+    },
+
+    /**
      * Ask the native layer for the current push token.
      */
     getPushToken: function() {

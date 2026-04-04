@@ -36,7 +36,7 @@
         "backgroundColor": "#4f46e5"
       },
       "package": "com.assetxai.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
@@ -85,7 +85,15 @@
           }
         }
       ],
-      "expo-sqlite"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#7c3aed",
+          "defaultChannel": "assetxai",
+          "sounds": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

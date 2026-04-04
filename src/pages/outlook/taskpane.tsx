@@ -232,6 +232,12 @@ export default function OutlookTaskPane() {
     setAuthenticated(false);
     setScreen('home');
     resetAll();
+    // Notify native app (if running inside the mobile WebView) to sign out too
+    if (typeof window !== 'undefined' && (window as any).AssetXAI?.signOut) {
+      (window as any).AssetXAI.signOut();
+    } else if (typeof window !== 'undefined' && (window as any).ReactNativeWebView) {
+      (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'signout' }));
+    }
   };
 
   const resetAll = () => {

@@ -1,24 +1,8 @@
-import * as SQLite from 'expo-sqlite';
-
-let db: SQLite.SQLiteDatabase | null = null;
-
-async function getDb(): Promise<SQLite.SQLiteDatabase> {
-  if (!db) {
-    db = await SQLite.openDatabaseAsync('assetxai_offline.db');
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS offline_queue (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        action TEXT NOT NULL,
-        endpoint TEXT NOT NULL,
-        method TEXT NOT NULL,
-        body TEXT,
-        createdAt TEXT DEFAULT (datetime('now')),
-        retries INTEGER DEFAULT 0
-      );
-    `);
-  }
-  return db;
-}
+/**
+ * Offline queue — stub implementation.
+ * expo-sqlite removed to reduce app size (app is primarily a WebView).
+ * Actions are queued in-memory and synced on reconnect.
+ */
 
 export interface QueuedAction {
   id: number;
@@ -30,25 +14,34 @@ export interface QueuedAction {
   retries: number;
 }
 
-export async function enqueueAction(action: string, endpoint: string, method: string, body?: object): Promise<void> {
-  const database = await getDb();
-  await database.runAsync(
-    'INSERT INTO offline_queue (action, endpoint, method, body) VALUES (?, ?, ?, ?)',
-    [action, endpoint, method, body ? JSON.stringify(body) : null]
-  );
+let queue: QueuedAction[] = [];
+let nextId = 1;
+
+export async function enqueueAction(
+  action: string, endpoint: string, method: string, body?: object,
+): Promise<void> {
+  queue.push({
+    id: nextId++,
+    action,
+    endpoint,
+    method,
+    body: body ? JSON.stringify(body) : null,
+    createdAt: new Date().toISOString(),
+    retries: 0,
+  });
 }
 
 export async function getPendingActions(): Promise<QueuedAction[]> {
-  const database = await getDb();
-  return database.getAllAsync<QueuedAction>('SELECT * FROM offline_queue ORDER BY createdAt ASC');
+  return [...queue];
 }
 
 export async function removeAction(id: number): Promise<void> {
-  const database = await getDb();
-  await database.runAsync('DELETE FROM offline_queue WHERE id = ?', [id]);
+  queue = queue.filter(q => q.id !== id);
 }
 
-export async function syncOfflineQueue(apiClient: (endpoint: string, opts: any) => Promise<any>): Promise<{ synced: number; failed: number }> {
+export async function syncOfflineQueue(
+  apiClient: (endpoint: string, opts: any) => Promise<any>,
+): Promise<{ synced: number; failed: number }> {
   const pending = await getPendingActions();
   let synced = 0;
   let failed = 0;
@@ -63,8 +56,8 @@ export async function syncOfflineQueue(apiClient: (endpoint: string, opts: any) 
       synced++;
     } catch {
       failed++;
-      const database = await getDb();
-      await database.runAsync('UPDATE offline_queue SET retries = retries + 1 WHERE id = ?', [item.id]);
+      const found = queue.find(q => q.id === item.id);
+      if (found) found.retries++;
     }
   }
 
