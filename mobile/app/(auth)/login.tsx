@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, StatusBar,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, StatusBar, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { isConfigValid } from '@/constants/config';
@@ -64,9 +63,9 @@ export default function LoginScreen() {
         >
           {/* Logo / Branding */}
           <View style={styles.brandArea}>
-            <View style={styles.logoBox}>
-              <Ionicons name="cube" size={36} color="#fff" />
-            </View>
+            <LinearGradient colors={['rgba(99,102,241,0.5)', 'rgba(45,36,112,0.85)']} style={styles.logoBox}>
+              <Image source={require('../../assets/icon.png')} style={styles.logoImg} resizeMode="contain" />
+            </LinearGradient>
             <Text style={styles.appName}>AssetXAI</Text>
             <Text style={styles.appTagline}>Enterprise Asset Management</Text>
           </View>
@@ -79,7 +78,8 @@ export default function LoginScreen() {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Email Address</Text>
               <View style={styles.inputWrap}>
-                <Ionicons name="mail-outline" size={18} color={theme.colors.textMuted} />
+                {/* @ symbol as mail icon */}
+                <Text style={styles.fieldIcon}>@</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="you@organization.com"
@@ -97,7 +97,11 @@ export default function LoginScreen() {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Password</Text>
               <View style={styles.inputWrap}>
-                <Ionicons name="lock-closed-outline" size={18} color={theme.colors.textMuted} />
+                {/* Lock icon drawn with views */}
+                <View style={styles.lockIcon}>
+                  <View style={styles.lockTop} />
+                  <View style={styles.lockBody} />
+                </View>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your password"
@@ -109,7 +113,7 @@ export default function LoginScreen() {
                   onSubmitEditing={handleLogin}
                 />
                 <TouchableOpacity onPress={() => setShowPw(!showPw)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={18} color={theme.colors.textMuted} />
+                  <Text style={styles.eyeIcon}>{showPw ? '🙈' : '👁'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -131,19 +135,18 @@ export default function LoginScreen() {
                 ) : (
                   <>
                     <Text style={styles.loginText}>Sign In</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                    <Text style={styles.arrowIcon}>→</Text>
                   </>
                 )}
               </LinearGradient>
             </TouchableOpacity>
 
             <View style={styles.footer}>
-              <Ionicons name="shield-checkmark-outline" size={14} color={theme.colors.textMuted} />
-              <Text style={styles.footerText}>Secured with enterprise SSO</Text>
+              <Text style={styles.footerText}>🔒  Secured with enterprise SSO</Text>
             </View>
           </View>
 
-          <Text style={styles.versionText}>AssetXAI Mobile · v2.0</Text>
+          <Text style={styles.versionText}>AssetXAI Mobile · v2.2</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -182,12 +185,17 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.25)',
     marginBottom: 4,
+    overflow: 'hidden',
+  },
+  logoImg: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
   },
   appName: {
     fontSize: 30,
@@ -241,6 +249,46 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: theme.colors.text,
+  },
+  fieldIcon: {
+    fontSize: 16,
+    color: theme.colors.textMuted,
+    fontWeight: '700',
+    width: 18,
+    textAlign: 'center',
+  },
+  lockIcon: {
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockTop: {
+    width: 10,
+    height: 6,
+    borderWidth: 1.5,
+    borderColor: theme.colors.textMuted,
+    borderBottomWidth: 0,
+    borderRadius: 5,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 0,
+  },
+  lockBody: {
+    width: 13,
+    height: 9,
+    borderWidth: 1.5,
+    borderColor: theme.colors.textMuted,
+    borderRadius: 2,
+    backgroundColor: 'transparent',
+  },
+  eyeIcon: {
+    fontSize: 16,
+  },
+  arrowIcon: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '700',
   },
   loginBtn: {
     borderRadius: theme.radius.xl,

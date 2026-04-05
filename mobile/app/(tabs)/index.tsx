@@ -1,14 +1,18 @@
 /**
- * Main screen — role-aware WebView
+ * Main screen — role-aware WebView with server-side SSO
  *
- * Routing (decided BEFORE any WebView renders):
- *   HANDHELD         → /(tabs)/inventory   (native)
- *   ADMIN / MANAGER  → assetxai.live        (full main dashboard)
- *   STAFF            → assetxai.live/outlook/taskpane  (employee portal)
+ * All account types open in the WebView (no native-only routing).
+ * A server-side SSO handshake (/api/auth/mobile-sso) sets a real cookie
+ * so the web app never asks the user to log in again.
  *
- * Top-bar right side is role-specific:
- *   ADMIN/MANAGER  → Dashboard icon  (navigates WebView to /dashboard)
- *   STAFF          → Scan icon       (native camera scanner)
+ * Role → web destination:
+ *   HANDHELD         → /handheld          (dedicated handheld interface)
+ *   STAFF            → /outlook/taskpane  (employee portal)
+ *   ADMIN / MANAGER  → /dashboard         (full main dashboard)
+ *
+ * Top-bar right icon is role-specific:
+ *   ADMIN/MANAGER  → Dashboard grid icon
+ *   HANDHELD/STAFF → Scan icon (native camera)
  *
  * Sign-out is native-only — the WebView NEVER shows a sign-out button.
  */
@@ -31,9 +35,9 @@ import { buildBridgeScript } from '@/lib/webBridge';
 
 // Destination paths per role (after SSO handshake)
 const PATHS = {
-  handheld: '/outlook/taskpane',   // handheld: taskpane web interface
-  staff:    '/outlook/taskpane',   // staff: employee taskpane
-  admin:    '/dashboard',          // admin/manager: full main dashboard
+  handheld: '/handheld',           // dedicated handheld web interface
+  staff:    '/outlook/taskpane',   // employee taskpane
+  admin:    '/dashboard',          // full main dashboard
 } as const;
 
 /**
