@@ -13,6 +13,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
+import * as Updates from 'expo-updates';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -338,6 +339,24 @@ function RootLayoutNav() {
       setNativeSplashHidden(true);
     }, 4000);
     return () => clearTimeout(t);
+  }, []);
+
+  // Force OTA update check on every launch (production only).
+  // If a newer bundle is available on the update channel, download it
+  // and immediately reload so the user always runs the latest code.
+  useEffect(() => {
+    if (__DEV__) return; // skip in development / Expo Go
+    (async () => {
+      try {
+        const result = await Updates.checkForUpdateAsync();
+        if (result.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync(); // restarts the JS bundle immediately
+        }
+      } catch {
+        // network unavailable or update server error — silent fail
+      }
+    })();
   }, []);
 
   return (
