@@ -36,7 +36,7 @@
         "backgroundColor": "#4f46e5"
       },
       "package": "com.assetxai.app",
-      "versionCode": 10,
+      "versionCode": 11,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.INTERNET",
