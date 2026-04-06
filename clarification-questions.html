@@ -4,8 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AssetXAI — Clarification Questions | QRCS RFQ 2026</title>
-<!-- docx.js — generates real .docx files entirely in the browser -->
-<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+<!-- docx.js loaded on-demand when user clicks Export Word -->
 <style>
 /* ═══════════════════════════════════════════════════════════
    VARIABLES & RESET
@@ -1420,13 +1419,29 @@ strong{color:var(--ink);font-weight:700}
    WORD (.docx) EXPORT — fully client-side via docx.js
 ═══════════════════════════════════════════════════ */
 async function exportWord(btn) {
-  if (!window.docx) {
-    alert('Word library still loading — please try again in a moment.');
-    return;
-  }
   var saved = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = 'Generating...';
+
+  /* ── load docx.js on demand ── */
+  if (!window.docx) {
+    btn.innerHTML = '⏳ Loading library…';
+    try {
+      await new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'https://unpkg.com/docx@8.5.0/build/index.js';
+        s.onload  = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    } catch (_) {
+      alert('Could not load the Word export library.\nPlease check your internet connection and try again.');
+      btn.disabled = false;
+      btn.innerHTML = saved;
+      return;
+    }
+  }
+
+  btn.innerHTML = '⏳ Generating…';
   try {
     await _buildDocx();
   } catch (e) {
