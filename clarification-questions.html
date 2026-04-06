@@ -4,6 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AssetXAI — Clarification Questions | QRCS RFQ 2026</title>
+<!-- docx.js — generates real .docx files entirely in the browser -->
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
 <style>
 /* ═══════════════════════════════════════════════════════════
    VARIABLES & RESET
@@ -41,6 +43,9 @@ strong{color:var(--ink);font-weight:700}
 .btn-primary:hover{box-shadow:0 5px 16px rgba(79,70,229,.45);transform:translateY(-1px)}
 .btn-outline{background:#f8fafc;color:var(--ink3);border:1px solid var(--border)}
 .btn-outline:hover{background:#f1f5f9}
+.btn-word{background:linear-gradient(135deg,#1e3a5f,#1d4ed8);color:#fff;box-shadow:0 3px 10px rgba(29,78,216,.25)}
+.btn-word:hover{box-shadow:0 5px 16px rgba(29,78,216,.4);transform:translateY(-1px)}
+.btn-word:disabled{opacity:.6;transform:none;cursor:not-allowed}
 
 /* ═══════════════════════════════════════════════════════════
    PAGE WRAPPER
@@ -353,6 +358,7 @@ strong{color:var(--ink);font-weight:700}
 <!-- ── Toolbar ────────────────────────────────────────────── -->
 <div class="toolbar">
   <button class="btn btn-primary" onclick="window.print()">🖨&nbsp; Print / Export PDF</button>
+  <button class="btn btn-word" id="wordBtn" onclick="exportWord(this)">📄&nbsp; Export Word (.docx)</button>
   <a class="btn btn-outline" href="#summary">📋 Jump to Summary</a>
 </div>
 
@@ -1407,6 +1413,364 @@ strong{color:var(--ink);font-weight:700}
   </div>
 </div>
 
+</div><!-- /wrap -->
+
+<script>
+/* ═══════════════════════════════════════════════════
+   WORD (.docx) EXPORT — fully client-side via docx.js
+   Reads content directly from the page DOM so the
+   HTML page layout is never touched.
+═══════════════════════════════════════════════════ */
+async function exportWord(btn) {
+  if (!window.docx) {
+    alert('Word export library is still loading — please try again in a moment.');
+    return;
+  }
+
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳&nbsp; Generating…';
+
+  try {
+    const D = window.docx;
+    const {
+      Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+      WidthType, AlignmentType, BorderStyle, ShadingType, PageBreak,
+      Header, Footer, NumberFormat
+    } = D;
+
+    /* ── helpers ── */
+    const twip  = mm => Math.round(mm * 56.7);
+    const hpt   = pt => pt * 2;             // half-points for TextRun size
+
+    const PRI = {
+      c: { fill: 'FEF2F2', text: 'DC2626', border: 'FECACA', label: 'CRITICAL' },
+      h: { fill: 'FFFBEB', text: 'D97706', border: 'FDE68A', label: 'HIGH'     },
+      m: { fill: 'EFF6FF', text: '2563EB', border: 'BFDBFE', label: 'MEDIUM'   },
+      l: { fill: 'F0FDF4', text: '16A34A', border: 'BBF7D0', label: 'LOW'      },
+    };
+
+    function getPri(el) {
+      if (!el) return 'm';
+      const cls = (el.className || '').split(/\s+/);
+      for (const k of ['c','h','m','l']) if (cls.includes(k)) return k;
+      return 'm';
+    }
+
+    function cellBorder(color, sz = 6) {
+      const s = { style: BorderStyle.SINGLE, size: sz, color };
+      return { top: s, bottom: s, left: s, right: s };
+    }
+
+    function thinLine(color = 'E2E8F0') {
+      const s = { style: BorderStyle.SINGLE, size: 4, color };
+      return { top: s, bottom: s, left: s, right: s,
+               insideHorizontal: s, insideVertical: s };
+    }
+
+    function shade(fill) {
+      return { fill, type: ShadingType.CLEAR, color: 'auto' };
+    }
+
+    /* margin shorthand for table cells */
+    const cm = (t=2, b=2, l=3, r=3) => ({
+      top: twip(t), bottom: twip(b), left: twip(l), right: twip(r)
+    });
+
+    const children = [];
+
+    /* ════════════════════════════════════════
+       COVER PAGE
+    ════════════════════════════════════════ */
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: twip(28), after: twip(3) },
+        children: [
+          new TextRun({ text: 'AssetXAI', bold: true, size: hpt(13), color: '4F46E5' }),
+          new TextRun({ text: '  ·  Proposal & Pre-Sales Team', size: hpt(11), color: '64748B' }),
+        ],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: twip(2) },
+        children: [new TextRun({ text: 'CLARIFICATION QUESTIONS', bold: true, size: hpt(28), color: '0F172A' })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: twip(2) },
+        children: [new TextRun({ text: 'RFQ — Asset Management & Ticketing System', bold: true, size: hpt(16), color: '4F46E5' })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: twip(14) },
+        children: [new TextRun({ text: 'Integrated with RFID Technology', italics: true, size: hpt(13), color: '64748B' })],
+      }),
+      /* Metadata box */
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: thinLine('CBD5E1'),
+        rows: [
+          new TableRow({ children: [
+            new TableCell({ width: { size: 22, type: WidthType.PERCENTAGE }, shading: shade('F1F5F9'), margins: cm(), children: [new Paragraph({ children: [new TextRun({ text: 'Document Ref', bold: true, size: hpt(9), color: '64748B' })] })] }),
+            new TableCell({ width: { size: 28, type: WidthType.PERCENTAGE }, margins: cm(), children: [new Paragraph({ children: [new TextRun({ text: 'AX-CQ-2026-001', bold: true, size: hpt(10), color: '0F172A' })] })] }),
+            new TableCell({ width: { size: 22, type: WidthType.PERCENTAGE }, shading: shade('F1F5F9'), margins: cm(), children: [new Paragraph({ children: [new TextRun({ text: 'Issued To', bold: true, size: hpt(9), color: '64748B' })] })] }),
+            new TableCell({ width: { size: 28, type: WidthType.PERCENTAGE }, margins: cm(), children: [new Paragraph({ children: [new TextRun({ text: 'QRCS Procurement', bold: true, size: hpt(10), color: '0F172A' })] })] }),
+          ]}),
+          new TableRow({ children: [
+            new TableCell({ shading: shade('F1F5F9'), margins: cm(), children: [new Paragraph({ children: [new TextRun({ text: 'Issued By', bold: true, size: hpt(9), color: '64748B' })] })] }),
+            new TableCell({ margins: cm(), children: [new Paragraph({ children: [new TextRun({ text: 'AssetXAI', bold: true, size: hpt(10), color: '0F172A' })] })] }),
+            new TableCell({ shading: shade('F1F5F9'), margins: cm(), children: [new Paragraph({ children: [new TextRun({ text: 'Date', bold: true, size: hpt(9), color: '64748B' })] })] }),
+            new TableCell({ margins: cm(), children: [new Paragraph({ children: [new TextRun({ text: 'April 6, 2026', bold: true, size: hpt(10), color: '0F172A' })] })] }),
+          ]}),
+        ],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: twip(8), after: twip(2) },
+        children: [new TextRun({ text: '16 Critical  ·  22 High  ·  12 Medium  ·  4 Low  ·  54 Questions  ·  14 Categories', size: hpt(10), color: '64748B' })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 0 },
+        children: [new TextRun({ text: 'CONFIDENTIAL — For Proposal & Bid Response Purposes Only', bold: true, size: hpt(9), color: '94A3B8' })],
+      }),
+      new Paragraph({ spacing: { before: 0, after: 0 }, children: [new PageBreak()] }),
+    );
+
+    /* ════════════════════════════════════════
+       URGENCY BANNER (single-cell table = proper box)
+    ════════════════════════════════════════ */
+    children.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: cellBorder('B91C1C', 12),
+        rows: [new TableRow({ children: [new TableCell({
+          shading: shade('7F1D1D'),
+          margins: cm(3, 3, 4, 4),
+          borders: cellBorder('B91C1C', 12),
+          children: [
+            new Paragraph({ spacing: { before: 0, after: twip(1) }, children: [
+              new TextRun({ text: '⚠  RFID SUPPLIER ESCALATION — URGENT ACTION REQUIRED', bold: true, size: hpt(11), color: 'FCA5A5' })
+            ]}),
+            new Paragraph({ spacing: { before: 0, after: 0 }, children: [
+              new TextRun({ text: 'Our primary RFID hardware supplier in China has not responded to repeated communication attempts. Clarification of the client\'s existing RFID infrastructure (frequency band, brand, model, and communication standards) is urgently required to qualify alternative suppliers in the EU, US, and Southeast Asian markets and still meet any bid submission deadline. See questions C1–C5.', size: hpt(9.5), color: 'FECACA' })
+            ]}),
+          ],
+        })})]},
+      ),
+      new Paragraph({ spacing: { before: 0, after: twip(4) }, children: [new TextRun({ text: '' })] }),
+    );
+
+    /* ════════════════════════════════════════
+       SECTIONS — read from DOM
+    ════════════════════════════════════════ */
+    const sectionEls = document.querySelectorAll('.sec');
+
+    for (const secEl of sectionEls) {
+      const letter  = secEl.querySelector('.sec-letter')?.textContent?.trim() || '';
+      const title   = secEl.querySelector('h2')?.textContent?.trim() || '';
+      const badge   = secEl.querySelector('.sec-badge')?.textContent?.trim() || '';
+      const isSumm  = letter === '∑';
+
+      /* section heading row */
+      children.push(
+        new Paragraph({
+          shading: shade('1E293B'),
+          spacing: { before: twip(6), after: 0 },
+          indent: { left: twip(3), right: twip(3) },
+          children: [
+            new TextRun({ text: isSumm ? '∑  ' : `${letter}  `, bold: true, size: hpt(13), color: '818CF8' }),
+            new TextRun({ text: title, bold: true, size: hpt(12), color: 'F1F5F9' }),
+            new TextRun({ text: `     ${badge}`, size: hpt(9), color: '94A3B8' }),
+          ],
+        }),
+      );
+
+      /* ── SUMMARY REFERENCE TABLE ── */
+      if (isSumm) {
+        const hRow = new TableRow({
+          tableHeader: true,
+          children: [
+            ['ID', 7], ['Category', 13], ['Question Summary', 62], ['Priority', 18]
+          ].map(([h, w]) => new TableCell({
+            width: { size: w, type: WidthType.PERCENTAGE },
+            shading: shade('F8FAFC'),
+            margins: cm(1.5, 1.5, 2.5, 2.5),
+            children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, size: hpt(9), color: '475569' })] })],
+          })),
+        });
+
+        const dataRows = [];
+        for (const tr of secEl.querySelectorAll('.ref-table tbody tr')) {
+          const tds = tr.querySelectorAll('td');
+          const pk  = getPri(tr.querySelector('.pri'));
+          const pc  = PRI[pk];
+          dataRows.push(new TableRow({ children: [
+            new TableCell({ width: { size: 7,  type: WidthType.PERCENTAGE }, margins: cm(1,1,2,2), children: [new Paragraph({ children: [new TextRun({ text: tds[0]?.textContent?.trim() || '', bold: true, size: hpt(9), font: 'Courier New', color: '0F172A' })] })] }),
+            new TableCell({ width: { size: 13, type: WidthType.PERCENTAGE }, margins: cm(1,1,2,2), children: [new Paragraph({ children: [new TextRun({ text: tds[1]?.textContent?.trim() || '', bold: true, size: hpt(9), color: '334155' })] })] }),
+            new TableCell({ width: { size: 62, type: WidthType.PERCENTAGE }, margins: cm(1,1,2,2), children: [new Paragraph({ children: [new TextRun({ text: tds[2]?.textContent?.trim() || '', size: hpt(9), color: '475569' })] })] }),
+            new TableCell({ width: { size: 18, type: WidthType.PERCENTAGE }, shading: shade(pc.fill), margins: cm(1,1,2,2), children: [new Paragraph({ children: [new TextRun({ text: pc.label, bold: true, size: hpt(8.5), color: pc.text })] })] }),
+          ]}));
+        }
+
+        children.push(
+          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: thinLine(), rows: [hRow, ...dataRows] }),
+          new Paragraph({ spacing: { before: 0, after: twip(2) }, children: [new TextRun({ text: '' })] }),
+        );
+        continue;
+      }
+
+      /* ── QUESTION ROWS ── */
+      for (const qEl of secEl.querySelectorAll('.q')) {
+        const qId    = qEl.querySelector('.q-id')?.textContent?.trim()    || '';
+        const qTitle = qEl.querySelector('.q-title')?.textContent?.trim() || '';
+        const qBody  = qEl.querySelector('.q-body');
+        const pk     = getPri(qEl.querySelector('.pri'));
+        const pc     = PRI[pk];
+
+        /* question header: coloured shading + left accent */
+        children.push(new Paragraph({
+          shading: shade(pc.fill),
+          spacing: { before: twip(3), after: 0 },
+          indent: { left: twip(2), right: twip(2) },
+          border: { left: { style: BorderStyle.SINGLE, size: 24, color: pc.text } },
+          children: [
+            new TextRun({ text: qId,      bold: true, size: hpt(10), color: pc.text }),
+            new TextRun({ text: '   '                                                }),
+            new TextRun({ text: qTitle,   bold: true, size: hpt(10), color: '0F172A' }),
+            new TextRun({ text: '     '                                              }),
+            new TextRun({ text: `[ ${pc.label} ]`, bold: true, size: hpt(8.5), color: pc.text }),
+          ],
+        }));
+
+        /* body: main text (non-list, non-note) */
+        if (qBody) {
+          let mainParts = [];
+          for (const node of qBody.childNodes) {
+            const tag = node.nodeName?.toUpperCase();
+            if (tag === 'UL' || tag === 'OL') continue;
+            if (node.classList && node.classList.contains('note-box')) continue;
+            const t = node.textContent;
+            if (t && t.trim()) mainParts.push(t);
+          }
+          const mainText = mainParts.join('').replace(/\s+/g, ' ').trim();
+
+          if (mainText) {
+            children.push(new Paragraph({
+              spacing: { before: twip(1.5), after: 0 },
+              indent: { left: twip(9) },
+              children: [new TextRun({ text: mainText, size: hpt(9.5), color: '475569' })],
+            }));
+          }
+
+          /* bullet points */
+          for (const li of qBody.querySelectorAll('li')) {
+            children.push(new Paragraph({
+              spacing: { before: 0, after: 0 },
+              indent: { left: twip(13), hanging: twip(4) },
+              children: [
+                new TextRun({ text: '•  ' + li.textContent.trim(), size: hpt(9.5), color: '334155' }),
+              ],
+            }));
+          }
+
+          /* warning note box (single-cell table for proper border) */
+          const noteEl = qBody.querySelector('.note-box');
+          if (noteEl) {
+            children.push(
+              new Table({
+                width: { size: 95, type: WidthType.PERCENTAGE },
+                float: { horizontalAnchor: 'text', absoluteHorizontalPosition: twip(9) },
+                borders: { left: { style: BorderStyle.SINGLE, size: 12, color: 'F59E0B' }, top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }, bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }, right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' } },
+                rows: [new TableRow({ children: [new TableCell({
+                  shading: shade('FFFBEB'),
+                  margins: cm(1.5, 1.5, 3, 3),
+                  borders: { left: { style: BorderStyle.SINGLE, size: 12, color: 'F59E0B' }, top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }, bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }, right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' } },
+                  children: [new Paragraph({ children: [new TextRun({ text: noteEl.textContent.replace(/\s+/g, ' ').trim(), size: hpt(9), color: '78350F', bold: true })] })],
+                })})]},
+              }),
+            );
+          }
+        }
+
+        /* response field */
+        children.push(new Paragraph({
+          spacing: { before: twip(2), after: twip(4) },
+          indent: { left: twip(9) },
+          children: [
+            new TextRun({ text: 'QRCS Response: ', bold: true, size: hpt(8.5), color: '94A3B8' }),
+            new TextRun({ text: '_'.repeat(80), size: hpt(8.5), color: 'E2E8F0' }),
+          ],
+        }));
+      }
+    }
+
+    /* ════════════════════════════════════════
+       DOCUMENT FOOTER (last page)
+    ════════════════════════════════════════ */
+    children.push(
+      new Paragraph({ spacing: { before: 0, after: 0 }, children: [new PageBreak()] }),
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: thinLine('1E293B'),
+        rows: [new TableRow({ children: [new TableCell({
+          shading: shade('0F172A'),
+          margins: cm(4, 4, 5, 5),
+          borders: thinLine('1E293B'),
+          children: [
+            new Paragraph({ spacing: { before: 0, after: twip(1) }, children: [new TextRun({ text: 'AssetXAI — Enterprise Asset Intelligence', bold: true, size: hpt(12), color: 'E2E8F0' })] }),
+            new Paragraph({ spacing: { before: 0, after: twip(0.5) }, children: [new TextRun({ text: 'Prepared by the AssetXAI Pre-Sales & Technical Team', size: hpt(9.5), color: '94A3B8' })] }),
+            new Paragraph({ spacing: { before: 0, after: 0 }, children: [new TextRun({ text: 'Document Ref: AX-CQ-2026-001  |  April 6, 2026  |  v1.1  |  assetxai.live', size: hpt(9), color: '64748B' })] }),
+            new Paragraph({ spacing: { before: twip(1), after: 0 }, children: [new TextRun({ text: 'CONFIDENTIAL — For Proposal & Bid Response Purposes Only', bold: true, size: hpt(8.5), color: '475569' })] }),
+          ],
+        })})]},
+      ),
+    );
+
+    /* ════════════════════════════════════════
+       BUILD & DOWNLOAD
+    ════════════════════════════════════════ */
+    const doc = new Document({
+      creator:     'AssetXAI',
+      title:       'AssetXAI — Clarification Questions | QRCS RFQ 2026',
+      description: 'Asset Management & Ticketing System with RFID — Clarification Questions',
+      styles: {
+        default: {
+          document: { run: { font: 'Calibri', size: hpt(11) } },
+        },
+      },
+      sections: [{
+        properties: {
+          page: {
+            /* A4: 210mm × 297mm in twips */
+            size:   { width: Math.round(210 * 56.7), height: Math.round(297 * 56.7) },
+            margin: { top: twip(20), right: twip(18), bottom: twip(20), left: twip(18) },
+          },
+        },
+        children,
+      }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'AssetXAI-Clarification-Questions-QRCS-RFQ-2026.docx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+  } catch (err) {
+    console.error('Word export error:', err);
+    alert('Export failed — see browser console for details.\n\n' + err.message);
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = origText;
+  }
+}
+</script>
 </div><!-- /wrap -->
 </body>
 </html>
