@@ -23,7 +23,7 @@
         "EXPO_PUBLIC_API_URL": "https://assetxai.live"
       },
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "apk"
       },
       "ios": {
         "resourceClass": "m-medium"
