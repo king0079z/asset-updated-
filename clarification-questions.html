@@ -1416,34 +1416,16 @@ strong{color:var(--ink);font-weight:700}
 
 <script>
 /* ═══════════════════════════════════════════════════
-   WORD (.docx) EXPORT — fully client-side via docx.js
+   WORD EXPORT — zero-dependency HTML→.doc approach
+   Works offline, no CDN, no tracking prevention issues
 ═══════════════════════════════════════════════════ */
-async function exportWord(btn) {
+function exportWord(btn) {
   var saved = btn.innerHTML;
   btn.disabled = true;
-
-  /* ── load docx.js on demand ── */
-  if (!window.docx) {
-    btn.innerHTML = '⏳ Loading library…';
-    try {
-      await new Promise(function (resolve, reject) {
-        var s = document.createElement('script');
-        s.src = 'https://unpkg.com/docx@8.5.0/build/index.js';
-        s.onload  = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    } catch (_) {
-      alert('Could not load the Word export library.\nPlease check your internet connection and try again.');
-      btn.disabled = false;
-      btn.innerHTML = saved;
-      return;
-    }
-  }
-
   btn.innerHTML = '⏳ Generating…';
+
   try {
-    await _buildDocx();
+    _buildWordDoc();
   } catch (e) {
     console.error('Word export error:', e);
     alert('Export failed: ' + e.message);
@@ -1453,217 +1435,167 @@ async function exportWord(btn) {
   }
 }
 
-async function _buildDocx() {
-  var D = window.docx;
-  var Document    = D.Document;
-  var Packer      = D.Packer;
-  var Paragraph   = D.Paragraph;
-  var TextRun     = D.TextRun;
-  var Table       = D.Table;
-  var TableRow    = D.TableRow;
-  var TableCell   = D.TableCell;
-  var WidthType   = D.WidthType;
-  var AlignmentType = D.AlignmentType;
-  var BorderStyle = D.BorderStyle;
-  var ShadingType = D.ShadingType;
-  var PageBreak   = D.PageBreak;
-
-  /* ── tiny helpers ── */
-  function mm(v) { return Math.round(v * 56.7); }   /* mm -> twip */
-  function hp(pt) { return pt * 2; }                /* pt -> half-point */
-
+function _buildWordDoc() {
+  /* priority colours */
   var PRI = {
-    c: { fill: 'FEF2F2', txt: 'DC2626', label: 'CRITICAL' },
-    h: { fill: 'FFFBEB', txt: 'D97706', label: 'HIGH'     },
-    m: { fill: 'EFF6FF', txt: '2563EB', label: 'MEDIUM'   },
-    l: { fill: 'F0FDF4', txt: '16A34A', label: 'LOW'      }
+    c: { bg: '#FEF2F2', border: '#DC2626', color: '#DC2626', label: 'CRITICAL' },
+    h: { bg: '#FFFBEB', border: '#D97706', color: '#D97706', label: 'HIGH'     },
+    m: { bg: '#EFF6FF', border: '#2563EB', color: '#2563EB', label: 'MEDIUM'   },
+    l: { bg: '#F0FDF4', border: '#16A34A', color: '#16A34A', label: 'LOW'      }
   };
 
   function getPri(el) {
     if (!el) return 'm';
-    var cl = el.className ? el.className.split(' ') : [];
-    var keys = ['c','h','m','l'];
-    for (var i = 0; i < keys.length; i++) {
-      if (cl.indexOf(keys[i]) !== -1) return keys[i];
+    var cl = (el.className || '').split(' ');
+    for (var i = 0; i < cl.length; i++) {
+      if (PRI[cl[i]]) return cl[i];
     }
     return 'm';
   }
 
-  /* shared border/shade builders */
-  function border(color, sz) {
-    sz = sz || 6;
-    var s = { style: BorderStyle.SINGLE, size: sz, color: color };
-    return { top: s, bottom: s, left: s, right: s };
-  }
-  function borderAll(color, sz) {
-    sz = sz || 4;
-    var s = { style: BorderStyle.SINGLE, size: sz, color: color };
-    return { top: s, bottom: s, left: s, right: s,
-             insideHorizontal: s, insideVertical: s };
-  }
-  function shade(fill) {
-    return { fill: fill, type: ShadingType.CLEAR, color: 'auto' };
-  }
-  function mg(t, b, l, r) {
-    t = t || 2; b = b || 2; l = l || 3; r = r || 3;
-    return { top: mm(t), bottom: mm(b), left: mm(l), right: mm(r) };
+  function esc(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  /* one-liner paragraph & run */
-  function para(runs, opts) {
-    var cfg = opts || {};
-    cfg.children = runs;
-    return new Paragraph(cfg);
-  }
-  function run(text, ptSize, color, bold, mono) {
-    var cfg = { text: text, size: hp(ptSize || 11) };
-    if (color) cfg.color = color;
-    if (bold)  cfg.bold = true;
-    if (mono)  cfg.font = 'Courier New';
-    return new TextRun(cfg);
-  }
-  function irun(text, ptSize, color) {
-    return new TextRun({ text: text, size: hp(ptSize || 11), color: color || '0F172A', italics: true });
-  }
+  /* ── build HTML ── */
+  var H = [];
 
-  /* single-cell table (used for coloured banner boxes) */
-  function boxTable(borderColor, borderSz, bgFill, cellMg, cellChildren) {
-    var b = border(borderColor, borderSz);
-    var cell = new TableCell({ shading: shade(bgFill), margins: cellMg, borders: b, children: cellChildren });
-    var row  = new TableRow({ children: [cell] });
-    return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: b, rows: [row] });
-  }
+  H.push('<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office"',
+    ' xmlns:w="urn:schemas-microsoft-com:office:word"',
+    ' xmlns="http://www.w3.org/TR/REC-html40"><head>',
+    '<meta charset="UTF-8">',
+    '<meta name=ProgId content=Word.Document>',
+    '<meta name=Generator content="Microsoft Word 15">',
+    '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View>',
+    '<w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->',
+    '<style>',
+    '  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #0F172A; margin: 2cm 2cm 2cm 2cm; }',
+    '  h1 { font-size: 24pt; font-weight: bold; text-align: center; color: #0F172A; margin: 0 0 6pt 0; }',
+    '  h2 { font-size: 13pt; font-weight: bold; text-align: center; color: #4F46E5; margin: 0 0 4pt 0; }',
+    '  h3 { font-size: 11pt; font-style: italic; text-align: center; color: #64748B; font-weight: normal; margin: 0 0 18pt 0; }',
+    '  table { border-collapse: collapse; width: 100%; margin: 6pt 0; }',
+    '  td, th { padding: 4pt 6pt; font-size: 9pt; }',
+    '  .cover-brand { font-size: 13pt; font-weight: bold; color: #4F46E5; text-align: center; margin-bottom: 4pt; }',
+    '  .cover-sub   { font-size: 9pt; color: #94A3B8; text-align: center; margin-top: 10pt; }',
+    '  .sec-hdr { background: #1E293B; color: #F1F5F9; font-size: 12pt; font-weight: bold;',
+    '             padding: 6pt 8pt; margin: 16pt 0 4pt 0; page-break-after: avoid; }',
+    '  .sec-letter { color: #818CF8; margin-right: 8pt; }',
+    '  .q-hdr { padding: 5pt 8pt 5pt 12pt; margin: 8pt 0 0 0; font-size: 10pt;',
+    '           font-weight: bold; border-left: 4pt solid; page-break-after: avoid; }',
+    '  .q-body-text { font-size: 9.5pt; color: #475569; margin: 4pt 0 4pt 24pt; }',
+    '  .q-bullet { font-size: 9.5pt; color: #334155; margin: 2pt 0 2pt 36pt; }',
+    '  .note-box { background: #FFFBEB; border-left: 4pt solid #F59E0B;',
+    '              padding: 4pt 8pt; font-size: 9pt; color: #78350F;',
+    '              font-weight: bold; margin: 4pt 0 4pt 24pt; }',
+    '  .q-resp { font-size: 8.5pt; color: #94A3B8; margin: 4pt 0 12pt 24pt; }',
+    '  .urgency { background: #7F1D1D; color: #FECACA; padding: 8pt 10pt;',
+    '             border: 2pt solid #B91C1C; margin: 8pt 0 12pt 0; }',
+    '  .urgency-title { font-size: 11pt; font-weight: bold; color: #FCA5A5; margin-bottom: 4pt; }',
+    '  .page-break { page-break-after: always; }',
+    '</style></head><body>');
 
-  /* ──────────────────── BUILD CONTENT ──────────────────── */
-  var kids = [];
+  /* COVER */
+  H.push('<div class="cover-brand">AssetXAI <span style="color:#64748B;font-weight:normal;font-size:11pt">— Proposal &amp; Pre-Sales Team</span></div>',
+    '<h1>CLARIFICATION QUESTIONS</h1>',
+    '<h2>RFQ — Asset Management &amp; Ticketing System</h2>',
+    '<h3>Integrated with RFID Technology</h3>');
 
-  /* ── COVER ── */
-  kids.push(
-    para([run('AssetXAI', 13, '4F46E5', true), run('  -  Proposal & Pre-Sales Team', 11, '64748B')],
-      { alignment: AlignmentType.CENTER, spacing: { before: mm(28), after: mm(3) } }),
-    para([run('CLARIFICATION QUESTIONS', 28, '0F172A', true)],
-      { alignment: AlignmentType.CENTER, spacing: { before: 0, after: mm(2) } }),
-    para([run('RFQ - Asset Management & Ticketing System', 16, '4F46E5', true)],
-      { alignment: AlignmentType.CENTER, spacing: { before: 0, after: mm(2) } }),
-    para([irun('Integrated with RFID Technology', 13, '64748B')],
-      { alignment: AlignmentType.CENTER, spacing: { before: 0, after: mm(14) } })
-  );
+  H.push('<table style="border:1pt solid #CBD5E1;">',
+    '<tr>',
+    '<td style="background:#F1F5F9;color:#64748B;font-weight:bold;width:22%">Document Ref</td>',
+    '<td style="width:28%;font-weight:bold">AX-CQ-2026-001</td>',
+    '<td style="background:#F1F5F9;color:#64748B;font-weight:bold;width:22%">Issued To</td>',
+    '<td style="width:28%;font-weight:bold">QRCS Procurement</td>',
+    '</tr><tr>',
+    '<td style="background:#F1F5F9;color:#64748B;font-weight:bold">Issued By</td>',
+    '<td style="font-weight:bold">AssetXAI</td>',
+    '<td style="background:#F1F5F9;color:#64748B;font-weight:bold">Date</td>',
+    '<td style="font-weight:bold">April 6, 2026</td>',
+    '</tr></table>');
 
-  /* metadata table */
-  var metaRows = [
-    new TableRow({ children: [
-      new TableCell({ width: { size: 22, type: WidthType.PERCENTAGE }, shading: shade('F1F5F9'), margins: mg(), children: [para([run('Document Ref', 9, '64748B', true)])] }),
-      new TableCell({ width: { size: 28, type: WidthType.PERCENTAGE }, margins: mg(), children: [para([run('AX-CQ-2026-001', 10, '0F172A', true)])] }),
-      new TableCell({ width: { size: 22, type: WidthType.PERCENTAGE }, shading: shade('F1F5F9'), margins: mg(), children: [para([run('Issued To', 9, '64748B', true)])] }),
-      new TableCell({ width: { size: 28, type: WidthType.PERCENTAGE }, margins: mg(), children: [para([run('QRCS Procurement', 10, '0F172A', true)])] })
-    ]}),
-    new TableRow({ children: [
-      new TableCell({ shading: shade('F1F5F9'), margins: mg(), children: [para([run('Issued By', 9, '64748B', true)])] }),
-      new TableCell({ margins: mg(), children: [para([run('AssetXAI', 10, '0F172A', true)])] }),
-      new TableCell({ shading: shade('F1F5F9'), margins: mg(), children: [para([run('Date', 9, '64748B', true)])] }),
-      new TableCell({ margins: mg(), children: [para([run('April 6, 2026', 10, '0F172A', true)])] })
-    ]})
-  ];
-  kids.push(
-    new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: borderAll('CBD5E1'), rows: metaRows }),
-    para([run('16 Critical  |  22 High  |  12 Medium  |  4 Low  |  54 Questions  |  14 Categories', 10, '64748B')],
-      { alignment: AlignmentType.CENTER, spacing: { before: mm(8), after: mm(2) } }),
-    para([run('CONFIDENTIAL - For Proposal & Bid Response Purposes Only', 9, '94A3B8', true)],
-      { alignment: AlignmentType.CENTER, spacing: { before: 0, after: 0 } }),
-    para([new PageBreak()], { spacing: { before: 0, after: 0 } })
-  );
+  H.push('<p style="text-align:center;font-size:9.5pt;color:#64748B;margin:12pt 0 4pt 0">',
+    '16 Critical &nbsp;|&nbsp; 22 High &nbsp;|&nbsp; 12 Medium &nbsp;|&nbsp; 4 Low &nbsp;|&nbsp; 54 Questions &nbsp;|&nbsp; 14 Categories</p>',
+    '<p style="text-align:center;font-size:8.5pt;color:#94A3B8;margin:0">',
+    '<b>CONFIDENTIAL — For Proposal &amp; Bid Response Purposes Only</b></p>');
 
-  /* ── URGENCY BANNER ── */
-  kids.push(
-    boxTable('B91C1C', 10, '7F1D1D', mg(3, 3, 4, 4), [
-      para([run('URGENT: RFID Supplier Communication Failure - Escalation Required', 11, 'FCA5A5', true)],
-        { spacing: { before: 0, after: mm(1) } }),
-      para([run('Our primary RFID hardware supplier in China has not responded to repeated communication attempts. Clarification of the existing RFID infrastructure (frequency, brand, model, standards) is urgently required to qualify alternative suppliers in EU, US, and Southeast Asian markets. See questions C1-C5.', 9.5, 'FECACA')],
-        { spacing: { before: 0, after: 0 } })
-    ]),
-    para([run('')], { spacing: { before: 0, after: mm(4) } })
-  );
+  H.push('<div class="page-break"></div>');
 
-  /* ── SECTIONS (read from DOM) ── */
+  /* URGENCY BANNER */
+  H.push('<div class="urgency">',
+    '<div class="urgency-title">⚠ URGENT: RFID Supplier Communication Failure — Escalation Required</div>',
+    '<div style="font-size:9.5pt">Our primary RFID hardware supplier in China has not responded to repeated communication attempts. ',
+    'Clarification of the existing RFID infrastructure (frequency, brand, model, standards) is urgently required ',
+    'to qualify alternative suppliers in EU, US, and Southeast Asian markets. See questions C1–C5.</div>',
+    '</div>');
+
+  /* SECTIONS from DOM */
   var secs = document.querySelectorAll('.sec');
   for (var si = 0; si < secs.length; si++) {
-    var secEl   = secs[si];
+    var secEl    = secs[si];
     var letterEl = secEl.querySelector('.sec-letter');
     var h2El     = secEl.querySelector('h2');
     var badgeEl  = secEl.querySelector('.sec-badge');
     var letter   = letterEl ? letterEl.textContent.trim() : '';
-    var secTitle = h2El     ? h2El.textContent.trim()     : '';
-    var badge    = badgeEl  ? badgeEl.textContent.trim()  : '';
-    var isSumm   = (letter === '\u2211');
+    var secTitle = h2El     ? h2El.textContent.replace(letter,'').trim() : '';
+    var badge    = badgeEl  ? badgeEl.textContent.trim() : '';
+    var isSumm   = (letter === '∑');
 
     /* section heading */
-    kids.push(para([
-      run(isSumm ? '\u2211  ' : (letter + '  '), 13, '818CF8', true),
-      run(secTitle, 12, 'F1F5F9', true),
-      run('     ' + badge, 9, '94A3B8')
-    ], { shading: shade('1E293B'), spacing: { before: mm(6), after: 0 }, indent: { left: mm(3), right: mm(3) } }));
+    H.push('<div class="sec-hdr"><span class="sec-letter">' + esc(letter) + '</span>',
+      esc(secTitle),
+      badge ? '<span style="color:#94A3B8;font-size:9pt;font-weight:normal;margin-left:12pt">' + esc(badge) + '</span>' : '',
+      '</div>');
 
     /* summary table */
     if (isSumm) {
       var refEl = secEl.querySelector('.ref-table');
       if (refEl) {
-        var hdrCells = [
-          new TableCell({ width: { size: 7,  type: WidthType.PERCENTAGE }, shading: shade('F8FAFC'), margins: mg(1.5,1.5,2,2), children: [para([run('ID',       9, '475569', true)])] }),
-          new TableCell({ width: { size: 13, type: WidthType.PERCENTAGE }, shading: shade('F8FAFC'), margins: mg(1.5,1.5,2,2), children: [para([run('Category', 9, '475569', true)])] }),
-          new TableCell({ width: { size: 62, type: WidthType.PERCENTAGE }, shading: shade('F8FAFC'), margins: mg(1.5,1.5,2,2), children: [para([run('Question Summary', 9, '475569', true)])] }),
-          new TableCell({ width: { size: 18, type: WidthType.PERCENTAGE }, shading: shade('F8FAFC'), margins: mg(1.5,1.5,2,2), children: [para([run('Priority', 9, '475569', true)])] })
-        ];
-        var tblRows = [new TableRow({ tableHeader: true, children: hdrCells })];
+        H.push('<table style="border:1pt solid #E2E8F0;font-size:9pt;">',
+          '<thead><tr style="background:#F8FAFC;">',
+          '<th style="border:1pt solid #E2E8F0;width:7%;color:#475569">ID</th>',
+          '<th style="border:1pt solid #E2E8F0;width:13%;color:#475569">Category</th>',
+          '<th style="border:1pt solid #E2E8F0;width:62%;color:#475569">Question Summary</th>',
+          '<th style="border:1pt solid #E2E8F0;width:18%;color:#475569">Priority</th>',
+          '</tr></thead><tbody>');
         var refRows = refEl.querySelectorAll('tbody tr');
         for (var ri = 0; ri < refRows.length; ri++) {
           var rrow = refRows[ri];
           var tds  = rrow.querySelectorAll('td');
-          var pk   = getPri(rrow.querySelector('.pri'));
-          var pc   = PRI[pk];
-          tblRows.push(new TableRow({ children: [
-            new TableCell({ width: { size: 7,  type: WidthType.PERCENTAGE }, margins: mg(1,1,2,2), children: [para([run(tds[0] ? tds[0].textContent.trim() : '', 9, '0F172A', true, true)])] }),
-            new TableCell({ width: { size: 13, type: WidthType.PERCENTAGE }, margins: mg(1,1,2,2), children: [para([run(tds[1] ? tds[1].textContent.trim() : '', 9, '334155', true)])] }),
-            new TableCell({ width: { size: 62, type: WidthType.PERCENTAGE }, margins: mg(1,1,2,2), children: [para([run(tds[2] ? tds[2].textContent.trim() : '', 9, '475569')])] }),
-            new TableCell({ width: { size: 18, type: WidthType.PERCENTAGE }, shading: shade(pc.fill), margins: mg(1,1,2,2), children: [para([run(pc.label, 8.5, pc.txt, true)])] })
-          ]}));
+          var rk   = getPri(rrow.querySelector('.pri'));
+          var rc   = PRI[rk];
+          H.push('<tr>',
+            '<td style="border:1pt solid #E2E8F0;font-family:Courier New,monospace;font-weight:bold">' + esc(tds[0] ? tds[0].textContent.trim() : '') + '</td>',
+            '<td style="border:1pt solid #E2E8F0;font-weight:bold;color:#334155">' + esc(tds[1] ? tds[1].textContent.trim() : '') + '</td>',
+            '<td style="border:1pt solid #E2E8F0;color:#475569">' + esc(tds[2] ? tds[2].textContent.trim() : '') + '</td>',
+            '<td style="border:1pt solid #E2E8F0;background:' + rc.bg + ';color:' + rc.color + ';font-weight:bold;text-align:center">' + rc.label + '</td>',
+            '</tr>');
         }
-        kids.push(
-          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, borders: borderAll('E2E8F0', 4), rows: tblRows }),
-          para([run('')], { spacing: { before: 0, after: mm(2) } })
-        );
+        H.push('</tbody></table>');
       }
       continue;
     }
 
-    /* question rows */
+    /* questions */
     var qEls = secEl.querySelectorAll('.q');
     for (var qi = 0; qi < qEls.length; qi++) {
-      var qEl      = qEls[qi];
-      var idEl     = qEl.querySelector('.q-id');
-      var titleEl  = qEl.querySelector('.q-title');
-      var bodyEl   = qEl.querySelector('.q-body');
-      var priEl    = qEl.querySelector('.pri');
-      var qId      = idEl    ? idEl.textContent.trim()    : '';
-      var qTitle   = titleEl ? titleEl.textContent.trim() : '';
-      var qk       = getPri(priEl);
-      var qc       = PRI[qk];
+      var qEl     = qEls[qi];
+      var idEl    = qEl.querySelector('.q-id');
+      var titleEl = qEl.querySelector('.q-title');
+      var bodyEl  = qEl.querySelector('.q-body');
+      var priEl   = qEl.querySelector('.pri');
+      var qId     = idEl    ? idEl.textContent.trim()    : '';
+      var qTitle  = titleEl ? titleEl.textContent.trim() : '';
+      var qk      = getPri(priEl);
+      var qc      = PRI[qk];
 
-      /* coloured question header */
-      kids.push(para([
-        run(qId, 10, qc.txt, true),
-        run('   '),
-        run(qTitle, 10, '0F172A', true),
-        run('     '),
-        run('[ ' + qc.label + ' ]', 8.5, qc.txt, true)
-      ], {
-        shading: shade(qc.fill),
-        spacing: { before: mm(3), after: 0 },
-        indent: { left: mm(2), right: mm(2) },
-        border: { left: { style: BorderStyle.SINGLE, size: 24, color: qc.txt } }
-      }));
+      H.push('<div class="q-hdr" style="background:' + qc.bg + ';border-left-color:' + qc.border + ';color:' + qc.color + '">',
+        '<span style="font-family:Courier New,monospace">' + esc(qId) + '</span>',
+        ' &nbsp; <span style="color:#0F172A">' + esc(qTitle) + '</span>',
+        ' &nbsp; <span style="font-size:8.5pt">[' + qc.label + ']</span>',
+        '</div>');
 
       if (bodyEl) {
-        /* main text (exclude lists and note-box) */
+        /* main text */
         var parts = [];
         var nodes = bodyEl.childNodes;
         for (var ni = 0; ni < nodes.length; ni++) {
@@ -1672,73 +1604,50 @@ async function _buildDocx() {
           if (tag === 'UL' || tag === 'OL') continue;
           if (nd.classList && nd.classList.contains('note-box')) continue;
           var nt = nd.textContent;
-          if (nt && nt.trim()) parts.push(nt);
+          if (nt && nt.trim()) parts.push(nt.trim());
         }
-        var mainText = parts.join('').replace(/\s+/g, ' ').trim();
+        var mainText = parts.join(' ').replace(/\s+/g,' ').trim();
         if (mainText) {
-          kids.push(para([run(mainText, 9.5, '475569')],
-            { spacing: { before: mm(1.5), after: 0 }, indent: { left: mm(9) } }));
+          H.push('<p class="q-body-text">' + esc(mainText) + '</p>');
         }
 
         /* bullets */
         var lis = bodyEl.querySelectorAll('li');
         for (var li = 0; li < lis.length; li++) {
-          kids.push(para([run('\u2022  ' + lis[li].textContent.trim(), 9.5, '334155')],
-            { spacing: { before: 0, after: 0 }, indent: { left: mm(13), hanging: mm(4) } }));
+          H.push('<p class="q-bullet">&#8226;&nbsp; ' + esc(lis[li].textContent.trim()) + '</p>');
         }
 
         /* note box */
         var noteEl = bodyEl.querySelector('.note-box');
         if (noteEl) {
-          var noteText = noteEl.textContent.replace(/\s+/g, ' ').trim();
-          kids.push(
-            boxTable('F59E0B', 8, 'FFFBEB', mg(1.5, 1.5, 3, 3), [
-              para([run(noteText, 9, '78350F', true)], { spacing: { before: 0, after: 0 } })
-            ]),
-            para([run('')], { spacing: { before: 0, after: mm(1) } })
-          );
+          H.push('<div class="note-box">' + esc(noteEl.textContent.replace(/\s+/g,' ').trim()) + '</div>');
         }
       }
 
       /* response line */
-      kids.push(para([
-        run('QRCS Response: ', 8.5, '94A3B8', true),
-        new TextRun({ text: '_'.repeat(80), size: hp(8.5), color: 'E2E8F0' })
-      ], { spacing: { before: mm(2), after: mm(4) }, indent: { left: mm(9) } }));
+      H.push('<p class="q-resp"><b>QRCS Response:</b> <span style="color:#CBD5E1">',
+        '________________________________________</span></p>');
     }
   }
 
-  /* ── FOOTER ── */
-  kids.push(
-    para([new PageBreak()], { spacing: { before: 0, after: 0 } }),
-    boxTable('1E293B', 4, '0F172A', mg(4, 4, 5, 5), [
-      para([run('AssetXAI - Enterprise Asset Intelligence', 12, 'E2E8F0', true)], { spacing: { before: 0, after: mm(1) } }),
-      para([run('Prepared by the AssetXAI Pre-Sales & Technical Team', 9.5, '94A3B8')], { spacing: { before: 0, after: mm(0.5) } }),
-      para([run('Document Ref: AX-CQ-2026-001  |  April 6, 2026  |  v1.1  |  assetxai.live', 9, '64748B')], { spacing: { before: 0, after: 0 } }),
-      para([run('CONFIDENTIAL - For Proposal & Bid Response Purposes Only', 8.5, '475569', true)], { spacing: { before: mm(1), after: 0 } })
-    ])
-  );
+  /* FOOTER */
+  H.push('<div class="page-break"></div>',
+    '<div style="background:#0F172A;color:#E2E8F0;padding:12pt 14pt;border:2pt solid #1E293B;">',
+    '<div style="font-size:12pt;font-weight:bold;margin-bottom:4pt">AssetXAI — Enterprise Asset Intelligence</div>',
+    '<div style="font-size:9.5pt;color:#94A3B8">Prepared by the AssetXAI Pre-Sales &amp; Technical Team</div>',
+    '<div style="font-size:9pt;color:#64748B;margin-top:4pt">Document Ref: AX-CQ-2026-001 &nbsp;|&nbsp; April 6, 2026 &nbsp;|&nbsp; v1.1 &nbsp;|&nbsp; assetxai.live</div>',
+    '<div style="font-size:8.5pt;color:#475569;font-weight:bold;margin-top:6pt">CONFIDENTIAL — For Proposal &amp; Bid Response Purposes Only</div>',
+    '</div>');
 
-  /* ── BUILD DOCUMENT ── */
-  var doc = new Document({
-    creator: 'AssetXAI',
-    title: 'AssetXAI Clarification Questions QRCS RFQ 2026',
-    sections: [{
-      properties: {
-        page: {
-          size:   { width: Math.round(210 * 56.7), height: Math.round(297 * 56.7) },
-          margin: { top: mm(20), right: mm(18), bottom: mm(20), left: mm(18) }
-        }
-      },
-      children: kids
-    }]
-  });
+  H.push('</body></html>');
 
-  var blob = await Packer.toBlob(doc);
+  /* trigger download */
+  var html = H.join('');
+  var blob = new Blob([html], { type: 'application/msword;charset=utf-8' });
   var url  = URL.createObjectURL(blob);
   var a    = document.createElement('a');
   a.href   = url;
-  a.download = 'AssetXAI-Clarification-Questions-QRCS-2026.docx';
+  a.download = 'AssetXAI-Clarification-Questions-QRCS-2026.doc';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
