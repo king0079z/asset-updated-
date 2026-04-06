@@ -3,1150 +3,1472 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>AssetXAI – Clarification Questions | QRCS RFQ 2026</title>
+<title>AssetXAI — Clarification Questions | QRCS RFQ 2026</title>
 <style>
+/* ═══════════════════════════════════════════════════════════
+   VARIABLES & RESET
+═══════════════════════════════════════════════════════════ */
 :root{
-  --navy:#0f172a;--blue:#1d4ed8;--indigo:#4f46e5;--green:#16a34a;
-  --red:#dc2626;--amber:#d97706;--gray:#64748b;--border:#e2e8f0;
+  --ink:#0f172a; --ink2:#1e293b; --ink3:#334155; --ink4:#475569; --ink5:#64748b;
+  --indigo:#4f46e5; --blue:#2563eb; --sky:#0ea5e9;
+  --red:#dc2626;   --red-light:#fef2f2; --red-border:#fecaca; --red-mid:#ef4444;
+  --amber:#d97706; --amber-light:#fffbeb; --amber-border:#fde68a;
+  --blue-light:#eff6ff; --blue-border:#bfdbfe;
+  --green:#16a34a; --green-light:#f0fdf4; --green-border:#bbf7d0;
+  --surface:#ffffff; --bg:#f1f5f9; --border:#e2e8f0; --border2:#f1f5f9;
+  --radius:12px; --radius-sm:8px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.04);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px;line-height:1.6}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink2);font-size:14px;line-height:1.65}
+strong{color:var(--ink);font-weight:700}
 
-.print-btn{position:fixed;top:18px;right:20px;z-index:999;background:linear-gradient(135deg,#4f46e5,#2563eb);color:#fff;border:none;padding:11px 22px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(79,70,229,.4);display:flex;align-items:center;gap:8px;transition:all .2s}
-.print-btn:hover{box-shadow:0 6px 20px rgba(79,70,229,.6);transform:translateY(-1px)}
+/* ═══════════════════════════════════════════════════════════
+   SCREEN — FLOATING TOOLBAR
+═══════════════════════════════════════════════════════════ */
+.toolbar{
+  position:fixed;top:16px;right:16px;z-index:1000;
+  display:flex;gap:8px;
+  background:#fff;border:1px solid var(--border);border-radius:14px;
+  padding:8px 12px;box-shadow:var(--shadow-md);
+}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:9px;font-size:12.5px;font-weight:700;
+  cursor:pointer;border:none;transition:all .18s;white-space:nowrap;
+  text-decoration:none;
+}
+.btn-primary{background:linear-gradient(135deg,var(--indigo),var(--blue));color:#fff;box-shadow:0 3px 10px rgba(79,70,229,.3)}
+.btn-primary:hover{box-shadow:0 5px 16px rgba(79,70,229,.45);transform:translateY(-1px)}
+.btn-outline{background:#f8fafc;color:var(--ink3);border:1px solid var(--border)}
+.btn-outline:hover{background:#f1f5f9}
 
-.page{max-width:980px;margin:0 auto;padding:32px 20px 60px}
+/* ═══════════════════════════════════════════════════════════
+   SCREEN — PAGE WRAPPER
+═══════════════════════════════════════════════════════════ */
+.wrap{max-width:1040px;margin:0 auto;padding:28px 20px 64px}
 
-/* Cover */
-.cover{background:var(--navy);border-radius:20px;overflow:hidden;margin-bottom:32px;position:relative}
-.cover-top{background:linear-gradient(135deg,#1e1b4b 0%,#0f172a 60%,#0c1a3a 100%);padding:48px 52px 36px;position:relative;overflow:hidden}
-.cover-top::before{content:'';position:absolute;top:-60px;right:-60px;width:320px;height:320px;border-radius:50%;background:rgba(79,70,229,.12)}
-.cover-top::after{content:'';position:absolute;bottom:-40px;left:-40px;width:200px;height:200px;border-radius:50%;background:rgba(37,99,235,.1)}
-.cover-eyebrow{display:flex;align-items:center;gap:10px;margin-bottom:24px}
-.cover-logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#4f46e5,#2563eb);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#fff;flex-shrink:0}
-.cover-brand{font-size:13px;font-weight:800;color:#818cf8;letter-spacing:.07em;text-transform:uppercase}
-.cover-title{font-size:36px;font-weight:900;color:#fff;letter-spacing:-.5px;line-height:1.1;margin-bottom:10px;position:relative;z-index:1}
-.cover-title span{background:linear-gradient(90deg,#818cf8,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.cover-subtitle{font-size:15px;color:#94a3b8;margin-bottom:28px;position:relative;z-index:1}
-.cover-meta-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;position:relative;z-index:1}
-.cover-meta-item{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px}
-.cover-meta-item label{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:4px}
-.cover-meta-item span{font-size:13px;font-weight:700;color:#e2e8f0}
-.cover-bottom{background:linear-gradient(to right,#312e81,#1e3a8a);padding:16px 52px;display:flex;align-items:center;justify-content:space-between}
-.cover-bottom-left{font-size:12px;color:#93c5fd;font-weight:600}
-.cover-bottom-right{display:flex;gap:8px}
-.pill{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#e0e7ff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px}
+/* ═══════════════════════════════════════════════════════════
+   COVER CARD
+═══════════════════════════════════════════════════════════ */
+.cover{
+  background:linear-gradient(145deg,#0c0a1e 0%,#0f172a 35%,#1a1660 70%,#1e3a8a 100%);
+  border-radius:20px;overflow:hidden;margin-bottom:28px;
+  box-shadow:0 8px 40px rgba(15,23,42,.35);
+  position:relative;
+}
+.cover::before{
+  content:'';position:absolute;top:-80px;right:-80px;
+  width:400px;height:400px;border-radius:50%;
+  background:radial-gradient(circle,rgba(99,102,241,.18) 0%,transparent 70%);
+}
+.cover::after{
+  content:'';position:absolute;bottom:-60px;left:-60px;
+  width:280px;height:280px;border-radius:50%;
+  background:radial-gradient(circle,rgba(37,99,235,.14) 0%,transparent 70%);
+}
+.cover-inner{padding:48px 52px 40px;position:relative;z-index:1}
+.cover-eyebrow{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.cover-logo{
+  width:46px;height:46px;border-radius:13px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--indigo),var(--blue));
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;font-weight:900;color:#fff;
+  box-shadow:0 4px 16px rgba(79,70,229,.45);
+}
+.cover-brand{font-size:12px;font-weight:800;color:#818cf8;letter-spacing:.1em;text-transform:uppercase}
+.cover-title{font-size:40px;font-weight:900;color:#fff;letter-spacing:-.8px;line-height:1.08;margin-bottom:12px}
+.cover-title em{
+  font-style:normal;
+  background:linear-gradient(90deg,#a5b4fc,#60a5fa,#38bdf8);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.cover-sub{font-size:15px;color:#94a3b8;margin-bottom:32px;font-weight:500}
+.cover-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.cover-meta-cell{
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  border-radius:11px;padding:14px 16px;
+}
+.cover-meta-cell label{display:block;font-size:9.5px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px}
+.cover-meta-cell span{font-size:13px;font-weight:700;color:#e2e8f0}
+.cover-bar{
+  background:linear-gradient(to right,rgba(49,46,129,.7),rgba(30,58,138,.7));
+  border-top:1px solid rgba(255,255,255,.08);
+  padding:14px 52px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.cover-bar-left{font-size:11.5px;color:#93c5fd;font-weight:600;letter-spacing:.02em}
+.cover-pills{display:flex;gap:8px}
+.cpill{
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
+  color:#c7d2fe;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;
+  letter-spacing:.02em;
+}
 
-/* Alert banner */
-.alert-banner{background:linear-gradient(to right,#7f1d1d,#991b1b);border:1px solid #dc2626;border-radius:14px;padding:18px 24px;margin-bottom:24px;display:flex;align-items:flex-start;gap:14px}
-.alert-banner-icon{font-size:22px;flex-shrink:0;margin-top:2px}
-.alert-banner-body h4{font-size:14px;font-weight:800;color:#fca5a5;margin-bottom:4px}
-.alert-banner-body p{font-size:13px;color:#fecaca;line-height:1.6}
+/* ═══════════════════════════════════════════════════════════
+   URGENCY BANNER
+═══════════════════════════════════════════════════════════ */
+.urgency{
+  background:linear-gradient(135deg,#450a0a,#7f1d1d);
+  border:1.5px solid #b91c1c;border-radius:14px;
+  padding:20px 24px;margin-bottom:24px;
+  display:flex;align-items:flex-start;gap:16px;
+  box-shadow:0 4px 20px rgba(185,28,28,.2);
+}
+.urgency-icon{
+  width:42px;height:42px;border-radius:10px;flex-shrink:0;
+  background:rgba(239,68,68,.25);border:1px solid rgba(239,68,68,.35);
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+}
+.urgency h4{font-size:14px;font-weight:800;color:#fca5a5;margin-bottom:5px;letter-spacing:-.1px}
+.urgency p{font-size:12.5px;color:#fecaca;line-height:1.65}
 
-/* Summary strip */
-.summary-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
-.summary-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 20px;text-align:center}
-.summary-card .num{font-size:32px;font-weight:900;line-height:1}
-.summary-card .lbl{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
-.summary-card.red .num{color:#dc2626}
-.summary-card.amber .num{color:#d97706}
-.summary-card.blue .num{color:#1d4ed8}
-.summary-card.green .num{color:#16a34a}
+/* ═══════════════════════════════════════════════════════════
+   KPI STRIP
+═══════════════════════════════════════════════════════════ */
+.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.kpi{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:20px 18px;text-align:center;position:relative;overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi.c::before{background:var(--red-mid)}
+.kpi.h::before{background:var(--amber)}
+.kpi.m::before{background:var(--blue)}
+.kpi.l::before{background:var(--green)}
+.kpi-num{font-size:38px;font-weight:900;line-height:1;margin-bottom:6px}
+.kpi.c .kpi-num{color:var(--red)}
+.kpi.h .kpi-num{color:var(--amber)}
+.kpi.m .kpi-num{color:var(--blue)}
+.kpi.l .kpi-num{color:var(--green)}
+.kpi-label{font-size:11.5px;font-weight:700;color:var(--ink5);text-transform:uppercase;letter-spacing:.07em}
+.kpi-bar{height:4px;border-radius:2px;margin-top:12px;background:var(--border2)}
+.kpi.c .kpi-bar-fill{background:var(--red-mid)}
+.kpi.h .kpi-bar-fill{background:var(--amber)}
+.kpi.m .kpi-bar-fill{background:var(--blue)}
+.kpi.l .kpi-bar-fill{background:var(--green)}
+.kpi-bar-fill{height:4px;border-radius:2px;transition:width .6s ease}
 
-/* Section */
-.section{background:#fff;border-radius:16px;border:1px solid var(--border);margin-bottom:20px;overflow:hidden}
-.section-header{background:linear-gradient(to right,#1e293b,#0f172a);padding:16px 28px;display:flex;align-items:center;gap:12px}
-.section-letter{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4f46e5,#2563eb);color:#fff;font-size:15px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.section-header h2{font-size:15px;font-weight:800;color:#fff;letter-spacing:-.2px;flex:1}
-.section-count{font-size:11px;color:#94a3b8;font-weight:600;background:rgba(255,255,255,.08);padding:3px 10px;border-radius:20px;border:1px solid rgba(255,255,255,.12)}
-.section-body{padding:0}
+/* ═══════════════════════════════════════════════════════════
+   SECTION CARDS
+═══════════════════════════════════════════════════════════ */
+.sec{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;margin-bottom:18px;overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.sec-hd{
+  display:flex;align-items:center;gap:14px;
+  padding:16px 24px;
+  background:linear-gradient(to right,var(--ink2),var(--ink));
+  border-bottom:1px solid rgba(0,0,0,.15);
+}
+.sec-letter{
+  width:36px;height:36px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--indigo),var(--blue));
+  color:#fff;font-size:16px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(79,70,229,.4);
+}
+.sec-hd h2{flex:1;font-size:14.5px;font-weight:800;color:#f1f5f9;letter-spacing:-.1px}
+.sec-badge{
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);
+  color:#94a3b8;font-size:11px;font-weight:700;
+  padding:3px 10px;border-radius:20px;
+}
+.sec-body{padding:0}
 
-/* Question rows */
-.q-row{border-bottom:1px solid #f1f5f9;padding:20px 28px;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:start;transition:background .15s}
-.q-row:last-child{border-bottom:none}
-.q-row:hover{background:#f8fafc}
-.q-num{width:40px;height:40px;border-radius:10px;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
-.q-num.critical{background:#fef2f2;color:#dc2626;border-color:#fecaca}
-.q-num.high{background:#fff7ed;color:#d97706;border-color:#fed7aa}
-.q-num.medium{background:#eff6ff;color:#2563eb;border-color:#bfdbfe}
-.q-num.low{background:#f0fdf4;color:#16a34a;border-color:#bbf7d0}
+/* ═══════════════════════════════════════════════════════════
+   QUESTION ROWS
+═══════════════════════════════════════════════════════════ */
+.q{
+  display:grid;grid-template-columns:52px 1fr 88px;
+  gap:0;border-bottom:1px solid var(--border2);
+  transition:background .12s;
+}
+.q:last-child{border-bottom:none}
+.q:hover{background:#fafbfc}
 
-.q-body{}
-.q-title{font-size:13px;font-weight:800;color:#0f172a;margin-bottom:6px}
-.q-desc{font-size:12.5px;color:#475569;line-height:1.65;margin-bottom:0}
-.q-desc ul{padding-left:18px;margin-top:6px}
-.q-desc ul li{margin-bottom:4px}
-.q-desc strong{color:#1e293b;font-weight:700}
-.q-desc .note{background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:12px;color:#78350f;line-height:1.5}
-.q-desc .note strong{color:#92400e}
+.q-left{
+  padding:18px 0 18px 20px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+}
+.q-id{
+  width:36px;height:36px;border-radius:9px;
+  font-size:12px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.q-id.c{background:var(--red-light);color:var(--red);border:1px solid var(--red-border)}
+.q-id.h{background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)}
+.q-id.m{background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border)}
+.q-id.l{background:var(--green-light);color:var(--green);border:1px solid var(--green-border)}
 
-.badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;align-self:flex-start;margin-top:4px}
-.badge.critical{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
-.badge.high{background:#fff7ed;color:#d97706;border:1px solid #fed7aa}
-.badge.medium{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
-.badge.low{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
-.badge::before{content:'●';font-size:8px}
+.q-mid{padding:18px 20px 18px 16px}
+.q-title{font-size:13px;font-weight:800;color:var(--ink);margin-bottom:7px;letter-spacing:-.1px}
+.q-body{font-size:12.5px;color:var(--ink4);line-height:1.68}
+.q-body ul{padding-left:16px;margin-top:6px}
+.q-body li{margin-bottom:5px}
+.q-body strong{color:var(--ink2)}
+.note-box{
+  background:#fffbeb;border:1px solid #fde68a;border-radius:9px;
+  padding:10px 14px;margin-top:10px;
+  font-size:12px;color:#78350f;line-height:1.6;
+}
+.note-box strong{color:#92400e}
 
-/* Summary table */
-.sum-table{width:100%;border-collapse:collapse}
-.sum-table th{background:#f8fafc;padding:10px 16px;font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.06em;text-align:left;border-bottom:2px solid #e2e8f0}
-.sum-table td{padding:12px 16px;font-size:12.5px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
-.sum-table tr:last-child td{border-bottom:none}
-.sum-table tr:hover td{background:#f8fafc}
-.q-id{font-weight:800;color:#1e293b;font-family:monospace;font-size:12px}
+/* Response area */
+.q-right{
+  padding:18px 20px 18px 8px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:8px;
+}
+.pri{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:10.5px;font-weight:800;padding:4px 10px;
+  border-radius:20px;white-space:nowrap;letter-spacing:.02em;
+}
+.pri::before{content:'●';font-size:7px}
+.pri.c{background:var(--red-light);color:var(--red);border:1px solid var(--red-border)}
+.pri.h{background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)}
+.pri.m{background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border)}
+.pri.l{background:var(--green-light);color:var(--green);border:1px solid var(--green-border)}
+.resp-lbl{font-size:9px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em}
+.resp-box{
+  width:100%;min-height:48px;border-radius:7px;
+  border:1.5px dashed #cbd5e1;background:#f8fafc;
+  font-size:11px;color:#94a3b8;
+  display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:6px;line-height:1.4;
+}
 
-/* Footer */
-.footer{background:var(--navy);border-radius:16px;padding:28px 36px;display:flex;align-items:center;justify-content:space-between;margin-top:32px}
-.footer-left{color:#94a3b8;font-size:12px;line-height:1.7}
-.footer-left strong{color:#e2e8f0;display:block;font-size:14px;margin-bottom:4px}
-.footer-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.footer-pill{background:rgba(79,70,229,.2);border:1px solid rgba(79,70,229,.3);color:#a5b4fc;font-size:11px;font-weight:700;padding:4px 14px;border-radius:20px}
+/* ═══════════════════════════════════════════════════════════
+   SUMMARY TABLE
+═══════════════════════════════════════════════════════════ */
+.ref-table{width:100%;border-collapse:collapse}
+.ref-table thead th{
+  background:#f8fafc;padding:11px 14px;
+  font-size:10.5px;font-weight:800;color:var(--ink5);
+  text-transform:uppercase;letter-spacing:.08em;text-align:left;
+  border-bottom:2px solid var(--border);
+}
+.ref-table tbody td{
+  padding:11px 14px;font-size:12.5px;color:var(--ink4);
+  border-bottom:1px solid var(--border2);vertical-align:middle;
+}
+.ref-table tbody tr:last-child td{border-bottom:none}
+.ref-table tbody tr:hover td{background:#fafbfc}
+.ref-id{font-weight:900;color:var(--ink);font-family:'Courier New',monospace;font-size:12px}
+.ref-cat{font-size:11.5px;font-weight:700;color:var(--ink3)}
 
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════════════ */
+.doc-footer{
+  background:linear-gradient(135deg,var(--ink),var(--ink2));
+  border-radius:16px;padding:28px 36px;margin-top:28px;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:20px;box-shadow:var(--shadow-md);
+}
+.doc-footer-left{color:#94a3b8;font-size:12px;line-height:1.8}
+.doc-footer-left strong{color:#e2e8f0;font-size:14px;display:block;margin-bottom:2px}
+.doc-footer-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.fpill{
+  background:rgba(79,70,229,.15);border:1px solid rgba(79,70,229,.25);
+  color:#a5b4fc;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PRINT STYLES — THE KEY IMPROVEMENT
+═══════════════════════════════════════════════════════════ */
 @media print{
-  .print-btn{display:none}
-  body{background:#fff}
-  .page{padding:0}
-  .cover,.section,.summary-strip,.alert-banner{break-inside:avoid}
-  .q-row{break-inside:avoid}
+  /* Force color printing — critical for colored backgrounds */
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+
+  @page{
+    size:A4;
+    margin:18mm 16mm 20mm 16mm;
+  }
+  @page:first{
+    margin-top:0;
+  }
+
+  /* Running page footer on every page except the first */
+  @page:not(:first){
+    @bottom-left{content:'AssetXAI — Clarification Questions | QRCS RFQ 2026 | CONFIDENTIAL';font-size:8pt;color:#94a3b8}
+    @bottom-right{content:'Page ' counter(page) ' of ' counter(pages);font-size:8pt;color:#94a3b8}
+  }
+
+  html,body{background:#fff !important;font-size:11pt}
+  .toolbar{display:none !important}
+  .wrap{max-width:100%;padding:0;margin:0}
+
+  /* Cover takes full first page */
+  .cover{
+    border-radius:0 !important;
+    margin:0 -16mm !important;
+    width:calc(100% + 32mm) !important;
+    page-break-after:always;
+    break-after:page;
+    min-height:100vh;
+    display:flex;flex-direction:column;justify-content:center;
+  }
+  .cover-inner{padding:52px 52px 44px !important}
+  .cover-title{font-size:32pt !important}
+  .cover-meta{grid-template-columns:repeat(4,1fr) !important}
+
+  /* Urgency and KPI on page 2 */
+  .urgency{page-break-inside:avoid;break-inside:avoid}
+  .kpi-strip{
+    page-break-inside:avoid;break-inside:avoid;
+    grid-template-columns:repeat(4,1fr) !important;
+  }
+
+  /* Section cards */
+  .sec{
+    page-break-inside:avoid;break-inside:avoid;
+    border-radius:8px !important;
+    margin-bottom:12px !important;
+    box-shadow:none !important;
+    border:1px solid #e2e8f0 !important;
+  }
+  .sec-hd{
+    background:linear-gradient(to right,#1e293b,#0f172a) !important;
+    padding:12px 20px !important;
+  }
+  .sec-hd h2{color:#f1f5f9 !important;font-size:11pt !important}
+
+  /* Question rows — keep together, add response field */
+  .q{
+    page-break-inside:avoid;break-inside:avoid;
+    grid-template-columns:48px 1fr 76px !important;
+  }
+  .q:hover{background:transparent !important}
+  .q-left{padding:14px 0 14px 16px !important}
+  .q-mid{padding:14px 16px 14px 12px !important}
+  .q-title{font-size:10.5pt !important;margin-bottom:5px !important}
+  .q-body{font-size:9.5pt !important}
+  .q-right{padding:14px 16px 14px 8px !important}
+  .resp-box{
+    min-height:52px !important;border:1.5px dashed #cbd5e1 !important;
+    background:#f8fafc !important;
+  }
+  .note-box{background:#fffbeb !important;border:1px solid #fde68a !important}
+
+  /* Priority badges — force colors */
+  .pri.c{background:#fef2f2 !important;color:#dc2626 !important;border:1px solid #fecaca !important}
+  .pri.h{background:#fffbeb !important;color:#d97706 !important;border:1px solid #fde68a !important}
+  .pri.m{background:#eff6ff !important;color:#2563eb !important;border:1px solid #bfdbfe !important}
+  .pri.l{background:#f0fdf4 !important;color:#16a34a !important;border:1px solid #bbf7d0 !important}
+  .q-id.c{background:#fef2f2 !important;color:#dc2626 !important;border:1px solid #fecaca !important}
+  .q-id.h{background:#fffbeb !important;color:#d97706 !important;border:1px solid #fde68a !important}
+  .q-id.m{background:#eff6ff !important;color:#2563eb !important;border:1px solid #bfdbfe !important}
+  .q-id.l{background:#f0fdf4 !important;color:#16a34a !important;border:1px solid #bbf7d0 !important}
+
+  /* KPI cards — force colors */
+  .kpi{background:#fff !important;border:1px solid #e2e8f0 !important}
+  .kpi.c::before{background:#ef4444 !important}
+  .kpi.h::before{background:#d97706 !important}
+  .kpi.m::before{background:#2563eb !important}
+  .kpi.l::before{background:#16a34a !important}
+  .kpi.c .kpi-num{color:#dc2626 !important}
+  .kpi.h .kpi-num{color:#d97706 !important}
+  .kpi.m .kpi-num{color:#2563eb !important}
+  .kpi.l .kpi-num{color:#16a34a !important}
+  .kpi.c .kpi-bar-fill{background:#ef4444 !important}
+  .kpi.h .kpi-bar-fill{background:#d97706 !important}
+  .kpi.m .kpi-bar-fill{background:#2563eb !important}
+  .kpi.l .kpi-bar-fill{background:#16a34a !important}
+
+  /* Urgency banner */
+  .urgency{
+    background:linear-gradient(135deg,#450a0a,#7f1d1d) !important;
+    border:1.5px solid #b91c1c !important;
+    box-shadow:none !important;
+  }
+  .urgency-icon{background:rgba(239,68,68,.25) !important;border:1px solid rgba(239,68,68,.35) !important}
+  .urgency h4{color:#fca5a5 !important}
+  .urgency p{color:#fecaca !important}
+
+  /* Summary table */
+  .ref-table thead th{background:#f8fafc !important;border-bottom:2px solid #e2e8f0 !important}
+  .ref-table tbody tr:nth-child(even) td{background:#fafbfc !important}
+
+  /* Footer */
+  .doc-footer{
+    page-break-inside:avoid;break-inside:avoid;
+    background:linear-gradient(135deg,#0f172a,#1e293b) !important;
+    border-radius:8px !important;
+    margin-top:16px !important;
+    padding:20px 28px !important;
+  }
+  .doc-footer-left{color:#94a3b8 !important}
+  .doc-footer-left strong{color:#e2e8f0 !important}
+  .fpill{background:rgba(79,70,229,.15) !important;border:1px solid rgba(79,70,229,.25) !important;color:#a5b4fc !important}
 }
 </style>
 </head>
 <body>
 
-<button class="print-btn" onclick="window.print()">🖨 Print / Export PDF</button>
+<!-- ── Toolbar ────────────────────────────────────────────── -->
+<div class="toolbar">
+  <button class="btn btn-primary" onclick="window.print()">🖨&nbsp; Print / Export PDF</button>
+  <a class="btn btn-outline" href="#summary">📋 Jump to Summary</a>
+</div>
 
-<div class="page">
+<div class="wrap">
 
-  <!-- Cover -->
-  <div class="cover">
-    <div class="cover-top">
-      <div class="cover-eyebrow">
-        <div class="cover-logo">A</div>
-        <span class="cover-brand">AssetXAI — Proposal Team</span>
-      </div>
-      <div class="cover-title">Clarification Questions<br><span>RFQ — Asset Management &amp; Ticketing</span></div>
-      <div class="cover-subtitle">Integrated with RFID Technology &nbsp;|&nbsp; Issued to QRCS</div>
-      <div class="cover-meta-grid">
-        <div class="cover-meta-item"><label>Document Ref</label><span>AX-CQ-2026-001</span></div>
-        <div class="cover-meta-item"><label>Issued To</label><span>QRCS Procurement</span></div>
-        <div class="cover-meta-item"><label>Issued By</label><span>AssetXAI</span></div>
-        <div class="cover-meta-item"><label>Date</label><span>April 6, 2026</span></div>
-      </div>
+<!-- ════════════════════ COVER ════════════════════ -->
+<div class="cover">
+  <div class="cover-inner">
+    <div class="cover-eyebrow">
+      <div class="cover-logo">A</div>
+      <span class="cover-brand">AssetXAI · Proposal &amp; Pre-Sales Team</span>
     </div>
-    <div class="cover-bottom">
-      <span class="cover-bottom-left">Confidential — For Proposal Purposes Only</span>
-      <div class="cover-bottom-right">
-        <span class="pill">14 Categories</span>
-        <span class="pill">54 Questions</span>
-        <span class="pill">Response Required</span>
-      </div>
+    <div class="cover-title">
+      Clarification Questions<br>
+      <em>RFQ — Asset Management &amp; Ticketing</em><br>
+      <em>Integrated with RFID Technology</em>
     </div>
-  </div>
-
-  <!-- Alert -->
-  <div class="alert-banner">
-    <div class="alert-banner-icon">⚠️</div>
-    <div class="alert-banner-body">
-      <h4>RFID Supplier Communication Failure — Escalation Required</h4>
-      <p>Our primary RFID hardware supplier in China has not responded to repeated communication attempts. Clarification of the client's existing RFID infrastructure (frequency, brand, model, standards) is <strong>urgently required</strong> to allow us to qualify alternative suppliers in EU, US, and Southeast Asian markets and still meet any bid submission deadline.</p>
+    <div class="cover-sub">Issued to: Qatar Red Crescent Society (QRCS) Procurement &nbsp;|&nbsp; Confidential</div>
+    <div class="cover-meta">
+      <div class="cover-meta-cell"><label>Document Ref</label><span>AX-CQ-2026-001</span></div>
+      <div class="cover-meta-cell"><label>Issued To</label><span>QRCS Procurement</span></div>
+      <div class="cover-meta-cell"><label>Issued By</label><span>AssetXAI</span></div>
+      <div class="cover-meta-cell"><label>Date</label><span>April 6, 2026</span></div>
     </div>
   </div>
-
-  <!-- Summary cards -->
-  <div class="summary-strip">
-    <div class="summary-card red"><div class="num">16</div><div class="lbl">🔴 Critical</div></div>
-    <div class="summary-card amber"><div class="num">22</div><div class="lbl">🟠 High</div></div>
-    <div class="summary-card blue"><div class="num">12</div><div class="lbl">🟡 Medium</div></div>
-    <div class="summary-card green"><div class="num">4</div><div class="lbl">🟢 Low</div></div>
-  </div>
-
-  <!-- ─────────────────────────────── A. PROJECT SCOPE & TIMELINE ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">A</div>
-      <h2>Project Scope &amp; Timeline</h2>
-      <span class="section-count">5 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num critical">A1</div>
-        <div class="q-body">
-          <div class="q-title">Project Timeline — Missing from RFQ</div>
-          <div class="q-desc">The RFQ contains <strong>no project timeline, milestone plan, or go-live date</strong>. We require the following to structure a compliant proposal:
-            <ul>
-              <li>Expected project start date</li>
-              <li>Expected go-live / production date (per phase if phased)</li>
-              <li>Deadline for RFQ/proposal submission</li>
-              <li>Date by which QRCS will respond to clarification questions</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num critical">A2</div>
-        <div class="q-body">
-          <div class="q-title">Phased vs. Full Deployment</div>
-          <div class="q-desc">Is a single go-live required, or is a <strong>phased rollout acceptable</strong> (e.g., software platform first, RFID hardware infrastructure second)? This directly affects our project plan, resource allocation, and pricing model.</div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">A3</div>
-        <div class="q-body">
-          <div class="q-title">Budget Envelope / Cost Guidance</div>
-          <div class="q-desc">No budget ceiling or indicative range is stated. Please confirm whether there is an allocated budget or a cost-per-user ceiling so the proposal can be structured to meet QRCS's financial expectations without over- or under-scoping.</div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">A4</div>
-        <div class="q-body">
-          <div class="q-title">Evaluation &amp; Scoring Criteria</div>
-          <div class="q-desc">What are the bid evaluation criteria and weightings (technical vs. commercial vs. experience)? This allows us to prioritize the right elements of our submission.</div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">A5</div>
-        <div class="q-body">
-          <div class="q-title">Bid Presentation / Demo</div>
-          <div class="q-desc">Is a product demonstration or technical presentation required as part of the evaluation? If so, please advise on timing, format (on-site / remote), and audience.</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
+  <div class="cover-bar">
+    <span class="cover-bar-left">CONFIDENTIAL — For Proposal &amp; Bid Response Purposes Only</span>
+    <div class="cover-pills">
+      <span class="cpill">14 Categories</span>
+      <span class="cpill">54 Questions</span>
+      <span class="cpill">Response Required</span>
+      <span class="cpill">v1.1</span>
     </div>
   </div>
+</div>
 
-  <!-- ─────────────────────────────── B. DEPLOYMENT & INFRASTRUCTURE ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">B</div>
-      <h2>Deployment &amp; Infrastructure</h2>
-      <span class="section-count">5 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num critical">B1</div>
-        <div class="q-body">
-          <div class="q-title">On-Premise vs. Private Cloud — Mandatory Clarification</div>
-          <div class="q-desc">Section 1 states the system must be deployed <strong>"on-prime" (on-premise)</strong>. Please confirm:
-            <ul>
-              <li>Does QRCS have existing server hardware available, or must the vendor supply it?</li>
-              <li>What operating system is available/preferred (Windows Server / Linux)?</li>
-              <li>Is a <strong>private cloud deployment</strong> (dedicated Azure or AWS hosted environment) acceptable as an alternative to physical on-site servers?</li>
-              <li>Available server specifications: CPU cores, RAM (GB), storage (TB), and redundancy setup</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num critical">B2</div>
-        <div class="q-body">
-          <div class="q-title">High Availability &amp; Disaster Recovery Requirements</div>
-          <div class="q-desc">
-            <ul>
-              <li>What is the required system uptime SLA (e.g., 99.5%, 99.9%, 99.99%)?</li>
-              <li>Is a warm/hot standby server required?</li>
-              <li>What is the acceptable Recovery Time Objective (RTO) and Recovery Point Objective (RPO)?</li>
-              <li>Are backup, DR, and failover requirements in scope for the vendor, or managed by QRCS IT?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">B3</div>
-        <div class="q-body">
-          <div class="q-title">Network Connectivity Between the 7 Sites</div>
-          <div class="q-desc">
-            <ul>
-              <li>Are all 7 sites connected via a shared WAN, MPLS, or VPN?</li>
-              <li>What is the available bandwidth between sites and to the central server?</li>
-              <li>Must each site support <strong>local offline operation</strong> if the WAN link fails, with automatic sync on reconnection?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">B4</div>
-        <div class="q-body">
-          <div class="q-title">Data Residency, Privacy &amp; Security Compliance</div>
-          <div class="q-desc">
-            <ul>
-              <li>Are there data sovereignty or local data residency requirements (data must remain in a specific country)?</li>
-              <li>Is ISO 27001 certification required of the vendor?</li>
-              <li>Are there regulatory or governmental frameworks (PDPL, NCA, or Red Crescent/Red Cross mandates) the system must adhere to?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">B5</div>
-        <div class="q-body">
-          <div class="q-title">Performance Benchmarks</div>
-          <div class="q-desc">Are there specific performance requirements, such as maximum page load time, API response time, or bulk RFID scan throughput that the system must meet and be tested against during User Acceptance Testing?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-    </div>
+<!-- ════════════════════ URGENCY BANNER ════════════════════ -->
+<div class="urgency">
+  <div class="urgency-icon">⚠️</div>
+  <div>
+    <h4>RFID Supplier Communication Failure — Escalation Required</h4>
+    <p>Our primary RFID hardware supplier in China has not responded to repeated communication attempts. Clarification of the client's existing RFID infrastructure — frequency band, brand, model, and communication standards — is <strong style="color:#fca5a5">urgently required</strong> to allow us to qualify alternative suppliers in the EU, US, and Southeast Asian markets and still meet any bid submission deadline. See questions C1–C5.</p>
   </div>
+</div>
 
-  <!-- ─────────────────────────────── C. RFID HARDWARE ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">C</div>
-      <h2>RFID Hardware &amp; Infrastructure</h2>
-      <span class="section-count">10 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num critical">C1</div>
-        <div class="q-body">
-          <div class="q-title">Existing RFID Infrastructure — Full Specification Required</div>
-          <div class="q-desc">Section 2.1 states QRCS <strong>"already has RFID infrastructure."</strong> We must understand this fully before sourcing compatible hardware:
-            <ul>
-              <li>Brand and model of existing RFID readers/gateways</li>
-              <li>RFID frequency band in operation (433 MHz, 868 MHz, 915 MHz, 2.4 GHz, or HF 13.56 MHz)</li>
-              <li>Communication protocol used by readers (MQTT, REST API, proprietary?)</li>
-              <li>Are existing readers staying in service, or being replaced as part of this project?</li>
-              <li>Is an SDK or API available for the existing reader infrastructure?</li>
-            </ul>
-            <div class="note"><strong>⚠️ Urgent:</strong> Our primary RFID hardware supplier in China is not responding. Without existing infrastructure details, we cannot qualify alternative suppliers and guarantee tag/reader compatibility. This may affect our ability to submit a compliant bid.</div>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num critical">C2</div>
-        <div class="q-body">
-          <div class="q-title">Active RFID Tags — 5,000 Tags Specification</div>
-          <div class="q-desc">
-            <ul>
-              <li>Required RFID frequency for active tags (433 MHz or 2.4 GHz)?</li>
-              <li>Required read range (meters)?</li>
-              <li>Environmental conditions: indoor / outdoor, temperature range, humidity, chemical exposure?</li>
-              <li>Mounting surface types: metal assets, plastic, glass, composite?</li>
-              <li>Must tags be IP-rated (e.g., IP67/IP68) or MIL-STD rated?</li>
-              <li>Is two-way write capability required or read-only?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num critical">C3</div>
-        <div class="q-body">
-          <div class="q-title">Passive RFID Tags — 10,000 Tags Specification</div>
-          <div class="q-desc">
-            <ul>
-              <li>Required RFID standard for passive tags: <strong>EPC Gen 2 UHF (860–960 MHz)</strong> or <strong>HF ISO 15693 / ISO 14443</strong>?</li>
-              <li>Required read range (cm or meters)?</li>
-              <li>Are on-metal (in-metal) tags required for metal-surfaced assets?</li>
-              <li>Are standard adhesive label tags acceptable for non-metal assets?</li>
-              <li>Should tags arrive pre-encoded (EPC programmed), or will encoding be performed on-site during deployment?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num critical">C4</div>
-        <div class="q-body">
-          <div class="q-title">Passageway Readers — 7 Sites — Site Survey Access</div>
-          <div class="q-desc">Section 1.7 requires passageway access control readers at the entrances and exits of <strong>all 7 sites</strong> and requests a site survey to determine reader quantities. We require:
-            <ul>
-              <li>Names, addresses, and approximate sizes of all 7 sites</li>
-              <li>Approximate number of entry/exit passageways per site (for a preliminary estimate)</li>
-              <li>Are passageway readers required for <strong>active RFID, passive RFID, or both</strong>?</li>
-              <li>Is integration with physical access control (door locks, barriers, turnstiles) required, or monitoring/alerting only?</li>
-              <li>Will QRCS facilitate site visits before bid submission, or is a desktop/virtual survey acceptable?</li>
-              <li>Who is responsible for civil works (cabling, conduit, power supply to readers) — QRCS or the vendor?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num critical">C5</div>
-        <div class="q-body">
-          <div class="q-title">Handheld Devices — 15 Units</div>
-          <div class="q-desc">
-            <ul>
-              <li>Should the vendor <strong>supply the handheld hardware</strong>, or provide software-only integration with QRCS-owned devices?</li>
-              <li>Preferred OS: <strong>Android or Windows</strong>?</li>
-              <li>Required RFID frequency per handheld (UHF, HF, or both)?</li>
-              <li>Must the handheld include an integrated barcode / QR scanner?</li>
-              <li>Required ruggedness rating (MIL-STD-810G, IP65, or similar)?</li>
-              <li>Required battery life per shift (hours)?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">C6</div>
-        <div class="q-body">
-          <div class="q-title">Active Tag Removal / Anti-Tamper Alarm (Section 1.6)</div>
-          <div class="q-desc">Section 1.6 requires an alarm when an active RFID tag is <strong>physically removed</strong> from an asset. This requires anti-tamper sensors on the tag hardware itself.
-            <ul>
-              <li>Is anti-tamper alarm capability a <strong>mandatory requirement or optional enhancement</strong>?</li>
-              <li>Does the existing active tag infrastructure already support anti-tamper alerts?</li>
-              <li>If new anti-tamper tags are required, is the additional cost acceptable?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">C7</div>
-        <div class="q-body">
-          <div class="q-title">Low Battery Alerts for Active Tags</div>
-          <div class="q-desc">
-            <ul>
-              <li>What is the required battery alert threshold (e.g., below 20% or 15%)?</li>
-              <li>Should battery status be transmitted automatically at a set frequency, or only reported on next scheduled RFID scan?</li>
-              <li>Should low battery alerts trigger a maintenance ticket automatically in the system?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">C8</div>
-        <div class="q-body">
-          <div class="q-title">Electronic Floor Map — Floor Plans Availability (Section 1.5)</div>
-          <div class="q-desc">Sections 1.5, 1.6, and 2.4 reference zone-based asset tracking displayed on an <strong>electronic map</strong>.
-            <ul>
-              <li>Are digital floor plans (DWG, SVG, PDF, or image format) available for all 7 sites?</li>
-              <li>What level of location accuracy is expected — <strong>zone/room-level</strong> (RFID zone), or <strong>sub-meter precision</strong> (requiring a dedicated indoor positioning system)?</li>
-              <li>Is a full Indoor Positioning System (IPS) with location engines in scope, or is RFID zone approximation sufficient?</li>
-              <li>Note: Electronic map customization is marked "extensible" in the RFQ — is a basic zone map acceptable for base scope, with IPS as an optional future extension?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">C9</div>
-        <div class="q-body">
-          <div class="q-title">RFID Compatibility Standards</div>
-          <div class="q-desc">Section 2.1 references compatibility with "common RFID standards (e.g., EPC Gen2, ISO standards)." Are there <strong>specific certification marks or standards</strong> required (e.g., ETSI EN 302 208, FCC Part 15, ISO 18000-63)? Are there any country-specific radio regulations that apply at the 7 sites?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">C10</div>
-        <div class="q-body">
-          <div class="q-title">Asset Flow Path &amp; Distribution Statistics (Section 1.5)</div>
-          <div class="q-desc">Sections 1.5 marks "Asset flow path data statistics" and "Asset area distribution statistics" as <strong>extensible / requiring customization</strong>. Should these be included in the base scope, priced as optional additions, or excluded entirely from this bid?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-    </div>
+<!-- ════════════════════ KPI STRIP ════════════════════ -->
+<div class="kpi-strip">
+  <div class="kpi c">
+    <div class="kpi-num">16</div>
+    <div class="kpi-label">🔴 Critical</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:100%"></div></div>
   </div>
-
-  <!-- ─────────────────────────────── D. ERP INTEGRATION ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">D</div>
-      <h2>ERP Integration — Microsoft Dynamics 365</h2>
-      <span class="section-count">4 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num critical">D1</div>
-        <div class="q-body">
-          <div class="q-title">Dynamics 365 Edition &amp; Modules in Use</div>
-          <div class="q-desc">
-            <ul>
-              <li>Which edition of Dynamics 365 is deployed: <strong>Finance &amp; Operations (F&amp;O)</strong>, <strong>Business Central</strong>, or another?</li>
-              <li>Which D365 modules are relevant to the integration: Fixed Assets, Inventory Management, Finance, Procurement, or others?</li>
-              <li>Is D365 hosted in the Microsoft cloud or on-premise?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num critical">D2</div>
-        <div class="q-body">
-          <div class="q-title">Integration Scope — Data Flow &amp; Direction</div>
-          <div class="q-desc">
-            <ul>
-              <li>Should data sync be <strong>one-way</strong> (AssetXAI → D365) or <strong>bi-directional</strong>?</li>
-              <li>Which specific data entities need to sync: Assets, Asset Status, Disposal/Retirement, Depreciation schedules, Purchase Orders, Locations, Users?</li>
-              <li>Should the asset management system read depreciation from D365, or only push asset data to D365 for D365 to process?</li>
-              <li>Is real-time sync required, or scheduled batch sync (e.g., nightly)?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">D3</div>
-        <div class="q-body">
-          <div class="q-title">API Access &amp; Integration Credentials</div>
-          <div class="q-desc">
-            <ul>
-              <li>Does QRCS's Dynamics 365 instance have an accessible OData or REST API?</li>
-              <li>Will QRCS provide a service account / API key for integration testing during the project?</li>
-              <li>Are there middleware or integration platform tools already in use (e.g., Azure Logic Apps, Power Automate, MuleSoft) that the vendor must work with?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">D4</div>
-        <div class="q-body">
-          <div class="q-title">ERP Integration Acceptance &amp; Testing</div>
-          <div class="q-desc">Who is responsible for ERP-side configuration and testing — the vendor, QRCS's D365 team, or Microsoft's implementation partner? Will the D365 team be available as a counterpart during integration development?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-    </div>
+  <div class="kpi h">
+    <div class="kpi-num">22</div>
+    <div class="kpi-label">🟠 High</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:81%"></div></div>
   </div>
-
-  <!-- ─────────────────────────────── E. SSO & AUTHENTICATION ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">E</div>
-      <h2>SSO &amp; Authentication — Microsoft Azure AD</h2>
-      <span class="section-count">4 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num critical">E1</div>
-        <div class="q-body">
-          <div class="q-title">Azure AD Tenant &amp; App Registration</div>
-          <div class="q-desc">
-            <ul>
-              <li>Is Microsoft Azure AD already configured and active for QRCS users?</li>
-              <li>Will QRCS provide an Azure AD <strong>Application Registration</strong> (Client ID, Tenant ID, Client Secret) for SSO configuration?</li>
-              <li>Are all 20 technicians and 900 end users within the <strong>same Azure AD tenant</strong>, or spread across multiple tenants/domains?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">E2</div>
-        <div class="q-body">
-          <div class="q-title">Multi-Factor Authentication (MFA)</div>
-          <div class="q-desc">
-            <ul>
-              <li>Is MFA <strong>mandatory for all users</strong>, or only for administrator and technician roles?</li>
-              <li>Should MFA be enforced by the asset system itself, or is it handled by Azure AD Conditional Access policies?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">E3</div>
-        <div class="q-body">
-          <div class="q-title">SSO Scope — Web Portal vs. Mobile App</div>
-          <div class="q-desc">Should Azure AD SSO apply to both the <strong>web portal and the mobile application</strong>, or is it required for the web portal only? If mobile SSO is required, is Microsoft Authenticator the expected MFA method?</div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">E4</div>
-        <div class="q-body">
-          <div class="q-title">Automated User Provisioning (SCIM)</div>
-          <div class="q-desc">Should user accounts be manually created in the asset system by an administrator, or is <strong>automated SCIM provisioning</strong> from Azure AD required (users automatically created/deactivated as they join/leave QRCS)?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-    </div>
+  <div class="kpi m">
+    <div class="kpi-num">12</div>
+    <div class="kpi-label">🟡 Medium</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:44%"></div></div>
   </div>
-
-  <!-- ─────────────────────────────── F. DATA MIGRATION ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">F</div>
-      <h2>Data Migration (Section 3.15)</h2>
-      <span class="section-count">4 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num critical">F1</div>
-        <div class="q-body">
-          <div class="q-title">Existing System Details</div>
-          <div class="q-desc">Section 3.15 requires migration from the existing system. Please provide:
-            <ul>
-              <li>Name and version of the current asset management / ticketing system</li>
-              <li>Data format available for export: SQL database, Excel/CSV, or API export?</li>
-              <li>Approximate record volume: number of assets, tickets, users, locations, and history entries</li>
-              <li>How many years of historical data must be migrated?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">F2</div>
-        <div class="q-body">
-          <div class="q-title">Data Quality &amp; Pre-Migration Assessment</div>
-          <div class="q-desc">
-            <ul>
-              <li>Has a data quality assessment been performed on the existing data?</li>
-              <li>Can QRCS provide a <strong>data sample extract</strong> prior to bid submission so a migration assessment and effort estimate can be included in the proposal?</li>
-              <li>Are there known data quality issues (duplicates, incomplete records, inconsistent formats) the vendor should be aware of?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">F3</div>
-        <div class="q-body">
-          <div class="q-title">Parallel Running Period</div>
-          <div class="q-desc">
-            <ul>
-              <li>Is a period of parallel running required (old and new systems operating simultaneously)?</li>
-              <li>If yes, what is the expected parallel-run duration?</li>
-              <li>Who is responsible for maintaining data consistency across both systems during that period?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">F4</div>
-        <div class="q-body">
-          <div class="q-title">RFID Tag Data Migration</div>
-          <div class="q-desc">Are existing RFID tag-to-asset bindings (tag IDs linked to asset records) available for migration, or will re-tagging and re-registration of assets be required as part of the deployment?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-    </div>
+  <div class="kpi l">
+    <div class="kpi-num">4</div>
+    <div class="kpi-label">🟢 Low</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:15%"></div></div>
   </div>
+</div>
 
-  <!-- ─────────────────────────────── G. MOBILE APPLICATION ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">G</div>
-      <h2>Mobile Application</h2>
-      <span class="section-count">3 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num critical">G1</div>
-        <div class="q-body">
-          <div class="q-title">iOS (Apple) Application — Mandatory or Optional?</div>
-          <div class="q-desc">Section 4.12 lists <strong>"Mobile Application (Android – Apple)"</strong>. Please confirm:
-            <ul>
-              <li>Is a native <strong>iOS (Apple) application mandatory</strong> for this contract, or is Android-only acceptable for the base scope?</li>
-              <li>If iOS is required: what minimum iOS version must be supported?</li>
-              <li>How many users are expected to use iOS vs. Android devices?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge critical">Critical</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num high">G2</div>
-        <div class="q-body">
-          <div class="q-title">Mobile Device Ownership &amp; MDM</div>
-          <div class="q-desc">
-            <ul>
-              <li>Are mobile devices (smartphones / tablets) provided by QRCS, or will staff use personal devices (BYOD)?</li>
-              <li>Does QRCS operate a Mobile Device Management (MDM) solution (Microsoft Intune, VMware Workspace ONE, Jamf)?</li>
-              <li>If so, must the app be enrolled and distributed through the MDM, or standard app store distribution is acceptable?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">G3</div>
-        <div class="q-body">
-          <div class="q-title">Mobile Offline Functionality Scope</div>
-          <div class="q-desc">Section 2.2 requires "offline scanning with automatic sync when connected." What is the expected <strong>maximum offline duration</strong> the mobile app must support (hours, days)? Which specific functions must remain available offline (asset scan, ticket creation, stocktaking, or all)?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-    </div>
+<!-- ════════════════════ A — PROJECT SCOPE & TIMELINE ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">A</div>
+    <h2>Project Scope &amp; Timeline</h2>
+    <span class="sec-badge">5 questions</span>
   </div>
+  <div class="sec-body">
 
-  <!-- ─────────────────────────────── H. TICKETING SYSTEM ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">H</div>
-      <h2>Ticketing System</h2>
-      <span class="section-count">4 questions</span>
+    <div class="q">
+      <div class="q-left"><div class="q-id c">A1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Project Timeline — Missing from RFQ</div>
+        <div class="q-body">The RFQ contains <strong>no project timeline, milestone plan, or go-live date.</strong> To structure a compliant and accurate proposal we require:
+          <ul>
+            <li>Expected project start date</li>
+            <li>Expected go-live / production date (per phase if phased rollout)</li>
+            <li>Submission deadline for the RFQ response</li>
+            <li>Date by which QRCS will respond to these clarification questions</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
-    <div class="section-body">
 
-      <div class="q-row">
-        <div class="q-num high">H1</div>
-        <div class="q-body">
-          <div class="q-title">Email-to-Ticket Integration (Section 3.1)</div>
-          <div class="q-desc">Section 3.1 requires ticket creation via <strong>Email ID integration</strong>:
-            <ul>
-              <li>Should the system create tickets automatically from inbound emails to a dedicated mailbox?</li>
-              <li>What email platform does QRCS use (Microsoft 365 / Exchange On-Premise)?</li>
-              <li>Should replies within the ticket thread automatically update the ticket history (two-way email threading)?</li>
-              <li>Should the system send all ticket notifications from a QRCS-branded email domain?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
+    <div class="q">
+      <div class="q-left"><div class="q-id c">A2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Phased vs. Full Single Deployment</div>
+        <div class="q-body">Is a single go-live required, or is a <strong>phased rollout acceptable</strong> (e.g., software platform first, RFID hardware infrastructure in a second phase)? This directly affects our project plan, resource scheduling, and pricing structure.</div>
       </div>
-
-      <div class="q-row">
-        <div class="q-num high">H2</div>
-        <div class="q-body">
-          <div class="q-title">External Vendor Portal Access</div>
-          <div class="q-desc">Section 3.5 requires vendor/service provider ticket assignment. Should external vendors/contractors be able to <strong>log in to a dedicated portal</strong> to view and update their assigned tickets, or will QRCS internal staff manage all vendor interactions on their behalf?</div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">H3</div>
-        <div class="q-body">
-          <div class="q-title">ITSM / Helpdesk Integration (Section 4.12)</div>
-          <div class="q-desc">Section 4.12 references "Integration with ITSM / Helpdesk (if applicable)." Is there an existing ITSM platform in use (ServiceNow, Freshservice, Jira Service Management, ManageEngine)? If so, should tickets be synced between the asset system and the ITSM tool?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">H4</div>
-        <div class="q-body">
-          <div class="q-title">Spare Parts Tracking (Section 3.5 — Optional)</div>
-          <div class="q-desc">Section 3.5 lists "Spare parts and service tracking (optional)." Should spare parts inventory management be included in the base scope of this contract, or quoted separately as an optional module?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">A3</div></div>
+      <div class="q-mid">
+        <div class="q-title">Budget Envelope / Cost Guidance</div>
+        <div class="q-body">No budget ceiling or indicative range is stated in the RFQ. Please confirm whether there is an allocated budget or a cost-per-user ceiling so the proposal can be scoped appropriately — avoiding over- or under-engineering the solution.</div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">A4</div></div>
+      <div class="q-mid">
+        <div class="q-title">Bid Evaluation &amp; Scoring Criteria</div>
+        <div class="q-body">What are the evaluation criteria and their weightings (e.g., technical capability vs. commercial pricing vs. vendor experience vs. RFID hardware)? This allows us to present the most relevant information in our submission.</div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">A5</div></div>
+      <div class="q-mid">
+        <div class="q-title">Product Demonstration / Technical Presentation</div>
+        <div class="q-body">Is a live product demo or technical presentation required as part of the evaluation? If yes: expected timing, on-site or remote, and intended audience (IT, procurement, end users)?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
   </div>
+</div>
 
-  <!-- ─────────────────────────────── I. USERS & ROLES ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">I</div>
-      <h2>Users, Roles &amp; Licensing</h2>
-      <span class="section-count">3 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num high">I1</div>
-        <div class="q-body">
-          <div class="q-title">User Distribution Across the 7 Sites</div>
-          <div class="q-desc">
-            <ul>
-              <li>How are the <strong>900 end users</strong> and <strong>20 technicians</strong> distributed across the 7 sites?</li>
-              <li>Is there a dedicated site administrator per location, or a single centralized admin team?</li>
-              <li>What is the expected number of <strong>concurrent active users at peak load</strong>? (Critical for server sizing and performance design.)</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">I2</div>
-        <div class="q-body">
-          <div class="q-title">Custom User Roles</div>
-          <div class="q-desc">Beyond administrators, technicians, and end users, are additional custom roles required? For example: department manager, finance approver, internal auditor, procurement officer, or external vendor coordinator?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num low">I3</div>
-        <div class="q-body">
-          <div class="q-title">Licensing Model Preference</div>
-          <div class="q-desc">Does QRCS prefer a <strong>named-user license model</strong> (per registered user), a <strong>concurrent-user model</strong> (per simultaneous session), or a <strong>site license</strong>? This affects how we structure our commercial proposal.</div>
-        </div>
-        <span class="badge low">Low</span>
-      </div>
-
-    </div>
+<!-- ════════════════════ B — INFRASTRUCTURE ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">B</div>
+    <h2>Deployment &amp; Infrastructure</h2>
+    <span class="sec-badge">5 questions</span>
   </div>
+  <div class="sec-body">
 
-  <!-- ─────────────────────────────── J. TRAINING & SUPPORT ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">J</div>
-      <h2>Training &amp; Post-Implementation Support</h2>
-      <span class="section-count">4 questions</span>
+    <div class="q">
+      <div class="q-left"><div class="q-id c">B1</div></div>
+      <div class="q-mid">
+        <div class="q-title">On-Premise vs. Private Cloud — Mandatory Clarification</div>
+        <div class="q-body">Section 1 states the system must be deployed <strong>"on-prime" (on-premise).</strong> Please confirm:
+          <ul>
+            <li>Does QRCS have existing server hardware available, or must the vendor supply it?</li>
+            <li>Preferred operating system: Windows Server or Linux?</li>
+            <li>Is a <strong>private cloud deployment</strong> (dedicated Azure / AWS hosted environment) acceptable as an equivalent alternative?</li>
+            <li>Available server specs: CPU cores, RAM (GB), storage (TB), redundancy configuration</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
-    <div class="section-body">
 
-      <div class="q-row">
-        <div class="q-num high">J1</div>
+    <div class="q">
+      <div class="q-left"><div class="q-id c">B2</div></div>
+      <div class="q-mid">
+        <div class="q-title">High Availability &amp; Disaster Recovery Requirements</div>
         <div class="q-body">
-          <div class="q-title">Training Scope &amp; Delivery</div>
-          <div class="q-desc">
-            <ul>
-              <li>Is end-user training for all <strong>900 users</strong> in scope for the vendor, or only for the 20 technicians and system administrators?</li>
-              <li>Should training be delivered <strong>on-site, remotely via video conference, or via a self-service LMS/video library</strong>?</li>
-              <li>What language(s) are required: <strong>Arabic, English, or both</strong>?</li>
-              <li>Are printed or digital user manuals and admin guides required as formal deliverables?</li>
-            </ul>
-          </div>
+          <ul>
+            <li>Required system uptime SLA (e.g., 99.5%, 99.9%, 99.99%)?</li>
+            <li>Is a warm/hot standby server required?</li>
+            <li>Acceptable Recovery Time Objective (RTO) and Recovery Point Objective (RPO)?</li>
+            <li>Are backup, DR, and failover in scope for the vendor, or managed by QRCS IT?</li>
+          </ul>
         </div>
-        <span class="badge high">High</span>
       </div>
-
-      <div class="q-row">
-        <div class="q-num high">J2</div>
-        <div class="q-body">
-          <div class="q-title">Post Go-Live Support &amp; Warranty Period</div>
-          <div class="q-desc">
-            <ul>
-              <li>What is the <strong>minimum system warranty period</strong> required after go-live?</li>
-              <li>What are the expected support response times per severity level (e.g., Critical: 2h, High: 8h, Medium: 24h)?</li>
-              <li>Is a dedicated named support contact required, or a shared helpdesk acceptable?</li>
-              <li>Is ongoing system maintenance and enhancement included in the base contract or a separate agreement?</li>
-              <li>Should the vendor provide an Arabic-language support channel?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">J3</div>
-        <div class="q-body">
-          <div class="q-title">UAT &amp; Acceptance Process</div>
-          <div class="q-desc">
-            <ul>
-              <li>How will system acceptance be defined: functional testing, user acceptance testing (UAT), performance testing, or all?</li>
-              <li>Who signs off on acceptance — QRCS IT, end users, or executive management?</li>
-              <li>What is the expected UAT duration, and will a dedicated staging environment be required?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">J4</div>
-        <div class="q-body">
-          <div class="q-title">Change Request Process Post-Delivery</div>
-          <div class="q-desc">What is the expected process for managing change requests that arise during or after UAT? Will these be handled within the base contract budget, or billed as additional scope at an agreed day rate?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">B3</div></div>
+      <div class="q-mid">
+        <div class="q-title">Network Connectivity Between the 7 Sites</div>
+        <div class="q-body">
+          <ul>
+            <li>Are all 7 sites connected via a shared WAN, MPLS, or VPN?</li>
+            <li>Available bandwidth between sites and to the central server?</li>
+            <li>Must each site support <strong>local offline operation</strong> if the WAN link fails, with automatic sync on reconnection?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">B4</div></div>
+      <div class="q-mid">
+        <div class="q-title">Data Residency, Privacy &amp; Security Compliance</div>
+        <div class="q-body">
+          <ul>
+            <li>Are there data sovereignty or residency requirements (data must remain in a specific country)?</li>
+            <li>Is ISO 27001 certification required from the vendor?</li>
+            <li>Must the system comply with NCA (Saudi), PDPL, or IFRC internal policy standards?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">B5</div></div>
+      <div class="q-mid">
+        <div class="q-title">Performance Benchmarks</div>
+        <div class="q-body">Are there specific measurable performance requirements (e.g., max page load time, API response time, bulk RFID scan throughput per second) that will be formally tested during UAT?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
   </div>
+</div>
 
-  <!-- ─────────────────────────────── K. COMPLIANCE & AUDIT ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">K</div>
-      <h2>Compliance, Audit &amp; Data Policy</h2>
-      <span class="section-count">3 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num high">K1</div>
-        <div class="q-body">
-          <div class="q-title">Applicable Regulatory Frameworks</div>
-          <div class="q-desc">Are there specific regulatory, governmental, or Red Crescent / Red Cross organizational standards the system must comply with for data security, audit evidence, or financial reporting? For example: NCA (Saudi National Cybersecurity Authority), PDPL (Personal Data Protection Law), or IFRC internal policy standards?</div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">K2</div>
-        <div class="q-body">
-          <div class="q-title">Data Retention Policy</div>
-          <div class="q-desc">
-            <ul>
-              <li>What is the minimum data retention period required for audit logs, ticket history, and asset lifecycle records?</li>
-              <li>Is there a requirement to permanently delete (right to erasure) specific user or asset data on request?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num low">K3</div>
-        <div class="q-body">
-          <div class="q-title">Audit Evidence Requirements</div>
-          <div class="q-desc">Section 2.12 requires "evidence generation for audits (scan logs, timestamps, locations)." Are digitally signed or cryptographically sealed audit logs required, or is standard timestamped log export to PDF/Excel sufficient for QRCS's internal and external auditors?</div>
-        </div>
-        <span class="badge low">Low</span>
-      </div>
-
-    </div>
+<!-- ════════════════════ C — RFID HARDWARE ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">C</div>
+    <h2>RFID Hardware &amp; Infrastructure</h2>
+    <span class="sec-badge">10 questions</span>
   </div>
+  <div class="sec-body">
 
-  <!-- ─────────────────────────────── L. COMMERCIAL & CONTRACTUAL ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">L</div>
-      <h2>Commercial &amp; Contractual Terms</h2>
-      <span class="section-count">4 questions</span>
+    <div class="q">
+      <div class="q-left"><div class="q-id c">C1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Existing RFID Infrastructure — Full Specification Required</div>
+        <div class="q-body">Section 2.1 states QRCS <strong>"already has RFID infrastructure."</strong> We must understand this before sourcing compatible hardware:
+          <ul>
+            <li>Brand and model of existing RFID readers / gateways</li>
+            <li>RFID frequency band in operation (433 MHz, 868 MHz, 915 MHz, 2.4 GHz, or HF 13.56 MHz)</li>
+            <li>Communication protocol of existing readers (MQTT, REST API, proprietary?)</li>
+            <li>Are existing readers staying in service or being replaced by this project?</li>
+            <li>Is an SDK or integration API available for the existing reader infrastructure?</li>
+          </ul>
+          <div class="note-box"><strong>⚠️ Supplier Escalation:</strong> Our primary RFID hardware supplier in China is not responding. Without these infrastructure details we cannot qualify alternative suppliers or guarantee tag/reader compatibility, which may affect our ability to submit a complete bid on time.</div>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
-    <div class="section-body">
 
-      <div class="q-row">
-        <div class="q-num high">L1</div>
+    <div class="q">
+      <div class="q-left"><div class="q-id c">C2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Active RFID Tags — 5,000 Tags Specification</div>
         <div class="q-body">
-          <div class="q-title">Payment Terms &amp; Milestone Structure</div>
-          <div class="q-desc">
-            <ul>
-              <li>What are QRCS's standard payment terms (advance payment %, milestone-based, or on final delivery)?</li>
-              <li>Is a <strong>performance bond or bank guarantee</strong> required from the vendor?</li>
-              <li>What are the penalty terms for delays, and are they capped?</li>
-            </ul>
-          </div>
+          <ul>
+            <li>Required RFID frequency (433 MHz or 2.4 GHz)?</li>
+            <li>Required read range in meters?</li>
+            <li>Environmental conditions: indoor / outdoor, temperature range, humidity, chemical exposure?</li>
+            <li>Mounting surface types: metal, plastic, glass, composite?</li>
+            <li>IP rating required (e.g., IP67/IP68) or MIL-STD ruggedness?</li>
+            <li>Two-way write capability required, or read-only?</li>
+          </ul>
         </div>
-        <span class="badge high">High</span>
       </div>
-
-      <div class="q-row">
-        <div class="q-num high">L2</div>
-        <div class="q-body">
-          <div class="q-title">Intellectual Property Ownership</div>
-          <div class="q-desc">
-            <ul>
-              <li>Will all customizations, reports, workflows, and configuration deliverables become <strong>QRCS's property</strong> upon acceptance?</li>
-              <li>Is <strong>source code escrow</strong> required?</li>
-              <li>Are there restrictions on the vendor using learnings or anonymized data from this deployment for product improvement?</li>
-            </ul>
-          </div>
-        </div>
-        <span class="badge high">High</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">L3</div>
-        <div class="q-body">
-          <div class="q-title">Local Presence / Partner Requirements</div>
-          <div class="q-desc">Does QRCS require the vendor to have a <strong>local registered entity or authorized partner</strong> in the country of operation for this contract to be awarded? If yes, please specify the jurisdiction.</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num low">L4</div>
-        <div class="q-body">
-          <div class="q-title">Hardware Warranty &amp; Replacement</div>
-          <div class="q-desc">For all RFID hardware supplied (tags, readers, handhelds): what is the minimum hardware warranty period expected? Should the vendor maintain a local spare parts stock for fast hardware replacement, and is this included in the base scope or an additional service?</div>
-        </div>
-        <span class="badge low">Low</span>
-      </div>
-
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id c">C3</div></div>
+      <div class="q-mid">
+        <div class="q-title">Passive RFID Tags — 10,000 Tags Specification</div>
+        <div class="q-body">
+          <ul>
+            <li>Required standard: <strong>EPC Gen 2 UHF (860–960 MHz)</strong> or <strong>HF ISO 15693 / ISO 14443</strong>?</li>
+            <li>Required read range (cm or meters)?</li>
+            <li>Are on-metal (in-metal) tags required for metal-surfaced assets?</li>
+            <li>Are standard adhesive label tags acceptable for non-metal assets?</li>
+            <li>Should tags arrive pre-encoded (EPC programmed), or will encoding be done on-site during deployment?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id c">C4</div></div>
+      <div class="q-mid">
+        <div class="q-title">Passageway Readers — 7 Sites — Site Survey Access</div>
+        <div class="q-body">Section 1.7 requires passageway readers at entrances and exits of <strong>all 7 sites,</strong> with a site survey to determine the required quantity. We need:
+          <ul>
+            <li>Names, addresses, and approximate size of all 7 sites</li>
+            <li>Approximate number of entry/exit passageways per site (for a preliminary estimate now)</li>
+            <li>Are readers required for <strong>active RFID, passive RFID, or both</strong>?</li>
+            <li>Is integration with physical access control (barriers, turnstiles, door locks) required, or alerting/monitoring only?</li>
+            <li>Will QRCS facilitate site visits before bid submission, or is a desktop/virtual survey acceptable?</li>
+            <li>Who is responsible for civil works (cabling, conduit, power supply to readers)?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id c">C5</div></div>
+      <div class="q-mid">
+        <div class="q-title">Handheld Devices — 15 Units</div>
+        <div class="q-body">
+          <ul>
+            <li>Should the vendor <strong>supply the handheld hardware,</strong> or provide software-only integration with QRCS-owned devices?</li>
+            <li>Preferred OS: <strong>Android or Windows</strong>?</li>
+            <li>Required RFID frequency per handheld (UHF, HF, or both)?</li>
+            <li>Must the handheld include integrated barcode / QR scanning?</li>
+            <li>Required ruggedness rating (MIL-STD-810G, IP65, or similar)?</li>
+            <li>Required battery life per shift?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">C6</div></div>
+      <div class="q-mid">
+        <div class="q-title">Active Tag Removal / Anti-Tamper Alarm (Section 1.6)</div>
+        <div class="q-body">Section 1.6 requires an alarm when a tag is <strong>physically removed</strong> from an asset. This requires anti-tamper sensors built into the tag hardware.
+          <ul>
+            <li>Is anti-tamper alarm capability <strong>mandatory or optional</strong>?</li>
+            <li>Does the existing active tag infrastructure already support anti-tamper alerts?</li>
+            <li>If new anti-tamper tags are required, is the additional cost acceptable?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">C7</div></div>
+      <div class="q-mid">
+        <div class="q-title">Low Battery Alerts for Active Tags</div>
+        <div class="q-body">
+          <ul>
+            <li>Required battery alert threshold (e.g., below 20%)?</li>
+            <li>Should battery status be transmitted automatically at a set frequency, or only on next scheduled RFID scan?</li>
+            <li>Should low battery alerts automatically trigger a maintenance ticket in the system?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">C8</div></div>
+      <div class="q-mid">
+        <div class="q-title">Electronic Floor Map — Floor Plans Availability (Section 1.5)</div>
+        <div class="q-body">Sections 1.5, 1.6, and 2.4 reference zone-based asset tracking on an <strong>electronic map.</strong>
+          <ul>
+            <li>Are digital floor plans (DWG, SVG, PDF, or image format) available for all 7 sites?</li>
+            <li>Required accuracy: <strong>zone/room-level</strong> (RFID zone approximation), or <strong>sub-meter precision</strong> (requiring a full indoor positioning system)?</li>
+            <li>Is a full IPS with location engines in scope, or is RFID zone approximation sufficient?</li>
+            <li>The RFQ marks this as "extensible" — is a basic zone map acceptable for base scope with IPS as a future extension?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">C9</div></div>
+      <div class="q-mid">
+        <div class="q-title">RFID Compliance Standards &amp; Radio Certifications</div>
+        <div class="q-body">Are there specific certification marks required (e.g., ETSI EN 302 208, FCC Part 15, ISO 18000-63)? Are there country-specific radio regulations that apply at any of the 7 site locations?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">C10</div></div>
+      <div class="q-mid">
+        <div class="q-title">Asset Flow Path &amp; Area Distribution Statistics (Section 1.5)</div>
+        <div class="q-body">Section 1.5 marks "Asset flow path data statistics" and "Asset area distribution statistics" as <strong>extensible / requiring customization.</strong> Should these be included in the base scope, priced separately as optional add-ons, or excluded from this bid?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
   </div>
+</div>
 
-  <!-- ─────────────────────────────── M. STOCKTAKING & O&M ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">M</div>
-      <h2>Asset Stocktaking &amp; Operations &amp; Maintenance</h2>
-      <span class="section-count">2 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num medium">M1</div>
-        <div class="q-body">
-          <div class="q-title">Automatic Stocktaking — Key Assets (Section 1.3)</div>
-          <div class="q-desc">Section 1.3 describes "automatic stocktaking of key assets" where device status is collected based on execution times defined in the system. Does this require integration with the Active RFID reader infrastructure to auto-detect tag presence in defined zones on a schedule, or is handheld-based scheduled scanning sufficient?</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-      <div class="q-row">
-        <div class="q-num medium">M2</div>
-        <div class="q-body">
-          <div class="q-title">Inspection Routes — Scope &amp; Volume</div>
-          <div class="q-desc">Section 1.4 requires configurable inspection routes and periodic maintenance tasks. Approximately how many inspection routes and assets requiring periodic inspection are expected across the 7 sites? This affects system configuration effort and the scope of the O&amp;M module setup.</div>
-        </div>
-        <span class="badge medium">Medium</span>
-      </div>
-
-    </div>
+<!-- ════════════════════ D — ERP ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">D</div>
+    <h2>ERP Integration — Microsoft Dynamics 365</h2>
+    <span class="sec-badge">4 questions</span>
   </div>
+  <div class="sec-body">
 
-  <!-- ─────────────────────────────── N. ASSET CARD & IMPORT ─── -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter">N</div>
-      <h2>Asset Register &amp; Configuration</h2>
-      <span class="section-count">2 questions</span>
-    </div>
-    <div class="section-body">
-
-      <div class="q-row">
-        <div class="q-num high">N1</div>
+    <div class="q">
+      <div class="q-left"><div class="q-id c">D1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Dynamics 365 Edition &amp; Modules in Use</div>
         <div class="q-body">
-          <div class="q-title">Asset Register Volume &amp; Custom Fields</div>
-          <div class="q-desc">
-            <ul>
-              <li>What is the approximate total number of assets to be managed in the system?</li>
-              <li>Are there custom data fields required beyond standard fields (asset ID, type, serial number, model, location, assigned user, status)?</li>
-              <li>Will QRCS provide the existing asset register in Excel or CSV format for bulk import?</li>
-            </ul>
-          </div>
+          <ul>
+            <li>Which edition is deployed: <strong>Finance &amp; Operations (F&amp;O), Business Central,</strong> or another?</li>
+            <li>Which modules are relevant: Fixed Assets, Inventory Management, Finance, Procurement, or others?</li>
+            <li>Is D365 hosted in the Microsoft cloud or on-premise?</li>
+          </ul>
         </div>
-        <span class="badge high">High</span>
       </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
 
-      <div class="q-row">
-        <div class="q-num medium">N2</div>
+    <div class="q">
+      <div class="q-left"><div class="q-id c">D2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Integration Scope — Data Entities &amp; Sync Direction</div>
         <div class="q-body">
-          <div class="q-title">Asset Categories &amp; Hierarchy</div>
-          <div class="q-desc">Does QRCS have an existing asset classification hierarchy (categories, subcategories, types) that must be replicated in the new system? If so, can this classification list be shared in advance to allow configuration planning?</div>
+          <ul>
+            <li>One-way sync (AssetXAI → D365) or <strong>bi-directional</strong>?</li>
+            <li>Which data entities need to sync: Assets, Asset Status, Disposals, Depreciation schedules, Purchase Orders, Locations, Users?</li>
+            <li>Should depreciation be read from D365, or only asset data pushed to D365 for D365 to process?</li>
+            <li>Real-time sync or scheduled batch (e.g., nightly)?</li>
+          </ul>
         </div>
-        <span class="badge medium">Medium</span>
       </div>
-
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">D3</div></div>
+      <div class="q-mid">
+        <div class="q-title">API Access &amp; Integration Credentials</div>
+        <div class="q-body">
+          <ul>
+            <li>Does QRCS's D365 instance have an accessible OData or REST API?</li>
+            <li>Will QRCS provide a service account / API key for integration testing?</li>
+            <li>Are middleware platforms already in use (Azure Logic Apps, Power Automate, MuleSoft) that the vendor must work with?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">D4</div></div>
+      <div class="q-mid">
+        <div class="q-title">ERP-Side Testing Responsibilities</div>
+        <div class="q-body">Who is responsible for ERP-side configuration and testing — the vendor, QRCS's D365 team, or Microsoft's implementation partner? Will the D365 team be available as a technical counterpart during integration development?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
   </div>
+</div>
 
-  <!-- Summary table -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-letter" style="background:linear-gradient(135deg,#0f172a,#1e293b)">∑</div>
-      <h2>Quick Reference Summary — All Questions</h2>
-      <span class="section-count">54 questions</span>
-    </div>
-    <div class="section-body" style="padding:0">
-      <table class="sum-table">
-        <thead>
-          <tr>
-            <th>ID</th><th>Category</th><th>Question</th><th>Priority</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td class="q-id">A1</td><td>Timeline</td><td>Project timeline, milestones, go-live date</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">A2</td><td>Timeline</td><td>Phased vs. full deployment</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">A3</td><td>Timeline</td><td>Budget envelope / cost guidance</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">A4</td><td>Timeline</td><td>Bid evaluation criteria and weightings</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">A5</td><td>Timeline</td><td>Product demo / presentation requirement</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">B1</td><td>Infrastructure</td><td>On-premise vs. private cloud deployment</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">B2</td><td>Infrastructure</td><td>HA, DR, RTO, RPO requirements</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">B3</td><td>Infrastructure</td><td>Network connectivity between the 7 sites</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">B4</td><td>Infrastructure</td><td>Data residency, privacy, security compliance</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">B5</td><td>Infrastructure</td><td>Performance benchmarks</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">C1</td><td>RFID Hardware</td><td>Existing RFID infrastructure — full spec</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">C2</td><td>RFID Hardware</td><td>Active RFID tags — 5,000 tags specification</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">C3</td><td>RFID Hardware</td><td>Passive RFID tags — 10,000 tags specification</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">C4</td><td>RFID Hardware</td><td>Passageway readers — 7 sites, site survey</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">C5</td><td>RFID Hardware</td><td>Handheld devices — 15 units, supply &amp; spec</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">C6</td><td>RFID Hardware</td><td>Anti-tamper tag removal alarm</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">C7</td><td>RFID Hardware</td><td>Low battery alerts for active tags</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">C8</td><td>RFID Hardware</td><td>Electronic floor map — floor plans availability</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">C9</td><td>RFID Hardware</td><td>RFID compliance standards &amp; certifications</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">C10</td><td>RFID Hardware</td><td>Flow path &amp; distribution statistics scope</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">D1</td><td>ERP Integration</td><td>Dynamics 365 edition &amp; modules</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">D2</td><td>ERP Integration</td><td>Integration scope — data entities &amp; direction</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">D3</td><td>ERP Integration</td><td>API access &amp; integration credentials</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">D4</td><td>ERP Integration</td><td>ERP-side testing responsibilities</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">E1</td><td>SSO / Auth</td><td>Azure AD tenant &amp; app registration</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">E2</td><td>SSO / Auth</td><td>MFA — mandatory and scope</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">E3</td><td>SSO / Auth</td><td>SSO scope — web portal vs. mobile app</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">E4</td><td>SSO / Auth</td><td>Automated SCIM user provisioning</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">F1</td><td>Data Migration</td><td>Existing system details &amp; data format</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">F2</td><td>Data Migration</td><td>Data quality &amp; pre-migration assessment</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">F3</td><td>Data Migration</td><td>Parallel running period</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">F4</td><td>Data Migration</td><td>RFID tag data migration</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">G1</td><td>Mobile App</td><td>iOS — mandatory or optional?</td><td><span class="badge critical">Critical</span></td></tr>
-          <tr><td class="q-id">G2</td><td>Mobile App</td><td>Device ownership &amp; MDM requirements</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">G3</td><td>Mobile App</td><td>Offline functionality scope</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">H1</td><td>Ticketing</td><td>Email-to-ticket integration</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">H2</td><td>Ticketing</td><td>External vendor portal access</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">H3</td><td>Ticketing</td><td>ITSM / helpdesk integration</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">H4</td><td>Ticketing</td><td>Spare parts module — base or optional</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">I1</td><td>Users &amp; Roles</td><td>User distribution across 7 sites &amp; concurrency</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">I2</td><td>Users &amp; Roles</td><td>Custom user roles required</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">I3</td><td>Users &amp; Roles</td><td>Licensing model preference</td><td><span class="badge low">Low</span></td></tr>
-          <tr><td class="q-id">J1</td><td>Training</td><td>Training scope, language &amp; delivery method</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">J2</td><td>Training</td><td>Post go-live support &amp; warranty period</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">J3</td><td>Training</td><td>UAT &amp; acceptance process</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">J4</td><td>Training</td><td>Change request process post-delivery</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">K1</td><td>Compliance</td><td>Applicable regulatory frameworks</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">K2</td><td>Compliance</td><td>Data retention policy</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">K3</td><td>Compliance</td><td>Audit evidence format requirements</td><td><span class="badge low">Low</span></td></tr>
-          <tr><td class="q-id">L1</td><td>Commercial</td><td>Payment terms &amp; milestone structure</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">L2</td><td>Commercial</td><td>IP ownership &amp; source code escrow</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">L3</td><td>Commercial</td><td>Local presence / partner requirement</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">L4</td><td>Commercial</td><td>Hardware warranty &amp; spare parts stock</td><td><span class="badge low">Low</span></td></tr>
-          <tr><td class="q-id">M1</td><td>Stocktaking</td><td>Automatic stocktaking — active RFID scope</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">M2</td><td>Stocktaking</td><td>Inspection routes — volume and scope</td><td><span class="badge medium">Medium</span></td></tr>
-          <tr><td class="q-id">N1</td><td>Asset Register</td><td>Asset volume &amp; custom fields</td><td><span class="badge high">High</span></td></tr>
-          <tr><td class="q-id">N2</td><td>Asset Register</td><td>Asset category hierarchy</td><td><span class="badge medium">Medium</span></td></tr>
-        </tbody>
-      </table>
-    </div>
+<!-- ════════════════════ E — SSO & AUTH ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">E</div>
+    <h2>SSO &amp; Authentication — Microsoft Azure AD</h2>
+    <span class="sec-badge">4 questions</span>
   </div>
+  <div class="sec-body">
 
-  <!-- Footer -->
-  <div class="footer">
-    <div class="footer-left">
-      <strong>AssetXAI — Enterprise Asset Intelligence</strong>
-      Prepared by the AssetXAI Pre-Sales &amp; Technical Team<br>
-      Document Ref: AX-CQ-2026-001 &nbsp;|&nbsp; April 6, 2026<br>
-      Confidential — For Proposal &amp; Clarification Purposes Only
+    <div class="q">
+      <div class="q-left"><div class="q-id c">E1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Azure AD Tenant &amp; Application Registration</div>
+        <div class="q-body">
+          <ul>
+            <li>Is Microsoft Azure AD already configured and active for QRCS users?</li>
+            <li>Will QRCS provide an Azure AD <strong>Application Registration</strong> (Client ID, Tenant ID, Client Secret) for SSO configuration?</li>
+            <li>Are all 20 technicians and 900 end users within the <strong>same Azure AD tenant,</strong> or spread across multiple tenants / domains?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
-    <div class="footer-right">
-      <span class="footer-pill">v1.0 — Initial Issue</span>
-      <span class="footer-pill">54 Questions · 14 Categories</span>
-      <span class="footer-pill">assetxai.live</span>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">E2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Multi-Factor Authentication (MFA)</div>
+        <div class="q-body">
+          <ul>
+            <li>Is MFA <strong>mandatory for all users,</strong> or only for administrators and technicians?</li>
+            <li>Should MFA be enforced by the asset system itself, or handled by Azure AD Conditional Access policies?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
     </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">E3</div></div>
+      <div class="q-mid">
+        <div class="q-title">SSO Scope — Web Portal vs. Mobile Application</div>
+        <div class="q-body">Should Azure AD SSO apply to both the <strong>web portal and the mobile application,</strong> or only to the web portal? If mobile SSO is required, is Microsoft Authenticator the expected MFA method?</div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">E4</div></div>
+      <div class="q-mid">
+        <div class="q-title">Automated User Provisioning (SCIM)</div>
+        <div class="q-body">Should user accounts be manually created by an administrator, or is <strong>automated SCIM provisioning</strong> from Azure AD required (users auto-created/deactivated as they join or leave QRCS)?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
   </div>
+</div>
 
-</div><!-- /page -->
+<!-- ════════════════════ F — DATA MIGRATION ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">F</div>
+    <h2>Data Migration (Section 3.15)</h2>
+    <span class="sec-badge">4 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id c">F1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Existing System Details &amp; Data Format</div>
+        <div class="q-body">Section 3.15 requires migration from the existing system. Please provide:
+          <ul>
+            <li>Name and version of the current asset management / ticketing system</li>
+            <li>Data format available for export: SQL database, Excel/CSV, or API export?</li>
+            <li>Approximate record volume: number of assets, tickets, users, locations, history records</li>
+            <li>How many years of historical data must be migrated?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">F2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Data Quality &amp; Pre-Migration Assessment</div>
+        <div class="q-body">
+          <ul>
+            <li>Has a data quality assessment been performed on the existing data?</li>
+            <li>Can QRCS provide a <strong>data sample extract</strong> before bid submission so a migration assessment can be included in the proposal?</li>
+            <li>Are there known data quality issues (duplicates, incomplete records, inconsistent formats)?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">F3</div></div>
+      <div class="q-mid">
+        <div class="q-title">Parallel Running Period</div>
+        <div class="q-body">
+          <ul>
+            <li>Is a parallel running period required (old and new systems operating simultaneously)?</li>
+            <li>If yes, what is the expected duration?</li>
+            <li>Who is responsible for maintaining data consistency across both systems during this period?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">F4</div></div>
+      <div class="q-mid">
+        <div class="q-title">RFID Tag-to-Asset Binding Migration</div>
+        <div class="q-body">Are existing RFID tag-to-asset bindings (tag IDs linked to asset records) available for migration, or will re-tagging and re-registration of assets be required as part of the deployment?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ G — MOBILE APP ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">G</div>
+    <h2>Mobile Application</h2>
+    <span class="sec-badge">3 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id c">G1</div></div>
+      <div class="q-mid">
+        <div class="q-title">iOS (Apple) Application — Mandatory or Optional?</div>
+        <div class="q-body">Section 4.12 lists <strong>"Mobile Application (Android – Apple)."</strong> Please confirm:
+          <ul>
+            <li>Is a native <strong>iOS (Apple) application mandatory</strong> for contract award, or is Android-only acceptable for the base scope?</li>
+            <li>If iOS is mandatory: minimum iOS version required?</li>
+            <li>How many users are expected to use iOS vs. Android devices?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri c">Critical</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">G2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Mobile Device Ownership &amp; MDM</div>
+        <div class="q-body">
+          <ul>
+            <li>Are mobile devices provided by QRCS, or will staff use personal devices (BYOD)?</li>
+            <li>Does QRCS operate an MDM solution (Microsoft Intune, VMware Workspace ONE, Jamf)?</li>
+            <li>If so, must the app be enrolled and distributed through the MDM platform?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">G3</div></div>
+      <div class="q-mid">
+        <div class="q-title">Mobile Offline Functionality Scope</div>
+        <div class="q-body">Section 2.2 requires "offline scanning with automatic sync when connected." What is the expected <strong>maximum offline duration</strong> (hours or days)? Which functions must remain available offline — asset scan, ticket creation, stocktaking, or all?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ H — TICKETING ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">H</div>
+    <h2>Ticketing System</h2>
+    <span class="sec-badge">4 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">H1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Email-to-Ticket Integration (Section 3.1)</div>
+        <div class="q-body">Section 3.1 requires ticket creation via <strong>Email ID integration:</strong>
+          <ul>
+            <li>Should the system auto-create tickets from inbound emails to a dedicated mailbox?</li>
+            <li>Email platform in use: Microsoft 365 or Exchange On-Premise?</li>
+            <li>Should replies within the email thread automatically update ticket history (two-way threading)?</li>
+            <li>Should notifications be sent from a QRCS-branded email domain?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">H2</div></div>
+      <div class="q-mid">
+        <div class="q-title">External Vendor Portal Access</div>
+        <div class="q-body">Section 3.5 requires vendor / service provider ticket assignment. Should external vendors be able to <strong>log in to a dedicated portal</strong> to view and update their assigned tickets, or will QRCS internal staff manage all vendor interactions on their behalf?</div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">H3</div></div>
+      <div class="q-mid">
+        <div class="q-title">ITSM / Helpdesk Integration (Section 4.12)</div>
+        <div class="q-body">Section 4.12 references "Integration with ITSM / Helpdesk (if applicable)." Is there an existing ITSM platform in use (ServiceNow, Freshservice, Jira Service Management, ManageEngine)? If so, should tickets sync between the asset system and the ITSM tool?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">H4</div></div>
+      <div class="q-mid">
+        <div class="q-title">Spare Parts Tracking — Base Scope or Optional (Section 3.5)</div>
+        <div class="q-body">Section 3.5 lists "Spare parts and service tracking (optional)." Should spare parts inventory management be included in the base contract scope, or quoted separately as an optional module?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ I — USERS & ROLES ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">I</div>
+    <h2>Users, Roles &amp; Licensing</h2>
+    <span class="sec-badge">3 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">I1</div></div>
+      <div class="q-mid">
+        <div class="q-title">User Distribution Across 7 Sites &amp; Peak Concurrency</div>
+        <div class="q-body">
+          <ul>
+            <li>How are the <strong>900 end users</strong> and <strong>20 technicians</strong> distributed across the 7 sites?</li>
+            <li>Is there a dedicated site administrator per location, or a single centralized admin team?</li>
+            <li>Expected number of <strong>concurrent active users at peak load?</strong> (Critical for server sizing.)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">I2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Custom User Roles Required</div>
+        <div class="q-body">Beyond administrators, technicians, and end users, are additional custom roles required? Examples: department manager, finance approver, internal auditor, procurement officer, or external vendor coordinator?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id l">I3</div></div>
+      <div class="q-mid">
+        <div class="q-title">Licensing Model Preference</div>
+        <div class="q-body">Does QRCS prefer a <strong>named-user license</strong> (per registered user), a <strong>concurrent-user license</strong> (per simultaneous session), or a <strong>site license</strong>? This affects how the commercial proposal is structured.</div>
+      </div>
+      <div class="q-right"><span class="pri l">Low</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ J — TRAINING & SUPPORT ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">J</div>
+    <h2>Training &amp; Post-Implementation Support</h2>
+    <span class="sec-badge">4 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">J1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Training Scope, Language &amp; Delivery Method</div>
+        <div class="q-body">
+          <ul>
+            <li>Is end-user training for all <strong>900 users</strong> in scope for the vendor, or only for the 20 technicians and administrators?</li>
+            <li>Delivery method: <strong>on-site, remote video conference, or self-service LMS / video library?</strong></li>
+            <li>Required language(s): <strong>Arabic, English, or both?</strong></li>
+            <li>Are printed or digital user manuals and admin guides required as formal deliverables?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">J2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Post Go-Live Support &amp; Warranty Period</div>
+        <div class="q-body">
+          <ul>
+            <li>Minimum system warranty period required after go-live?</li>
+            <li>Expected support response times by severity (e.g., Critical: 2h, High: 8h, Medium: 24h)?</li>
+            <li>Dedicated named support contact, or shared helpdesk?</li>
+            <li>Is ongoing maintenance and enhancement included in the base contract or a separate agreement?</li>
+            <li>Is an Arabic-language support channel required?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">J3</div></div>
+      <div class="q-mid">
+        <div class="q-title">UAT &amp; System Acceptance Process</div>
+        <div class="q-body">
+          <ul>
+            <li>How is acceptance defined: functional testing, UAT, performance testing, or all?</li>
+            <li>Who signs off on acceptance — QRCS IT, end users, or executive management?</li>
+            <li>Expected UAT duration, and will a separate staging environment be required?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">J4</div></div>
+      <div class="q-mid">
+        <div class="q-title">Change Request Process Post-Delivery</div>
+        <div class="q-body">What is the expected process for managing change requests during or after UAT? Will these be handled within the base contract budget, or billed as additional scope at an agreed day rate?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ K — COMPLIANCE ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">K</div>
+    <h2>Compliance, Audit &amp; Data Policy</h2>
+    <span class="sec-badge">3 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">K1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Applicable Regulatory Frameworks</div>
+        <div class="q-body">Are there specific regulatory, governmental, or Red Crescent / Red Cross organizational standards the system must comply with? Examples: NCA (Saudi National Cybersecurity Authority), PDPL (Personal Data Protection Law), or IFRC internal policy standards for audit and financial reporting?</div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">K2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Data Retention Policy</div>
+        <div class="q-body">
+          <ul>
+            <li>Minimum retention period for audit logs, ticket history, and asset lifecycle records?</li>
+            <li>Is a right-to-erasure requirement applicable (permanent deletion of specific user or asset data on request)?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id l">K3</div></div>
+      <div class="q-mid">
+        <div class="q-title">Audit Evidence Format Requirements</div>
+        <div class="q-body">Section 2.12 requires "evidence generation for audits (scan logs, timestamps, locations)." Are digitally signed or cryptographically sealed audit logs required, or is standard timestamped log export to PDF/Excel sufficient for internal and external auditors?</div>
+      </div>
+      <div class="q-right"><span class="pri l">Low</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ L — COMMERCIAL ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">L</div>
+    <h2>Commercial &amp; Contractual Terms</h2>
+    <span class="sec-badge">4 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">L1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Payment Terms &amp; Milestone Structure</div>
+        <div class="q-body">
+          <ul>
+            <li>QRCS standard payment terms (advance %, milestone-based, or on final delivery)?</li>
+            <li>Is a <strong>performance bond or bank guarantee</strong> required from the vendor?</li>
+            <li>Are there delay penalty terms, and are they capped?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">L2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Intellectual Property Ownership</div>
+        <div class="q-body">
+          <ul>
+            <li>Will all customizations, reports, workflows, and configuration deliverables become <strong>QRCS's property</strong> upon acceptance?</li>
+            <li>Is <strong>source code escrow</strong> required?</li>
+            <li>Are there restrictions on the vendor using anonymized learnings from this deployment for product improvement?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">L3</div></div>
+      <div class="q-mid">
+        <div class="q-title">Local Presence / Authorized Partner Requirement</div>
+        <div class="q-body">Does QRCS require the vendor to have a <strong>locally registered entity or authorized local partner</strong> in the country of operation for this contract to be awarded? If yes, please specify the jurisdiction required.</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id l">L4</div></div>
+      <div class="q-mid">
+        <div class="q-title">Hardware Warranty &amp; Spare Parts Stock</div>
+        <div class="q-body">For all RFID hardware supplied (tags, readers, handhelds): minimum hardware warranty period expected? Should the vendor maintain a local spare parts stock for fast hardware replacement, and is this included in base scope or an additional service?</div>
+      </div>
+      <div class="q-right"><span class="pri l">Low</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ M — STOCKTAKING ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">M</div>
+    <h2>Asset Stocktaking &amp; Operations &amp; Maintenance</h2>
+    <span class="sec-badge">2 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">M1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Automatic Stocktaking — Active RFID Integration (Section 1.3)</div>
+        <div class="q-body">Section 1.3 describes "automatic stocktaking of key assets" where device status is collected based on execution times defined in the system. Does this require integration with the Active RFID reader infrastructure to auto-detect tag presence in defined zones on a schedule, or is handheld-based scheduled scanning sufficient?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">M2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Inspection Routes — Volume &amp; Scope (Section 1.4)</div>
+        <div class="q-body">Section 1.4 requires configurable inspection routes and periodic maintenance tasks. Approximately how many inspection routes and assets requiring periodic inspection are expected across the 7 sites? This affects system configuration effort and O&amp;M module setup scope.</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ N — ASSET REGISTER ════════════════════ -->
+<div class="sec">
+  <div class="sec-hd">
+    <div class="sec-letter">N</div>
+    <h2>Asset Register &amp; Configuration</h2>
+    <span class="sec-badge">2 questions</span>
+  </div>
+  <div class="sec-body">
+
+    <div class="q">
+      <div class="q-left"><div class="q-id h">N1</div></div>
+      <div class="q-mid">
+        <div class="q-title">Asset Register Volume &amp; Custom Fields</div>
+        <div class="q-body">
+          <ul>
+            <li>Approximate total number of assets to be managed in the system?</li>
+            <li>Are custom data fields required beyond standard fields (asset ID, type, serial number, model, location, assigned user, status)?</li>
+            <li>Will QRCS provide the existing asset register in Excel or CSV for bulk import?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="q-right"><span class="pri h">High</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+    <div class="q">
+      <div class="q-left"><div class="q-id m">N2</div></div>
+      <div class="q-mid">
+        <div class="q-title">Asset Category Hierarchy</div>
+        <div class="q-body">Does QRCS have an existing asset classification hierarchy (categories, subcategories, types) that must be replicated in the new system? If so, can this list be shared in advance to allow configuration planning?</div>
+      </div>
+      <div class="q-right"><span class="pri m">Medium</span><div class="resp-lbl">QRCS Response</div><div class="resp-box">[ Response field ]</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════ SUMMARY TABLE ════════════════════ -->
+<div class="sec" id="summary">
+  <div class="sec-hd">
+    <div class="sec-letter" style="background:linear-gradient(135deg,#334155,#1e293b);font-size:18px">∑</div>
+    <h2>Quick Reference — All 54 Questions</h2>
+    <span class="sec-badge">Complete list</span>
+  </div>
+  <div class="sec-body">
+    <table class="ref-table">
+      <thead>
+        <tr><th style="width:52px">ID</th><th style="width:120px">Category</th><th>Question Summary</th><th style="width:88px">Priority</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="ref-id">A1</td><td class="ref-cat">Timeline</td><td>Project timeline, milestones &amp; go-live date — missing from RFQ</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">A2</td><td class="ref-cat">Timeline</td><td>Phased vs. full single deployment</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">A3</td><td class="ref-cat">Timeline</td><td>Budget envelope / cost guidance</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">A4</td><td class="ref-cat">Timeline</td><td>Bid evaluation criteria and weightings</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">A5</td><td class="ref-cat">Timeline</td><td>Product demonstration / technical presentation required?</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">B1</td><td class="ref-cat">Infrastructure</td><td>On-premise vs. private cloud — server specs &amp; OS</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">B2</td><td class="ref-cat">Infrastructure</td><td>High availability, DR, RTO and RPO requirements</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">B3</td><td class="ref-cat">Infrastructure</td><td>Network connectivity between the 7 sites</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">B4</td><td class="ref-cat">Infrastructure</td><td>Data residency, privacy &amp; security compliance</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">B5</td><td class="ref-cat">Infrastructure</td><td>Performance benchmarks for UAT</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">C1</td><td class="ref-cat">RFID Hardware</td><td>Existing RFID infrastructure — full brand, model &amp; protocol spec</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">C2</td><td class="ref-cat">RFID Hardware</td><td>Active RFID tags (5,000) — frequency, range, environment, IP rating</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">C3</td><td class="ref-cat">RFID Hardware</td><td>Passive RFID tags (10,000) — standard, range, surface type</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">C4</td><td class="ref-cat">RFID Hardware</td><td>Passageway readers — 7 sites, site survey access &amp; civil works</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">C5</td><td class="ref-cat">RFID Hardware</td><td>Handheld devices (15 units) — vendor supply, OS, ruggedness</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">C6</td><td class="ref-cat">RFID Hardware</td><td>Anti-tamper / tag removal alarm — mandatory or optional?</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">C7</td><td class="ref-cat">RFID Hardware</td><td>Low battery alerts — threshold &amp; auto-ticket trigger</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">C8</td><td class="ref-cat">RFID Hardware</td><td>Electronic floor map — floor plans availability &amp; precision level</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">C9</td><td class="ref-cat">RFID Hardware</td><td>RFID radio certifications &amp; country-specific regulations</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">C10</td><td class="ref-cat">RFID Hardware</td><td>Asset flow path &amp; area distribution stats — base scope or optional?</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">D1</td><td class="ref-cat">ERP</td><td>Dynamics 365 edition (F&amp;O vs. Business Central) &amp; modules</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">D2</td><td class="ref-cat">ERP</td><td>Integration data entities, sync direction &amp; frequency</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">D3</td><td class="ref-cat">ERP</td><td>API access credentials &amp; middleware in use</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">D4</td><td class="ref-cat">ERP</td><td>ERP-side testing responsibilities &amp; team availability</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">E1</td><td class="ref-cat">SSO / Auth</td><td>Azure AD tenant &amp; Application Registration details</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">E2</td><td class="ref-cat">SSO / Auth</td><td>MFA — mandatory scope &amp; enforcement method</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">E3</td><td class="ref-cat">SSO / Auth</td><td>SSO scope — web portal vs. mobile application</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">E4</td><td class="ref-cat">SSO / Auth</td><td>Automated SCIM user provisioning from Azure AD</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">F1</td><td class="ref-cat">Migration</td><td>Existing system name, data format &amp; record volumes</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">F2</td><td class="ref-cat">Migration</td><td>Data quality assessment &amp; sample extract availability</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">F3</td><td class="ref-cat">Migration</td><td>Parallel running period duration &amp; responsibility</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">F4</td><td class="ref-cat">Migration</td><td>RFID tag-to-asset binding migration or re-tagging required?</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">G1</td><td class="ref-cat">Mobile App</td><td>iOS (Apple) application — mandatory or optional?</td><td><span class="pri c">Critical</span></td></tr>
+        <tr><td class="ref-id">G2</td><td class="ref-cat">Mobile App</td><td>Device ownership (BYOD vs. QRCS-provided) &amp; MDM platform</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">G3</td><td class="ref-cat">Mobile App</td><td>Offline functionality scope &amp; maximum offline duration</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">H1</td><td class="ref-cat">Ticketing</td><td>Email-to-ticket integration &amp; email platform</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">H2</td><td class="ref-cat">Ticketing</td><td>External vendor portal access vs. internal management</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">H3</td><td class="ref-cat">Ticketing</td><td>ITSM / helpdesk integration with existing platform</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">H4</td><td class="ref-cat">Ticketing</td><td>Spare parts module — base scope or optional add-on?</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">I1</td><td class="ref-cat">Users</td><td>User distribution across 7 sites &amp; peak concurrent count</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">I2</td><td class="ref-cat">Users</td><td>Custom user roles beyond admin / technician / end user</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">I3</td><td class="ref-cat">Users</td><td>Licensing model preference (named, concurrent, or site)</td><td><span class="pri l">Low</span></td></tr>
+        <tr><td class="ref-id">J1</td><td class="ref-cat">Training</td><td>Training scope, language (Arabic/English) &amp; delivery method</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">J2</td><td class="ref-cat">Training</td><td>Post go-live support SLA, warranty period &amp; Arabic channel</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">J3</td><td class="ref-cat">Training</td><td>UAT acceptance criteria, sign-off &amp; staging environment</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">J4</td><td class="ref-cat">Training</td><td>Change request process &amp; pricing model post-delivery</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">K1</td><td class="ref-cat">Compliance</td><td>Applicable regulatory frameworks (NCA, PDPL, IFRC)</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">K2</td><td class="ref-cat">Compliance</td><td>Data retention periods &amp; right-to-erasure requirements</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">K3</td><td class="ref-cat">Compliance</td><td>Audit log format — signed/sealed vs. timestamped export</td><td><span class="pri l">Low</span></td></tr>
+        <tr><td class="ref-id">L1</td><td class="ref-cat">Commercial</td><td>Payment terms, milestone structure &amp; performance bond</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">L2</td><td class="ref-cat">Commercial</td><td>IP ownership &amp; source code escrow</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">L3</td><td class="ref-cat">Commercial</td><td>Local presence / authorized partner requirement</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">L4</td><td class="ref-cat">Commercial</td><td>Hardware warranty period &amp; local spare parts stock</td><td><span class="pri l">Low</span></td></tr>
+        <tr><td class="ref-id">M1</td><td class="ref-cat">Stocktaking</td><td>Automatic stocktaking — active RFID reader integration scope</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">M2</td><td class="ref-cat">Stocktaking</td><td>Inspection routes — volume &amp; O&amp;M configuration scope</td><td><span class="pri m">Medium</span></td></tr>
+        <tr><td class="ref-id">N1</td><td class="ref-cat">Asset Register</td><td>Total asset volume &amp; custom field requirements</td><td><span class="pri h">High</span></td></tr>
+        <tr><td class="ref-id">N2</td><td class="ref-cat">Asset Register</td><td>Existing asset category hierarchy to be replicated</td><td><span class="pri m">Medium</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════ FOOTER ════════════════════ -->
+<div class="doc-footer">
+  <div class="doc-footer-left">
+    <strong>AssetXAI — Enterprise Asset Intelligence</strong>
+    Prepared by the AssetXAI Pre-Sales &amp; Technical Team<br>
+    Document Ref: AX-CQ-2026-001 &nbsp;|&nbsp; Date: April 6, 2026 &nbsp;|&nbsp; Version: 1.1<br>
+    Confidential — For Proposal &amp; Bid Response Purposes Only
+  </div>
+  <div class="doc-footer-right">
+    <span class="fpill">v1.1 — Improved Layout</span>
+    <span class="fpill">54 Questions · 14 Categories</span>
+    <span class="fpill">assetxai.live</span>
+  </div>
+</div>
+
+</div><!-- /wrap -->
 </body>
 </html>
