@@ -341,17 +341,17 @@ function RootLayoutNav() {
     return () => clearTimeout(t);
   }, []);
 
-  // Force OTA update check on every launch (production only).
-  // If a newer bundle is available on the update channel, download it
-  // and immediately reload so the user always runs the latest code.
+  // OTA: only when expo-updates is enabled (release builds with a channel + updates.url).
+  // Avoid calling into the native module when updates are disabled (avoids odd startup failures).
   useEffect(() => {
-    if (__DEV__) return; // skip in development / Expo Go
+    if (__DEV__) return;
+    if (!Updates.isEnabled) return;
     (async () => {
       try {
         const result = await Updates.checkForUpdateAsync();
         if (result.isAvailable) {
           await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync(); // restarts the JS bundle immediately
+          await Updates.reloadAsync();
         }
       } catch {
         // network unavailable or update server error — silent fail
