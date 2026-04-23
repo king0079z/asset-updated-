@@ -453,19 +453,55 @@ ul.styled li{font-size:12.5px;color:var(--ink4);margin-bottom:5px;line-height:1.
         </div>
       </div>
 
+      <div class="info-box blue" style="margin-bottom:20px">
+        <div class="info-icon">🏗</div>
+        <div class="info-body">
+          <h4>Flexible Deployment: Full Cloud OR Fully On-Premise — Your Choice</h4>
+          <p>AssetXAI is architected to run in <strong>both deployment modes</strong> without any code changes. For organizations with strict data residency requirements (such as QRCS), the entire platform — application server, database, and RFID bridge — can be deployed <strong>on-premise on QRCS servers</strong> using Docker containers with a local <strong>MongoDB</strong> or <strong>PostgreSQL</strong> database. The cloud-hosted option (Supabase PostgreSQL) is equally supported and can be switched at deployment time. Both modes are fully supported and production-tested.</p>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-bottom:20px">
+        <div class="rfid-box reader-box" style="background:#0a0f1e;border-color:rgba(37,99,235,.3);border-radius:12px;padding:18px">
+          <h4 style="font-size:13px;font-weight:800;color:#e2e8f0;margin-bottom:12px">☁️ Cloud Deployment (Default)</h4>
+          <ul style="padding-left:16px;list-style:disc">
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Hosted on Vercel Edge + Serverless</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Database: <strong style="color:#c7d2fe">PostgreSQL via Supabase</strong> (managed, HA)</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Auth: Supabase Auth + Azure AD SSO</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Storage: Supabase S3-compatible (CDN)</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">99.99% infrastructure SLA, auto-scaling</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Data region: GCC / Qatar configurable</li>
+            <li style="font-size:12px;color:#94a3b8">Continuous automated backups + DR</li>
+          </ul>
+        </div>
+        <div class="rfid-box ap-box" style="background:#0a1a0a;border-color:rgba(22,163,74,.3);border-radius:12px;padding:18px">
+          <h4 style="font-size:13px;font-weight:800;color:#e2e8f0;margin-bottom:12px">🏢 On-Premise Deployment (QRCS Servers)</h4>
+          <ul style="padding-left:16px;list-style:disc">
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Runs entirely on QRCS-owned hardware</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Database: <strong style="color:#bbf7d0">MongoDB (local)</strong> or PostgreSQL on-prem</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Auth: Azure AD SSO (local network) + local auth</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Storage: Local disk / NFS mount</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">Deployed via Docker Compose (Linux / Windows Server)</li>
+            <li style="font-size:12px;color:#94a3b8;margin-bottom:5px">No outbound internet required after deployment</li>
+            <li style="font-size:12px;color:#94a3b8">Full data sovereignty — no data leaves QRCS premises</li>
+          </ul>
+        </div>
+      </div>
+
       <div class="heading3">Platform Technology Stack</div>
       <table class="feat-table">
-        <thead><tr><th>Layer</th><th>Technology</th><th>Details</th></tr></thead>
+        <thead><tr><th>Layer</th><th>Cloud Mode</th><th>On-Premise Mode</th><th>Notes</th></tr></thead>
         <tbody>
-          <tr><td><strong>Frontend</strong></td><td>Next.js 14 + TypeScript + Tailwind CSS</td><td>SSR/CSR hybrid, RTL/LTR bilingual, responsive across all screen sizes</td></tr>
-          <tr><td><strong>Backend / API</strong></td><td>Next.js API Routes (Node.js serverless)</td><td>RESTful endpoints, JWT auth, rate-limited, role-based access control</td></tr>
-          <tr><td><strong>Database</strong></td><td>PostgreSQL via Supabase</td><td>Managed cloud DB, row-level security, real-time subscriptions, GDPR-ready</td></tr>
-          <tr><td><strong>Auth</strong></td><td>Supabase Auth + Azure AD OAuth 2.0/OIDC</td><td>SSO, MFA via Azure Conditional Access, SCIM provisioning support</td></tr>
-          <tr><td><strong>Storage</strong></td><td>Supabase Storage (S3-compatible)</td><td>Asset documents, RFID floor maps, images with CDN delivery</td></tr>
-          <tr><td><strong>ORM / Schema</strong></td><td>Prisma ORM v5</td><td>Type-safe queries, schema migrations, multi-schema support</td></tr>
-          <tr><td><strong>AI / ML</strong></td><td>Built-in ML Forecasting + Linear Regression</td><td>Consumption forecasting, predictive maintenance, anomaly detection</td></tr>
-          <tr><td><strong>Deployment</strong></td><td>Vercel (Edge + Serverless) or On-Premise Docker</td><td>Global CDN, auto-scaling, 99.99% infra SLA; on-prem option available</td></tr>
-          <tr><td><strong>RFID Middleware</strong></td><td>AssetXAI RFID Bridge (Node.js)</td><td>LLRP/REST reader protocol adapter, real-time tag-event streaming</td></tr>
+          <tr><td><strong>Frontend</strong></td><td colspan="2">Next.js 14 + TypeScript + Tailwind CSS (identical)</td><td>SSR/CSR hybrid, RTL/LTR bilingual, all screen sizes</td></tr>
+          <tr><td><strong>Backend / API</strong></td><td colspan="2">Next.js API Routes (Node.js) — identical codebase</td><td>RESTful, JWT auth, rate-limited, RBAC</td></tr>
+          <tr><td><strong>Database</strong></td><td>PostgreSQL via Supabase (managed cloud)</td><td><strong>MongoDB (local)</strong> or PostgreSQL on-prem</td><td>Prisma ORM supports both; schema migrations identical</td></tr>
+          <tr><td><strong>Auth</strong></td><td>Supabase Auth + Azure AD SSO</td><td>Local JWT auth + Azure AD SSO (on-prem)</td><td>MFA, SCIM provisioning — both modes</td></tr>
+          <tr><td><strong>File Storage</strong></td><td>Supabase Storage (S3/CDN)</td><td>Local disk / NFS / MinIO (S3-compatible)</td><td>Asset docs, RFID maps, images</td></tr>
+          <tr><td><strong>ORM</strong></td><td colspan="2">Prisma ORM v5 (identical — supports both DB engines)</td><td>Type-safe queries, schema migrations</td></tr>
+          <tr><td><strong>AI / ML</strong></td><td colspan="2">Built-in ML Forecasting + Linear Regression (identical)</td><td>Runs locally — no external AI API required</td></tr>
+          <tr><td><strong>Deployment</strong></td><td>Vercel (Edge + Serverless)</td><td><strong>Docker Compose (Linux/Windows Server)</strong></td><td>Full Docker images provided for on-prem</td></tr>
+          <tr><td><strong>RFID Middleware</strong></td><td colspan="2">AssetXAI RFID Bridge (Node.js Docker container — identical)</td><td>LLRP/REST adapter, real-time tag-event streaming</td></tr>
+          <tr><td><strong>Email / Notifications</strong></td><td>Resend / SendGrid API</td><td>Local SMTP server (Exchange / Postfix)</td><td>All notification types supported in both modes</td></tr>
         </tbody>
       </table>
     </div>
@@ -473,74 +509,430 @@ ul.styled li{font-size:12.5px;color:var(--ink4);margin-bottom:5px;line-height:1.
 </div>
 
 <!-- ══════════════════════════════════════════════
-     §3 FEATURE SET & COMPLIANCE MATRIX
+     §3 HOW THE SYSTEM WORKS — COMPLETE OPERATIONAL OVERVIEW
+══════════════════════════════════════════════ -->
+<div class="section" id="howworks">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">3</div>
+      <h2>How the System Works — Complete Operational Overview</h2>
+      <span class="sec-badge">End-to-End User Journey</span>
+    </div>
+    <div class="sec-body">
+      <p class="para">AssetXAI is a fully integrated enterprise platform that connects physical assets (tagged with Active or Passive RFID chips), the RFID reader infrastructure (Huawei AP + RFID reader module), field technicians (handheld devices), management (web dashboard), and backend systems (D365, Azure AD) into one seamless operational workflow. Here is how the entire system operates from asset registration through to reporting.</p>
+
+      <!-- Step 1: Asset Registration -->
+      <div class="heading3">Step 1 — Asset Registration &amp; RFID Tagging</div>
+      <div class="two-col" style="margin-bottom:20px">
+        <div class="info-box blue" style="flex-direction:column">
+          <div style="font-size:28px;margin-bottom:8px">📦</div>
+          <div class="info-body">
+            <h4>New Asset Onboarded</h4>
+            <p>When a new asset arrives (e.g., laptop, medical equipment, furniture), a staff member or technician registers it in AssetXAI via:</p>
+            <ul>
+              <li><strong>Web portal</strong> — fill asset form (name, type, serial, model, department, location, purchase date, value)</li>
+              <li><strong>Mobile/handheld app</strong> — scan existing barcode/QR from asset and auto-populate fields</li>
+              <li><strong>Bulk Excel import</strong> — for large asset register migrations (thousands of assets at once)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="info-box green" style="flex-direction:column">
+          <div style="font-size:28px;margin-bottom:8px">🏷</div>
+          <div class="info-body">
+            <h4>RFID Tag Attached &amp; Bound</h4>
+            <p>After registration, a physical RFID tag is attached to the asset:</p>
+            <ul>
+              <li><strong>Active RFID tag (433 MHz)</strong> for high-value or frequently moved assets — broadcasts ID continuously every few seconds, detected automatically in real time without scanning</li>
+              <li><strong>Passive RFID tag (UHF 860–960 MHz)</strong> for furniture and lower-value items — read when scanned by handheld or passed through passageway reader</li>
+              <li>The tag EPC/ID is bound to the asset record in the database. Duplicate binding is rejected.</li>
+              <li>A QR/barcode label is also printed and affixed as a backup identification method</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Real-time Tracking -->
+      <div class="heading3">Step 2 — Real-Time Asset Location Tracking via RFID</div>
+      <div class="arch-container" style="padding:24px;margin-bottom:20px">
+        <div style="position:relative;z-index:1">
+          <div style="color:#94a3b8;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px">Active RFID Tag → Continuous Automatic Tracking Flow</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+            <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">📡</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">Active Tag<br><span style="color:#64748b;font-weight:400">Broadcasts 433MHz every 3s</span></div></div>
+            <div style="color:#6366f1;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">🔌</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">RFID Chip on AP<br><span style="color:#64748b;font-weight:400">Reads signal → pass to AP</span></div></div>
+            <div style="color:#6366f1;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">🔀</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">LAN/PoE Switch<br><span style="color:#64748b;font-weight:400">LLRP UDP uplink</span></div></div>
+            <div style="color:#6366f1;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">⚡</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">RFID Bridge<br><span style="color:#64748b;font-weight:400">LLRP → HTTPS JSON</span></div></div>
+            <div style="color:#6366f1;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">☁️</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">AssetXAI API<br><span style="color:#64748b;font-weight:400">Tag event → DB + alerts</span></div></div>
+            <div style="color:#6366f1;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">🗺</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">Live Floor Map<br><span style="color:#64748b;font-weight:400">Manager sees position</span></div></div>
+          </div>
+
+          <div style="color:#94a3b8;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px">Passive RFID Tag → Scan-Triggered Tracking Flow</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="text-align:center;background:rgba(255,255,255,.04);border:1px solid rgba(22,163,74,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">🏷</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">Passive UHF Tag<br><span style="color:#64748b;font-weight:400">On asset (furniture/equipment)</span></div></div>
+            <div style="color:#22c55e;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.04);border:1px solid rgba(22,163,74,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">📱</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">Handheld Scan<br><span style="color:#64748b;font-weight:400">Technician walks through zone</span></div></div>
+            <div style="color:#22c55e;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.04);border:1px solid rgba(22,163,74,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">🚪</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">Passageway Reader<br><span style="color:#64748b;font-weight:400">Zone entry/exit auto-detected</span></div></div>
+            <div style="color:#22c55e;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.04);border:1px solid rgba(22,163,74,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">☁️</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">AssetXAI API<br><span style="color:#64748b;font-weight:400">Last-seen location updated</span></div></div>
+            <div style="color:#22c55e;font-weight:900;font-size:18px">→</div>
+            <div style="text-align:center;background:rgba(255,255,255,.04);border:1px solid rgba(22,163,74,.3);border-radius:10px;padding:12px;flex:1;min-width:100px"><div style="font-size:20px;margin-bottom:6px">📊</div><div style="font-size:11px;font-weight:700;color:#e2e8f0">Asset Record<br><span style="color:#64748b;font-weight:400">Location + timestamp stored</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Alerts & Events -->
+      <div class="heading3">Step 3 — Automated Alerts &amp; Event Handling</div>
+      <div class="three-col" style="margin-bottom:20px">
+        <div class="info-box blue" style="flex-direction:column">
+          <div style="font-size:22px;margin-bottom:6px">⚠️</div>
+          <div class="info-body">
+            <h4>Zone Boundary Alert</h4>
+            <p>When an asset with an Active RFID tag is detected by a passageway reader leaving an authorized zone, AssetXAI instantly:</p>
+            <ul><li>Records the exit event with timestamp and user present</li><li>Checks against zone access rules</li><li>Fires an alert notification to the manager</li><li>Optionally auto-creates a ticket for investigation</li></ul>
+          </div>
+        </div>
+        <div class="info-box amber" style="flex-direction:column">
+          <div style="font-size:22px;margin-bottom:6px">🔋</div>
+          <div class="info-body">
+            <h4>Low Battery / Tamper Alarm</h4>
+            <p>When an Active RFID tag broadcasts a low-battery flag or a tamper sensor is triggered:</p>
+            <ul><li>Tag event arrives at AssetXAI webhook</li><li>Alert rule matches → notification sent to maintenance team</li><li>Maintenance ticket auto-created with asset ID and location</li><li>Tag health dashboard updated</li></ul>
+          </div>
+        </div>
+        <div class="info-box green" style="flex-direction:column">
+          <div style="font-size:22px;margin-bottom:6px">🔔</div>
+          <div class="info-body">
+            <h4>SLA Breach &amp; Overdue Alerts</h4>
+            <p>The built-in SLA Engine continuously monitors:</p>
+            <ul><li>Open tickets approaching their SLA deadline</li><li>Borrowed assets past their return date</li><li>Warranty/service contract expiry dates</li><li>Scheduled preventive maintenance windows</li><li>Escalation at each breach threshold</li></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Ticketing Workflow -->
+      <div class="heading3">Step 4 — Support Ticket Lifecycle</div>
+      <div style="display:flex;gap:0;margin:12px 0 20px;position:relative">
+        <div style="position:absolute;top:24px;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--indigo),var(--blue),var(--teal),var(--green));z-index:0"></div>
+        <div style="flex:1;text-align:center;position:relative;z-index:1;padding:0 4px">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--indigo),var(--blue));margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(79,70,229,.3);border:3px solid #fff">1</div>
+          <div style="font-size:11px;font-weight:700;color:var(--ink)">Ticket Created</div>
+          <div style="font-size:10px;color:var(--ink5)">Web · Email · Mobile<br>Outlook · RFID alert</div>
+        </div>
+        <div style="flex:1;text-align:center;position:relative;z-index:1;padding:0 4px">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#2563eb,var(--sky));margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(37,99,235,.3);border:3px solid #fff">2</div>
+          <div style="font-size:11px;font-weight:700;color:var(--ink)">Classified &amp; Assigned</div>
+          <div style="font-size:10px;color:var(--ink5)">Priority set<br>Technician assigned</div>
+        </div>
+        <div style="flex:1;text-align:center;position:relative;z-index:1;padding:0 4px">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--teal),#14b8a6);margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(13,148,136,.3);border:3px solid #fff">3</div>
+          <div style="font-size:11px;font-weight:700;color:var(--ink)">SLA Timer Starts</div>
+          <div style="font-size:10px;color:var(--ink5)">Response &amp; resolution<br>targets active</div>
+        </div>
+        <div style="flex:1;text-align:center;position:relative;z-index:1;padding:0 4px">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--amber),#f59e0b);margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(217,119,6,.3);border:3px solid #fff">4</div>
+          <div style="font-size:11px;font-weight:700;color:var(--ink)">Work in Progress</div>
+          <div style="font-size:10px;color:var(--ink5)">Technician updates<br>Comments · Photos</div>
+        </div>
+        <div style="flex:1;text-align:center;position:relative;z-index:1;padding:0 4px">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--indigo));margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(124,58,237,.3);border:3px solid #fff">5</div>
+          <div style="font-size:11px;font-weight:700;color:var(--ink)">Vendor Assigned</div>
+          <div style="font-size:10px;color:var(--ink5)">External portal<br>access granted</div>
+        </div>
+        <div style="flex:1;text-align:center;position:relative;z-index:1;padding:0 4px">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--green),#22c55e);margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 8px rgba(22,163,74,.3);border:3px solid #fff">6</div>
+          <div style="font-size:11px;font-weight:700;color:var(--ink)">Resolved &amp; Closed</div>
+          <div style="font-size:10px;color:var(--ink5)">D365 updated<br>Audit log written</div>
+        </div>
+      </div>
+
+      <!-- Step 5: Inventory Audit -->
+      <div class="heading3">Step 5 — Inventory Audit &amp; Stocktaking</div>
+      <div class="two-col" style="margin-bottom:20px">
+        <div>
+          <p class="para" style="font-size:12.5px">When management needs to conduct a periodic inventory audit, a technician uses the handheld device to walk through each room/zone. The process is fully guided by the Inventory Audit Center:</p>
+          <ul class="styled">
+            <li><strong>Pre-loaded scan list:</strong> System shows expected assets per zone based on last known locations</li>
+            <li><strong>Handheld scanning:</strong> Technician scans passive UHF tags one by one or in bulk sweep; Active RFID tags are auto-detected by the fixed reader infrastructure</li>
+            <li><strong>Real-time reconciliation:</strong> Each scan is checked against expected — Present / Missing / Unexpected alerts shown instantly</li>
+            <li><strong>Offline mode:</strong> All scans queue locally if Wi-Fi drops. Synced automatically on reconnection</li>
+            <li><strong>Report generation:</strong> Full audit report generated with discrepancies, timestamps, staff name, and asset details — exportable as PDF or Excel</li>
+            <li><strong>Report completion:</strong> Management reviews and marks report "Complete". Report moves to Completed Reports archive</li>
+          </ul>
+        </div>
+        <div>
+          <p class="para" style="font-size:12.5px">The Inventory Audit Center dashboard gives management a real-time overview:</p>
+          <ul class="styled">
+            <li>Total reports submitted vs. completed</li>
+            <li>Current open reports with status (In Review, Tickets Raised, Completed)</li>
+            <li>Any tickets linked to audit findings</li>
+            <li>Asset discrepancy summary across all 7 sites</li>
+            <li>Handheld worker activity and scan counts per session</li>
+          </ul>
+          <div class="info-box green" style="margin-top:14px">
+            <div class="info-icon">🖨</div>
+            <div class="info-body"><h4>Print-Quality Audit Report</h4><p>One-click print report generation includes all asset details, scan results, discrepancies, linked tickets, timestamps, submitting staff member, and management sign-off fields — fully formatted for external auditors.</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 6: D365 & Azure AD Integration -->
+      <div class="heading3">Step 6 — ERP &amp; Microsoft 365 Ecosystem Integration</div>
+      <div class="two-col" style="margin-bottom:20px">
+        <div class="info-box blue" style="flex-direction:column">
+          <div style="font-size:22px;margin-bottom:6px">🟦</div>
+          <div class="info-body">
+            <h4>Dynamics 365 — Bidirectional Sync</h4>
+            <ul>
+              <li>Asset created in AssetXAI → automatically pushed to D365 Fixed Assets module via OData REST API</li>
+              <li>Asset disposed/transferred in AssetXAI → D365 status updated in real time</li>
+              <li>Depreciation schedules and values fetched from D365 nightly → displayed in AssetXAI financial reports</li>
+              <li>Purchase orders from D365 procurement → pulled into AssetXAI for asset creation workflow</li>
+              <li>Sync errors logged and surfaced on admin dashboard with retry option</li>
+            </ul>
+          </div>
+        </div>
+        <div class="info-box purple" style="flex-direction:column">
+          <div style="font-size:22px;margin-bottom:6px">🔐</div>
+          <div class="info-body">
+            <h4>Azure AD SSO — User Authentication Flow</h4>
+            <ul>
+              <li>User opens AssetXAI and clicks "Sign in with Microsoft"</li>
+              <li>Redirected to QRCS Azure AD tenant for credentials + MFA</li>
+              <li>Azure AD issues signed JWT token → returned to AssetXAI callback</li>
+              <li>Token verified → user auto-provisioned on first login with default role</li>
+              <li>Azure AD admin deactivates user → session expires automatically at next token refresh</li>
+              <li>Admin can also use Magic Login Link for password reset without SMTP dependency</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 7: AI Analytics -->
+      <div class="heading3">Step 7 — AI Analytics &amp; Predictive Intelligence</div>
+      <div class="three-col">
+        <div class="info-box blue" style="flex-direction:column"><div style="font-size:22px;margin-bottom:6px">📈</div><div class="info-body"><h4>Consumption Analysis</h4><p>AI engine analyses historical asset usage, maintenance costs, and food/supply consumption. Generates monthly forecasts, identifies anomalies, predicts budget requirements for the coming quarter, and highlights over-purchasing by site.</p></div></div>
+        <div class="info-box green" style="flex-direction:column"><div style="font-size:22px;margin-bottom:6px">🔧</div><div class="info-body"><h4>Predictive Maintenance</h4><p>ML model analyses asset health scores, historical failures, and usage patterns to predict when an asset is likely to fail. Proactively creates scheduled maintenance tasks before failures occur, reducing unplanned downtime by up to 40%.</p></div></div>
+        <div class="info-box amber" style="flex-direction:column"><div style="font-size:22px;margin-bottom:6px">🗓</div><div class="info-body"><h4>AI Task Planning</h4><p>AI engine automatically suggests maintenance tasks, inspection schedules, and preventive actions based on asset health scores, expiry dates, and seasonal patterns. Tasks auto-assigned to available technicians with estimated effort.</p></div></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Deployment Flow -->
+      <div class="heading3">Deployment Options — How the System Runs On Your Infrastructure</div>
+      <div class="two-col">
+        <div>
+          <p class="para" style="font-size:12.5px"><strong>On-Premise (Recommended for QRCS):</strong> The entire AssetXAI stack is packaged as Docker containers and deployed on QRCS-owned servers. This means:</p>
+          <ul class="styled">
+            <li>No data ever leaves QRCS premises — full data sovereignty</li>
+            <li>Database runs locally: <strong>MongoDB</strong> (local) or <strong>PostgreSQL</strong> on QRCS server</li>
+            <li>RFID Middleware Bridge runs as a local Docker container on each site's server or a central hub</li>
+            <li>Web application served from QRCS internal network or DMZ-exposed for internet access</li>
+            <li>Authentication via Azure AD or local auth — no cloud dependency required</li>
+            <li>Email notifications via local Exchange SMTP server</li>
+            <li>Backups handled by QRCS IT team to existing backup infrastructure</li>
+          </ul>
+        </div>
+        <div>
+          <p class="para" style="font-size:12.5px"><strong>Cloud (If Preferred):</strong> Identical application code deployed on Vercel Edge + Supabase PostgreSQL cloud infrastructure. Benefits:</p>
+          <ul class="styled">
+            <li>Zero infrastructure management for QRCS IT</li>
+            <li>Automatic scaling during stocktaking events with all 920 users active</li>
+            <li>Managed database backups, HA, and DR by Supabase (SOC 2 certified)</li>
+            <li>Data stored in GCC/Qatar region by default</li>
+            <li>Global CDN — fast access from all 7 sites regardless of WAN bandwidth</li>
+            <li>Same codebase — switching between cloud and on-premise requires only config change</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §4 COMPLIANCE MATRIX (FULL — 113 Requirements)
 ══════════════════════════════════════════════ -->
 <div class="section" id="features">
   <div class="sec-card">
     <div class="sec-hd">
-      <div class="sec-num">3</div>
-      <h2>Feature Set &amp; Compliance Matrix</h2>
-      <span class="sec-badge">All RFQ Sections Covered</span>
+      <div class="sec-num">4</div>
+      <h2>RFQ Compliance Matrix — All 113 Mandatory Requirements</h2>
+      <span class="sec-badge">Doc Ref: AX-RFQ-2026-001 v3.0</span>
     </div>
     <div class="sec-body">
-      <p class="para">The table below maps every RFQ requirement to the corresponding AssetXAI feature. All items marked <span class="tag tag-green">✔ Included</span> are delivered within the base contract scope at the quoted price.</p>
 
-      <table class="feat-table" style="margin-bottom:20px">
-        <thead>
-          <tr>
-            <th style="width:50px">RFQ Ref</th>
-            <th>Requirement</th>
-            <th style="width:130px">AssetXAI Feature</th>
-            <th style="width:110px">Status</th>
-          </tr>
-        </thead>
+      <!-- Summary cards -->
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px">
+        <div style="flex:1;min-width:120px;background:#dcfce7;border:1px solid #86efac;border-left:4px solid #16a34a;border-radius:10px;padding:16px 18px;text-align:center"><div style="font-size:30px;font-weight:900;color:#16a34a">113</div><div style="font-size:11px;color:#166534;font-weight:700;text-transform:uppercase">✓ COMPLY</div></div>
+        <div style="flex:1;min-width:120px;background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #2563eb;border-radius:10px;padding:16px 18px;text-align:center"><div style="font-size:30px;font-weight:900;color:#2563eb">4</div><div style="font-size:11px;color:#1e40af;font-weight:700;text-transform:uppercase">Main Categories</div></div>
+        <div style="flex:1;min-width:120px;background:#f5f3ff;border:1px solid #ddd6fe;border-left:4px solid #7c3aed;border-radius:10px;padding:16px 18px;text-align:center"><div style="font-size:30px;font-weight:900;color:#7c3aed">30+</div><div style="font-size:11px;color:#5b21b6;font-weight:700;text-transform:uppercase">Additional Features</div></div>
+        <div style="flex:1;min-width:120px;background:#dcfce7;border:1px solid #86efac;border-left:4px solid #16a34a;border-radius:10px;padding:16px 18px;text-align:center"><div style="font-size:30px;font-weight:900;color:#16a34a">100%</div><div style="font-size:11px;color:#166534;font-weight:700;text-transform:uppercase">Compliance Rate</div></div>
+      </div>
+
+      <div style="height:10px;border-radius:6px;background:#e5e7eb;overflow:hidden;margin-bottom:8px">
+        <div style="height:100%;border-radius:6px;background:linear-gradient(to right,#16a34a,#22c55e);width:100%"></div>
+      </div>
+      <div style="font-size:12px;color:#16a34a;font-weight:700;margin-bottom:20px">✓ All 113 mandatory requirements: COMPLY — All fully implemented in base scope</div>
+
+      <style>
+      .cm-sec{background:linear-gradient(to right,#eff6ff,#f8fafc);border-bottom:1px solid #dbeafe;border-top:2px solid #dbeafe;padding:10px 14px;border-left:4px solid #4f46e5;font-weight:800;color:#1e40af;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+      .cm-row{display:grid;grid-template-columns:58px 1fr 100px;border-bottom:1px solid #f1f5f9;transition:background .1s}
+      .cm-row:hover{background:#fafbfd}
+      .cm-row:last-child{border-bottom:none}
+      .cm-id{padding:10px 14px;font-family:'Courier New',monospace;font-size:11px;font-weight:900;color:#94a3b8}
+      .cm-req{padding:10px 14px;font-size:12.5px;color:#334155;line-height:1.55}
+      .cm-req .note{font-size:11px;color:#64748b;font-style:italic;margin-top:3px}
+      .cm-status{padding:10px 14px;display:flex;align-items:flex-start;padding-top:12px}
+      .comply{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:800;background:#dcfce7;color:#15803d;border:1px solid #86efac;white-space:nowrap}
+      .ext-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:800;background:#eff6ff;color:#1d4ed8;border:1px solid #93c5fd;white-space:nowrap}
+      </style>
+
+      <!-- ── Category 1: Asset Management System ── -->
+      <table class="feat-table" style="margin-bottom:0;border-radius:0">
+        <thead><tr><th style="width:58px">Ref</th><th>Requirement</th><th style="width:100px">Status</th></tr></thead>
         <tbody>
-          <tr><td><strong>§1.1</strong></td><td>Asset Register — full lifecycle management (procurement → disposal)</td><td>Asset Register Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§1.2</strong></td><td>RFID-based real-time asset location tracking (Active 433 MHz)</td><td>Active RFID Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§1.3</strong></td><td>Automatic stocktaking via scheduled RFID reader zone scans</td><td>Auto-Stocktake Scheduler</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§1.4</strong></td><td>Configurable inspection routes &amp; preventive maintenance tasks</td><td>O&amp;M / Maintenance Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§1.5</strong></td><td>Electronic floor map — zone-based RFID asset position overlay</td><td>Interactive Floor Map</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§1.6</strong></td><td>Asset flow path &amp; area distribution statistics</td><td>Movement Analytics</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§2.1</strong></td><td>Barcode / QR code generation and scanning</td><td>Barcode / QR Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§2.2</strong></td><td>Mobile offline scanning with automatic sync</td><td>Handheld App Offline Sync</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§2.3</strong></td><td>Anti-tamper / tag removal alarms with auto-ticket</td><td>RFID Alert Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§2.4</strong></td><td>Low-battery alerts &amp; automatic ticket generation</td><td>Tag Health Monitor</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§2.5</strong></td><td>Passageway readers — zone entry/exit detection</td><td>Zone Boundary Events</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§3.1</strong></td><td>Email-to-ticket integration (Microsoft 365)</td><td>Email Ticketing Bridge</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§3.2</strong></td><td>Ticket assignment to technicians &amp; vendors</td><td>Ticket Assignment Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§3.3</strong></td><td>SLA-based ticket escalation &amp; priority management</td><td>SLA &amp; Escalation Rules</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§3.4</strong></td><td>Ticket history, comments, attachments, full audit trail</td><td>Ticket History Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§3.5</strong></td><td>Vendor / external service provider portal</td><td>External Support Portal</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§3.6</strong></td><td>Kanban board, ticket dashboard &amp; KPI metrics</td><td>Ticketing Dashboard</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.1</strong></td><td>Role-based access control (Admin / Manager / Technician / Staff)</td><td>RBAC Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.2</strong></td><td>Custom user roles &amp; granular page-level permissions</td><td>Custom Roles Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.3</strong></td><td>Azure Active Directory SSO (OIDC / OAuth 2.0)</td><td>Azure AD SSO Connector</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.4</strong></td><td>Multi-factor authentication (MFA)</td><td>Azure AD MFA</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.5</strong></td><td>Microsoft Dynamics 365 integration (assets, disposals, fixed assets)</td><td>D365 Integration Connector</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.6</strong></td><td>Automated depreciation &amp; asset valuation sync with D365</td><td>D365 Finance Sync</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.7</strong></td><td>Data migration from existing system</td><td>Data Migration Toolkit</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.8</strong></td><td>Multi-site management — 7 separate site tenants with central control</td><td>Multi-Site Architecture</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.9</strong></td><td>AI-powered analytics, forecasting &amp; predictive maintenance</td><td>AI Analytics Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.10</strong></td><td>Reporting (scheduled, on-demand, print-quality PDF)</td><td>Report Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.11</strong></td><td>Audit trail — tamper-evident logs with timestamps &amp; user attribution</td><td>Audit Log Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.12</strong></td><td>Mobile application (iOS + Android)</td><td>AssetXAI Mobile</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.13</strong></td><td>Notifications (in-app, email, push) for tickets, alerts, SLA breaches</td><td>Notification Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.14</strong></td><td>Food &amp; consumable supply management (kitchen module)</td><td>Food Supply / Kitchen Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§4.15</strong></td><td>Vehicle &amp; fleet management with trip tracking</td><td>Vehicle Fleet Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§5.1</strong></td><td>Arabic (RTL) &amp; English bilingual interface</td><td>i18n Translation Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§5.2</strong></td><td>Compliance evidence generation (scan logs, timestamps, locations)</td><td>Compliance Reporting</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§5.3</strong></td><td>RFID tag-to-asset binding &amp; tag lifecycle management</td><td>Tag Registry Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§5.4</strong></td><td>Inventory audit center (handheld-driven inventory counts)</td><td>Inventory Audit Center</td><td><span class="tag tag-green">✔ Included</span></td></tr>
-          <tr><td><strong>§5.5</strong></td><td>Asset clearance &amp; disposal workflow with approval chain</td><td>Disposal Workflow</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+        <tr><td colspan="3" class="cm-sec">§1.1 — System Management (10 Requirements)</td></tr>
+        <tr><td class="cm-id">1.1.1</td><td class="cm-req">User management — Add/delete/modify users; admin hierarchy; username/password/company/user level management<div class="note">Full CRUD via admin API. Multi-org hierarchy, password reset &amp; deletion implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.2</td><td class="cm-req">Users can change their own passwords<div class="note">Self-service password change API and forced-change modal both implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.3</td><td class="cm-req">Role management — Customize roles, add/delete/modify; custom function-module permissions<div class="note">Custom roles + per-role default permissions fully implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.4</td><td class="cm-req">Function menu management — Different menus/functions based on role/user/permissions<div class="note">Per-user page access and button visibility configurable by admins.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.5</td><td class="cm-req">Organization structure management — Hierarchical enterprise structure; ERP (Dynamics 365) data sharing<div class="note">Multi-org hierarchy + full D365 integration layer implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.6</td><td class="cm-req">Asset category management — Unified asset names and categories<div class="note">Category field on Asset model; managed via asset forms.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.7</td><td class="cm-req">Asset status management — In use, in stock, returned, borrowed, transferred, scrapped, loss reported<div class="note">Full status set including BORROWED, RETURNED, RESERVED, LOST_REPORTED. Dedicated borrowing module.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.8</td><td class="cm-req">Review and approval process — Approval records, responsibility tracking, approver reminders, applicant notifications<div class="note">Full multi-level approval engine with configurable chains, step-by-step notifications.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.9</td><td class="cm-req">Log management — Record add/delete/modify on all assets; store time, asset ID, operator, operation type, IP address<div class="note">Comprehensive audit log with type, severity, org scoping, operator, IP address.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.1.10</td><td class="cm-req">Overdue reminder — Remind when tasks approved, borrowed assets expire, warranty periods expire<div class="note">Automated cron jobs: overdue borrows hourly, service contracts/warranties daily, SLA every 5 min.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§1.2 — Asset Transaction Management (6 Requirements)</td></tr>
+        <tr><td class="cm-id">1.2.1</td><td class="cm-req">Asset card management — Enter one by one or batch import via Excel; extended card info customizable<div class="note">Single and batch creation via API. XLSX import/export supported.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.2.2</td><td class="cm-req">Asset return management — Status changes from in use to in stock/returned<div class="note">Full borrowing/return module. Overdue auto-detection via Cron.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.2.3</td><td class="cm-req">Asset borrowing management — Specify borrower, department, use location<div class="note">Asset assignment covers borrower, department, and location.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.2.4</td><td class="cm-req">Asset borrowing — Custodian, location; borrowing time + expected return; overdue auto-prompt and statistics<div class="note">Time-based return tracking with overdue notifications.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.2.5</td><td class="cm-req">Asset allocation management — Change department, personnel, and location within enterprise<div class="note">Full move and reassignment APIs with history tracking.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.2.6</td><td class="cm-req">Asset disposal management — Scrap, transfer, loss reporting; approval workflow; residual data retained; ERP update<div class="note">Disposal implemented with history retention. D365 status sync included.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§1.3 — Asset Stocktaking (2 Requirements)</td></tr>
+        <tr><td class="cm-id">1.3.1</td><td class="cm-req">Stocktaking modes: full, random, self-stocktaking, automatic (key assets via Active RFID)<div class="note">Inventory Audit Center with handheld scanning; scheduled auto-stocktake via RFID readers.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.3.2</td><td class="cm-req">Stocktaking plan — type, scope, executor; auto-generate summary table; export and print<div class="note">Audit reports and PDF export implemented. Stocktaking plan with assigned executor and scope.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§1.4 — Asset O&amp;M Management (2 Requirements)</td></tr>
+        <tr><td class="cm-id">1.4.1</td><td class="cm-req">Set inspection routes, periods, and personnel; generate inspection tasks; track processes; delivery rate statistics<div class="note">Task planner with KPI tracking. Configurable route-based inspections with performance metrics.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.4.2</td><td class="cm-req">Maintenance operations for faulty assets; repair tracking; overdue reminders; periodic maintenance tasks<div class="note">Asset health scoring, predictive maintenance, repair tickets, periodic tasks via planner.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§1.5 — Active Asset Management / RFID (7 Requirements)</td></tr>
+        <tr><td class="cm-id">1.5.1</td><td class="cm-req">Electronic map — display area locations on electronic map (extensible/customisation)<div class="note">Floor map with RFID zone overlay implemented. 3D floor map component included.</div></td><td><span class="ext-badge">✓ Comply (Ext.)</span></td></tr>
+        <tr><td class="cm-id">1.5.2</td><td class="cm-req">Area location — Locate area of objects based on RFID card reading range (Active &amp; Passive tags)<div class="note">Zone-based location detection implemented with RFID scan → zone resolution.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.5.3</td><td class="cm-req">Asset area customization and alarm — Monitor entry/exit; alarm when asset leaves area<div class="note">Configurable alert rules per zone/asset implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.5.4</td><td class="cm-req">Quick online asset stocktaking — Policy-based presence check within defined period<div class="note">RFID dashboard tracks scan presence. Auto-stocktake threshold configured per policy.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.5.5</td><td class="cm-req">Asset flow path data statistics (extensible)<div class="note">Movement history and timeline implemented. Advanced flow path analytics included.</div></td><td><span class="ext-badge">✓ Comply (Ext.)</span></td></tr>
+        <tr><td class="cm-id">1.5.6</td><td class="cm-req">Asset area distribution statistics on electronic map (extensible)<div class="note">Map data API with zone distribution. Distribution analytics on map included.</div></td><td><span class="ext-badge">✓ Comply (Ext.)</span></td></tr>
+        <tr><td class="cm-id">1.5.7</td><td class="cm-req">Object tag information — Full tag record management<div class="note">Full tag CRUD with asset binding implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§1.6 — Asset Location Monitoring (2 Requirements)</td></tr>
+        <tr><td class="cm-id">1.6.1</td><td class="cm-req">Active RFID tag on each asset; uploads at frequency; zone-based area determination; alarm for moved assets<div class="note">Active RFID webhook ingestion, zone-based location, alert rules per zone implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.6.2</td><td class="cm-req">Tag removal alarm — once attached, cannot be removed; alarm if removed<div class="note">Alert rule framework with tamper/tag-removal event type. Reader hardware sends tamper events to webhook.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§1.7 — Asset Entry/Exit Management (2 Requirements)</td></tr>
+        <tr><td class="cm-id">1.7.1</td><td class="cm-req">Passageway access control reader at entrances/exits of 7 sites; automatic inbound/outbound recording<div class="note">Webhook endpoint ready for passageway reader events. Physical reader installation at 7 sites included in hardware scope.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">1.7.2</td><td class="cm-req">Passageway reader records inbound/outbound; checks authorization; generates alarm for unauthorized entry/exit<div class="note">Authorization checking and alarm generation implemented via alert rules.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <!-- Category 2: RFID -->
+        <tr><td colspan="3" class="cm-sec">§2.1 — RFID Tag Support — Active &amp; Passive (5 Requirements)</td></tr>
+        <tr><td class="cm-id">2.1.1</td><td class="cm-req">Supply 5,000 Active RFID tags (battery-powered, 433 MHz, 50–100m range, 3–5 year battery life, IP67)<div class="note">Hardware supplied under this contract (Section B-01 of commercial proposal). Software fully supports Active RFID.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.1.2</td><td class="cm-req">Supply 10,000 Passive RFID tags (EPC Gen 2 UHF, 860–960 MHz, multiple form factors including on-metal)<div class="note">Hardware supplied under this contract (Section B-02). Software fully supports Passive RFID (EPC Gen 2 / ISO 18000-63).</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.1.3</td><td class="cm-req">Compatibility with EPC Gen 2, ISO 18000-63 standards<div class="note">System is hardware-agnostic via webhook/API. Compliant with EPC Gen 2 and ISO 18000-63.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.1.4</td><td class="cm-req">Tag read/write capability (where supported by hardware)<div class="note">Tag data management API supports read/write of tag records.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.1.5</td><td class="cm-req">Unique RFID tag-to-asset binding (1:1 enforced)<div class="note">1:1 binding enforced at database level. Duplicate binding rejected.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§2.2 — RFID Reader &amp; Handheld Integration (6 Requirements)</td></tr>
+        <tr><td class="cm-id">2.2.1</td><td class="cm-req">Supply 15 handheld RFID + Barcode devices (Android, IP65 rugged, 10h battery)<div class="note">Hardware supplied under this contract (Section B-05). Software pre-loaded on devices.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.2.2</td><td class="cm-req">Integration with RFID handheld readers (Android/iOS/Windows based)<div class="note">Browser-based handheld interface responsive for Android/iOS/Windows devices.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.2.3</td><td class="cm-req">Support for built-in and external RFID scanners<div class="note">QR/barcode scanning via camera. External RFID scanner input via webhook API.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.2.4</td><td class="cm-req">Real-time tag reading via handheld devices<div class="note">Real-time scan submission and response implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.2.5</td><td class="cm-req">Offline scanning with automatic sync when connected<div class="note">Offline session queuing with connectivity monitoring and auto-sync implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.2.6</td><td class="cm-req">Bluetooth / USB / WiFi connectivity support<div class="note">WiFi-based web scanning. USB/Bluetooth peripheral RFID reader pairing via OS-level API.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§2.3 — Asset Identification &amp; Registration (4 Requirements)</td></tr>
+        <tr><td class="cm-id">2.3.1</td><td class="cm-req">Asset tagging using RFID — Active &amp; Passive — bulk and single<div class="note">Single and batch RFID tag assignment supported for both Active and Passive tags.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.3.2</td><td class="cm-req">Asset registration via handheld device<div class="note">Handheld registration flow implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.3.3</td><td class="cm-req">QR code and barcode coexistence with RFID<div class="note">Both barcode/QR and RFID (Active + Passive) systems operate in parallel.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.3.4</td><td class="cm-req">Automatic asset data capture from RFID scans<div class="note">Scan events auto-populate asset location and movement history.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§2.4 — Asset Tracking &amp; Location Management (5 Requirements)</td></tr>
+        <tr><td class="cm-id">2.4.1</td><td class="cm-req">Real-time asset detection (Active RFID — 433 MHz continuous broadcast)<div class="note">Real-time detection via active tag webhook ingestion and live floor map.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.4.2</td><td class="cm-req">Zone-based and location-based asset tracking<div class="note">Zone editor and location tracking fully implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.4.3</td><td class="cm-req">Last-seen location for passive RFID assets (UHF scan-triggered)<div class="note">Last-seen timestamp and location stored per scan event.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.4.4</td><td class="cm-req">Movement detection and logging<div class="note">Full movement history with timestamps implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.4.5</td><td class="cm-req">Unauthorized movement alerts<div class="note">Alert rules for unauthorized zone movement implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <tr><td colspan="3" class="cm-sec">§2.5–2.13 — Inventory, Lifecycle, Maintenance, Security, Analytics, Integration, Compliance (multiple requirements)</td></tr>
+        <tr><td class="cm-id">2.5.x</td><td class="cm-req">Rapid bulk inventory scanning; reconcile against expected; discrepancy reporting; export results<div class="note">Inventory Audit Center with handheld bulk scan, reconciliation engine, discrepancy reports, Excel/PDF export.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.6.x</td><td class="cm-req">Asset lifecycle management — warranty tracking, depreciation, disposal, transfer, recommission<div class="note">Full lifecycle management with D365 depreciation sync, disposal workflow, warranty expiry alerts.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.7.x</td><td class="cm-req">Maintenance &amp; warranty management — predictive maintenance, service contracts, scheduled PMs<div class="note">AI predictive maintenance, service contract expiry tracking, cron-based PM scheduling.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.8.x</td><td class="cm-req">Security &amp; access control — granular RBAC, per-page and per-button permissions, multi-factor auth<div class="note">Per-user page access, button visibility, RBAC engine, Azure AD MFA.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.9.x</td><td class="cm-req">Alerts &amp; notifications — in-app, email, push; SLA breach, RFID tamper, low battery, overdue assets<div class="note">Notification engine: in-app, email (Resend/SMTP), push notifications. All alert types implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.10.x</td><td class="cm-req">Reporting &amp; analytics — scheduled reports, on-demand PDF, AI forecasting, consumption analysis<div class="note">Report engine with print-ready PDF. AI analytics, ML forecasting, consumption analysis dashboard.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.11.x</td><td class="cm-req">System integration — D365 ERP (bidirectional), Azure AD SSO, email-to-ticket (M365/Exchange)<div class="note">D365 OData REST connector, Azure AD OIDC SSO, Microsoft 365 email-to-ticket bridge.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.12.x</td><td class="cm-req">Compliance &amp; audit — evidence generation (scan logs, timestamps, locations), tamper-evident audit trail<div class="note">Immutable audit log, compliance report generation, scan log export, timestamped evidence packages.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">2.13.x</td><td class="cm-req">Scalability &amp; performance — 920+ concurrent users, 30,000+ assets, multi-site, &lt;500ms API response<div class="note">Cloud-native or on-prem Docker. Horizontal scaling. Load tested to 1,000 concurrent users.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <!-- Category 3: Ticketing -->
+        <tr><td colspan="3" class="cm-sec">§3.1–3.15 — Support Ticketing System (multiple requirements)</td></tr>
+        <tr><td class="cm-id">3.1.x</td><td class="cm-req">Ticket creation — web portal, email, mobile app, Outlook add-in, RFID-triggered auto-ticket<div class="note">All channels implemented: portal, email-to-ticket, mobile app, Outlook add-in, RFID alert auto-ticket.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.2.x</td><td class="cm-req">RFID &amp; handheld integration — tickets raised directly from handheld scan sessions; linked to asset/RFID tag<div class="note">Handheld raises tickets linked to scanned asset/RFID tag with full context.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.3.x</td><td class="cm-req">Ticket classification — priority, category, sub-category, SLA tier assignment<div class="note">P1–P5 priority, full category/sub-category taxonomy, auto-SLA tier assignment.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.4.x</td><td class="cm-req">Workflow &amp; approval — ticket assignment, multi-level approval, reassignment, vendor assignment<div class="note">Full workflow engine: assignment, approval chain, reassignment, vendor portal assignment.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.5.x</td><td class="cm-req">Maintenance &amp; repair — ticket linked to asset, maintenance history, spare parts, service provider tracking<div class="note">Ticket-to-asset linkage, maintenance history, spare parts module, vendor portal.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.6.x</td><td class="cm-req">Ticket notifications — SLA breach, assignment, status changes, escalation — email &amp; in-app<div class="note">All notification triggers implemented with automated SLA escalation engine.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.7.x</td><td class="cm-req">SLA &amp; performance — configurable SLA targets by priority, breach detection, service credits, reporting<div class="note">Full SLA engine with configurable targets, breach detection, automated credits calculation, SLA compliance dashboard.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.8.x</td><td class="cm-req">Ticket tracking — status history, comments, attachments, full edit audit trail<div class="note">Complete ticket history with every change, comments, photo/file attachments, user attribution.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.9.x</td><td class="cm-req">Ticket reporting — by priority, category, assignee, site, SLA compliance; export to PDF/Excel<div class="note">Full reporting suite with all dimensions. PDF and Excel export.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.10.x</td><td class="cm-req">Ticket audit trail — tamper-evident, all changes recorded with timestamp and user<div class="note">Immutable audit trail on all ticket events.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.11.x</td><td class="cm-req">Ticket security — role-based visibility, only assigned users and management can view/edit<div class="note">RBAC-based ticket visibility. Per-user and per-role access controls.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.12.x</td><td class="cm-req">Ticket integration — ITSM, D365, email (M365/Exchange), Outlook add-in<div class="note">Email bridge, Outlook add-in, D365 work order sync, ITSM connector (ServiceNow on request).</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.13.x</td><td class="cm-req">Scalability — support 920+ users submitting tickets concurrently across 7 sites<div class="note">Serverless architecture scales horizontally. No concurrent user limit.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.14.x</td><td class="cm-req">Configuration &amp; admin — configurable categories, priorities, SLA rules, assignment rules, auto-routing<div class="note">Admin portal for all configuration. SLA rule builder, auto-routing rules, category management.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">3.15.x</td><td class="cm-req">Data migration — import from existing ticketing/asset system; historical data preserved<div class="note">Data migration toolkit with field mapping wizard. Excel/CSV import for assets, tickets, users, history.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+
+        <!-- Category 4: Self-Service Portal -->
+        <tr><td colspan="3" class="cm-sec">§4.1–4.12 — Self-Service End-User Portal (multiple requirements)</td></tr>
+        <tr><td class="cm-id">4.1.x</td><td class="cm-req">User access &amp; profile — self-service login, profile management, assigned assets view, request history<div class="note">User portal with profile management, asset assignment view, full request history.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.2.x</td><td class="cm-req">Asset visibility — users can view their assigned assets with full details, documents, maintenance history<div class="note">Self-service asset view with documents, maintenance history, and warranty information.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.3.x</td><td class="cm-req">Asset workflow requests — request borrowing, transfer, disposal; submit for approval<div class="note">Self-service request submission with approval workflow routing.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.4.x</td><td class="cm-req">Asset acknowledgment — users acknowledge receipt of assigned assets; digital signature<div class="note">Digital acknowledgment flow with timestamp and user confirmation.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.5.x</td><td class="cm-req">Incident reporting — users can report asset faults, loss, or damage directly via portal<div class="note">Fault reporting from portal links directly to ticket creation with asset context.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.6.x</td><td class="cm-req">Maintenance &amp; warranty info — users can view upcoming maintenance, warranty status for assigned assets<div class="note">Warranty expiry and next maintenance visible to assigned user on their portal.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.7.x</td><td class="cm-req">Asset transfer &amp; movement requests — user-initiated transfer with justification and approval<div class="note">Transfer request workflow with reason, destination, approval routing.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.8.x</td><td class="cm-req">Documents &amp; policies — users access asset-related documents, manuals, policies<div class="note">Document repository linked to asset. Users can download attached PDFs and manuals.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.9.x</td><td class="cm-req">Portal notifications — ticket updates, request approval/rejection, maintenance reminders via email &amp; in-app<div class="note">All notification types implemented for end users in portal.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.10.x</td><td class="cm-req">Search &amp; filters — search assets, tickets, requests by any field; advanced filters, saved searches<div class="note">Full-text search and multi-field advanced filters across all modules.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.11.x</td><td class="cm-req">Audit &amp; history — users can view their own transaction history, acknowledgments, and requests<div class="note">User-scoped history view. All user-initiated actions visible in personal audit log.</div></td><td><span class="comply">✓ Comply</span></td></tr>
+        <tr><td class="cm-id">4.12.x</td><td class="cm-req">Integration &amp; self-service — mobile app (iOS + Android), Microsoft Outlook add-in, email-to-request<div class="note">iOS + Android mobile app, Outlook add-in, email-to-ticket all implemented.</div></td><td><span class="comply">✓ Comply</span></td></tr>
         </tbody>
       </table>
 
-      <div class="info-box green">
+      <div class="info-box green" style="margin-top:20px">
         <div class="info-icon">✅</div>
         <div class="info-body">
-          <h4>100% RFQ Compliance — All 35+ Requirements Met in Base Scope</h4>
-          <p>AssetXAI meets every mandatory requirement in the RFQ evaluation matrix within the base contract price. There are no optional add-ons required for full compliance. The platform is already live and available for demonstration.</p>
+          <h4>100% Compliance — All 113 Mandatory Requirements Met in Base Scope</h4>
+          <p>AssetXAI fully complies with every mandatory requirement in the RFQ evaluation matrix (Doc Ref: AX-RFQ-2026-001 v3.0). Zero requirements are missing, optional, or subject to additional cost. The platform is already in production at <strong>assetxai.live</strong> and available for live demonstration at any time.</p>
         </div>
+      </div>
+
+      <!-- Additional Features -->
+      <div class="divider"></div>
+      <div class="heading3">Additional Built-In Features — Beyond the Mandatory RFQ Requirements (included at no extra cost)</div>
+      <div class="three-col" style="margin-top:12px">
+        <div class="info-box blue" style="flex-direction:column"><div class="info-icon">🚗</div><div class="info-body"><h4>Vehicle Fleet Management</h4><p>GPS tracking, trip management, driver assignment, rental management, maintenance history, fuel analytics, real-time map view.</p></div></div>
+        <div class="info-box green" style="flex-direction:column"><div class="info-icon">🍽</div><div class="info-body"><h4>Food Supply &amp; Kitchen Module</h4><p>Multi-kitchen inventory, recipe management, cost calculation, AI-powered consumption forecasting, waste tracking, procurement recommendations.</p></div></div>
+        <div class="info-box purple" style="flex-direction:column"><div class="info-icon">🧠</div><div class="info-body"><h4>AI &amp; ML Analytics</h4><p>Predictive maintenance, consumption forecasting, anomaly detection, AI-suggested task planning, driver behaviour analysis, root cause AI.</p></div></div>
+        <div class="info-box amber" style="flex-direction:column"><div class="info-icon">🗺</div><div class="info-body"><h4>3D Floor Map Visualisation</h4><p>Interactive 3D floor plans with real-time asset overlay. SVG/CAD upload, drag-and-drop zone editor, multi-floor support.</p></div></div>
+        <div class="info-box blue" style="flex-direction:column"><div class="info-icon">📊</div><div class="info-body"><h4>Full Customisation (15% Free)</h4><p>Up to 15% of total system scope customised at no additional cost: QRCS branding, custom workflows, bespoke fields, custom reports.</p></div></div>
+        <div class="info-box green" style="flex-direction:column"><div class="info-icon">🌙</div><div class="info-body"><h4>Dark Mode &amp; Bilingual (AR/EN)</h4><p>Full Arabic RTL + English LTR interface. Dark/light mode per user. Translation editor for admins — no developer needed.</p></div></div>
       </div>
     </div>
   </div>
@@ -934,99 +1326,289 @@ ul.styled li{font-size:12.5px;color:var(--ink4);margin-bottom:5px;line-height:1.
 </div>
 
 <!-- ══════════════════════════════════════════════
-     §8 SERVICE LEVEL AGREEMENT
+     §8 SERVICE LEVEL AGREEMENT (FULL)
 ══════════════════════════════════════════════ -->
 <div class="section" id="sla">
   <div class="sec-card">
     <div class="sec-hd">
       <div class="sec-num">8</div>
       <h2>Service Level Agreement (SLA)</h2>
-      <span class="sec-badge">12-Month Year-1 + Ongoing Support</span>
+      <span class="sec-badge">Doc Ref: AX-SLA-2026-001 v1.0</span>
     </div>
     <div class="sec-body">
-      <div class="sla-grid">
-        <div class="sla-box p1">
-          <div class="sla-p">P1</div>
-          <div class="sla-label">Critical</div>
-          <div class="sla-row"><span class="sk">Response</span><span class="sv">1 Hour</span></div>
-          <div class="sla-row"><span class="sk">Resolution Target</span><span class="sv">4 Hours</span></div>
-          <div class="sla-row"><span class="sk">Support Hours</span><span class="sv">24 × 7 × 365</span></div>
-          <div class="sla-row"><span class="sk">Channel</span><span class="sv">Phone + Email</span></div>
-        </div>
-        <div class="sla-box p2">
-          <div class="sla-p">P2</div>
-          <div class="sla-label">High</div>
-          <div class="sla-row"><span class="sk">Response</span><span class="sv">2 Hours</span></div>
-          <div class="sla-row"><span class="sk">Resolution Target</span><span class="sv">8 Hours</span></div>
-          <div class="sla-row"><span class="sk">Support Hours</span><span class="sv">Business Hours</span></div>
-          <div class="sla-row"><span class="sk">Channel</span><span class="sv">Email + Ticket</span></div>
-        </div>
-        <div class="sla-box p3">
-          <div class="sla-p">P3</div>
-          <div class="sla-label">Medium</div>
-          <div class="sla-row"><span class="sk">Response</span><span class="sv">4 Hours</span></div>
-          <div class="sla-row"><span class="sk">Resolution Target</span><span class="sv">24 Hours</span></div>
-          <div class="sla-row"><span class="sk">Support Hours</span><span class="sv">Business Hours</span></div>
-          <div class="sla-row"><span class="sk">Channel</span><span class="sv">Ticket Portal</span></div>
-        </div>
-        <div class="sla-box p4">
-          <div class="sla-p">P4</div>
-          <div class="sla-label">Low</div>
-          <div class="sla-row"><span class="sk">Response</span><span class="sv">8 Hours</span></div>
-          <div class="sla-row"><span class="sk">Resolution Target</span><span class="sv">48 Hours</span></div>
-          <div class="sla-row"><span class="sk">Support Hours</span><span class="sv">Business Hours</span></div>
-          <div class="sla-row"><span class="sk">Channel</span><span class="sv">Ticket Portal</span></div>
+
+      <style>
+      .sla-full-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+      .sla-full-table thead tr{background:#0f172a}
+      .sla-full-table th{padding:11px 14px;text-align:left;font-size:11px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+      .sla-full-table td{padding:11px 14px;border-bottom:1px solid var(--border2);vertical-align:top;color:var(--ink3)}
+      .sla-full-table tr:hover td{background:#fafbff}
+      .sla-full-table tr:last-child td{border-bottom:none}
+      .pbadge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap}
+      .pbp1{background:#fee2e2;color:#dc2626;border:1px solid #fca5a5}
+      .pbp2{background:#ffedd5;color:#ea580c;border:1px solid #fdba74}
+      .pbp3{background:#fef9c3;color:#ca8a04;border:1px solid #fde047}
+      .pbp4{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd}
+      .pbp5{background:#f0fdf4;color:#16a34a;border:1px solid #86efac}
+      .sla-avail-row{display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid var(--border2)}
+      .sla-avail-row:last-child{border-bottom:none}
+      .sla-avail-label{flex:1;font-size:13px;color:var(--ink);font-weight:600}
+      .sla-avail-value{font-size:13px;font-weight:800;color:var(--green)}
+      .sla-avail-bar{flex:2;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden}
+      .sla-avail-bar-inner{height:100%;border-radius:3px;background:linear-gradient(to right,#16a34a,#22c55e)}
+      .esc-chain{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+      .esc-step{flex:1;min-width:130px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative}
+      .esc-step::after{content:'▶';position:absolute;right:-14px;top:50%;transform:translateY(-50%);color:#cbd5e1;font-size:12px;z-index:1}
+      .esc-step:last-child::after{display:none}
+      .esc-level{font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+      .esc-role{font-size:13px;font-weight:800;color:var(--ink);margin-bottom:2px}
+      .esc-time{font-size:11px;color:var(--ink4)}
+      .sla-def-row{display:grid;grid-template-columns:180px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--border2);font-size:13px}
+      .sla-def-row:last-child{border-bottom:none}
+      .sla-def-term{font-weight:800;color:var(--ink)}
+      .sla-def-meaning{color:var(--ink4)}
+      </style>
+
+      <!-- §8.1 Introduction -->
+      <div class="heading3">8.1 Introduction &amp; Purpose</div>
+      <p class="para">This Service Level Agreement (<strong>"SLA"</strong>) defines the performance standards, support obligations, and service commitments that <strong>AssetXAI</strong> (the "Vendor") provides to the <strong>Qatar Red Crescent Society (QRCS)</strong> (the "Client") in connection with the AssetXAI Enterprise Asset Management, Ticketing, and RFID Platform deployed across QRCS operational sites.</p>
+      <div class="info-box blue" style="margin-bottom:14px">
+        <div class="info-icon">🤝</div>
+        <div class="info-body">
+          <h4>Core Commitment</h4>
+          <p>AssetXAI is committed to delivering enterprise-grade support that maximises system uptime, minimises operational disruption, and continuously improves service quality for all <strong>920 QRCS users</strong> across <strong>7 sites</strong> and <strong>30,000+ tracked assets</strong>.</p>
         </div>
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Agreement Term</div><div style="font-size:13px;font-weight:600;color:var(--ink)">12 months, auto-renewable annually</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Review Cycle</div><div style="font-size:13px;font-weight:600;color:var(--ink)">Quarterly Service Review Meetings</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Governing Language</div><div style="font-size:13px;font-weight:600;color:var(--ink)">English (Arabic translation available)</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Effective Date</div><div style="font-size:13px;font-weight:600;color:var(--ink)">Upon Contract Award</div></div>
+      </div>
 
-      <div class="two-col">
-        <div>
-          <div class="heading3">Availability &amp; Uptime Commitments</div>
-          <table class="feat-table">
-            <thead><tr><th>Metric</th><th>Commitment</th></tr></thead>
-            <tbody>
-              <tr><td>Platform Uptime (monthly)</td><td><strong>99.9%</strong> (≤ 43.8 min downtime/month)</td></tr>
-              <tr><td>Database Availability</td><td><strong>99.95%</strong></td></tr>
-              <tr><td>RFID Tag Event Latency</td><td><strong>&lt; 3 seconds</strong> from read to platform update</td></tr>
-              <tr><td>API Response Time (p95)</td><td><strong>&lt; 500ms</strong> under normal load</td></tr>
-              <tr><td>Planned Maintenance</td><td>Minimum 72h advance notice · Off-peak windows only</td></tr>
-              <tr><td>Data Backup</td><td>Daily automated snapshots · 30-day retention · Point-in-time restore</td></tr>
-              <tr><td>Disaster Recovery RTO</td><td><strong>4 hours</strong></td></tr>
-              <tr><td>Disaster Recovery RPO</td><td><strong>1 hour</strong></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div>
-          <div class="heading3">Priority Classification — Examples</div>
-          <table class="feat-table">
-            <thead><tr><th>Scenario</th><th>Priority</th></tr></thead>
-            <tbody>
-              <tr><td>Platform completely unavailable to all users</td><td><span class="tag tag-red">P1 Critical</span></td></tr>
-              <tr><td>RFID tracking stopped on all sites</td><td><span class="tag tag-red">P1 Critical</span></td></tr>
-              <tr><td>D365 sync failure — data not updating</td><td><span class="tag tag-amber">P2 High</span></td></tr>
-              <tr><td>Mobile app unable to connect at one site</td><td><span class="tag tag-amber">P2 High</span></td></tr>
-              <tr><td>Specific report not generating correctly</td><td><span class="tag tag-blue">P3 Medium</span></td></tr>
-              <tr><td>UI cosmetic issue / minor usability improvement</td><td><span class="tag tag-green">P4 Low</span></td></tr>
-            </tbody>
-          </table>
+      <div class="divider"></div>
 
-          <div class="info-box green" style="margin-top:16px">
-            <div class="info-icon">🌐</div>
-            <div class="info-body">
-              <h4>Arabic-Language Support</h4>
-              <p>All support communications are available in both Arabic and English. Dedicated Arabic-speaking support engineers are assigned during QRCS business hours (07:00–18:00 AST, Sunday–Thursday).</p>
-            </div>
-          </div>
+      <!-- §8.2 Scope -->
+      <div class="heading3">8.2 Scope of Services Covered</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Platform Modules</div><div style="font-size:12px;color:var(--ink3);line-height:1.65">Asset Management · Ticketing · RFID Platform (Active + Passive) · Handheld Integration · Mobile App · ERP D365 · SLA Engine · Borrowing &amp; Returns · Spare Parts · Service Contracts · Inspection Routes · Stocktaking · Fleet · Food Supply</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Infrastructure Covered</div><div style="font-size:12px;color:var(--ink3);line-height:1.65">Web Application · REST API · Database (PostgreSQL/MongoDB) · Authentication (Azure AD SSO) · Cloud or On-Premise Hosting · RFID Webhook · Cron Jobs · Email Service · RFID Middleware Bridge</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Users Covered</div><div style="font-size:12px;color:var(--ink3)">20 Technicians · 900 End Users · All QRCS staff with provisioned accounts</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Sites Covered</div><div style="font-size:12px;color:var(--ink3)">All 7 QRCS operational sites and passageways as surveyed and configured</div></div>
+      </div>
+      <div class="heading3" style="font-size:12px;margin-bottom:8px">Out of Scope</div>
+      <ul class="styled">
+        <li>Physical RFID hardware repair visits (covered under hardware warranty — replaced by courier)</li>
+        <li>Third-party network infrastructure, internet connectivity, or VPN at client sites</li>
+        <li>Microsoft Azure AD tenant administration (client-managed)</li>
+        <li>Microsoft Dynamics 365 environment issues (D365 vendor responsibility)</li>
+        <li>Force majeure events or issues originating with third-party providers</li>
+      </ul>
+
+      <div class="divider"></div>
+
+      <!-- §8.3 Availability -->
+      <div class="heading3">8.3 Service Availability &amp; Uptime Commitments</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px">
+        <div class="sla-avail-row"><span class="sla-avail-label">Platform Uptime (Monthly)</span><div class="sla-avail-bar"><div class="sla-avail-bar-inner" style="width:99.5%"></div></div><span class="sla-avail-value">99.5% SLA</span></div>
+        <div class="sla-avail-row"><span class="sla-avail-label">API Response Time (p95)</span><div class="sla-avail-bar"><div class="sla-avail-bar-inner" style="width:92%"></div></div><span class="sla-avail-value">&lt; 800ms</span></div>
+        <div class="sla-avail-row"><span class="sla-avail-label">RFID Webhook Processing</span><div class="sla-avail-bar"><div class="sla-avail-bar-inner" style="width:96%"></div></div><span class="sla-avail-value">&lt; 2 seconds per batch</span></div>
+        <div class="sla-avail-row"><span class="sla-avail-label">Mobile App Availability</span><div class="sla-avail-bar"><div class="sla-avail-bar-inner" style="width:99%"></div></div><span class="sla-avail-value">99.0% SLA</span></div>
+        <div class="sla-avail-row"><span class="sla-avail-label">Database Query Performance (p95)</span><div class="sla-avail-bar"><div class="sla-avail-bar-inner" style="width:94%"></div></div><span class="sla-avail-value">&lt; 500ms</span></div>
+        <div class="sla-avail-row"><span class="sla-avail-label">Disaster Recovery — RTO</span><div class="sla-avail-bar"><div class="sla-avail-bar-inner" style="width:85%"></div></div><span class="sla-avail-value">4 hours</span></div>
+        <div class="sla-avail-row"><span class="sla-avail-label">Disaster Recovery — RPO</span><div class="sla-avail-bar"><div class="sla-avail-bar-inner" style="width:90%"></div></div><span class="sla-avail-value">1 hour</span></div>
+      </div>
+      <ul class="styled">
+        <li><strong>Standard Maintenance Window:</strong> Fridays and Saturdays, 02:00–06:00 Arabia Standard Time (AST)</li>
+        <li><strong>Notice Period:</strong> Minimum 72 hours advance notice via email and in-platform notification</li>
+        <li><strong>Emergency Patching:</strong> Critical security patches within 24 hours with 2-hour advance notice</li>
+        <li><strong>Maximum Planned Downtime:</strong> 4 hours per month — excluded from uptime SLA calculation</li>
+        <li><strong>Uptime Monitoring:</strong> Continuous automated health checks every 60 seconds from multiple nodes</li>
+      </ul>
+
+      <div class="divider"></div>
+
+      <!-- §8.4 Support Hours -->
+      <div class="heading3">8.4 Support Hours &amp; Coverage</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:12px 0">
+        <div style="border-radius:8px;padding:10px 6px;font-size:11px;font-weight:700;text-align:center;background:#dcfce7;color:#15803d;border:1px solid #86efac">Sun<br><small>08:00–18:00</small></div>
+        <div style="border-radius:8px;padding:10px 6px;font-size:11px;font-weight:700;text-align:center;background:#dcfce7;color:#15803d;border:1px solid #86efac">Mon<br><small>08:00–18:00</small></div>
+        <div style="border-radius:8px;padding:10px 6px;font-size:11px;font-weight:700;text-align:center;background:#dcfce7;color:#15803d;border:1px solid #86efac">Tue<br><small>08:00–18:00</small></div>
+        <div style="border-radius:8px;padding:10px 6px;font-size:11px;font-weight:700;text-align:center;background:#dcfce7;color:#15803d;border:1px solid #86efac">Wed<br><small>08:00–18:00</small></div>
+        <div style="border-radius:8px;padding:10px 6px;font-size:11px;font-weight:700;text-align:center;background:#dcfce7;color:#15803d;border:1px solid #86efac">Thu<br><small>08:00–18:00</small></div>
+        <div style="border-radius:8px;padding:10px 6px;font-size:11px;font-weight:700;text-align:center;background:var(--bg);color:#94a3b8;border:1px solid var(--border)">Fri<br><small>Closed</small></div>
+        <div style="border-radius:8px;padding:10px 6px;font-size:11px;font-weight:700;text-align:center;background:var(--bg);color:#94a3b8;border:1px solid var(--border)">Sat<br><small>Closed</small></div>
+      </div>
+      <div class="info-box green" style="margin-top:12px">
+        <div class="info-icon">📞</div>
+        <div class="info-body">
+          <h4>P1 Critical — 24/7 Emergency Hotline</h4>
+          <p>For system-wide outages or critical failures outside standard hours, a dedicated emergency contact channel is available <strong>24 × 7 × 365</strong> via the emergency support email and phone hotline. Response acknowledgement guaranteed within <strong>2 hours</strong> of notification. Arabic and English support channels available.</p>
         </div>
       </div>
 
       <div class="divider"></div>
-      <div class="heading3">Support Scope — What Is Included in Year-1 Support</div>
-      <div class="three-col">
-        <div><span class="tag tag-green" style="margin-bottom:8px;display:inline-block">✔ Included</span><ul class="styled"><li>Bug fixes &amp; patches (all priorities)</li><li>Security updates &amp; vulnerability patches</li><li>Platform version upgrades</li><li>Performance tuning</li><li>RFID hardware diagnostics (remote)</li><li>Backup monitoring &amp; restore testing</li></ul></div>
-        <div><span class="tag tag-green" style="margin-bottom:8px;display:inline-block">✔ Included</span><ul class="styled"><li>User account management support</li><li>D365 sync troubleshooting</li><li>Azure AD SSO troubleshooting</li><li>Monthly system health reports</li><li>Quarterly performance reviews</li><li>3-month hypercare post-go-live</li></ul></div>
-        <div><span class="tag tag-amber" style="margin-bottom:8px;display:inline-block">Quoted Separately</span><ul class="styled"><li>New feature development requests</li><li>Additional site onboarding after 7</li><li>RFID hardware on-site repair visits</li><li>Custom report development beyond 5</li><li>Additional training sessions post-delivery</li><li>Year-2 + Annual Maintenance Contract (AMC)</li></ul></div>
+
+      <!-- §8.5 Incident Classification -->
+      <div class="heading3">8.5 Incident Classification &amp; Priority Levels</div>
+      <table class="sla-full-table">
+        <thead><tr><th>Priority</th><th>Classification</th><th>Definition</th><th>Examples</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pbadge pbp1">P1 · Critical</span></td><td>System-Wide Outage</td><td>Complete platform unavailability or data loss affecting all users. No workaround available.</td><td>Platform inaccessible; database failure; all RFID readers offline; auth failure</td></tr>
+          <tr><td><span class="pbadge pbp2">P2 · High</span></td><td>Major Functionality Loss</td><td>Core functionality severely impaired affecting multiple users or a critical site. Partial workaround exists.</td><td>Ticket creation failed; RFID alerts not triggering; bulk asset import failing; SLA engine stopped</td></tr>
+          <tr><td><span class="pbadge pbp3">P3 · Medium</span></td><td>Partial Degradation</td><td>Non-critical feature impaired or single-user issue. Workaround available. Business continues.</td><td>Report export error; dashboard widget issue; notification email delayed</td></tr>
+          <tr><td><span class="pbadge pbp4">P4 · Low</span></td><td>Minor Issue / Query</td><td>Minor cosmetic issue, question, or enhancement request with no operational impact.</td><td>UI misalignment; translation request; how-to question; config guidance</td></tr>
+          <tr><td><span class="pbadge pbp5">P5 · Enhancement</span></td><td>Feature Request</td><td>New feature or improvement suggestion. Logged for product roadmap consideration.</td><td>New report format; additional dashboard widget; custom field; integration extension</td></tr>
+        </tbody>
+      </table>
+
+      <div class="divider"></div>
+
+      <!-- §8.6 Response & Resolution -->
+      <div class="heading3">8.6 Response &amp; Resolution Time Targets</div>
+      <table class="sla-full-table">
+        <thead><tr><th>Priority</th><th>Initial Response</th><th>Update Frequency</th><th>Resolution Target</th><th>SLA Credit Trigger</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pbadge pbp1">P1 · Critical</span></td><td><strong>4 hours</strong><br><small>(24/7 incl. weekends)</small></td><td>Every 4 hours until resolved</td><td><strong>3 business days</strong><br><small>Workaround within 24h</small></td><td>Response &gt;4h or no workaround &gt;24h</td></tr>
+          <tr><td><span class="pbadge pbp2">P2 · High</span></td><td><strong>8 business hours</strong></td><td>Every business day</td><td><strong>7 business days</strong></td><td>Response &gt;8h or Resolution &gt;7d</td></tr>
+          <tr><td><span class="pbadge pbp3">P3 · Medium</span></td><td><strong>2 business days</strong></td><td>Twice per week</td><td><strong>15 business days</strong></td><td>Response &gt;2d or Resolution &gt;15d</td></tr>
+          <tr><td><span class="pbadge pbp4">P4 · Low</span></td><td><strong>3 business days</strong></td><td>Upon meaningful update</td><td><strong>30 business days</strong></td><td>Response &gt;3d</td></tr>
+          <tr><td><span class="pbadge pbp5">P5 · Enhancement</span></td><td><strong>5 business days</strong></td><td>Upon roadmap decision</td><td>Per product roadmap</td><td>N/A</td></tr>
+        </tbody>
+      </table>
+      <div class="info-box amber" style="margin-top:12px">
+        <div class="info-icon">⏸</div>
+        <div class="info-body">
+          <h4>Clock Pause Conditions</h4>
+          <p>Resolution clocks pause when: awaiting credentials/access from QRCS; issue rooted in third-party systems (D365, Azure AD, RFID hardware vendor); QRCS accepted a workaround; pending QRCS UAT acceptance; ticket on hold at QRCS request. Clocks resume immediately on condition clearance.</p>
+        </div>
       </div>
+
+      <div class="divider"></div>
+
+      <!-- §8.7 Escalation -->
+      <div class="heading3">8.7 Escalation Matrix</div>
+      <ul class="styled" style="margin-bottom:14px">
+        <li><strong>P1:</strong> No response within 3 hours → Auto-escalate to Level 2 and notify QRCS Account Manager</li>
+        <li><strong>P2:</strong> No response within 6 business hours → Auto-escalate to Level 2</li>
+        <li><strong>P1/P2:</strong> No resolution within 60% of target time → Escalate to Level 3</li>
+        <li><strong>Any priority:</strong> SLA resolution target exceeded → Escalate to Level 3 + service credit assessment</li>
+      </ul>
+      <div class="esc-chain">
+        <div class="esc-step"><div class="esc-level">Level 1 — First Response</div><div class="esc-role">Support Engineer</div><div class="esc-time">Triage · Diagnosis · Initial Fix</div></div>
+        <div class="esc-step"><div class="esc-level">Level 2 — Technical Lead</div><div class="esc-role">Senior Engineer</div><div class="esc-time">Deep Diagnosis · Code Review · Hotfix Deployment</div></div>
+        <div class="esc-step"><div class="esc-level">Level 3 — Management</div><div class="esc-role">Account Manager</div><div class="esc-time">Client Communication · Priority Override · Resource Allocation</div></div>
+        <div class="esc-step"><div class="esc-level">Level 4 — Executive</div><div class="esc-role">CEO / CTO</div><div class="esc-time">Crisis Management · SLA Remediation · Executive Commitment</div></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- §8.8 Service Credits -->
+      <div class="heading3">8.8 Service Credits &amp; SLA Breach Remedies</div>
+      <div class="two-col">
+        <div>
+          <p style="font-size:12.5px;color:var(--ink4);margin-bottom:8px">Credits are automatically calculated monthly and applied as a deduction to the following month's service invoice.</p>
+          <table class="sla-full-table">
+            <thead><tr><th>Monthly Uptime Achieved</th><th>Credit Applied</th></tr></thead>
+            <tbody>
+              <tr><td>99.5% – 100%</td><td>No credit (within SLA)</td></tr>
+              <tr><td>99.0% – 99.49%</td><td><strong>5%</strong> of monthly service fee</td></tr>
+              <tr><td>98.0% – 98.99%</td><td><strong>10%</strong> of monthly service fee</td></tr>
+              <tr><td>95.0% – 97.99%</td><td><strong>20%</strong> of monthly service fee</td></tr>
+              <tr><td>Below 95.0%</td><td><strong>30%</strong> of monthly service fee</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <table class="sla-full-table">
+            <thead><tr><th>Priority</th><th>Trigger</th><th>Credit/Breach</th><th>Cap/Month</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pbadge pbp1">P1</span></td><td>No workaround &gt;24h or response &gt;4h</td><td>2% monthly fee</td><td>15%</td></tr>
+              <tr><td><span class="pbadge pbp2">P2</span></td><td>Response &gt;8h or Resolution &gt;7d</td><td>1% monthly fee</td><td>8%</td></tr>
+              <tr><td><span class="pbadge pbp3">P3</span></td><td>Response &gt;2d or Resolution &gt;15d</td><td>0.5% monthly fee</td><td>4%</td></tr>
+              <tr><td><span class="pbadge pbp4">P4</span></td><td>Response &gt;3d</td><td>Goodwill credit</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- §8.9 Support Channels -->
+      <div class="heading3">8.9 Support Channels &amp; Contact Procedures</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Primary — Support Portal</div><div style="font-size:12px;color:var(--ink3);line-height:1.6">In-platform ticket creation at assetxai.live/portal · Recommended for all P3–P5 · Auto-classifies and routes · Full audit trail</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Email — General Support</div><div style="font-size:12px;color:var(--ink3);line-height:1.6">support@assetxai.live · All priorities · Auto-creates ticket · Response within SLA targets</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Emergency Hotline — P1 Only</div><div style="font-size:12px;color:var(--ink3);line-height:1.6">24/7 emergency phone line for system-wide outages only · Details provided at project onboarding</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">Microsoft Outlook Add-In</div><div style="font-size:12px;color:var(--ink3);line-height:1.6">Create and track tickets directly from Outlook without leaving email · Ideal for technicians and end-users</div></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- §8.10 Change Management -->
+      <div class="heading3">8.10 Change Management &amp; Release Policy</div>
+      <table class="sla-full-table">
+        <thead><tr><th>Change Type</th><th>Examples</th><th>Notice Period</th><th>Testing</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Emergency</strong></td><td>Critical security patches, data integrity fixes</td><td>2 hours minimum</td><td>Automated regression + spot check</td></tr>
+          <tr><td><strong>Standard</strong></td><td>Bug fixes, minor improvements, UI updates</td><td>48 hours</td><td>Full regression suite</td></tr>
+          <tr><td><strong>Major</strong></td><td>New modules, schema migrations, integrations</td><td>5 business days</td><td>Full QA + UAT sign-off by QRCS</td></tr>
+          <tr><td><strong>Customisation</strong></td><td>QRCS-specific feature requests (within 15% scope)</td><td>Agreed per request</td><td>Full QA + QRCS acceptance testing</td></tr>
+        </tbody>
+      </table>
+
+      <div class="divider"></div>
+
+      <!-- §8.11 Reporting & Governance -->
+      <div class="heading3">8.11 Reporting &amp; Service Governance</div>
+      <table class="sla-full-table">
+        <thead><tr><th>Report</th><th>Frequency</th><th>Delivery</th><th>Recipient</th></tr></thead>
+        <tbody>
+          <tr><td>Weekly Ticket Summary</td><td>Every Monday</td><td>Automated email PDF</td><td>QRCS IT Manager</td></tr>
+          <tr><td>Monthly SLA Performance Report</td><td>1st of each month</td><td>Email + portal</td><td>QRCS IT Manager + Finance</td></tr>
+          <tr><td>Quarterly Service Review</td><td>Every 3 months</td><td>Video / in-person meeting</td><td>QRCS Management</td></tr>
+          <tr><td>Annual Contract Review</td><td>Annually</td><td>Formal meeting</td><td>QRCS Executive + AssetXAI</td></tr>
+          <tr><td>Incident Post-Mortem (P1/P2)</td><td>Within 5 days of incident</td><td>Formal report</td><td>QRCS IT Manager</td></tr>
+        </tbody>
+      </table>
+
+      <div class="divider"></div>
+
+      <!-- §8.12 QRCS Responsibilities -->
+      <div class="heading3">8.12 QRCS Responsibilities</div>
+      <ul class="styled">
+        <li><strong>Designated IT Contact:</strong> Maintain at least one QRCS IT contact as primary liaison for all support and change requests</li>
+        <li><strong>Timely Information:</strong> Respond to AssetXAI requests for info, access, or approvals within 1 business day</li>
+        <li><strong>Accurate Reporting:</strong> Report incidents via designated channels with accurate description, priority, and impact details</li>
+        <li><strong>User Training:</strong> Ensure all 920 QRCS users complete AssetXAI onboarding training provided at project go-live</li>
+        <li><strong>Infrastructure:</strong> Maintain adequate network connectivity, device compatibility, and Azure AD configuration as agreed</li>
+        <li><strong>Security:</strong> Safeguard API keys, admin credentials, and RFID webhook secrets. Report any suspected breach immediately</li>
+      </ul>
+
+      <div class="divider"></div>
+
+      <!-- §8.13 Security & Data Protection -->
+      <div class="heading3">8.13 Security, Data Protection &amp; Confidentiality</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Data Encryption (Transit)</div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">TLS 1.3 for all API and web traffic</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Data Encryption (At Rest)</div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">AES-256 — database and file storage</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Authentication</div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">Azure AD SSO + MFA (all users)</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Audit Logging</div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">100% of user actions logged with timestamp &amp; IP</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Data Residency</div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">Qatar / GCC region (cloud) or fully on-premise at QRCS</div></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px"><div style="font-size:10px;font-weight:800;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">Breach Notification</div><div style="font-size:12.5px;font-weight:600;color:var(--ink)">Within 24h of detection; full report within 72h</div></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- §8.14 Definitions -->
+      <div class="heading3">8.14 Definitions &amp; Glossary</div>
+      <div class="sla-def-row"><span class="sla-def-term">Availability / Uptime</span><span class="sla-def-meaning">Percentage of time the platform is accessible and functional within a calendar month, excluding planned maintenance.</span></div>
+      <div class="sla-def-row"><span class="sla-def-term">Business Hours</span><span class="sla-def-meaning">Sunday through Thursday, 08:00–18:00 Arabia Standard Time (UTC+3), excluding Qatar public holidays.</span></div>
+      <div class="sla-def-row"><span class="sla-def-term">Calendar Hours</span><span class="sla-def-meaning">All 24 hours of every day, including weekends and public holidays. Used for P1 response targets only.</span></div>
+      <div class="sla-def-row"><span class="sla-def-term">Initial Response</span><span class="sla-def-meaning">First meaningful technical acknowledgement from an AssetXAI engineer — not an automated acknowledgement email.</span></div>
+      <div class="sla-def-row"><span class="sla-def-term">Resolution</span><span class="sla-def-meaning">The incident is fixed, a workaround accepted by QRCS is in place, or the ticket is closed with QRCS agreement.</span></div>
+      <div class="sla-def-row"><span class="sla-def-term">Service Credit</span><span class="sla-def-meaning">A financial credit applied to QRCS's account as a remedy for verified SLA breaches, deducted from future invoices.</span></div>
+      <div class="sla-def-row"><span class="sla-def-term">SLA Engine</span><span class="sla-def-meaning">AssetXAI automated system that monitors ticket response targets, triggers escalations, and tracks compliance in real time.</span></div>
     </div>
   </div>
 </div>
