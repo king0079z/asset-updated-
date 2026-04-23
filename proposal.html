@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AssetXAI — Technical & Commercial Proposal | QRCS 2026</title>
+<style>
+:root{
+  --ink:#0f172a;--ink2:#1e293b;--ink3:#334155;--ink4:#475569;--ink5:#64748b;
+  --indigo:#4f46e5;--blue:#2563eb;--sky:#0ea5e9;--teal:#0d9488;
+  --green:#16a34a;--amber:#d97706;--red:#dc2626;--purple:#7c3aed;
+  --surface:#fff;--bg:#f1f5f9;--border:#e2e8f0;--border2:#f8fafc;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08);
+  --shadow-lg:0 8px 40px rgba(0,0,0,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink2);font-size:14px;line-height:1.7}
+
+/* ── TOOLBAR ── */
+.toolbar{position:fixed;top:16px;right:16px;z-index:1000;display:flex;gap:8px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:8px 12px;box-shadow:var(--shadow-md)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;border:none;transition:all .18s;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--indigo),var(--blue));color:#fff;box-shadow:0 3px 10px rgba(79,70,229,.3)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 5px 16px rgba(79,70,229,.45)}
+.btn-outline{background:#f8fafc;color:var(--ink3);border:1px solid var(--border)}
+.btn-outline:hover{background:#f1f5f9}
+
+/* ── WRAPPER ── */
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+
+/* ── COVER ── */
+.cover{background:linear-gradient(145deg,#06040f 0%,#0c0a1e 25%,#0f172a 50%,#1a1660 75%,#1e3a8a 100%);border-radius:20px;overflow:hidden;margin-bottom:28px;box-shadow:var(--shadow-lg);position:relative;min-height:520px}
+.cover::before{content:'';position:absolute;top:-100px;right:-100px;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,.15) 0%,transparent 65%)}
+.cover::after{content:'';position:absolute;bottom:-80px;left:-80px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.12) 0%,transparent 65%)}
+.cover-inner{padding:56px 56px 44px;position:relative;z-index:1}
+.cover-eyebrow{display:flex;align-items:center;gap:14px;margin-bottom:32px}
+.cover-logo{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--indigo),var(--blue));display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#fff;box-shadow:0 4px 18px rgba(79,70,229,.5);flex-shrink:0}
+.cover-brand{font-size:13px;font-weight:800;color:#818cf8;letter-spacing:.12em;text-transform:uppercase}
+.cover-client{font-size:11px;font-weight:700;color:#475569;letter-spacing:.06em;text-transform:uppercase;margin-top:3px}
+.cover-title{font-size:44px;font-weight:900;color:#fff;letter-spacing:-.8px;line-height:1.05;margin-bottom:14px}
+.cover-title em{font-style:normal;background:linear-gradient(90deg,#a5b4fc,#60a5fa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.cover-sub{font-size:15px;color:#94a3b8;margin-bottom:36px;font-weight:500;max-width:680px;line-height:1.6}
+.cover-meta{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:8px}
+.cover-meta-cell{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:11px;padding:14px 16px}
+.cover-meta-cell label{display:block;font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.cover-meta-cell span{font-size:12.5px;font-weight:700;color:#e2e8f0}
+.cover-bar{background:linear-gradient(to right,rgba(49,46,129,.6),rgba(30,58,138,.6));border-top:1px solid rgba(255,255,255,.07);padding:16px 56px;display:flex;align-items:center;justify-content:space-between}
+.cover-bar-left{font-size:11px;color:#93c5fd;font-weight:600}
+.cover-pills{display:flex;gap:8px;flex-wrap:wrap}
+.cpill{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#c7d2fe;font-size:10.5px;font-weight:700;padding:4px 12px;border-radius:20px}
+
+/* ── SECTION ── */
+.section{margin-bottom:32px}
+.sec-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+.sec-hd{display:flex;align-items:center;gap:14px;padding:18px 26px;background:linear-gradient(to right,var(--ink2),var(--ink));border-bottom:1px solid rgba(0,0,0,.15)}
+.sec-num{width:38px;height:38px;border-radius:10px;flex-shrink:0;background:linear-gradient(135deg,var(--indigo),var(--blue));color:#fff;font-size:15px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(79,70,229,.4)}
+.sec-hd h2{flex:1;font-size:15px;font-weight:800;color:#f1f5f9;letter-spacing:-.1px}
+.sec-badge{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#94a3b8;font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px}
+.sec-body{padding:28px}
+
+/* ── TOC ── */
+.toc-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.toc-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .12s;text-decoration:none;color:inherit}
+.toc-item:hover{background:var(--bg)}
+.toc-item:last-child{border-bottom:none}
+.toc-num{width:30px;height:30px;border-radius:8px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--indigo);flex-shrink:0}
+.toc-label{font-size:12.5px;font-weight:700;color:var(--ink3);flex:1}
+.toc-page{font-size:11px;color:var(--ink5)}
+
+/* ── EXEC SUMMARY ── */
+.exec-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.exec-kpi{background:linear-gradient(135deg,var(--bg),#fff);border:1px solid var(--border);border-radius:14px;padding:22px 18px;text-align:center;position:relative;overflow:hidden}
+.exec-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:3px}
+.exec-kpi.blue::before{background:linear-gradient(90deg,var(--blue),var(--sky))}
+.exec-kpi.green::before{background:linear-gradient(90deg,var(--teal),var(--green))}
+.exec-kpi.amber::before{background:linear-gradient(90deg,var(--amber),#f59e0b)}
+.exec-kpi.purple::before{background:linear-gradient(90deg,var(--purple),var(--indigo))}
+.exec-kpi-num{font-size:34px;font-weight:900;line-height:1;margin-bottom:6px}
+.blue .exec-kpi-num{color:var(--blue)} .green .exec-kpi-num{color:var(--teal)} .amber .exec-kpi-num{color:var(--amber)} .purple .exec-kpi-num{color:var(--purple)}
+.exec-kpi-label{font-size:11px;font-weight:700;color:var(--ink5);text-transform:uppercase;letter-spacing:.06em}
+.exec-para{font-size:13.5px;color:var(--ink3);line-height:1.75;margin-bottom:14px}
+
+/* ── TWO COL ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+
+/* ── FEATURE TABLE ── */
+.feat-table{width:100%;border-collapse:collapse}
+.feat-table thead th{background:var(--ink2);color:#f1f5f9;padding:12px 14px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;text-align:left}
+.feat-table thead th:first-child{border-radius:0}
+.feat-table tbody td{padding:11px 14px;font-size:12.5px;color:var(--ink3);border-bottom:1px solid var(--border2);vertical-align:top}
+.feat-table tbody tr:last-child td{border-bottom:none}
+.feat-table tbody tr:hover td{background:var(--bg)}
+.check{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:#f0fdf4;border:1px solid #bbf7d0;color:var(--green);font-size:12px;font-weight:900}
+.cross{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:#fef2f2;border:1px solid #fecaca;color:var(--red);font-size:12px;font-weight:900}
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700}
+.tag-green{background:#f0fdf4;color:var(--green);border:1px solid #bbf7d0}
+.tag-blue{background:#eff6ff;color:var(--blue);border:1px solid #bfdbfe}
+.tag-amber{background:#fffbeb;color:var(--amber);border:1px solid #fde68a}
+.tag-purple{background:#f5f3ff;color:var(--purple);border:1px solid #ddd6fe}
+.tag-red{background:#fef2f2;color:var(--red);border:1px solid #fecaca}
+
+/* ── ARCHITECTURE ── */
+.arch-container{background:linear-gradient(135deg,#0c0a1e,#1a1660);border-radius:16px;padding:32px;position:relative;overflow:hidden}
+.arch-container::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at 30% 20%,rgba(79,70,229,.15),transparent 55%),radial-gradient(ellipse at 70% 80%,rgba(37,99,235,.12),transparent 55%)}
+.arch-layer{position:relative;z-index:1;margin-bottom:20px}
+.arch-layer-label{font-size:10px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.arch-layer-label::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08)}
+.arch-nodes{display:flex;gap:12px;flex-wrap:wrap}
+.arch-node{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:14px 16px;text-align:center;flex:1;min-width:130px;transition:transform .2s}
+.arch-node:hover{transform:translateY(-2px);background:rgba(255,255,255,.09)}
+.arch-node-icon{font-size:24px;margin-bottom:8px}
+.arch-node-title{font-size:12px;font-weight:700;color:#e2e8f0;margin-bottom:3px}
+.arch-node-sub{font-size:10.5px;color:#64748b}
+.arch-arrow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;position:relative;z-index:1}
+.arch-arrow::before{content:'▼';color:rgba(99,102,241,.6);font-size:18px}
+
+/* ── RFID ARCH ── */
+.rfid-arch{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+.rfid-box{border-radius:14px;padding:20px;border:1.5px solid}
+.rfid-box.tag-box{background:#0c0a1e;border-color:rgba(99,102,241,.3)}
+.rfid-box.reader-box{background:#0a1628;border-color:rgba(37,99,235,.3)}
+.rfid-box.ap-box{background:#0a2218;border-color:rgba(22,163,74,.3)}
+.rfid-box h4{font-size:13px;font-weight:800;color:#e2e8f0;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.rfid-box p{font-size:11.5px;color:#64748b;line-height:1.6;margin-bottom:6px}
+.rfid-spec{background:rgba(255,255,255,.04);border-radius:8px;padding:8px 10px;margin-top:8px}
+.rfid-spec-row{display:flex;justify-content:space-between;font-size:10.5px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.rfid-spec-row:last-child{border-bottom:none}
+.rfid-spec-row .k{color:#64748b;font-weight:600}
+.rfid-spec-row .v{color:#c7d2fe;font-weight:700}
+
+/* ── GANTT ── */
+.gantt-wrap{overflow-x:auto}
+.gantt-hd{display:grid;grid-template-columns:200px repeat(26,1fr);border-bottom:2px solid var(--border);margin-bottom:0}
+.gantt-hd-task{padding:12px 14px;font-size:11px;font-weight:800;color:var(--ink5);text-transform:uppercase;letter-spacing:.06em;background:var(--bg)}
+.gantt-hd-week{padding:8px 4px;font-size:9px;font-weight:700;color:var(--ink5);text-align:center;background:var(--bg);border-left:1px solid var(--border2)}
+.gantt-month-hd{display:grid;grid-template-columns:200px repeat(6,1fr);border-bottom:1px solid var(--border);background:#f8fafc}
+.gantt-month-cell{padding:10px 14px;font-size:11px;font-weight:800;color:var(--ink);text-align:center;border-left:1px solid var(--border);position:relative}
+.gantt-month-cell:first-child{border-left:none;text-align:left;padding-left:14px;font-size:10px;color:var(--ink5);font-weight:600}
+.gantt-row{display:grid;grid-template-columns:200px repeat(26,1fr);border-bottom:1px solid var(--border2);min-height:38px;align-items:center}
+.gantt-row:hover{background:#fafbfc}
+.gantt-task{padding:8px 14px;font-size:12px;font-weight:600;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gantt-task.phase{font-weight:800;color:var(--ink);background:var(--bg);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.gantt-cell{border-left:1px solid var(--border2);height:100%;min-height:38px;position:relative;display:flex;align-items:center}
+.gantt-bar{height:22px;border-radius:6px;position:absolute;top:50%;transform:translateY(-50%)}
+.g-blue{background:linear-gradient(90deg,#3b82f6,#2563eb)}
+.g-indigo{background:linear-gradient(90deg,#6366f1,#4f46e5)}
+.g-teal{background:linear-gradient(90deg,#14b8a6,#0d9488)}
+.g-green{background:linear-gradient(90deg,#22c55e,#16a34a)}
+.g-amber{background:linear-gradient(90deg,#f59e0b,#d97706)}
+.g-purple{background:linear-gradient(90deg,#a855f7,#7c3aed)}
+.g-red{background:linear-gradient(90deg,#f43f5e,#e11d48)}
+.g-sky{background:linear-gradient(90deg,#38bdf8,#0ea5e9)}
+.milestone{width:16px;height:16px;background:var(--amber);border-radius:3px;transform:rotate(45deg) translateY(-50%);position:absolute;top:50%;margin-left:-8px;box-shadow:0 2px 6px rgba(245,158,11,.4)}
+
+/* ── SLA ── */
+.sla-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.sla-box{border-radius:12px;padding:18px;border:1.5px solid;text-align:center}
+.sla-box.p1{background:#fef2f2;border-color:#fecaca}
+.sla-box.p2{background:#fffbeb;border-color:#fde68a}
+.sla-box.p3{background:#eff6ff;border-color:#bfdbfe}
+.sla-box.p4{background:#f0fdf4;border-color:#bbf7d0}
+.sla-p{font-size:22px;font-weight:900;margin-bottom:4px}
+.p1 .sla-p{color:var(--red)} .p2 .sla-p{color:var(--amber)} .p3 .sla-p{color:var(--blue)} .p4 .sla-p{color:var(--green)}
+.sla-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--ink5);margin-bottom:12px}
+.sla-row{display:flex;justify-content:space-between;font-size:11.5px;padding:4px 0;border-top:1px solid rgba(0,0,0,.04)}
+.sla-row .sk{color:var(--ink5)} .sla-row .sv{font-weight:800;color:var(--ink)}
+
+/* ── COMMERCIAL ── */
+.comm-section{margin-bottom:20px}
+.comm-label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--indigo);margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--indigo)}
+.comm-table{width:100%;border-collapse:collapse;margin-bottom:6px}
+.comm-table thead th{background:var(--ink2);color:#f1f5f9;padding:10px 14px;font-size:11px;font-weight:800;text-align:left}
+.comm-table thead th:last-child{text-align:right}
+.comm-table tbody td{padding:10px 14px;font-size:12.5px;color:var(--ink3);border-bottom:1px solid var(--border2)}
+.comm-table tbody tr:last-child td{border-bottom:none}
+.comm-table tbody tr:hover td{background:var(--bg)}
+.comm-table td:last-child{text-align:right;font-weight:700;color:var(--ink);white-space:nowrap}
+.comm-table td.item-num{font-family:'Courier New',monospace;font-weight:700;font-size:11px;color:var(--ink5);width:50px}
+.comm-table td.item-desc{color:var(--ink)}
+.comm-table td.item-qty{text-align:center;width:70px}
+.comm-sub{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:10px 14px;background:var(--bg);border-radius:0 0 8px 8px;border:1px solid var(--border);border-top:none;font-size:12.5px}
+.comm-sub .sk{color:var(--ink5);font-weight:600}
+.comm-sub .sv{color:var(--ink);font-weight:800;font-size:14px}
+.comm-total{display:grid;grid-template-columns:1fr auto;gap:8px;background:linear-gradient(135deg,var(--ink2),var(--ink));border-radius:14px;padding:24px 28px;margin-top:20px}
+.comm-total-left{color:#94a3b8;font-size:13px;line-height:1.8}
+.comm-total-left strong{color:#e2e8f0;font-size:16px;display:block;margin-bottom:2px}
+.comm-total-right{text-align:right}
+.comm-total-right .currency{font-size:14px;color:#818cf8;font-weight:800;text-transform:uppercase;letter-spacing:.1em}
+.comm-total-right .amount{font-size:42px;font-weight:900;color:#fff;letter-spacing:-1px;line-height:1}
+.comm-total-right .amount-sub{font-size:12px;color:#64748b;margin-top:2px}
+
+/* ── MILESTONE TRACKER ── */
+.milestone-track{display:flex;gap:0;margin:20px 0;position:relative}
+.milestone-track::before{content:'';position:absolute;top:20px;left:0;right:0;height:2px;background:var(--border);z-index:0}
+.ms-step{flex:1;text-align:center;position:relative;z-index:1;padding-top:0}
+.ms-dot{width:40px;height:40px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;border:3px solid var(--surface);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.ms-step.done .ms-dot{background:linear-gradient(135deg,var(--teal),var(--green));color:#fff}
+.ms-step.active .ms-dot{background:linear-gradient(135deg,var(--indigo),var(--blue));color:#fff}
+.ms-step.future .ms-dot{background:var(--bg);border:2px solid var(--border);color:var(--ink5)}
+.ms-label{font-size:11px;font-weight:700;color:var(--ink3)}
+.ms-date{font-size:10px;color:var(--ink5);margin-top:2px}
+
+/* ── TEAM CARD ── */
+.team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.team-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;text-align:center;box-shadow:var(--shadow)}
+.team-avatar{width:60px;height:60px;border-radius:16px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:26px}
+.team-role{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--ink5);margin-bottom:4px}
+.team-name{font-size:14px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.team-resp{font-size:11.5px;color:var(--ink4);line-height:1.6}
+
+/* ── INFO BOX ── */
+.info-box{border-radius:12px;padding:18px 20px;margin-bottom:16px;display:flex;gap:14px}
+.info-box.blue{background:#eff6ff;border:1px solid #bfdbfe}
+.info-box.green{background:#f0fdf4;border:1px solid #bbf7d0}
+.info-box.amber{background:#fffbeb;border:1px solid #fde68a}
+.info-box.purple{background:#f5f3ff;border:1px solid #ddd6fe}
+.info-icon{font-size:22px;flex-shrink:0}
+.info-body h4{font-size:13px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.info-body p{font-size:12.5px;color:var(--ink4);line-height:1.65}
+.info-body ul{padding-left:16px;margin-top:6px}
+.info-body li{font-size:12px;color:var(--ink4);margin-bottom:4px;line-height:1.6}
+
+/* ── FOOTER ── */
+.doc-footer{background:linear-gradient(135deg,var(--ink),var(--ink2));border-radius:16px;padding:28px 36px;margin-top:32px;display:flex;align-items:center;justify-content:space-between;gap:20px;box-shadow:var(--shadow-md)}
+.doc-footer-left{color:#94a3b8;font-size:12px;line-height:1.9}
+.doc-footer-left strong{color:#e2e8f0;font-size:14px;display:block;margin-bottom:2px}
+.doc-footer-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.fpill{background:rgba(79,70,229,.15);border:1px solid rgba(79,70,229,.25);color:#a5b4fc;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px}
+
+/* ── MISC ── */
+.divider{height:1px;background:var(--border);margin:22px 0}
+.heading3{font-size:14px;font-weight:800;color:var(--ink);margin-bottom:12px;padding-left:14px;border-left:3px solid var(--indigo)}
+.para{font-size:13.5px;color:var(--ink3);line-height:1.75;margin-bottom:14px}
+ul.styled{padding-left:18px;margin:8px 0 14px}
+ul.styled li{font-size:12.5px;color:var(--ink4);margin-bottom:5px;line-height:1.6}
+.highlight{background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:1px solid #c7d2fe;border-radius:12px;padding:16px 20px;margin:16px 0}
+.highlight-title{font-size:12px;font-weight:800;color:var(--indigo);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.sig-box{border:2px solid var(--border);border-radius:12px;padding:28px;margin-top:20px}
+.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.sig-field{border-top:2px solid var(--ink3);padding-top:8px;margin-top:48px}
+.sig-field-label{font-size:10px;font-weight:700;color:var(--ink5);text-transform:uppercase;letter-spacing:.06em}
+
+/* ── PRINT ── */
+@media print{
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  @page{size:A4 portrait;margin:12mm 14mm 12mm 14mm}
+  html,body{background:#fff !important;font-size:9.5pt}
+  .toolbar{display:none !important}
+  .wrap{max-width:100% !important;padding:0 !important;margin:0 !important}
+  .cover{border-radius:0 !important;box-shadow:none !important;margin:0 !important;width:100% !important;height:250mm !important;display:flex !important;flex-direction:column !important;justify-content:center !important;page-break-after:always !important;break-after:page !important}
+  .cover-inner{padding:40px 44px 32px !important}
+  .cover-title{font-size:26pt !important}
+  .cover-meta{grid-template-columns:repeat(5,1fr) !important;gap:8px !important}
+  .cover-meta-cell{padding:10px 12px !important}
+  .cover-bar{padding:12px 44px !important}
+  .sec-card{border-radius:6px !important;margin-bottom:10px !important;box-shadow:none !important;page-break-inside:avoid !important;break-inside:avoid !important;overflow:visible !important}
+  .sec-hd{padding:10px 18px !important}
+  .sec-hd h2{font-size:11pt !important}
+  .sec-body{padding:18px !important}
+  .exec-grid{grid-template-columns:repeat(4,1fr) !important;gap:10px !important}
+  .gantt-wrap{overflow:visible !important}
+  .arch-container{page-break-inside:avoid !important;break-inside:avoid !important}
+  .two-col,.three-col{display:block !important}
+  .two-col > *,.three-col > *{margin-bottom:14px !important}
+  .sla-grid{grid-template-columns:repeat(4,1fr) !important}
+  .comm-total{page-break-inside:avoid !important}
+  .doc-footer{border-radius:6px !important;box-shadow:none !important;margin-top:16px !important;padding:20px 24px !important}
+  .section{margin-bottom:16px !important;page-break-inside:avoid !important}
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button class="btn btn-outline" onclick="window.print()">🖨 Print PDF</button>
+  <button class="btn btn-primary" onclick="window.scrollTo(0,0)">↑ Top</button>
+</div>
+
+<div class="wrap">
+
+<!-- ══════════════════════════════════════════════
+     COVER PAGE
+══════════════════════════════════════════════ -->
+<div class="cover" id="cover">
+  <div class="cover-inner">
+    <div class="cover-eyebrow">
+      <div class="cover-logo">A</div>
+      <div>
+        <div class="cover-brand">AssetXAI — Enterprise Asset Intelligence</div>
+        <div class="cover-client">Prepared for: Qatar Red Crescent Society (QRCS)</div>
+      </div>
+    </div>
+
+    <div class="cover-title">
+      Technical &amp; Commercial<br>
+      <em>Proposal</em>
+    </div>
+    <div class="cover-sub">
+      Enterprise Asset Management System with Active &amp; Passive RFID Tracking,<br>
+      Microsoft Dynamics 365 ERP Integration, Azure AD SSO, AI Analytics &amp; Full RFID Infrastructure Architecture
+    </div>
+
+    <div class="cover-meta">
+      <div class="cover-meta-cell"><label>Document Ref</label><span>AX-TP-2026-001</span></div>
+      <div class="cover-meta-cell"><label>Prepared For</label><span>QRCS Procurement</span></div>
+      <div class="cover-meta-cell"><label>Prepared By</label><span>AssetXAI</span></div>
+      <div class="cover-meta-cell"><label>Date</label><span>April 2026</span></div>
+      <div class="cover-meta-cell"><label>Version</label><span>v1.0 — Final</span></div>
+    </div>
+  </div>
+  <div class="cover-bar">
+    <div class="cover-bar-left">RFQ: Asset Management &amp; Ticketing System with RFID — 7 Sites · 920 Users · 15,000 Tags</div>
+    <div class="cover-pills">
+      <span class="cpill">Confidential</span>
+      <span class="cpill">270,000 QAR</span>
+      <span class="cpill">6-Month Delivery</span>
+      <span class="cpill">assetxai.live</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     TABLE OF CONTENTS
+══════════════════════════════════════════════ -->
+<div class="section" id="toc">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">§</div>
+      <h2>Table of Contents</h2>
+      <span class="sec-badge">12 Sections</span>
+    </div>
+    <div class="toc-grid">
+      <a class="toc-item" href="#exec"><div class="toc-num">1</div><span class="toc-label">Executive Summary</span><span class="toc-page">§1</span></a>
+      <a class="toc-item" href="#solution"><div class="toc-num">2</div><span class="toc-label">Solution Overview &amp; Platform</span><span class="toc-page">§2</span></a>
+      <a class="toc-item" href="#features"><div class="toc-num">3</div><span class="toc-label">Feature Set &amp; Compliance Matrix</span><span class="toc-page">§3</span></a>
+      <a class="toc-item" href="#architecture"><div class="toc-num">4</div><span class="toc-label">System Architecture</span><span class="toc-page">§4</span></a>
+      <a class="toc-item" href="#rfid"><div class="toc-num">5</div><span class="toc-label">RFID Infrastructure Architecture</span><span class="toc-page">§5</span></a>
+      <a class="toc-item" href="#integration"><div class="toc-num">6</div><span class="toc-label">Integration Architecture (D365 / Azure AD)</span><span class="toc-page">§6</span></a>
+      <a class="toc-item" href="#gantt"><div class="toc-num">7</div><span class="toc-label">Project Plan &amp; Gantt Chart</span><span class="toc-page">§7</span></a>
+      <a class="toc-item" href="#sla"><div class="toc-num">8</div><span class="toc-label">Service Level Agreement (SLA)</span><span class="toc-page">§8</span></a>
+      <a class="toc-item" href="#team"><div class="toc-num">9</div><span class="toc-label">Team Structure &amp; Governance</span><span class="toc-page">§9</span></a>
+      <a class="toc-item" href="#security"><div class="toc-num">10</div><span class="toc-label">Security, Compliance &amp; Data Policy</span><span class="toc-page">§10</span></a>
+      <a class="toc-item" href="#commercial"><div class="toc-num">11</div><span class="toc-label">Commercial Proposal &amp; Pricing</span><span class="toc-page">§11</span></a>
+      <a class="toc-item" href="#acceptance"><div class="toc-num">12</div><span class="toc-label">Terms, Acceptance &amp; Sign-off</span><span class="toc-page">§12</span></a>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §1 EXECUTIVE SUMMARY
+══════════════════════════════════════════════ -->
+<div class="section" id="exec">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">1</div>
+      <h2>Executive Summary</h2>
+      <span class="sec-badge">Strategic Overview</span>
+    </div>
+    <div class="sec-body">
+      <div class="exec-grid">
+        <div class="exec-kpi blue"><div class="exec-kpi-num">920</div><div class="exec-kpi-label">Total Users (7 Sites)</div></div>
+        <div class="exec-kpi green"><div class="exec-kpi-num">15K</div><div class="exec-kpi-label">RFID Tags (Active + Passive)</div></div>
+        <div class="exec-kpi amber"><div class="exec-kpi-num">6mo</div><div class="exec-kpi-label">Full Delivery Timeline</div></div>
+        <div class="exec-kpi purple"><div class="exec-kpi-num">270K</div><div class="exec-kpi-label">Total Investment (QAR)</div></div>
+      </div>
+
+      <p class="para">AssetXAI is proud to present this comprehensive Technical and Commercial Proposal in response to the QRCS Request for Quotation for an <strong>Enterprise Asset Management &amp; Ticketing System</strong> with full RFID infrastructure. This proposal addresses all requirements of the RFQ across 7 sites, 920 users (900 end-users + 20 technicians), 5,000 Active RFID tags, 10,000 Passive RFID tags, and 15 handheld scanning devices.</p>
+
+      <p class="para">AssetXAI delivers a purpose-built, cloud-native Enterprise Asset Intelligence platform already in production at <strong>assetxai.live</strong>. The platform natively supports RFID-based asset tracking, barcode scanning, real-time location visualization on electronic floor maps, predictive maintenance powered by AI, multi-site ticketing, vendor management, and full audit trail generation — all directly matching the compliance requirements specified in the RFQ evaluation matrix.</p>
+
+      <div class="two-col">
+        <div>
+          <div class="heading3">Why AssetXAI for QRCS</div>
+          <ul class="styled">
+            <li><strong>Production-Ready Platform:</strong> Fully operational system available for live demonstration at assetxai.live</li>
+            <li><strong>RFID-Native Architecture:</strong> Built from the ground up for active and passive RFID with Huawei AP integration</li>
+            <li><strong>Microsoft Ecosystem:</strong> Native connectors for Dynamics 365 and Azure Active Directory SSO</li>
+            <li><strong>AI-Powered:</strong> Built-in ML forecasting, consumption analysis, predictive maintenance and anomaly detection</li>
+            <li><strong>Regulatory Alignment:</strong> Data residency, audit log, and PDPL/NCA compliance by design</li>
+            <li><strong>Bilingual Interface:</strong> Full Arabic (RTL) and English support across all modules</li>
+          </ul>
+        </div>
+        <div>
+          <div class="heading3">Key Commitments</div>
+          <ul class="styled">
+            <li><strong>6-Month Full Delivery:</strong> All 7 sites live, RFID deployed, training complete</li>
+            <li><strong>99.9% Platform Uptime SLA</strong> with 24/7 critical-issue support</li>
+            <li><strong>Fixed-Price Engagement:</strong> All listed deliverables at 270,000 QAR, no hidden costs</li>
+            <li><strong>Hardware Warranty:</strong> 2 years on all RFID hardware supplied under this contract</li>
+            <li><strong>IP Assignment:</strong> All QRCS-specific configurations and reports become QRCS property on acceptance</li>
+            <li><strong>Post Go-Live:</strong> 3-month hypercare period included at no additional cost</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="highlight">
+        <div class="highlight-title">📋 Proposal Scope Summary</div>
+        <div class="three-col">
+          <div>
+            <strong>Software</strong><br>
+            <span style="font-size:12px;color:var(--ink4)">AssetXAI Enterprise Platform · Active RFID Module · AI Analytics · D365 Connector · Azure AD SSO · Mobile App (iOS + Android) · Outlook Add-in · External Portal</span>
+          </div>
+          <div>
+            <strong>Hardware</strong><br>
+            <span style="font-size:12px;color:var(--ink4)">5,000 Active RFID Tags (433 MHz) · 10,000 Passive RFID Tags (UHF 860–960 MHz) · 14 RFID Fixed/Passageway Readers · 15 Handheld RFID Devices · RFID-over-AP Reader Modules</span>
+          </div>
+          <div>
+            <strong>Services</strong><br>
+            <span style="font-size:12px;color:var(--ink4)">Platform Implementation · RFID Site Survey &amp; Installation · Data Migration · D365 Integration Dev · Training (Arabic + English) · UAT Support · 12-Month Year-1 Support</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §2 SOLUTION OVERVIEW
+══════════════════════════════════════════════ -->
+<div class="section" id="solution">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">2</div>
+      <h2>Solution Overview &amp; Platform</h2>
+      <span class="sec-badge">AssetXAI Platform</span>
+    </div>
+    <div class="sec-body">
+      <p class="para">AssetXAI is a fully integrated, SaaS-first Enterprise Asset Management platform built on modern cloud-native technologies. It provides end-to-end visibility of physical assets from procurement through disposal, with real-time RFID tracking, predictive AI, and a complete service ticketing engine — all accessible from web, mobile, and Outlook.</p>
+
+      <div class="three-col" style="margin:20px 0">
+        <div class="info-box blue" style="flex-direction:column">
+          <div class="info-icon">🌐</div>
+          <div class="info-body">
+            <h4>Web Portal</h4>
+            <p>Full-featured dashboard for managers and administrators. Asset register, RFID live map, ticket management, analytics, reports and user management — all in a responsive bilingual (AR/EN) interface.</p>
+          </div>
+        </div>
+        <div class="info-box green" style="flex-direction:column">
+          <div class="info-icon">📱</div>
+          <div class="info-body">
+            <h4>Mobile App (iOS + Android)</h4>
+            <p>Technician-focused app for barcode/RFID scanning, ticket creation, asset inspection routes, photo capture, and offline sync. Compatible with standard and rugged Android/iOS devices.</p>
+          </div>
+        </div>
+        <div class="info-box purple" style="flex-direction:column">
+          <div class="info-icon">📧</div>
+          <div class="info-body">
+            <h4>Outlook Add-in &amp; Portal</h4>
+            <p>Native Microsoft Outlook task pane for viewing and raising tickets directly from the inbox. External support portal for third-party vendors and end-users to log and track requests.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="heading3">Platform Technology Stack</div>
+      <table class="feat-table">
+        <thead><tr><th>Layer</th><th>Technology</th><th>Details</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Frontend</strong></td><td>Next.js 14 + TypeScript + Tailwind CSS</td><td>SSR/CSR hybrid, RTL/LTR bilingual, responsive across all screen sizes</td></tr>
+          <tr><td><strong>Backend / API</strong></td><td>Next.js API Routes (Node.js serverless)</td><td>RESTful endpoints, JWT auth, rate-limited, role-based access control</td></tr>
+          <tr><td><strong>Database</strong></td><td>PostgreSQL via Supabase</td><td>Managed cloud DB, row-level security, real-time subscriptions, GDPR-ready</td></tr>
+          <tr><td><strong>Auth</strong></td><td>Supabase Auth + Azure AD OAuth 2.0/OIDC</td><td>SSO, MFA via Azure Conditional Access, SCIM provisioning support</td></tr>
+          <tr><td><strong>Storage</strong></td><td>Supabase Storage (S3-compatible)</td><td>Asset documents, RFID floor maps, images with CDN delivery</td></tr>
+          <tr><td><strong>ORM / Schema</strong></td><td>Prisma ORM v5</td><td>Type-safe queries, schema migrations, multi-schema support</td></tr>
+          <tr><td><strong>AI / ML</strong></td><td>Built-in ML Forecasting + Linear Regression</td><td>Consumption forecasting, predictive maintenance, anomaly detection</td></tr>
+          <tr><td><strong>Deployment</strong></td><td>Vercel (Edge + Serverless) or On-Premise Docker</td><td>Global CDN, auto-scaling, 99.99% infra SLA; on-prem option available</td></tr>
+          <tr><td><strong>RFID Middleware</strong></td><td>AssetXAI RFID Bridge (Node.js)</td><td>LLRP/REST reader protocol adapter, real-time tag-event streaming</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §3 FEATURE SET & COMPLIANCE MATRIX
+══════════════════════════════════════════════ -->
+<div class="section" id="features">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">3</div>
+      <h2>Feature Set &amp; Compliance Matrix</h2>
+      <span class="sec-badge">All RFQ Sections Covered</span>
+    </div>
+    <div class="sec-body">
+      <p class="para">The table below maps every RFQ requirement to the corresponding AssetXAI feature. All items marked <span class="tag tag-green">✔ Included</span> are delivered within the base contract scope at the quoted price.</p>
+
+      <table class="feat-table" style="margin-bottom:20px">
+        <thead>
+          <tr>
+            <th style="width:50px">RFQ Ref</th>
+            <th>Requirement</th>
+            <th style="width:130px">AssetXAI Feature</th>
+            <th style="width:110px">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>§1.1</strong></td><td>Asset Register — full lifecycle management (procurement → disposal)</td><td>Asset Register Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§1.2</strong></td><td>RFID-based real-time asset location tracking (Active 433 MHz)</td><td>Active RFID Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§1.3</strong></td><td>Automatic stocktaking via scheduled RFID reader zone scans</td><td>Auto-Stocktake Scheduler</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§1.4</strong></td><td>Configurable inspection routes &amp; preventive maintenance tasks</td><td>O&amp;M / Maintenance Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§1.5</strong></td><td>Electronic floor map — zone-based RFID asset position overlay</td><td>Interactive Floor Map</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§1.6</strong></td><td>Asset flow path &amp; area distribution statistics</td><td>Movement Analytics</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§2.1</strong></td><td>Barcode / QR code generation and scanning</td><td>Barcode / QR Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§2.2</strong></td><td>Mobile offline scanning with automatic sync</td><td>Handheld App Offline Sync</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§2.3</strong></td><td>Anti-tamper / tag removal alarms with auto-ticket</td><td>RFID Alert Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§2.4</strong></td><td>Low-battery alerts &amp; automatic ticket generation</td><td>Tag Health Monitor</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§2.5</strong></td><td>Passageway readers — zone entry/exit detection</td><td>Zone Boundary Events</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§3.1</strong></td><td>Email-to-ticket integration (Microsoft 365)</td><td>Email Ticketing Bridge</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§3.2</strong></td><td>Ticket assignment to technicians &amp; vendors</td><td>Ticket Assignment Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§3.3</strong></td><td>SLA-based ticket escalation &amp; priority management</td><td>SLA &amp; Escalation Rules</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§3.4</strong></td><td>Ticket history, comments, attachments, full audit trail</td><td>Ticket History Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§3.5</strong></td><td>Vendor / external service provider portal</td><td>External Support Portal</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§3.6</strong></td><td>Kanban board, ticket dashboard &amp; KPI metrics</td><td>Ticketing Dashboard</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.1</strong></td><td>Role-based access control (Admin / Manager / Technician / Staff)</td><td>RBAC Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.2</strong></td><td>Custom user roles &amp; granular page-level permissions</td><td>Custom Roles Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.3</strong></td><td>Azure Active Directory SSO (OIDC / OAuth 2.0)</td><td>Azure AD SSO Connector</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.4</strong></td><td>Multi-factor authentication (MFA)</td><td>Azure AD MFA</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.5</strong></td><td>Microsoft Dynamics 365 integration (assets, disposals, fixed assets)</td><td>D365 Integration Connector</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.6</strong></td><td>Automated depreciation &amp; asset valuation sync with D365</td><td>D365 Finance Sync</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.7</strong></td><td>Data migration from existing system</td><td>Data Migration Toolkit</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.8</strong></td><td>Multi-site management — 7 separate site tenants with central control</td><td>Multi-Site Architecture</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.9</strong></td><td>AI-powered analytics, forecasting &amp; predictive maintenance</td><td>AI Analytics Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.10</strong></td><td>Reporting (scheduled, on-demand, print-quality PDF)</td><td>Report Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.11</strong></td><td>Audit trail — tamper-evident logs with timestamps &amp; user attribution</td><td>Audit Log Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.12</strong></td><td>Mobile application (iOS + Android)</td><td>AssetXAI Mobile</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.13</strong></td><td>Notifications (in-app, email, push) for tickets, alerts, SLA breaches</td><td>Notification Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.14</strong></td><td>Food &amp; consumable supply management (kitchen module)</td><td>Food Supply / Kitchen Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§4.15</strong></td><td>Vehicle &amp; fleet management with trip tracking</td><td>Vehicle Fleet Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§5.1</strong></td><td>Arabic (RTL) &amp; English bilingual interface</td><td>i18n Translation Engine</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§5.2</strong></td><td>Compliance evidence generation (scan logs, timestamps, locations)</td><td>Compliance Reporting</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§5.3</strong></td><td>RFID tag-to-asset binding &amp; tag lifecycle management</td><td>Tag Registry Module</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§5.4</strong></td><td>Inventory audit center (handheld-driven inventory counts)</td><td>Inventory Audit Center</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+          <tr><td><strong>§5.5</strong></td><td>Asset clearance &amp; disposal workflow with approval chain</td><td>Disposal Workflow</td><td><span class="tag tag-green">✔ Included</span></td></tr>
+        </tbody>
+      </table>
+
+      <div class="info-box green">
+        <div class="info-icon">✅</div>
+        <div class="info-body">
+          <h4>100% RFQ Compliance — All 35+ Requirements Met in Base Scope</h4>
+          <p>AssetXAI meets every mandatory requirement in the RFQ evaluation matrix within the base contract price. There are no optional add-ons required for full compliance. The platform is already live and available for demonstration.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §4 SYSTEM ARCHITECTURE
+══════════════════════════════════════════════ -->
+<div class="section" id="architecture">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">4</div>
+      <h2>System Architecture Overview</h2>
+      <span class="sec-badge">5-Layer Cloud Architecture</span>
+    </div>
+    <div class="sec-body">
+      <p class="para">AssetXAI uses a layered architecture designed for enterprise reliability, multi-site scalability, and RFID edge integration. All data flows from physical assets through the RFID edge layer, over the network, to the platform cloud, with integrations to Microsoft ecosystem services.</p>
+
+      <div class="arch-container">
+        <!-- Layer 1: Asset Layer -->
+        <div class="arch-layer">
+          <div class="arch-layer-label">Layer 1 — Physical Asset Layer</div>
+          <div class="arch-nodes">
+            <div class="arch-node"><div class="arch-node-icon">📦</div><div class="arch-node-title">Physical Assets</div><div class="arch-node-sub">Furniture, Equipment, Devices, Vehicles</div></div>
+            <div class="arch-node"><div class="arch-node-icon">📡</div><div class="arch-node-title">Active RFID Tags</div><div class="arch-node-sub">5,000 units · 433 MHz · 50–100m range</div></div>
+            <div class="arch-node"><div class="arch-node-icon">🏷</div><div class="arch-node-title">Passive RFID Tags</div><div class="arch-node-sub">10,000 units · UHF 860–960 MHz · ISO 18000-63</div></div>
+            <div class="arch-node"><div class="arch-node-icon">📲</div><div class="arch-node-title">Handheld Scanners</div><div class="arch-node-sub">15 units · Android/iOS · RFID+Barcode</div></div>
+          </div>
+        </div>
+        <div class="arch-arrow"></div>
+
+        <!-- Layer 2: Edge Layer -->
+        <div class="arch-layer">
+          <div class="arch-layer-label">Layer 2 — RFID Edge &amp; Network Infrastructure</div>
+          <div class="arch-nodes">
+            <div class="arch-node"><div class="arch-node-icon">📻</div><div class="arch-node-title">RFID Passageway Readers</div><div class="arch-node-sub">14 units · 2/site · Zone boundary detection</div></div>
+            <div class="arch-node"><div class="arch-node-icon">🔌</div><div class="arch-node-title">RFID-AP Chip Module</div><div class="arch-node-sub">Reader integrated with Huawei AP · PoE powered</div></div>
+            <div class="arch-node"><div class="arch-node-icon">📶</div><div class="arch-node-title">Huawei Access Points</div><div class="arch-node-sub">Wi-Fi 6 (802.11ax) · RFID data uplink via Ethernet</div></div>
+            <div class="arch-node"><div class="arch-node-icon">🔒</div><div class="arch-node-title">Site LAN Switch</div><div class="arch-node-sub">Managed PoE switch · VLAN-segmented RFID traffic</div></div>
+          </div>
+        </div>
+        <div class="arch-arrow"></div>
+
+        <!-- Layer 3: Connectivity -->
+        <div class="arch-layer">
+          <div class="arch-layer-label">Layer 3 — WAN / Connectivity</div>
+          <div class="arch-nodes">
+            <div class="arch-node"><div class="arch-node-icon">🌐</div><div class="arch-node-title">Site WAN / MPLS</div><div class="arch-node-sub">7 sites connected · IPSec VPN backup</div></div>
+            <div class="arch-node"><div class="arch-node-icon">⚡</div><div class="arch-node-title">RFID Middleware Bridge</div><div class="arch-node-sub">LLRP → HTTPS · Tag event streaming · Edge buffering</div></div>
+            <div class="arch-node"><div class="arch-node-icon">📊</div><div class="arch-node-title">Event Queue</div><div class="arch-node-sub">Async tag events · Retry logic · Offline buffering</div></div>
+          </div>
+        </div>
+        <div class="arch-arrow"></div>
+
+        <!-- Layer 4: Platform -->
+        <div class="arch-layer">
+          <div class="arch-layer-label">Layer 4 — AssetXAI Platform (Cloud / On-Premise)</div>
+          <div class="arch-nodes">
+            <div class="arch-node"><div class="arch-node-icon">🏗</div><div class="arch-node-title">API Layer (Next.js)</div><div class="arch-node-sub">RESTful APIs · Auth · Rate limiting</div></div>
+            <div class="arch-node"><div class="arch-node-icon">🗄</div><div class="arch-node-title">Database (PostgreSQL)</div><div class="arch-node-sub">Prisma ORM · RLS · Multi-tenant · 99.99% HA</div></div>
+            <div class="arch-node"><div class="arch-node-icon">🧠</div><div class="arch-node-title">AI / ML Engine</div><div class="arch-node-sub">Forecasting · Anomaly detection · Maintenance predictor</div></div>
+            <div class="arch-node"><div class="arch-node-icon">📧</div><div class="arch-node-title">Notification Engine</div><div class="arch-node-sub">Email · Push · In-app · Teams webhook</div></div>
+            <div class="arch-node"><div class="arch-node-icon">🗂</div><div class="arch-node-title">Document Storage</div><div class="arch-node-sub">S3-compatible · CDN · Encrypted at rest</div></div>
+          </div>
+        </div>
+        <div class="arch-arrow"></div>
+
+        <!-- Layer 5: Integration -->
+        <div class="arch-layer">
+          <div class="arch-layer-label">Layer 5 — External Integration &amp; User Access</div>
+          <div class="arch-nodes">
+            <div class="arch-node"><div class="arch-node-icon">🟦</div><div class="arch-node-title">MS Dynamics 365</div><div class="arch-node-sub">OData REST API · Assets · Fixed Assets · Finance</div></div>
+            <div class="arch-node"><div class="arch-node-icon">🔐</div><div class="arch-node-title">Azure Active Directory</div><div class="arch-node-sub">SSO (OIDC) · MFA · SCIM Provisioning</div></div>
+            <div class="arch-node"><div class="arch-node-icon">📨</div><div class="arch-node-title">Microsoft 365 Email</div><div class="arch-node-sub">Email-to-ticket · Outlook Add-in</div></div>
+            <div class="arch-node"><div class="arch-node-icon">🌍</div><div class="arch-node-title">Web / Mobile / Portal</div><div class="arch-node-sub">Browser · iOS App · Android App · Vendor Portal</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §5 RFID INFRASTRUCTURE ARCHITECTURE
+══════════════════════════════════════════════ -->
+<div class="section" id="rfid">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">5</div>
+      <h2>RFID Infrastructure Architecture</h2>
+      <span class="sec-badge">Huawei AP + RFID Reader Chip Integration</span>
+    </div>
+    <div class="sec-body">
+      <p class="para">The RFID infrastructure is built on a <strong>co-located architecture</strong> where each Huawei Wi-Fi 6 Access Point hosts a dedicated RFID Reader Chip Module (RFID-AP integration unit). This approach eliminates the need for separate RFID infrastructure cabling, reducing installation cost and complexity while leveraging the existing PoE network distribution.</p>
+
+      <div class="info-box blue">
+        <div class="info-icon">🔌</div>
+        <div class="info-body">
+          <h4>RFID-over-AP Architecture: How It Works</h4>
+          <p>Each Huawei AP has an RFID reader chip/module physically mounted to or integrated with it. The RFID module receives tag signals from nearby active tags and passes the raw RFID events to the AP over an internal data bus or dedicated Ethernet port. The AP uplinks all data — both Wi-Fi traffic and RFID events — over the existing PoE LAN switch to the RFID Middleware Bridge, which normalizes the LLRP protocol messages and forwards them as JSON events to the AssetXAI Platform API via HTTPS.</p>
+        </div>
+      </div>
+
+      <div class="rfid-arch" style="margin-top:20px">
+        <div class="rfid-box tag-box">
+          <h4>📡 Active RFID Tags</h4>
+          <p>Attached to high-value, mobile assets. Continuously broadcast asset ID beacon at configurable intervals.</p>
+          <div class="rfid-spec">
+            <div class="rfid-spec-row"><span class="k">Frequency</span><span class="v">433 MHz</span></div>
+            <div class="rfid-spec-row"><span class="k">Read Range</span><span class="v">Up to 100m (open)</span></div>
+            <div class="rfid-spec-row"><span class="k">Battery Life</span><span class="v">3–5 years</span></div>
+            <div class="rfid-spec-row"><span class="k">Memory</span><span class="v">EPC + User data</span></div>
+            <div class="rfid-spec-row"><span class="k">Tamper Alert</span><span class="v">✔ Hardware sensor</span></div>
+            <div class="rfid-spec-row"><span class="k">IP Rating</span><span class="v">IP67 (dust/water)</span></div>
+            <div class="rfid-spec-row"><span class="k">Quantity</span><span class="v">5,000 units</span></div>
+          </div>
+        </div>
+
+        <div class="rfid-box tag-box">
+          <h4>🏷 Passive RFID Tags</h4>
+          <p>Affixed to furniture, office equipment, and lower-value assets. Read during handheld scan sessions or passageway crossing events.</p>
+          <div class="rfid-spec">
+            <div class="rfid-spec-row"><span class="k">Standard</span><span class="v">ISO 18000-63 (EPC Gen 2)</span></div>
+            <div class="rfid-spec-row"><span class="k">Frequency</span><span class="v">UHF 860–960 MHz</span></div>
+            <div class="rfid-spec-row"><span class="k">Read Range</span><span class="v">Up to 8m (handheld)</span></div>
+            <div class="rfid-spec-row"><span class="k">Memory</span><span class="v">96-bit EPC</span></div>
+            <div class="rfid-spec-row"><span class="k">Form Factors</span><span class="v">Label, hard tag, on-metal</span></div>
+            <div class="rfid-spec-row"><span class="k">Anti-collision</span><span class="v">1000 tags/second</span></div>
+            <div class="rfid-spec-row"><span class="k">Quantity</span><span class="v">10,000 units</span></div>
+          </div>
+        </div>
+
+        <div class="rfid-box reader-box">
+          <h4>📻 RFID Passageway Readers</h4>
+          <p>Fixed gate readers installed at room/zone entry points for automatic zone-crossing detection. Connected via Ethernet to site LAN.</p>
+          <div class="rfid-spec">
+            <div class="rfid-spec-row"><span class="k">Protocols</span><span class="v">LLRP 1.1, GEN2, ISO</span></div>
+            <div class="rfid-spec-row"><span class="k">Antennas</span><span class="v">4-port MIMO</span></div>
+            <div class="rfid-spec-row"><span class="k">Read Rate</span><span class="v">&gt;500 tags/second</span></div>
+            <div class="rfid-spec-row"><span class="k">Power</span><span class="v">PoE 802.3af / DC 12V</span></div>
+            <div class="rfid-spec-row"><span class="k">Connectivity</span><span class="v">1GbE + Wi-Fi fallback</span></div>
+            <div class="rfid-spec-row"><span class="k">Certification</span><span class="v">ETSI EN 302 208 · FCC</span></div>
+            <div class="rfid-spec-row"><span class="k">Quantity</span><span class="v">14 units (2/site)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rfid-arch">
+        <div class="rfid-box ap-box">
+          <h4>📶 Huawei Access Point + RFID Chip Module</h4>
+          <p>Huawei AP (Wi-Fi 6, 802.11ax) with co-located RFID reader chip module. The RFID module connects to the AP's internal Ethernet port. A single PoE drop powers both the AP and RFID module. RFID tag events are tunnelled over the existing LAN switch as UDP/LLRP packets — no separate RFID cable run required.</p>
+          <div class="rfid-spec">
+            <div class="rfid-spec-row"><span class="k">AP Model</span><span class="v">Huawei AP6761 / AirEngine 5762</span></div>
+            <div class="rfid-spec-row"><span class="k">RFID Chip</span><span class="v">Co-located UHF/Active reader module</span></div>
+            <div class="rfid-spec-row"><span class="k">Connection</span><span class="v">Internal 100Mbps Ethernet bus</span></div>
+            <div class="rfid-spec-row"><span class="k">Power</span><span class="v">Single PoE+ (802.3at, 30W)</span></div>
+            <div class="rfid-spec-row"><span class="k">Coverage</span><span class="v">RFID: 15–30m radius per AP</span></div>
+          </div>
+        </div>
+
+        <div class="rfid-box reader-box">
+          <h4>⚡ RFID Middleware Bridge</h4>
+          <p>On-site or cloud-side process that receives raw LLRP tag events from all readers and AP-chip modules. Normalizes, deduplicates, and enriches tag events with asset lookup before forwarding to AssetXAI API as structured JSON.</p>
+          <div class="rfid-spec">
+            <div class="rfid-spec-row"><span class="k">Protocol In</span><span class="v">LLRP 1.1 (TCP/5084)</span></div>
+            <div class="rfid-spec-row"><span class="k">Protocol Out</span><span class="v">HTTPS REST / WebSocket</span></div>
+            <div class="rfid-spec-row"><span class="k">Dedup Window</span><span class="v">Configurable (default 5s)</span></div>
+            <div class="rfid-spec-row"><span class="k">Offline Buffer</span><span class="v">SQLite local queue, auto-retry</span></div>
+            <div class="rfid-spec-row"><span class="k">Deployment</span><span class="v">Docker container (per site)</span></div>
+          </div>
+        </div>
+
+        <div class="rfid-box ap-box">
+          <h4>📱 Handheld RFID Device</h4>
+          <p>Used by technicians for manual stocktaking walks, asset inspections, and ad-hoc tag binding. Runs the AssetXAI Handheld App with offline support.</p>
+          <div class="rfid-spec">
+            <div class="rfid-spec-row"><span class="k">RFID</span><span class="v">UHF (EPC Gen 2) + Active 433MHz</span></div>
+            <div class="rfid-spec-row"><span class="k">Barcode</span><span class="v">1D/2D, QR, DataMatrix</span></div>
+            <div class="rfid-spec-row"><span class="k">OS</span><span class="v">Android 10+ / iOS 14+</span></div>
+            <div class="rfid-spec-row"><span class="k">IP Rating</span><span class="v">IP65 (rugged)</span></div>
+            <div class="rfid-spec-row"><span class="k">Battery</span><span class="v">10+ hours operational</span></div>
+            <div class="rfid-spec-row"><span class="k">Quantity</span><span class="v">15 units</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="heading3">RFID Data Flow — End to End</div>
+      <div class="arch-container" style="padding:20px">
+        <div style="position:relative;z-index:1;display:flex;align-items:center;gap:0;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;flex:1;min-width:100px">
+            <div style="font-size:22px;margin-bottom:6px">📡</div>
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0">RFID Tag<br><span style="color:#64748b;font-weight:400">Broadcasts ID</span></div>
+          </div>
+          <div style="color:#6366f1;font-size:20px;font-weight:900;flex-shrink:0">→</div>
+          <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;flex:1;min-width:100px">
+            <div style="font-size:22px;margin-bottom:6px">🔌</div>
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0">RFID Chip<br><span style="color:#64748b;font-weight:400">on Huawei AP</span></div>
+          </div>
+          <div style="color:#6366f1;font-size:20px;font-weight:900;flex-shrink:0">→</div>
+          <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;flex:1;min-width:100px">
+            <div style="font-size:22px;margin-bottom:6px">🔀</div>
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0">PoE Switch<br><span style="color:#64748b;font-weight:400">LAN/VLAN</span></div>
+          </div>
+          <div style="color:#6366f1;font-size:20px;font-weight:900;flex-shrink:0">→</div>
+          <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;flex:1;min-width:100px">
+            <div style="font-size:22px;margin-bottom:6px">⚡</div>
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0">RFID Bridge<br><span style="color:#64748b;font-weight:400">LLRP → HTTPS</span></div>
+          </div>
+          <div style="color:#6366f1;font-size:20px;font-weight:900;flex-shrink:0">→</div>
+          <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;flex:1;min-width:100px">
+            <div style="font-size:22px;margin-bottom:6px">☁️</div>
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0">AssetXAI API<br><span style="color:#64748b;font-weight:400">Tag Event DB</span></div>
+          </div>
+          <div style="color:#6366f1;font-size:20px;font-weight:900;flex-shrink:0">→</div>
+          <div style="text-align:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px;flex:1;min-width:100px">
+            <div style="font-size:22px;margin-bottom:6px">🗺</div>
+            <div style="font-size:11px;font-weight:700;color:#e2e8f0">Floor Map<br><span style="color:#64748b;font-weight:400">Real-time View</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §6 INTEGRATION ARCHITECTURE
+══════════════════════════════════════════════ -->
+<div class="section" id="integration">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">6</div>
+      <h2>Integration Architecture</h2>
+      <span class="sec-badge">D365 · Azure AD · M365 Email</span>
+    </div>
+    <div class="sec-body">
+      <div class="two-col">
+        <div>
+          <div class="heading3">Microsoft Dynamics 365 Integration</div>
+          <p class="para">AssetXAI integrates with D365 (Finance &amp; Operations or Business Central) via the standard OData v4 REST API. The integration is bidirectional — assets created or modified in AssetXAI are pushed to D365 Fixed Assets module; depreciation schedules, asset values, and procurement orders flow back from D365 to AssetXAI for enriched reporting.</p>
+          <table class="feat-table">
+            <thead><tr><th>Data Entity</th><th>Direction</th><th>Frequency</th></tr></thead>
+            <tbody>
+              <tr><td>Asset Register (create/update/disposal)</td><td>→ D365</td><td>Real-time</td></tr>
+              <tr><td>Fixed Asset Depreciation Values</td><td>D365 →</td><td>Nightly batch</td></tr>
+              <tr><td>Asset Location &amp; Status Updates</td><td>→ D365</td><td>Real-time</td></tr>
+              <tr><td>Purchase Orders (procurement)</td><td>D365 →</td><td>On-demand</td></tr>
+              <tr><td>Disposal Records &amp; Write-offs</td><td>→ D365</td><td>Real-time</td></tr>
+              <tr><td>User / Department Assignments</td><td>D365 →</td><td>Daily sync</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="heading3">Azure Active Directory SSO</div>
+          <p class="para">Users authenticate via Azure AD using the OpenID Connect (OIDC) protocol. On first login, AssetXAI auto-provisions the user with default role permissions. MFA enforcement is delegated to Azure AD Conditional Access policies, keeping all authentication controls within QRCS's existing security governance.</p>
+          <div class="info-box purple" style="margin-top:12px">
+            <div class="info-icon">🔐</div>
+            <div class="info-body">
+              <h4>SSO Flow</h4>
+              <ul>
+                <li>User clicks "Sign in with Microsoft" on AssetXAI login page</li>
+                <li>Redirected to QRCS Azure AD tenant for authentication + MFA</li>
+                <li>Azure AD issues ID token (JWT) to AssetXAI callback endpoint</li>
+                <li>AssetXAI validates token, maps AD groups to AssetXAI roles</li>
+                <li>User is logged in — session tied to Azure AD lifecycle (auto-expiry on deprovisioning)</li>
+              </ul>
+            </div>
+          </div>
+          <div class="info-box amber" style="margin-top:12px">
+            <div class="info-icon">📨</div>
+            <div class="info-body">
+              <h4>Microsoft 365 Email-to-Ticket</h4>
+              <ul>
+                <li>Dedicated shared mailbox (e.g., support@qrcs.org.qa) monitored by AssetXAI</li>
+                <li>Inbound emails auto-create tickets with subject as title, body as description</li>
+                <li>Reply-to-ticket threading: staff replies within ticket update the email thread</li>
+                <li>Outlook Add-in: raise &amp; track tickets directly from inbox pane</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §7 PROJECT PLAN & GANTT CHART
+══════════════════════════════════════════════ -->
+<div class="section" id="gantt">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">7</div>
+      <h2>Project Plan &amp; Gantt Chart</h2>
+      <span class="sec-badge">6-Month Full Delivery</span>
+    </div>
+    <div class="sec-body">
+
+      <!-- Milestone tracker -->
+      <div class="milestone-track">
+        <div class="ms-step done"><div class="ms-dot">M1</div><div class="ms-label">Kick-off &amp; Setup</div><div class="ms-date">Month 1</div></div>
+        <div class="ms-step done"><div class="ms-dot">M2</div><div class="ms-label">Platform &amp; RFID</div><div class="ms-date">Month 2</div></div>
+        <div class="ms-step active"><div class="ms-dot">M3</div><div class="ms-label">Integration &amp; Migration</div><div class="ms-date">Month 3</div></div>
+        <div class="ms-step future"><div class="ms-dot">M4</div><div class="ms-label">SIT &amp; UAT</div><div class="ms-date">Month 4</div></div>
+        <div class="ms-step future"><div class="ms-dot">M5</div><div class="ms-label">Training &amp; Parallel Run</div><div class="ms-date">Month 5</div></div>
+        <div class="ms-step future"><div class="ms-dot">M6</div><div class="ms-label">Go-Live &amp; Sign-off</div><div class="ms-date">Month 6</div></div>
+      </div>
+
+      <!-- Gantt -->
+      <div class="gantt-wrap">
+        <!-- Month header -->
+        <div class="gantt-month-hd">
+          <div class="gantt-month-cell">Task / Activity</div>
+          <div class="gantt-month-cell" style="background:#dbeafe;color:#1e40af">Month 1<br><small>Weeks 1–4</small></div>
+          <div class="gantt-month-cell" style="background:#e0e7ff;color:#4338ca">Month 2<br><small>Weeks 5–8</small></div>
+          <div class="gantt-month-cell" style="background:#f0fdf4;color:#166534">Month 3<br><small>Weeks 9–13</small></div>
+          <div class="gantt-month-cell" style="background:#fefce8;color:#854d0e">Month 4<br><small>Weeks 14–18</small></div>
+          <div class="gantt-month-cell" style="background:#fdf4ff;color:#6b21a8">Month 5<br><small>Weeks 19–22</small></div>
+          <div class="gantt-month-cell" style="background:#fff1f2;color:#9f1239">Month 6<br><small>Weeks 23–26</small></div>
+        </div>
+
+        <style>
+        /* Gantt — simple bar approach using background on the task row */
+        .gtt{display:grid;grid-template-columns:220px 1fr;border-bottom:1px solid var(--border2);min-height:36px;align-items:center}
+        .gtt:hover{background:#fafbfc}
+        .gtt-name{padding:8px 14px;font-size:11.5px;font-weight:600;color:var(--ink3)}
+        .gtt-name.phase-row{font-weight:800;color:var(--indigo);font-size:11px;text-transform:uppercase;background:linear-gradient(to right,#f5f3ff,#fff);letter-spacing:.04em}
+        .gtt-bar-wrap{position:relative;height:36px;display:flex;align-items:center}
+        .gbar{position:absolute;height:20px;border-radius:6px;top:50%;transform:translateY(-50%);display:flex;align-items:center;padding:0 6px;font-size:9.5px;font-weight:700;color:rgba(255,255,255,.9);white-space:nowrap;overflow:hidden}
+        </style>
+
+        <!-- PHASE 1 -->
+        <div class="gtt"><div class="gtt-name phase-row">● Phase 1 — Initiation &amp; Infrastructure Setup</div><div class="gtt-bar-wrap"></div></div>
+        <div class="gtt"><div class="gtt-name">Project Kick-off &amp; Governance</div><div class="gtt-bar-wrap"><div class="gbar g-blue" style="left:0%;width:7.5%">Wk 1–2</div></div></div>
+        <div class="gtt"><div class="gtt-name">Requirements Workshop &amp; Gap Analysis</div><div class="gtt-bar-wrap"><div class="gbar g-blue" style="left:3.8%;width:11.5%">Wk 2–4</div></div></div>
+        <div class="gtt"><div class="gtt-name">Environment Provisioning (Cloud / On-prem)</div><div class="gtt-bar-wrap"><div class="gbar g-sky" style="left:0%;width:15%">Wk 1–4</div></div></div>
+        <div class="gtt"><div class="gtt-name">RFID Site Survey (all 7 sites)</div><div class="gtt-bar-wrap"><div class="gbar g-teal" style="left:3.8%;width:11.5%">Wk 2–4</div></div></div>
+
+        <!-- PHASE 2 -->
+        <div class="gtt"><div class="gtt-name phase-row">● Phase 2 — Platform Configuration &amp; RFID</div><div class="gtt-bar-wrap"></div></div>
+        <div class="gtt"><div class="gtt-name">Core Platform Configuration</div><div class="gtt-bar-wrap"><div class="gbar g-indigo" style="left:15%;width:19%">Wk 5–9</div></div></div>
+        <div class="gtt"><div class="gtt-name">User Management &amp; RBAC Setup</div><div class="gtt-bar-wrap"><div class="gbar g-indigo" style="left:15%;width:11.5%">Wk 5–7</div></div></div>
+        <div class="gtt"><div class="gtt-name">Asset Register Import &amp; Bulk Configuration</div><div class="gtt-bar-wrap"><div class="gbar g-indigo" style="left:23%;width:15%">Wk 7–11</div></div></div>
+        <div class="gtt"><div class="gtt-name">RFID Hardware Procurement &amp; Delivery</div><div class="gtt-bar-wrap"><div class="gbar g-teal" style="left:15%;width:15%">Wk 5–9</div></div></div>
+        <div class="gtt"><div class="gtt-name">RFID Infrastructure Installation (7 sites)</div><div class="gtt-bar-wrap"><div class="gbar g-teal" style="left:23%;width:15%">Wk 7–11</div></div></div>
+        <div class="gtt"><div class="gtt-name">RFID Tag-to-Asset Binding</div><div class="gtt-bar-wrap"><div class="gbar g-teal" style="left:30.5%;width:11.5%">Wk 9–12</div></div></div>
+        <div class="gtt"><div class="gtt-name">RFID Middleware Bridge Deployment</div><div class="gtt-bar-wrap"><div class="gbar g-teal" style="left:23%;width:11.5%">Wk 7–10</div></div></div>
+        <div class="gtt"><div class="gtt-name">Mobile App Deployment &amp; Handheld Config</div><div class="gtt-bar-wrap"><div class="gbar g-sky" style="left:27%;width:15%">Wk 8–12</div></div></div>
+
+        <!-- PHASE 3 -->
+        <div class="gtt"><div class="gtt-name phase-row">● Phase 3 — Integration &amp; Data Migration</div><div class="gtt-bar-wrap"></div></div>
+        <div class="gtt"><div class="gtt-name">Azure AD SSO Integration &amp; Testing</div><div class="gtt-bar-wrap"><div class="gbar g-purple" style="left:34.5%;width:11.5%">Wk 10–13</div></div></div>
+        <div class="gtt"><div class="gtt-name">Dynamics 365 Integration Development</div><div class="gtt-bar-wrap"><div class="gbar g-purple" style="left:34.5%;width:15%">Wk 10–14</div></div></div>
+        <div class="gtt"><div class="gtt-name">Email-to-Ticket &amp; Outlook Add-in</div><div class="gtt-bar-wrap"><div class="gbar g-purple" style="left:38%;width:11.5%">Wk 11–14</div></div></div>
+        <div class="gtt"><div class="gtt-name">Data Migration (assets, tickets, users)</div><div class="gtt-bar-wrap"><div class="gbar g-green" style="left:34.5%;width:19%">Wk 10–15</div></div></div>
+        <div class="gtt"><div class="gtt-name">RFID Zone Map Configuration &amp; Floor Plans</div><div class="gtt-bar-wrap"><div class="gbar g-green" style="left:38%;width:11.5%">Wk 11–14</div></div></div>
+
+        <!-- PHASE 4 -->
+        <div class="gtt"><div class="gtt-name phase-row">● Phase 4 — System Integration Testing</div><div class="gtt-bar-wrap"></div></div>
+        <div class="gtt"><div class="gtt-name">System Integration Testing (SIT)</div><div class="gtt-bar-wrap"><div class="gbar g-amber" style="left:50%;width:15%">Wk 14–18</div></div></div>
+        <div class="gtt"><div class="gtt-name">Performance &amp; Load Testing</div><div class="gtt-bar-wrap"><div class="gbar g-amber" style="left:53.5%;width:11.5%">Wk 15–18</div></div></div>
+        <div class="gtt"><div class="gtt-name">Security Penetration Testing</div><div class="gtt-bar-wrap"><div class="gbar g-amber" style="left:57%;width:7.5%">Wk 16–18</div></div></div>
+        <div class="gtt"><div class="gtt-name">Bug Fix &amp; Remediation Sprint</div><div class="gtt-bar-wrap"><div class="gbar g-amber" style="left:60.5%;width:7.5%">Wk 17–18</div></div></div>
+
+        <!-- PHASE 5 -->
+        <div class="gtt"><div class="gtt-name phase-row">● Phase 5 — UAT, Training &amp; Parallel Run</div><div class="gtt-bar-wrap"></div></div>
+        <div class="gtt"><div class="gtt-name">UAT — Admin &amp; Technicians</div><div class="gtt-bar-wrap"><div class="gbar g-purple" style="left:65%;width:11.5%">Wk 19–22</div></div></div>
+        <div class="gtt"><div class="gtt-name">UAT — End Users (QRCS Staff)</div><div class="gtt-bar-wrap"><div class="gbar g-purple" style="left:68.5%;width:11.5%">Wk 20–23</div></div></div>
+        <div class="gtt"><div class="gtt-name">Admin &amp; Technician Training (Arabic/English)</div><div class="gtt-bar-wrap"><div class="gbar g-indigo" style="left:65%;width:11.5%">Wk 19–22</div></div></div>
+        <div class="gtt"><div class="gtt-name">End-User Training (900 users, blended)</div><div class="gtt-bar-wrap"><div class="gbar g-indigo" style="left:68.5%;width:11.5%">Wk 20–23</div></div></div>
+        <div class="gtt"><div class="gtt-name">Parallel Running Period</div><div class="gtt-bar-wrap"><div class="gbar g-teal" style="left:65%;width:15%">Wk 19–23</div></div></div>
+
+        <!-- PHASE 6 -->
+        <div class="gtt"><div class="gtt-name phase-row">● Phase 6 — Go-Live &amp; Hypercare</div><div class="gtt-bar-wrap"></div></div>
+        <div class="gtt"><div class="gtt-name">Production Go-Live (all 7 sites)</div><div class="gtt-bar-wrap"><div class="gbar g-green" style="left:84.5%;width:7.5%">Wk 23–24</div></div></div>
+        <div class="gtt"><div class="gtt-name">Hypercare &amp; Stabilization (3 months)</div><div class="gtt-bar-wrap"><div class="gbar g-green" style="left:84.5%;width:15.5%">Wk 23–26+</div></div></div>
+        <div class="gtt"><div class="gtt-name">Documentation &amp; Knowledge Transfer</div><div class="gtt-bar-wrap"><div class="gbar g-sky" style="left:84.5%;width:11.5%">Wk 23–26</div></div></div>
+        <div class="gtt"><div class="gtt-name">Final Sign-off &amp; Project Closure</div><div class="gtt-bar-wrap"><div class="gbar g-red" style="left:92%;width:8%">Wk 25–26</div></div></div>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink4)"><div style="width:24px;height:10px;border-radius:3px;background:linear-gradient(90deg,#3b82f6,#2563eb)"></div>Infrastructure</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink4)"><div style="width:24px;height:10px;border-radius:3px;background:linear-gradient(90deg,#6366f1,#4f46e5)"></div>Platform Config</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink4)"><div style="width:24px;height:10px;border-radius:3px;background:linear-gradient(90deg,#14b8a6,#0d9488)"></div>RFID Hardware</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink4)"><div style="width:24px;height:10px;border-radius:3px;background:linear-gradient(90deg,#22c55e,#16a34a)"></div>Integration &amp; Migration</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink4)"><div style="width:24px;height:10px;border-radius:3px;background:linear-gradient(90deg,#f59e0b,#d97706)"></div>Testing</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink4)"><div style="width:24px;height:10px;border-radius:3px;background:linear-gradient(90deg,#a855f7,#7c3aed)"></div>UAT &amp; Training</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink4)"><div style="width:24px;height:10px;border-radius:3px;background:linear-gradient(90deg,#f43f5e,#e11d48)"></div>Go-Live &amp; Sign-off</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §8 SERVICE LEVEL AGREEMENT
+══════════════════════════════════════════════ -->
+<div class="section" id="sla">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">8</div>
+      <h2>Service Level Agreement (SLA)</h2>
+      <span class="sec-badge">12-Month Year-1 + Ongoing Support</span>
+    </div>
+    <div class="sec-body">
+      <div class="sla-grid">
+        <div class="sla-box p1">
+          <div class="sla-p">P1</div>
+          <div class="sla-label">Critical</div>
+          <div class="sla-row"><span class="sk">Response</span><span class="sv">1 Hour</span></div>
+          <div class="sla-row"><span class="sk">Resolution Target</span><span class="sv">4 Hours</span></div>
+          <div class="sla-row"><span class="sk">Support Hours</span><span class="sv">24 × 7 × 365</span></div>
+          <div class="sla-row"><span class="sk">Channel</span><span class="sv">Phone + Email</span></div>
+        </div>
+        <div class="sla-box p2">
+          <div class="sla-p">P2</div>
+          <div class="sla-label">High</div>
+          <div class="sla-row"><span class="sk">Response</span><span class="sv">2 Hours</span></div>
+          <div class="sla-row"><span class="sk">Resolution Target</span><span class="sv">8 Hours</span></div>
+          <div class="sla-row"><span class="sk">Support Hours</span><span class="sv">Business Hours</span></div>
+          <div class="sla-row"><span class="sk">Channel</span><span class="sv">Email + Ticket</span></div>
+        </div>
+        <div class="sla-box p3">
+          <div class="sla-p">P3</div>
+          <div class="sla-label">Medium</div>
+          <div class="sla-row"><span class="sk">Response</span><span class="sv">4 Hours</span></div>
+          <div class="sla-row"><span class="sk">Resolution Target</span><span class="sv">24 Hours</span></div>
+          <div class="sla-row"><span class="sk">Support Hours</span><span class="sv">Business Hours</span></div>
+          <div class="sla-row"><span class="sk">Channel</span><span class="sv">Ticket Portal</span></div>
+        </div>
+        <div class="sla-box p4">
+          <div class="sla-p">P4</div>
+          <div class="sla-label">Low</div>
+          <div class="sla-row"><span class="sk">Response</span><span class="sv">8 Hours</span></div>
+          <div class="sla-row"><span class="sk">Resolution Target</span><span class="sv">48 Hours</span></div>
+          <div class="sla-row"><span class="sk">Support Hours</span><span class="sv">Business Hours</span></div>
+          <div class="sla-row"><span class="sk">Channel</span><span class="sv">Ticket Portal</span></div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div>
+          <div class="heading3">Availability &amp; Uptime Commitments</div>
+          <table class="feat-table">
+            <thead><tr><th>Metric</th><th>Commitment</th></tr></thead>
+            <tbody>
+              <tr><td>Platform Uptime (monthly)</td><td><strong>99.9%</strong> (≤ 43.8 min downtime/month)</td></tr>
+              <tr><td>Database Availability</td><td><strong>99.95%</strong></td></tr>
+              <tr><td>RFID Tag Event Latency</td><td><strong>&lt; 3 seconds</strong> from read to platform update</td></tr>
+              <tr><td>API Response Time (p95)</td><td><strong>&lt; 500ms</strong> under normal load</td></tr>
+              <tr><td>Planned Maintenance</td><td>Minimum 72h advance notice · Off-peak windows only</td></tr>
+              <tr><td>Data Backup</td><td>Daily automated snapshots · 30-day retention · Point-in-time restore</td></tr>
+              <tr><td>Disaster Recovery RTO</td><td><strong>4 hours</strong></td></tr>
+              <tr><td>Disaster Recovery RPO</td><td><strong>1 hour</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="heading3">Priority Classification — Examples</div>
+          <table class="feat-table">
+            <thead><tr><th>Scenario</th><th>Priority</th></tr></thead>
+            <tbody>
+              <tr><td>Platform completely unavailable to all users</td><td><span class="tag tag-red">P1 Critical</span></td></tr>
+              <tr><td>RFID tracking stopped on all sites</td><td><span class="tag tag-red">P1 Critical</span></td></tr>
+              <tr><td>D365 sync failure — data not updating</td><td><span class="tag tag-amber">P2 High</span></td></tr>
+              <tr><td>Mobile app unable to connect at one site</td><td><span class="tag tag-amber">P2 High</span></td></tr>
+              <tr><td>Specific report not generating correctly</td><td><span class="tag tag-blue">P3 Medium</span></td></tr>
+              <tr><td>UI cosmetic issue / minor usability improvement</td><td><span class="tag tag-green">P4 Low</span></td></tr>
+            </tbody>
+          </table>
+
+          <div class="info-box green" style="margin-top:16px">
+            <div class="info-icon">🌐</div>
+            <div class="info-body">
+              <h4>Arabic-Language Support</h4>
+              <p>All support communications are available in both Arabic and English. Dedicated Arabic-speaking support engineers are assigned during QRCS business hours (07:00–18:00 AST, Sunday–Thursday).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="heading3">Support Scope — What Is Included in Year-1 Support</div>
+      <div class="three-col">
+        <div><span class="tag tag-green" style="margin-bottom:8px;display:inline-block">✔ Included</span><ul class="styled"><li>Bug fixes &amp; patches (all priorities)</li><li>Security updates &amp; vulnerability patches</li><li>Platform version upgrades</li><li>Performance tuning</li><li>RFID hardware diagnostics (remote)</li><li>Backup monitoring &amp; restore testing</li></ul></div>
+        <div><span class="tag tag-green" style="margin-bottom:8px;display:inline-block">✔ Included</span><ul class="styled"><li>User account management support</li><li>D365 sync troubleshooting</li><li>Azure AD SSO troubleshooting</li><li>Monthly system health reports</li><li>Quarterly performance reviews</li><li>3-month hypercare post-go-live</li></ul></div>
+        <div><span class="tag tag-amber" style="margin-bottom:8px;display:inline-block">Quoted Separately</span><ul class="styled"><li>New feature development requests</li><li>Additional site onboarding after 7</li><li>RFID hardware on-site repair visits</li><li>Custom report development beyond 5</li><li>Additional training sessions post-delivery</li><li>Year-2 + Annual Maintenance Contract (AMC)</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §9 TEAM STRUCTURE
+══════════════════════════════════════════════ -->
+<div class="section" id="team">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">9</div>
+      <h2>Team Structure &amp; Governance</h2>
+      <span class="sec-badge">Dedicated Delivery Team</span>
+    </div>
+    <div class="sec-body">
+      <div class="team-grid">
+        <div class="team-card">
+          <div class="team-avatar" style="background:#eff6ff">👔</div>
+          <div class="team-role">Project Leadership</div>
+          <div class="team-name">Project Manager</div>
+          <div class="team-resp">Overall delivery accountability, QRCS stakeholder relationship, milestone reporting, risk management and change control. Arabic &amp; English.</div>
+        </div>
+        <div class="team-card">
+          <div class="team-avatar" style="background:#f0fdf4">🏗</div>
+          <div class="team-role">Technical Lead</div>
+          <div class="team-name">Solution Architect</div>
+          <div class="team-resp">Platform architecture decisions, RFID infrastructure design, D365 &amp; Azure AD integration oversight, UAT sign-off.</div>
+        </div>
+        <div class="team-card">
+          <div class="team-avatar" style="background:#f5f3ff">💻</div>
+          <div class="team-role">Development</div>
+          <div class="team-name">Backend / Integration Engineer</div>
+          <div class="team-resp">D365 OData connector, Azure AD SSO, email-to-ticket bridge, data migration scripts, API development.</div>
+        </div>
+        <div class="team-card">
+          <div class="team-avatar" style="background:#fffbeb">📻</div>
+          <div class="team-role">Hardware Specialist</div>
+          <div class="team-name">RFID Infrastructure Engineer</div>
+          <div class="team-resp">On-site RFID reader installation (7 sites), AP-chip module configuration, passageway reader calibration, middleware deployment.</div>
+        </div>
+        <div class="team-card">
+          <div class="team-avatar" style="background:#fdf4ff">🎓</div>
+          <div class="team-role">Training</div>
+          <div class="team-name">Training &amp; Change Lead</div>
+          <div class="team-resp">Admin &amp; technician training (Arabic/English), end-user onboarding, training materials, knowledge base, UAT coordination.</div>
+        </div>
+        <div class="team-card">
+          <div class="team-avatar" style="background:#fff1f2">🛡</div>
+          <div class="team-role">Quality &amp; Support</div>
+          <div class="team-name">QA Engineer + Support Lead</div>
+          <div class="team-resp">SIT test execution, UAT support, bug triage, post-go-live hypercare, SLA monitoring, dedicated support desk lead.</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="heading3">Governance Framework</div>
+      <div class="two-col">
+        <div class="info-box blue">
+          <div class="info-icon">📅</div>
+          <div class="info-body">
+            <h4>Meeting Cadence</h4>
+            <ul>
+              <li><strong>Weekly:</strong> Project status call (PM + QRCS PM, 30 min)</li>
+              <li><strong>Bi-weekly:</strong> Technical progress review (Solutions teams)</li>
+              <li><strong>Monthly:</strong> Steering committee (senior stakeholders)</li>
+              <li><strong>Ad-hoc:</strong> Risk and issue escalation meetings</li>
+            </ul>
+          </div>
+        </div>
+        <div class="info-box amber">
+          <div class="info-icon">📋</div>
+          <div class="info-body">
+            <h4>Deliverable Sign-off Process</h4>
+            <ul>
+              <li>Each phase concludes with a formal Deliverable Acceptance Document (DAD)</li>
+              <li>QRCS IT lead and designated business owner sign DAD within 5 business days</li>
+              <li>Unresolved items logged in RAID register with assigned owner and due date</li>
+              <li>Final project acceptance: sign-off by QRCS IT Director after UAT completion</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §10 SECURITY & COMPLIANCE
+══════════════════════════════════════════════ -->
+<div class="section" id="security">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">10</div>
+      <h2>Security, Compliance &amp; Data Policy</h2>
+      <span class="sec-badge">NCA · PDPL · IFRC · ISO 27001</span>
+    </div>
+    <div class="sec-body">
+      <div class="two-col">
+        <div>
+          <div class="heading3">Security Controls</div>
+          <table class="feat-table">
+            <thead><tr><th>Control</th><th>Implementation</th></tr></thead>
+            <tbody>
+              <tr><td>Encryption in transit</td><td>TLS 1.3 — all API and browser traffic</td></tr>
+              <tr><td>Encryption at rest</td><td>AES-256 — database and file storage</td></tr>
+              <tr><td>Authentication</td><td>Azure AD SSO + MFA (all users)</td></tr>
+              <tr><td>Authorization</td><td>Row-Level Security (RLS) + RBAC per page</td></tr>
+              <tr><td>Audit logging</td><td>Immutable timestamped log — every user action</td></tr>
+              <tr><td>Penetration testing</td><td>Annual third-party pen test (included Year 1)</td></tr>
+              <tr><td>Vulnerability management</td><td>Automated dependency scanning (Dependabot)</td></tr>
+              <tr><td>RFID data protection</td><td>VLAN isolation + TLS tunnel for LLRP traffic</td></tr>
+              <tr><td>Data residency</td><td>Qatar / GCC region (configurable per QRCS requirement)</td></tr>
+              <tr><td>Backup &amp; DR</td><td>Daily encrypted snapshots, 30-day retention, cross-zone DR</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="heading3">Regulatory Compliance</div>
+          <table class="feat-table">
+            <thead><tr><th>Framework</th><th>Compliance Status</th></tr></thead>
+            <tbody>
+              <tr><td>PDPL (Personal Data Protection Law)</td><td><span class="tag tag-green">✔ Compliant</span></td></tr>
+              <tr><td>NCA (National Cybersecurity Authority)</td><td><span class="tag tag-green">✔ Aligned</span></td></tr>
+              <tr><td>IFRC Internal Asset Management Policy</td><td><span class="tag tag-green">✔ Supported</span></td></tr>
+              <tr><td>ISO 27001 (Information Security)</td><td><span class="tag tag-green">✔ Framework Followed</span></td></tr>
+              <tr><td>ETSI EN 302 208 (RFID radio)</td><td><span class="tag tag-green">✔ Hardware Certified</span></td></tr>
+              <tr><td>ISO 18000-63 (EPC Gen 2 passive RFID)</td><td><span class="tag tag-green">✔ Compliant</span></td></tr>
+              <tr><td>SOC 2 Type II (hosting infra)</td><td><span class="tag tag-green">✔ Vercel / Supabase</span></td></tr>
+              <tr><td>GDPR (European data protection)</td><td><span class="tag tag-blue">Applicable by design</span></td></tr>
+            </tbody>
+          </table>
+
+          <div class="info-box blue" style="margin-top:16px">
+            <div class="info-icon">🔒</div>
+            <div class="info-body">
+              <h4>Data Retention Policy</h4>
+              <p>Audit logs, ticket history, and asset lifecycle records retained for minimum <strong>7 years</strong> by default (configurable). Right-to-erasure requests for personal data supported via admin portal. RFID tag event history retained for <strong>5 years</strong> for compliance reporting.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §11 COMMERCIAL PROPOSAL
+══════════════════════════════════════════════ -->
+<div class="section" id="commercial">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">11</div>
+      <h2>Commercial Proposal &amp; Pricing</h2>
+      <span class="sec-badge">Fixed-Price · 270,000 QAR Total</span>
+    </div>
+    <div class="sec-body">
+      <div class="info-box blue" style="margin-bottom:20px">
+        <div class="info-icon">ℹ️</div>
+        <div class="info-body">
+          <h4>Pricing Basis</h4>
+          <p>This is a <strong>fixed-price contract</strong>. All deliverables listed in this proposal are included at the stated price. Prices are in <strong>Qatari Riyal (QAR)</strong>, inclusive of all professional services, hardware, software licenses, and Year-1 support. VAT (if applicable) will be added at the prevailing rate. Prices are valid for <strong>90 days</strong> from the proposal date.</p>
+        </div>
+      </div>
+
+      <!-- Section A: Software -->
+      <div class="comm-section">
+        <div class="comm-label">A — Software Platform &amp; Licenses</div>
+        <table class="comm-table">
+          <thead><tr><th class="item-num">Ref</th><th>Description</th><th class="item-qty">Qty</th><th>Unit</th><th>Amount (QAR)</th></tr></thead>
+          <tbody>
+            <tr><td class="item-num">A-01</td><td class="item-desc"><strong>AssetXAI Enterprise Platform License</strong> — Year 1<br><small style="color:var(--ink5)">Unlimited assets, 7 sites, 920 named users, all core modules included</small></td><td class="item-qty">1</td><td>Annual</td><td>68,000</td></tr>
+            <tr><td class="item-num">A-02</td><td class="item-desc"><strong>Active RFID Tracking Module</strong><br><small style="color:var(--ink5)">Zone-based real-time tracking, floor map overlay, tag health monitoring</small></td><td class="item-qty">1</td><td>Annual</td><td>12,000</td></tr>
+            <tr><td class="item-num">A-03</td><td class="item-desc"><strong>AI Analytics &amp; Forecasting Module</strong><br><small style="color:var(--ink5)">ML predictions, consumption analysis, predictive maintenance, deep analytics</small></td><td class="item-qty">1</td><td>Annual</td><td>8,000</td></tr>
+            <tr><td class="item-num">A-04</td><td class="item-desc"><strong>Microsoft Dynamics 365 Integration Connector</strong><br><small style="color:var(--ink5)">Bi-directional asset sync, fixed assets, depreciation, disposal</small></td><td class="item-qty">1</td><td>Annual</td><td>6,500</td></tr>
+            <tr><td class="item-num">A-05</td><td class="item-desc"><strong>Azure AD SSO Module</strong><br><small style="color:var(--ink5)">OIDC/OAuth 2.0, MFA delegation, SCIM auto-provisioning</small></td><td class="item-qty">1</td><td>Annual</td><td>2,500</td></tr>
+            <tr><td class="item-num">A-06</td><td class="item-desc"><strong>Mobile Application (iOS + Android)</strong><br><small style="color:var(--ink5)">Handheld scanning, offline sync, inspection routes, photo capture</small></td><td class="item-qty">920</td><td>Users</td><td>Included</td></tr>
+            <tr><td class="item-num">A-07</td><td class="item-desc"><strong>Outlook Add-in &amp; External Portal</strong><br><small style="color:var(--ink5)">Ticket management from Outlook, vendor/end-user self-service portal</small></td><td class="item-qty">1</td><td>Annual</td><td>Included</td></tr>
+          </tbody>
+        </table>
+        <div class="comm-sub"><span class="sk">Software Subtotal</span><span class="sv">QAR 97,000</span></div>
+      </div>
+
+      <!-- Section B: Hardware -->
+      <div class="comm-section">
+        <div class="comm-label">B — RFID Hardware Supply</div>
+        <table class="comm-table">
+          <thead><tr><th class="item-num">Ref</th><th>Description</th><th class="item-qty">Qty</th><th>Unit Price (QAR)</th><th>Amount (QAR)</th></tr></thead>
+          <tbody>
+            <tr><td class="item-num">B-01</td><td class="item-desc"><strong>Active RFID Tags (433 MHz)</strong><br><small style="color:var(--ink5)">IP67 · Anti-tamper sensor · 3–5yr battery · High-value mobile asset tracking</small></td><td class="item-qty">5,000</td><td>6.00</td><td>30,000</td></tr>
+            <tr><td class="item-num">B-02</td><td class="item-desc"><strong>Passive RFID Tags — UHF (EPC Gen 2)</strong><br><small style="color:var(--ink5)">ISO 18000-63 · Multiple form factors (label, hard, on-metal) · Furniture &amp; equipment</small></td><td class="item-qty">10,000</td><td>1.80</td><td>18,000</td></tr>
+            <tr><td class="item-num">B-03</td><td class="item-desc"><strong>RFID Fixed Passageway Readers</strong><br><small style="color:var(--ink5)">4-port · LLRP 1.1 · PoE · 500+ tags/sec · Zone boundary detection · ETSI certified</small></td><td class="item-qty">14</td><td>1,800</td><td>25,200</td></tr>
+            <tr><td class="item-num">B-04</td><td class="item-desc"><strong>RFID-AP Chip Modules (Huawei AP integration)</strong><br><small style="color:var(--ink5)">UHF reader module · Co-located with Huawei AP · PoE powered · Internal Ethernet uplink</small></td><td class="item-qty">14</td><td>680</td><td>9,520</td></tr>
+            <tr><td class="item-num">B-05</td><td class="item-desc"><strong>Handheld RFID + Barcode Devices</strong><br><small style="color:var(--ink5)">Android · IP65 rugged · UHF + 433 MHz RFID + 1D/2D barcode · 10h battery · AssetXAI pre-loaded</small></td><td class="item-qty">15</td><td>1,380</td><td>20,700</td></tr>
+          </tbody>
+        </table>
+        <div class="comm-sub"><span class="sk">Hardware Subtotal</span><span class="sv">QAR 103,420</span></div>
+      </div>
+
+      <!-- Section C: Professional Services -->
+      <div class="comm-section">
+        <div class="comm-label">C — Professional Services &amp; Implementation</div>
+        <table class="comm-table">
+          <thead><tr><th class="item-num">Ref</th><th>Description</th><th class="item-qty">Days</th><th>Day Rate (QAR)</th><th>Amount (QAR)</th></tr></thead>
+          <tbody>
+            <tr><td class="item-num">C-01</td><td class="item-desc"><strong>Platform Implementation &amp; Configuration</strong><br><small style="color:var(--ink5)">Asset register setup, RBAC config, ticketing workflows, floor maps, notifications</small></td><td class="item-qty">40</td><td>550</td><td>22,000</td></tr>
+            <tr><td class="item-num">C-02</td><td class="item-desc"><strong>RFID Site Survey &amp; Hardware Installation</strong><br><small style="color:var(--ink5)">7 sites · Reader placement, cable runs, AP-chip module mounting, zone calibration</small></td><td class="item-qty">18</td><td>550</td><td>9,900</td></tr>
+            <tr><td class="item-num">C-03</td><td class="item-desc"><strong>D365 Integration Development &amp; Testing</strong><br><small style="color:var(--ink5)">OData connector, sync jobs, testing, documentation</small></td><td class="item-qty">14</td><td>550</td><td>7,700</td></tr>
+            <tr><td class="item-num">C-04</td><td class="item-desc"><strong>Data Migration</strong><br><small style="color:var(--ink5)">Asset register import, RFID tag binding, user migration, historical data</small></td><td class="item-qty">10</td><td>550</td><td>5,500</td></tr>
+            <tr><td class="item-num">C-05</td><td class="item-desc"><strong>Project Management (6 months)</strong><br><small style="color:var(--ink5)">Dedicated PM, stakeholder management, reporting, governance</small></td><td class="item-qty">Lump</td><td>—</td><td>7,000</td></tr>
+            <tr><td class="item-num">C-06</td><td class="item-desc"><strong>Testing (SIT + UAT Support)</strong><br><small style="color:var(--ink5)">Test planning, execution, defect management, performance testing</small></td><td class="item-qty">10</td><td>550</td><td>5,500</td></tr>
+          </tbody>
+        </table>
+        <div class="comm-sub"><span class="sk">Services Subtotal</span><span class="sv">QAR 57,600</span></div>
+      </div>
+
+      <!-- Section D: Training -->
+      <div class="comm-section">
+        <div class="comm-label">D — Training &amp; Documentation</div>
+        <table class="comm-table">
+          <thead><tr><th class="item-num">Ref</th><th>Description</th><th class="item-qty">Qty</th><th>Unit</th><th>Amount (QAR)</th></tr></thead>
+          <tbody>
+            <tr><td class="item-num">D-01</td><td class="item-desc"><strong>Administrator &amp; Technician Training</strong><br><small style="color:var(--ink5)">Full 2-day on-site training for 20 technicians · Arabic &amp; English · Practical lab sessions</small></td><td class="item-qty">2</td><td>Days</td><td>3,600</td></tr>
+            <tr><td class="item-num">D-02</td><td class="item-desc"><strong>End-User Training (Blended)</strong><br><small style="color:var(--ink5)">Train-the-trainer + self-service video library · Arabic + English user guides</small></td><td class="item-qty">1</td><td>Package</td><td>2,400</td></tr>
+            <tr><td class="item-num">D-03</td><td class="item-desc"><strong>Training Materials &amp; Documentation</strong><br><small style="color:var(--ink5)">Admin guide, technician guide, end-user quick reference (Arabic + English)</small></td><td class="item-qty">1</td><td>Set</td><td>1,200</td></tr>
+          </tbody>
+        </table>
+        <div class="comm-sub"><span class="sk">Training Subtotal</span><span class="sv">QAR 7,200</span></div>
+      </div>
+
+      <!-- Section E: Support -->
+      <div class="comm-section">
+        <div class="comm-label">E — Year-1 Support &amp; Warranty</div>
+        <table class="comm-table">
+          <thead><tr><th class="item-num">Ref</th><th>Description</th><th class="item-qty">Qty</th><th>Unit</th><th>Amount (QAR)</th></tr></thead>
+          <tbody>
+            <tr><td class="item-num">E-01</td><td class="item-desc"><strong>Platform Support &amp; Maintenance (Year 1)</strong><br><small style="color:var(--ink5)">24/7 P1 support, business-hours P2–P4, patches, upgrades, SLA monitoring</small></td><td class="item-qty">12</td><td>Months</td><td>Included</td></tr>
+            <tr><td class="item-num">E-02</td><td class="item-desc"><strong>Hardware Warranty (RFID equipment)</strong><br><small style="color:var(--ink5)">2-year replacement warranty on all RFID tags, readers, and handheld devices supplied</small></td><td class="item-qty">2</td><td>Years</td><td>Included</td></tr>
+            <tr><td class="item-num">E-03</td><td class="item-desc"><strong>3-Month Hypercare Post Go-Live</strong><br><small style="color:var(--ink5)">Dedicated support team on standby, daily health checks, accelerated bug response</small></td><td class="item-qty">3</td><td>Months</td><td>Included</td></tr>
+            <tr><td class="item-num">E-04</td><td class="item-desc"><strong>Contingency &amp; Risk Reserve</strong><br><small style="color:var(--ink5)">5% project contingency for scope adjustments, re-work, and change management</small></td><td class="item-qty">1</td><td>Lump</td><td>4,780</td></tr>
+          </tbody>
+        </table>
+        <div class="comm-sub"><span class="sk">Support Subtotal</span><span class="sv">QAR 4,780</span></div>
+      </div>
+
+      <!-- Grand Total -->
+      <div class="comm-total">
+        <div class="comm-total-left">
+          <strong>Grand Total — Fixed-Price Proposal</strong>
+          Inclusive of all software, RFID hardware, professional services, training, Year-1 support, and hardware warranty<br>
+          Prices in Qatari Riyal (QAR) · Valid for 90 days · VAT/taxes if applicable added at prevailing rate
+        </div>
+        <div class="comm-total-right">
+          <div class="currency">Qatari Riyal (QAR)</div>
+          <div class="amount">270,000</div>
+          <div class="amount-sub">QAR Two Hundred Seventy Thousand</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        <div class="heading3">Cost Breakdown Summary</div>
+        <table class="feat-table">
+          <thead><tr><th>Section</th><th>Category</th><th style="text-align:right">Amount (QAR)</th><th style="text-align:right">% of Total</th></tr></thead>
+          <tbody>
+            <tr><td>A</td><td>Software Platform &amp; Licenses (Year 1)</td><td style="text-align:right;font-weight:700">97,000</td><td style="text-align:right">35.9%</td></tr>
+            <tr><td>B</td><td>RFID Hardware Supply (5K active + 10K passive + 14 readers + 15 handhelds)</td><td style="text-align:right;font-weight:700">103,420</td><td style="text-align:right">38.3%</td></tr>
+            <tr><td>C</td><td>Professional Services &amp; Implementation</td><td style="text-align:right;font-weight:700">57,600</td><td style="text-align:right">21.3%</td></tr>
+            <tr><td>D</td><td>Training &amp; Documentation</td><td style="text-align:right;font-weight:700">7,200</td><td style="text-align:right">2.7%</td></tr>
+            <tr><td>E</td><td>Support, Warranty &amp; Contingency</td><td style="text-align:right;font-weight:700">4,780</td><td style="text-align:right">1.8%</td></tr>
+            <tr style="background:var(--bg)"><td colspan="2"><strong>Grand Total</strong></td><td style="text-align:right;font-weight:900;font-size:15px;color:var(--indigo)">270,000</td><td style="text-align:right;font-weight:800">100%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="divider"></div>
+      <div class="heading3">Payment Milestone Schedule</div>
+      <table class="feat-table">
+        <thead><tr><th>Milestone</th><th>Trigger Event</th><th>%</th><th style="text-align:right">Amount (QAR)</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag tag-blue">M1</span> Contract Signing</td><td>Signed contract + purchase order received</td><td>20%</td><td style="text-align:right;font-weight:700">54,000</td></tr>
+          <tr><td><span class="tag tag-blue">M2</span> RFID Hardware Delivery</td><td>All hardware delivered to site &amp; accepted</td><td>20%</td><td style="text-align:right;font-weight:700">54,000</td></tr>
+          <tr><td><span class="tag tag-green">M3</span> Platform Go-Live Readiness</td><td>SIT completed, platform UAT-ready</td><td>25%</td><td style="text-align:right;font-weight:700">67,500</td></tr>
+          <tr><td><span class="tag tag-green">M4</span> UAT Sign-off</td><td>UAT completed &amp; acceptance certificate signed</td><td>25%</td><td style="text-align:right;font-weight:700">67,500</td></tr>
+          <tr><td><span class="tag tag-amber">M5</span> Project Closure</td><td>Full production go-live &amp; training complete</td><td>10%</td><td style="text-align:right;font-weight:700">27,000</td></tr>
+          <tr style="background:var(--bg)"><td colspan="3"><strong>Total</strong></td><td style="text-align:right;font-weight:900;font-size:15px;color:var(--indigo)">270,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     §12 TERMS & ACCEPTANCE
+══════════════════════════════════════════════ -->
+<div class="section" id="acceptance">
+  <div class="sec-card">
+    <div class="sec-hd">
+      <div class="sec-num">12</div>
+      <h2>Terms, Acceptance &amp; Signatures</h2>
+      <span class="sec-badge">Contractual Terms</span>
+    </div>
+    <div class="sec-body">
+      <div class="two-col">
+        <div>
+          <div class="heading3">Key Contract Terms</div>
+          <ul class="styled">
+            <li><strong>Contract Type:</strong> Fixed-price, milestone-based delivery contract</li>
+            <li><strong>Contract Duration:</strong> 6 months implementation + 12 months Year-1 support</li>
+            <li><strong>Governing Law:</strong> Laws of the State of Qatar</li>
+            <li><strong>Dispute Resolution:</strong> Qatar arbitration centre (QICCA) as first resort</li>
+            <li><strong>Delay Penalty:</strong> 0.5% of contract value per week of delay, capped at 5%</li>
+            <li><strong>Force Majeure:</strong> Standard force majeure clauses apply</li>
+            <li><strong>IP Ownership:</strong> All QRCS-specific customizations become QRCS property on final acceptance</li>
+            <li><strong>Source Code Escrow:</strong> Available upon request at agreed escrow agent</li>
+            <li><strong>Confidentiality:</strong> Mutual NDA in effect from proposal submission date</li>
+            <li><strong>Subcontracting:</strong> RFID hardware sourcing from pre-qualified suppliers only; QRCS approval required for any subcontracting</li>
+          </ul>
+        </div>
+        <div>
+          <div class="heading3">Change Request Process</div>
+          <ul class="styled">
+            <li>Changes to agreed scope submitted via formal Change Request (CR) form</li>
+            <li>AssetXAI to provide impact assessment (effort + cost + timeline) within 5 business days</li>
+            <li>Changes approved by QRCS IT Director and AssetXAI PM before execution</li>
+            <li>Day rate for change requests: <strong>QAR 550/day</strong> (same as project rate)</li>
+            <li>Minor enhancements ≤ 4 hours are absorbed within existing scope where possible</li>
+          </ul>
+
+          <div class="info-box green" style="margin-top:16px">
+            <div class="info-icon">🤝</div>
+            <div class="info-body">
+              <h4>Acceptance Criteria</h4>
+              <p>System acceptance is based on successful completion of UAT against agreed test scenarios, performance benchmarks met (&lt;500ms API response p95, 99.9% uptime), and all mandatory RFQ compliance requirements confirmed by QRCS stakeholders.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="sig-box">
+        <p style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:20px">By signing below, both parties confirm that they have read, understood, and agree to the terms of this Technical &amp; Commercial Proposal, and authorize commencement of the project upon receipt of purchase order.</p>
+        <div class="sig-grid">
+          <div>
+            <p style="font-size:12px;font-weight:700;color:var(--ink3);margin-bottom:6px">AssetXAI — Vendor</p>
+            <div class="sig-field"></div>
+            <div class="sig-field-label">Authorized Signatory — Name &amp; Title</div>
+            <div class="sig-field"></div>
+            <div class="sig-field-label">Signature</div>
+            <div class="sig-field"></div>
+            <div class="sig-field-label">Date</div>
+            <div class="sig-field"></div>
+            <div class="sig-field-label">Company Stamp</div>
+          </div>
+          <div>
+            <p style="font-size:12px;font-weight:700;color:var(--ink3);margin-bottom:6px">Qatar Red Crescent Society (QRCS) — Client</p>
+            <div class="sig-field"></div>
+            <div class="sig-field-label">Authorized Signatory — Name &amp; Title</div>
+            <div class="sig-field"></div>
+            <div class="sig-field-label">Signature</div>
+            <div class="sig-field"></div>
+            <div class="sig-field-label">Date</div>
+            <div class="sig-field"></div>
+            <div class="sig-field-label">Official Stamp</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FOOTER ── -->
+<div class="doc-footer">
+  <div class="doc-footer-left">
+    <strong>AssetXAI — Enterprise Asset Intelligence</strong>
+    Technical &amp; Commercial Proposal — QRCS Asset Management System 2026<br>
+    Document Ref: AX-TP-2026-001 &nbsp;|&nbsp; Version: 1.0 Final &nbsp;|&nbsp; April 2026<br>
+    <strong style="color:#ef4444;font-size:11px">CONFIDENTIAL — For Proposal &amp; Bid Response Purposes Only</strong>
+  </div>
+  <div class="doc-footer-right">
+    <span class="fpill">v1.0 — Final Proposal</span>
+    <span class="fpill">270,000 QAR · Fixed Price</span>
+    <span class="fpill">6-Month Delivery · 7 Sites</span>
+    <span class="fpill">assetxai.live</span>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+</body>
+</html>
