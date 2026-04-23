@@ -244,38 +244,145 @@ ul.styled li{font-size:12.5px;color:var(--ink4);margin-bottom:5px;line-height:1.
 
 /* ── PRINT ── */
 @media print{
-  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-  @page{size:A4 portrait;margin:12mm 14mm 12mm 14mm}
-  html,body{background:#fff !important;font-size:9.5pt}
-  .toolbar{display:none !important}
-  .wrap{max-width:100% !important;padding:0 !important;margin:0 !important}
-  .cover{border-radius:0 !important;box-shadow:none !important;margin:0 !important;width:100% !important;height:250mm !important;display:flex !important;flex-direction:column !important;justify-content:center !important;page-break-after:always !important;break-after:page !important}
-  .cover-inner{padding:40px 44px 32px !important}
-  .cover-title{font-size:26pt !important}
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;box-sizing:border-box !important}
+
+  /* ── Page: full A4, zero margin so browser URL/page-count decorations are suppressed ── */
+  @page{
+    size:A4 portrait;
+    margin:0;
+  }
+  @page:first{ margin:0; }
+
+  /* ── Root: fill the full 210mm × 297mm sheet ── */
+  html{
+    width:210mm !important;
+    margin:0 !important;
+    padding:0 !important;
+    background:#fff !important;
+    font-size:9pt !important;
+  }
+  body{
+    width:210mm !important;
+    margin:0 !important;
+    padding:0 !important;
+    background:#fff !important;
+    font-size:9pt !important;
+  }
+
+  /* ── Hide screen-only UI ── */
+  .toolbar,.print-instructions{display:none !important}
+
+  /* ── Main content wrapper: full width, inner breathing room ── */
+  .wrap{
+    width:210mm !important;
+    max-width:210mm !important;
+    margin:0 !important;
+    padding:0 !important;
+  }
+
+  /* ── Cover: full bleed, one full A4 page ── */
+  .cover{
+    width:210mm !important;
+    min-height:297mm !important;
+    border-radius:0 !important;
+    box-shadow:none !important;
+    margin:0 !important;
+    padding:0 !important;
+    page-break-after:always !important;
+    break-after:page !important;
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:center !important;
+  }
+  .cover-inner{padding:44px 48px 32px !important}
+  .cover-title{font-size:24pt !important}
   .cover-meta{grid-template-columns:repeat(5,1fr) !important;gap:8px !important}
   .cover-meta-cell{padding:10px 12px !important}
-  .cover-bar{padding:12px 44px !important}
-  .sec-card{border-radius:6px !important;margin-bottom:10px !important;box-shadow:none !important;page-break-inside:avoid !important;break-inside:avoid !important;overflow:visible !important}
-  .sec-hd{padding:10px 18px !important}
-  .sec-hd h2{font-size:11pt !important}
-  .sec-body{padding:18px !important}
-  .exec-grid{grid-template-columns:repeat(4,1fr) !important;gap:10px !important}
-  .gantt-wrap{overflow:visible !important}
-  .arch-container{page-break-inside:avoid !important;break-inside:avoid !important}
+  .cover-bar{padding:12px 48px !important}
+
+  /* ── Sections: fill full width, thin inner padding ── */
+  .section{
+    width:210mm !important;
+    margin:0 !important;
+    margin-bottom:0 !important;
+    padding:0 10mm !important;
+    page-break-inside:avoid !important;
+    break-inside:avoid !important;
+  }
+  .sec-card{
+    width:100% !important;
+    border-radius:4px !important;
+    margin:0 0 8px 0 !important;
+    box-shadow:none !important;
+    border:1px solid #e2e8f0 !important;
+    page-break-inside:avoid !important;
+    break-inside:avoid !important;
+    overflow:visible !important;
+  }
+  .sec-hd{padding:9px 16px !important}
+  .sec-hd h2{font-size:10.5pt !important}
+  .sec-body{padding:14px 16px !important}
+
+  /* ── Grid layouts: stack on narrow print columns ── */
+  .exec-grid{grid-template-columns:repeat(4,1fr) !important;gap:8px !important}
   .two-col,.three-col{display:block !important}
-  .two-col > *,.three-col > *{margin-bottom:14px !important}
+  .two-col > *,.three-col > * {margin-bottom:10px !important;width:100% !important}
   .sla-grid{grid-template-columns:repeat(4,1fr) !important}
-  .comm-total{page-break-inside:avoid !important}
-  .doc-footer{border-radius:6px !important;box-shadow:none !important;margin-top:16px !important;padding:20px 24px !important}
-  .section{margin-bottom:16px !important;page-break-inside:avoid !important}
+
+  /* ── Architecture & tables ── */
+  .arch-container{
+    page-break-inside:avoid !important;
+    break-inside:avoid !important;
+    width:100% !important;
+    border-radius:6px !important;
+  }
+  .arch-nodes{
+    display:grid !important;
+    grid-template-columns:repeat(4,1fr) !important;
+    gap:6px !important;
+  }
+  .arch-node{padding:8px !important}
+  .arch-node-icon{font-size:18px !important;margin-bottom:4px !important}
+  .arch-node-title{font-size:8pt !important}
+  .arch-node-sub{font-size:7pt !important}
+  .gantt-wrap{overflow:visible !important;width:100% !important}
+  table{width:100% !important;font-size:8pt !important}
+  .feat-table td,.feat-table th{padding:6px 10px !important}
+  .comm-table td,.comm-table th{padding:6px 10px !important}
+  .rfid-box{page-break-inside:avoid !important;break-inside:avoid !important;padding:12px !important}
+
+  /* ── Misc ── */
+  .comm-total{page-break-inside:avoid !important;border-radius:8px !important}
+  .doc-footer{border-radius:4px !important;box-shadow:none !important;margin-top:12px !important;padding:16px 20px !important}
+  .info-box{border-radius:6px !important;padding:12px !important}
+  .heading3{font-size:9.5pt !important;margin-bottom:8px !important}
+  .para{font-size:8.5pt !important}
+  ul.styled li{font-size:8pt !important}
+  .tag{font-size:7.5pt !important;padding:2px 7px !important}
+  .sec-badge{font-size:7.5pt !important}
 }
 </style>
 </head>
 <body>
 
 <div class="toolbar">
-  <button class="btn btn-outline" onclick="window.print()">🖨 Print PDF</button>
-  <button class="btn btn-primary" onclick="window.scrollTo(0,0)">↑ Top</button>
+  <button class="btn btn-primary" onclick="window.print()">🖨 Print / Save as PDF</button>
+  <button class="btn btn-outline" onclick="window.scrollTo(0,0)">↑ Top</button>
+  <span style="font-size:12px;color:#64748b;margin-left:8px;display:flex;align-items:center;gap:6px">
+    <span style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:4px 10px;font-weight:700;color:#854d0e">
+      ⚠️ In the print dialog → More settings → uncheck "Headers and footers" → set Margins to "None" for full-page PDF
+    </span>
+  </span>
+</div>
+
+<!-- Print instructions overlay — screen only, hidden on print -->
+<div class="print-instructions" style="background:#fef9c3;border-bottom:2px solid #fde047;padding:12px 24px;display:flex;align-items:center;gap:16px;font-size:13px;color:#713f12">
+  <span style="font-size:22px">🖨️</span>
+  <div>
+    <strong>For a perfect full-page PDF:</strong>
+    Open Print dialog (Ctrl+P) → <strong>More settings</strong> → set <strong>Margins → None</strong> → uncheck <strong>"Headers and footers"</strong> → Save as PDF.
+    This removes the browser URL bar, page numbers, and date from the printed output.
+  </div>
 </div>
 
 <div class="wrap">
